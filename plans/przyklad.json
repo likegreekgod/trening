@@ -1,0 +1,14 @@
+[
+  {"klient": "robert", "tydzien": 1, "jednostka": "T1", "tytul": "FBW A", "data": "2026-10-06", "nr": 1,
+   "cwiczenie": "Wyciskanie sztangi na ławce płaskiej", "prio": "A", "serie": 4, "powt": "6-8", "procent": "",
+   "kg": 50, "rpe_max": 8, "uwagi": "Łopatki ściągnięte, sztanga do dolnej części klatki.", "dod_serie": 0, "drop": ""},
+  {"klient": "robert", "tydzien": 1, "jednostka": "T1", "tytul": "FBW A", "data": "2026-10-06", "nr": 2,
+   "cwiczenie": "Rozpiętki na bramie (linki)", "prio": "B", "serie": 3, "powt": "12", "procent": "",
+   "kg": 10, "rpe_max": 9, "uwagi": "", "dod_serie": 1, "drop": 1},
+  {"klient": "damian", "tydzien": 1, "jednostka": "S1", "tytul": "Rwanie + przysiad", "data": "2026-10-06", "nr": 1,
+   "cwiczenie": "Rwanie", "prio": "A", "serie": 4, "powt": "2", "procent": 0.75, "kg": 67.5, "rpe_max": "",
+   "uwagi": "", "grupa": "R"},
+  {"klient": "damian", "tydzien": 1, "jednostka": "S1", "tytul": "Rwanie + przysiad", "data": "2026-10-06", "nr": 2,
+   "cwiczenie": "Zarzut + podrzut", "prio": "A", "serie": 3, "powt": "1+1", "procent": 0.7, "kg": 80, "rpe_max": "",
+   "uwagi": "", "grupa": "P"}
+]
