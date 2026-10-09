@@ -23,7 +23,7 @@ Filmy: telefon → Drive bezpośrednio (sesja resumable otwierana przez startUpl
 ```
 
 - `web/index.html` to jeden plik (HTML + CSS + JS), bez bundlera i frameworka. Cała komunikacja z serwerem idzie przez funkcję `call(fn, ...args)`.
-- `apps-script/Code.gs` jest powiązany z arkuszem `Trening – Aplikacja (dane)` (konto damian.trepka@gmail.com). API: `doPost` → `API_FNS` (getData, logSet, logSession, deleteSet, startUpload, uploadChunk). Pierwszym argumentem każdej funkcji jest klucz klienta.
+- `apps-script/Code.gs` jest powiązany z arkuszem `Trening – Aplikacja (dane)` (konto trenera, właściciel arkusza; `clasp login` musi być na tym samym koncie). API: `doPost` → `API_FNS` (getData, logSet, logSession, deleteSet, startUpload, uploadChunk). Pierwszym argumentem każdej funkcji jest klucz klienta.
 - `apps-script/Index.html` to stara wersja działająca przez `doGet` i `google.script.run` (linki `/exec?k=`). Zostaje na okres przejściowy. Nowe funkcje rób w `web/index.html`; starą wersję poprawiaj tylko przy błędach.
 - Klucz klienta w linku (`?k=k` + 11 znaków hex) jest jedynym zabezpieczeniem. PWA zapamiętuje go w `localStorage` („key”).
 - Nowe zapisy to nowe akcje w `API_FNS` wywoływane przez `call()` (np. `saveDyspozycja`), nigdy `google.script.run`.
