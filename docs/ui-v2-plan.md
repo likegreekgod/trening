@@ -62,7 +62,7 @@ Każdy PR w `web/` podbija `VERSION` w `sw.js`; `npm test` musi przechodzić. Po
 
 | PR | Zakres | Uwagi |
 |---|---|---|
-| 1. Backend v2 | Flagi `zamiana`, `skala`, `sufit_oly` w Klienci i `cfg`; `grupa`, `zamienniki`, `blok` w `getData`; kolumny Log v2 na końcu; `saveDyspozycja` + zakładka `Dyspozycja`; `przesunJednostke`; data w planie opcjonalna; ochrona wykonanych jednostek przy wczytywaniu planu i odrzucanie kolizji tygodni; zakładka `Bloki` z kolumną `wnioski` | Tylko `Code.gs` + testy. Zgodny wstecz, wdraża Action |
+| 1. Backend v2 ✓ (09.10) | Flagi `zamiana`, `skala`, `sufit_oly` w Klienci i `cfg`; `grupa`, `zamienniki`, `blok` w `getData`; kolumny Log v2 na końcu; `saveDyspozycja` + zakładka `Dyspozycja`; `przesunJednostke`; data w planie opcjonalna; ochrona wykonanych jednostek przy wczytywaniu planu i odrzucanie kolizji tygodni; zakładka `Bloki` z kolumną `wnioski` | Tylko `Code.gs` + testy. Zgodny wstecz, wdraża Action. Po wdrożeniu: `setup` (nagłówki Klienci J–L) |
 | 2. Fundament Pomost | Tokeny, czcionki, manifest, ostre rogi i linie na obecnym ekranie, etykiety ≥ 12 px; `web/lib.js` (czyste funkcje) + testy Node; Playwright: zrzuty jasny/ciemny, PROSTY/PRO, offline | Bez zmian działania |
 | 3. Nawigacja + Plan | Dolne menu, ekran Plan (tygodnie, deload z planu, dni z kropkami, „Blok N · tydz. M”, zmiana daty jednostki), nagłówek treningu | Dyspozycja i Postęp ukryte do czasu PR 10–11 |
 | 4. Serie | Nowy wiersz, ✓/✕ + stan „w kolejce”, typ pod numerem, RPE/RIR, recepta z RIR i kolorem talerza, „Ostatnio”, „dziś” w strefie lokalnej, ściągawka PROSTY | Payloady `logSet` bez zmian (testy) |

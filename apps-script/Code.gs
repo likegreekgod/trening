@@ -16,15 +16,25 @@
  * Log, typ: DROP, FAIL (nieudana) lub DROP+FAIL; puste = zwykła seria.
  * Plan bez dat (kolumna „data” pusta): jednostka zamknięta dostaje datę wykonania z Sesji, niezamknięta — dzisiejszą.
  *   Dzięki temu aplikacja otwiera pierwszą niezrobioną jednostkę, a Log/Sesje/podsumowanie mają faktyczne daty.
+ * Klienci, kolumna J „zamiana”: TAK = klient może zamienić ćwiczenie (z powodem).
+ * Klienci, kolumna K „skala”: RIR = widok RIR zamiast RPE (arkusz zawsze zapisuje RPE; RIR = 10 − RPE).
+ * Klienci, kolumna L „sufit_oly”: ułamek 1RM ponad plan dla bojów (domyślnie 0,05).
+ * Plan, kolumna „zamienniki” (opcjonalna): nazwy rozdzielone „;”. Kolumna „blok” (opcjonalna): np. B2;
+ *   tygodnie numerowane u klienta ciągle (blok 2 od tyg. 7), bo id serii = klient|tydzien|jednostka|nr|seria.
+ * Data faktyczna jednostki = dzień z Sesje.start (data w Sesjach to data z planu); bez Sesji – data z planu.
  */
 
 const ROOT_FOLDER_NAME = 'Trening – Klienci';
 const CHUNK = 4 * 1024 * 1024; // musi być wielokrotnością 256 KB
 
 const LOG_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data', 'nr_cw', 'cwiczenie',
-  'seria', 'kg', 'powt', 'rpe', 'vbt_ms', 'wykonane', 'film_link', 'uwagi', 'typ'];
+  'seria', 'kg', 'powt', 'rpe', 'vbt_ms', 'wykonane', 'film_link', 'uwagi', 'typ',
+  'ocena', 'vbt_peak', 'wysokosc_cm', 'sciezka', 'zamiana'];
 const SES_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data',
   'bol_kolano', 'bol_bark', 'samopoczucie', 'czas_min', 'uwagi', 'start', 'koniec', 'bol', 'bol_max', 'rpe_sesji'];
+const DYS_HEADERS = ['id', 'zapisano', 'klient', 'data', 'cmj1', 'cmj2', 'cmj3', 'cmj_sr',
+  'sen', 'stres', 'zmeczenie', 'bolesnosc', 'hooper_suma', 'vbt_test', 'werdykt', 'powody'];
+const OCENY = ['L', 'S', 'W', 'X'];   // boje: Łatwo / Średnio / Walka / Spalone
 
 /* ---------- WEB ---------- */
 
@@ -51,7 +61,7 @@ function doGet(e) {
 /* ---------- API dla aplikacji na GitHub Pages ----------
  * POST (Content-Type text/plain, bez preflight CORS), body: {fn, key, args:[…]} → {ok:true, result} | {ok:false, error}
  */
-const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk };
+const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, saveDyspozycja, przesunJednostke };
 
 function doPost(e) {
   let out;
@@ -75,6 +85,7 @@ function getData(key) {
   const h = plan.shift();
   const idx = name => h.indexOf(name);
   const ix = idx('dod_serie'), idr = idx('drop');
+  const opt = (r, name) => idx(name) < 0 || r[idx(name)] === null || r[idx(name)] === undefined ? '' : String(r[idx(name)]).trim();
   const rows = plan.filter(r => String(r[idx('klient')]).toLowerCase() === client.id)
     .map(r => ({
       week: Number(r[idx('tydzien')]), day: String(r[idx('jednostka')]), title: String(r[idx('tytul')]),
@@ -83,12 +94,16 @@ function getData(key) {
       pct: r[idx('procent')] === '' ? null : Number(String(r[idx('procent')]).replace(',', '.')),
       kg: numOr_(txt_(r[idx('kg')])), rpe: numOr_(r[idx('rpe_max')]), note: String(r[idx('uwagi')]),
       extra: ix < 0 || r[ix] === '' || r[ix] === null ? null : (Number(r[ix]) || 0),
-      drop: idr < 0 ? 0 : (Number(r[idr]) || 0)
+      drop: idr < 0 ? 0 : (Number(r[idr]) || 0),
+      group: opt(r, 'grupa').toUpperCase(), block: opt(r, 'blok'),
+      swaps: opt(r, 'zamienniki').split(';').map(s => s.trim()).filter(Boolean)
     }));
   const sessions = readRows_('Sesje', SES_HEADERS, client.id);
   fillDates_(rows, sessions, today_());
-  return { cfg: { name: client.name, pain: client.pain, simple: client.simple, extra: client.extra },
-    plan: rows, logs: readRows_('Log', LOG_HEADERS, client.id), sessions: sessions };
+  return { cfg: { name: client.name, pain: client.pain, simple: client.simple, extra: client.extra,
+      swap: client.swap, scale: client.scale, olyCeil: client.olyCeil },
+    plan: rows, logs: readRows_('Log', LOG_HEADERS, client.id), sessions: sessions,
+    readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id) };
 }
 
 /** Zapis jednej serii. Idempotentny po id (klient|tydz|jedn|nr|seria). */
@@ -96,8 +111,68 @@ function logSet(key, s) {
   const client = mustClient_(key);
   const id = [client.id, s.week, s.day, s.order, s.set].join('|');
   upsert_('Log', LOG_HEADERS, id, [id, new Date(), client.id, s.week, s.day, s.date || today_(), s.order, s.name,
-    s.set, s.kg, s.reps, s.rpe, s.vbt, s.done ? 'TAK' : '', s.video || '', s.note || '', s.typ || '']);
+    s.set, s.kg, s.reps, s.rpe, s.vbt, s.done ? 'TAK' : '', s.video || '', s.note || '', s.typ || '']
+    .concat(logV2_(s)));
   return { ok: true, id: id };
+}
+
+/** Kolumny Log v2 (ocena boju, VBT z filmu, ścieżka, zamiana). Brak pól (stara aplikacja) = puste. */
+function logV2_(s) {
+  const o = String(s.ocena || '').toUpperCase();
+  let path = s.path === undefined || s.path === null ? '' : (typeof s.path === 'string' ? s.path : JSON.stringify(s.path));
+  if (path.length > 45000) path = '';                                         // limit komórki 50 000 znaków
+  const v = x => x === undefined || x === null ? '' : x;
+  return [OCENY.indexOf(o) >= 0 ? o : '', v(s.vbtPeak), v(s.height), path, String(s.swap || '')];
+}
+
+/** Dyspozycja dnia: jeden wpis na klienta i dzień (ponowny zapis tego dnia nadpisuje). */
+function saveDyspozycja(key, d) {
+  const client = mustClient_(key);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(d.date || '')) ? d.date : today_();
+  const id = [client.id, date].join('|');
+  const v = x => x === undefined || x === null ? '' : x;
+  const h = d.hooper || {};
+  upsert_('Dyspozycja', DYS_HEADERS, id, [id, new Date(), client.id, date,
+    v((d.cmj || [])[0]), v((d.cmj || [])[1]), v((d.cmj || [])[2]), v(d.cmjAvg),
+    v(h.sen), v(h.stres), v(h.zmeczenie), v(h.bolesnosc), v(h.suma), v(d.vbt),
+    String(d.verdict || ''), [].concat(d.reasons || []).join('; ')]);
+  return { ok: true, id: id };
+}
+
+/** Klient przesuwa niezrobione jednostki: moves = [{week, day, date}]. Zrobionych (z wpisem w Sesjach) nie zmienia. */
+function przesunJednostke(key, moves) {
+  const client = mustClient_(key);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
+    const v = sh.getDataRange().getValues(), h = v[0];
+    const res = planMoves_(tableOf_('Plan'), readRows_('Sesje', SES_HEADERS, client.id), client.id, [].concat(moves || []));
+    if (res.rows.length) {
+      planTextCols_();
+      const col = h.indexOf('data') + 1;
+      res.rows.forEach(([i, date]) => sh.getRange(i + 2, col).setValue(date));
+    }
+    return { ok: true, moved: res.moved, skipped: res.skipped };
+  } finally { lock.releaseLock(); }
+}
+
+/** Czysta funkcja: które wiersze Planu (indeks od 0, bez nagłówka) dostają nową datę. */
+function planMoves_(plan, sessions, clientId, moves) {
+  const done = {};
+  sessions.forEach(s => { done[s.tydzien + '|' + s.jednostka] = 1; });
+  const rows = [], moved = [], skipped = [];
+  moves.forEach(m => {
+    const u = m.week + '|' + m.day;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(m.date || ''))) { skipped.push({ week: m.week, day: m.day, why: 'zła data' }); return; }
+    if (done[u]) { skipped.push({ week: m.week, day: m.day, why: 'jednostka zrobiona' }); return; }
+    let n = 0;
+    plan.forEach((r, i) => {
+      if (String(r.klient).toLowerCase() === clientId && String(r.tydzien) === String(m.week) && String(r.jednostka) === String(m.day)) { rows.push([i, m.date]); n++; }
+    });
+    if (n) moved.push({ week: m.week, day: m.day, date: m.date }); else skipped.push({ week: m.week, day: m.day, why: 'brak w planie' });
+  });
+  return { rows, moved, skipped };
 }
 
 /** Usunięcie serii dodanej przez klienta (rozgrzewka / dodatkowa / drop) — kasuje wiersz w Log. */
@@ -190,10 +265,20 @@ function findClient_(key) {
       return { key: key, id: String(v[i][1]).toLowerCase(), name: String(v[i][2]),
         pain: cell(v[i], 5) === 'TAK',
         simple: cell(v[i], 6) === 'PROSTY',
-        extra: Number(String(v[i][7] === undefined ? '' : v[i][7]).replace(',', '.')) || 0 };
+        extra: Number(String(v[i][7] === undefined ? '' : v[i][7]).replace(',', '.')) || 0,
+        swap: cell(v[i], 9) === 'TAK',
+        scale: cell(v[i], 10) === 'RIR' ? 'RIR' : 'RPE',
+        olyCeil: olyCeil_(v[i][11]) };
     }
   }
   return null;
+}
+
+/** Klienci L „sufit_oly”: ułamek (0,05) albo procent (5 / „5%”); puste lub błędne = 0,05. */
+function olyCeil_(v) {
+  const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(',', '.').replace('%', ''));
+  if (!(n >= 0)) return 0.05;
+  return n >= 1 ? n / 100 : n;
 }
 
 function mustClient_(key) {
@@ -309,14 +394,21 @@ function setup() {
   if (!kl.getRange(1, 7).getValue()) kl.getRange(1, 7).setValue('tryb');
   if (!kl.getRange(1, 8).getValue()) kl.getRange(1, 8).setValue('dod_serie');
   if (!kl.getRange(1, 9).getValue()) kl.getRange(1, 9).setValue('masters');
-  // lista rozwijana w kolumnie „tryb”
-  kl.getRange(2, 7, Math.max(kl.getMaxRows() - 1, 1), 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(['PROSTY', 'PRO'], true).setAllowInvalid(true).build());
+  if (!kl.getRange(1, 10).getValue()) kl.getRange(1, 10).setValue('zamiana');
+  if (!kl.getRange(1, 11).getValue()) kl.getRange(1, 11).setValue('skala');
+  if (!kl.getRange(1, 12).getValue()) kl.getRange(1, 12).setValue('sufit_oly');
+  // listy rozwijane: „tryb”, „zamiana”, „skala”
+  const list = (col, vals) => kl.getRange(2, col, Math.max(kl.getMaxRows() - 1, 1), 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(vals, true).setAllowInvalid(true).build());
+  list(7, ['PROSTY', 'PRO']);
+  list(10, ['TAK', 'NIE']);
+  list(11, ['RPE', 'RIR']);
   // klucze liczbowe (Arkusze potrafią zamienić je na liczbę) → nowy klucz tekstowy
   const keys = kl.getRange(2, 1, kl.getLastRow() - 1, 1).getValues();
   keys.forEach((r, i) => { if (!/^k[0-9a-f]{11}$/.test(String(r[0]))) kl.getRange(i + 2, 1).setValue(newKey_()); });
   sheet_('Log', LOG_HEADERS);
   sheet_('Sesje', SES_HEADERS);
+  sheet_('Dyspozycja', DYS_HEADERS);
   const f = rootFolder_();
   UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }
@@ -392,7 +484,11 @@ function instalujWyzwalacze() {
 }
 
 function podsumowanie() {
-  const res = computeSummary_(tableOf_('Plan'), tableOf_('Log'), tableOf_('Sesje'), tableOf_('Klienci'));
+  const localDay = t => Utilities.formatDate(new Date(t), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const plan = tableOf_('Plan'), log = tableOf_('Log'), ses = tableOf_('Sesje');
+  const res = computeSummary_(plan, log, ses, tableOf_('Klienci'), { localDay });
+  const bl = computeBlocks_(plan, log, ses, tableOf_('Dyspozycja'), res.rows, { localDay });
+  writeTable_('Bloki', BLOK_HEADERS, keepNotes_(bl, tableOf_('Bloki')));
   writeTable_('Podsumowanie', SUM_HEADERS, res.rows, (sh, n) => {
     const col = SUM_HEADERS.indexOf('status') + 1;
     if (n) sh.getRange(2, col, n, 1).setBackgrounds(res.rows.map(r => [STATUS_BG[r[col - 1]] || '#ffffff']));
@@ -453,7 +549,22 @@ function weekOf_(d) {
   return iso_(x);
 }
 
-function computeSummary_(plan, log, ses, klienci) {
+/** Dzień w strefie Europe/Warsaw z ISO (Sesje.start). Apps Script: podsumowanie() podaje wersję z Utilities. */
+function localDayDefault_(t) {
+  try { return new Date(t).toLocaleDateString('sv-SE', { timeZone: 'Europe/Warsaw' }); } catch (e) { return String(t).slice(0, 10); }
+}
+
+/** Faktyczna data jednostki: klient|tydzien|jednostka → dzień z Sesje.start (data w Sesjach to data z planu). */
+function unitDates_(ses, localDay) {
+  const AD = {};
+  ses.forEach(s => {
+    const t = s.start instanceof Date ? s.start.toISOString() : String(s.start || '');
+    if (/^\d{4}-\d{2}-\d{2}T/.test(t)) AD[[String(s.klient).toLowerCase(), s.tydzien, s.jednostka].join('|')] = (localDay || localDayDefault_)(t);
+  });
+  return AD;
+}
+
+function computeSummary_(plan, log, ses, klienci, opts) {
   const P = {}, B = {}, D = {}, M = {}, SD = {};
   (klienci || []).forEach(k => { M[String(k.klient_id).toLowerCase()] = String(k.masters || '').trim().toUpperCase() === 'TAK'; });
   const g0 = () => ({ R: 0, P: 0, CR: 0, CP: 0, PS: 0, I: 0 });
@@ -461,6 +572,8 @@ function computeSummary_(plan, log, ses, klienci) {
   plan.forEach(r => { P[key(String(r.klient).toLowerCase(), r.tydzien, r.jednostka, r.nr)] = r; });
   // plan bez dat: data jednostki = data wykonania z Sesji (jednostki niezrobione nie wchodzą do tygodnia)
   ses.forEach(s => { if (!blank_(s.data)) SD[key(String(s.klient).toLowerCase(), s.tydzien, s.jednostka)] = s.data; });
+  // jednostka zrobiona: tydzień wg faktycznej daty treningu (jednostki bywają przesuwane)
+  const AD = unitDates_(ses, opts && opts.localDay);
   const acc = (c, w) => B[c + '|' + w] || (B[c + '|' + w] = { c, w, planW: {}, sess: 0, planned: 0, planTon: 0, donePlanned: 0, work: 0, hard: 0,
     ton: 0, nl: 0, intSum: 0, fail: 0, addDrop: 0, e1: {}, rpeDiff: [], feel: [], pain: NaN, srpe: 0, srpeN: 0, ex: {},
     strWork: 0, strFail: 0, olyAny: false,
@@ -468,8 +581,8 @@ function computeSummary_(plan, log, ses, klienci) {
          hiSets: 0, hiMade: 0, loSets: 0, loMiss: 0 } });
 
   plan.forEach(r => {
-    const c = String(r.klient).toLowerCase();
-    const w = weekOf_(blank_(r.data) ? SD[key(c, r.tydzien, r.jednostka)] : r.data);
+    const c = String(r.klient).toLowerCase(), u = key(c, r.tydzien, r.jednostka);
+    const w = weekOf_(AD[u] || (blank_(r.data) ? SD[u] : r.data));
     if (!c || !w) return;
     const a = acc(c, w); a.planned += n_(r.serie) || 0; a.planW[r.tydzien] = 1;
     const pk = n_(r.kg), pr = repsOf_(r.powt);
@@ -478,7 +591,7 @@ function computeSummary_(plan, log, ses, klienci) {
 
   log.forEach(l => {
     if (String(l.wykonane).toUpperCase() !== 'TAK') return;
-    const c = String(l.klient).toLowerCase(), s = String(l.seria), w = weekOf_(l.data);
+    const c = String(l.klient).toLowerCase(), s = String(l.seria), w = weekOf_(AD[key(c, l.tydzien, l.jednostka)] || l.data);
     if (!c || !w || /^R/i.test(s)) return;                                   // rozgrzewka poza objętością
     const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
     const a = acc(c, w), name = String(l.cwiczenie);
@@ -524,7 +637,7 @@ function computeSummary_(plan, log, ses, klienci) {
   });
 
   ses.forEach(s => {
-    const c = String(s.klient).toLowerCase(), w = weekOf_(s.data);
+    const c = String(s.klient).toLowerCase(), sd = AD[key(c, s.tydzien, s.jednostka)] || s.data, w = weekOf_(sd);
     if (!c || !w) return;
     const a = acc(c, w); a.sess++;
     const f = n_(s.samopoczucie); if (f > 0) a.feel.push(f);
@@ -532,7 +645,7 @@ function computeSummary_(plan, log, ses, klienci) {
     if (pm >= 0) a.pain = isNaN(a.pain) ? pm : Math.max(a.pain, pm);
     const rs = n_(s.rpe_sesji), mn = n_(s.czas_min);
     if (rs >= 0 && mn > 0) {
-      const d = iso_(day_(s.data)), load = rs * mn;
+      const d = iso_(day_(sd)), load = rs * mn;
       a.srpe += load; a.srpeN++;
       (D[c] || (D[c] = {}))[d] = ((D[c] || {})[d] || 0) + load;
     }
@@ -635,14 +748,104 @@ function computeSummary_(plan, log, ses, klienci) {
   return { rows, exRows, olyRows };
 }
 
+/* ================== BLOKI (klient × blok, historia współpracy) ==================
+ * Blok = kolumna Plan „blok” (pusta = „(bez bloku)”). Liczone z całej historii przy każdym podsumowaniu.
+ * Kolumna „wnioski” należy do trenera: keepNotes_ przenosi ją między przeliczeniami (klucz klient|blok).
+ */
+const BLOK_HEADERS = ['klient', 'blok', 'od', 'do', 'tygodnie', 'jednostki', 'wykonanie_%', 'tonaz_kg', 'e1RM_zm',
+  'najlepsze_boje', 'sRPE_sr', 'samopocz_sr', 'dyspozycja', 'bol_max', 'statusy', 'wnioski'];
+const NO_BLOCK = '(bez bloku)';
+
+function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
+  const key = (...a) => a.map(String).join('|');
+  const AD = unitDates_(ses, opts && opts.localDay);
+  const U = {}, P = {}, X = {};
+  const blockOf = r => String(r.blok === undefined || r.blok === null ? '' : r.blok).trim() || NO_BLOCK;
+  plan.forEach(r => {
+    const c = String(r.klient).toLowerCase(); if (!c) return;
+    const u = key(c, r.tydzien, r.jednostka), b = blockOf(r);
+    P[key(c, r.tydzien, r.jednostka, r.nr)] = r;
+    const x = X[c + '|' + b] || (X[c + '|' + b] = { c, b, units: {}, weeks: [], planned: 0, donePlanned: 0, ton: 0,
+      e1: {}, best: { R: [0, ''], P: [0, ''] }, rpe: [], feel: [], pain: NaN, dates: [] });
+    U[u] = x;
+    x.planned += n_(r.serie) || 0;
+    if (!x.units[u]) { x.units[u] = 0; x.weeks.push(n_(r.tydzien)); const pd = blank_(r.data) ? NaN : day_(r.data), d = AD[u] || (isNaN(pd) ? '' : iso_(pd)); if (d) x.dates.push(d); }
+  });
+  log.forEach(l => {
+    if (String(l.wykonane).toUpperCase() !== 'TAK') return;
+    const c = String(l.klient).toLowerCase(), s = String(l.seria), x = U[key(c, l.tydzien, l.jednostka)];
+    if (!x || /^R/i.test(s)) return;
+    const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
+    const fail = /FAIL/.test(String(l.typ || '')), kg = n_(l.kg), reps = n_(l.powt), rpe = n_(l.rpe);
+    if (/^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) x.donePlanned++;
+    if (kg > 0 && reps > 0) x.ton += kg * reps;
+    const name = String(l.cwiczenie), grp = groupOf_(pr.grupa, name);
+    if ((grp === 'R' || grp === 'P') && !fail && kg > x.best[grp][0]) x.best[grp] = [kg, name];
+    if (grp !== 'R' && grp !== 'P' && String(pr.prio) === 'A' && !fail && rpe >= 5 && kg > 0 && reps > 0) {
+      const e = kg * (1 + (reps + (10 - rpe)) / 30), w = n_(l.tydzien), m = x.e1[name] || (x.e1[name] = {});
+      m[w] = Math.max(m[w] || 0, e);
+    }
+  });
+  ses.forEach(s => {
+    const x = U[key(String(s.klient).toLowerCase(), s.tydzien, s.jednostka)]; if (!x) return;
+    x.units[key(String(s.klient).toLowerCase(), s.tydzien, s.jednostka)] = 1;
+    const r = n_(s.rpe_sesji), f = n_(s.samopoczucie);
+    if (r >= 0) x.rpe.push(r);
+    if (f > 0) x.feel.push(f);
+    const pm = !blank_(s.bol_max) ? n_(s.bol_max) : Math.max(n_(s.bol_kolano) || -1, n_(s.bol_bark) || -1);
+    if (pm >= 0) x.pain = isNaN(x.pain) ? pm : Math.max(x.pain, pm);
+  });
+  const SI = SUM_HEADERS.indexOf('status');
+  const pl = v => String(r1_(v)).replace('.', ',');
+  return Object.values(X).map(x => {
+    const d = x.dates.slice().sort(), od = d[0] || '', dd = d[d.length - 1] || '';
+    const wk = x.weeks.filter(w => w > 0), units = Object.values(x.units);
+    const e1 = Object.keys(x.e1).sort().map(n => {
+      const ws = Object.keys(x.e1[n]).map(Number).sort((a, b) => a - b);
+      if (ws.length < 2) return '';
+      const a = x.e1[n][ws[0]], b = x.e1[n][ws[ws.length - 1]];
+      return n + ' ' + Math.round(a) + '→' + Math.round(b) + ' (' + (b >= a ? '+' : '') + pl(100 * (b / a - 1)) + '%)';
+    }).filter(Boolean).join('; ');
+    const best = ['R', 'P'].filter(g => x.best[g][0]).map(g => g + ' ' + x.best[g][0] + ' kg (' + x.best[g][1] + ')').join('; ');
+    const inRange = t => od && dd && t >= od && t <= dd;
+    const verd = {};
+    (dys || []).forEach(r => {
+      const t = r.data instanceof Date ? iso_(day_(r.data)) : String(r.data || '').slice(0, 10);
+      if (String(r.klient).toLowerCase() === x.c && inRange(t) && r.werdykt) verd[r.werdykt] = (verd[r.werdykt] || 0) + 1;
+    });
+    const st = { '🔴': 0, '🟠': 0 };
+    (sumRows || []).forEach(r => {
+      if (r[0] !== x.c || !od || r[1] < weekOf_(od) || r[1] > weekOf_(dd)) return;
+      const s = String(r[SI] || '');
+      if (s.indexOf('🔴') === 0) st['🔴']++; else if (s.indexOf('🟠') === 0) st['🟠']++;
+    });
+    return [x.c, x.b, od, dd, wk.length ? Math.min(...wk) + '–' + Math.max(...wk) : '',
+      units.filter(Boolean).length + '/' + units.length, x.planned ? Math.round(100 * x.donePlanned / x.planned) : '',
+      Math.round(x.ton), e1, best, x.rpe.length ? r1_(avg_(x.rpe)) : '', x.feel.length ? r1_(avg_(x.feel)) : '',
+      Object.keys(verd).map(k => k + ' ' + verd[k]).join(', '), isNaN(x.pain) ? '' : x.pain,
+      st['🔴'] || st['🟠'] ? '🔴 ' + st['🔴'] + ', 🟠 ' + st['🟠'] : '', ''];
+  }).sort((a, b) => a[0].localeCompare(b[0]) || String(a[2]).localeCompare(String(b[2])));
+}
+
+/** Przenosi „wnioski” trenera do nowych wierszy; blok, który zniknął z planu, zostaje z wnioskami. */
+function keepNotes_(rows, old) {
+  const W = BLOK_HEADERS.indexOf('wnioski'), seen = {}, prev = {};
+  (old || []).forEach(r => { if (String(r.wnioski || '').trim()) prev[String(r.klient) + '|' + String(r.blok)] = r; });
+  const out = rows.map(r => { const k = r[0] + '|' + r[1]; seen[k] = 1; const c = r.slice(); if (prev[k]) c[W] = prev[k].wnioski; return c; });
+  Object.keys(prev).filter(k => !seen[k]).forEach(k => out.push(BLOK_HEADERS.map(h => prev[k][h] === undefined ? '' : prev[k][h])));
+  return out;
+}
+
 /* ================== WCZYTYWANIE PLANÓW Z DRIVE ==================
- * Plik JSON w „Trening – Klienci/_plany/”: lista wierszy planu (klucze = PLAN_HEADERS; dod_serie, drop, grupa opcjonalne).
- * Poprawny plik → podmiana wierszy klientów z pliku w zakładce Plan, plik przeniesiony do „_plany/wczytane”.
- * Błędny → „_plany/bledy”. Każdy import zapisuje wiersz w zakładce „Import”.
+ * Plik JSON w „Trening – Klienci/_plany/”: lista wierszy planu (klucze = PLAN_HEADERS; data, dod_serie, drop, grupa,
+ * zamienniki, blok opcjonalne). Poprawny plik → podmiana wierszy klientów z pliku w zakładce Plan, plik przeniesiony
+ * do „_plany/wczytane”. Jednostki już zrobione (wpis w Sesjach) zostają z dotychczasowego planu; plik, który
+ * nadpisałby zrobioną jednostkę innego bloku (ten sam tydzień i jednostka), trafia do „_plany/bledy”.
+ * Każdy import zapisuje wiersz w zakładce „Import”.
  */
 const PLAN_HEADERS = ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'nr', 'cwiczenie', 'prio', 'serie', 'powt',
-  'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa'];
-const PLAN_REQUIRED = ['klient', 'tydzien', 'jednostka', 'data', 'nr', 'cwiczenie', 'serie', 'powt'];
+  'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok'];
+const PLAN_REQUIRED = ['klient', 'tydzien', 'jednostka', 'nr', 'cwiczenie', 'serie', 'powt'];
 
 function wczytajPlany() {
   const lock = LockService.getScriptLock();
@@ -664,9 +867,15 @@ function wczytajPlany() {
         importLog_(f.getName(), 'BŁĄD', 0, '', errs.slice(0, 10).join(' | '));
         continue;
       }
-      const clients = writePlanRows_(rows);
+      const m = mergePlan_(tableOf_('Plan'), rows, tableOf_('Sesje'));
+      if (m.errors.length) {
+        f.moveTo(bad);
+        importLog_(f.getName(), 'BŁĄD', 0, m.clients.join(', '), m.errors.slice(0, 10).join(' | '));
+        continue;
+      }
+      writePlanRows_(m.rows);
       f.moveTo(ok);
-      importLog_(f.getName(), 'OK', rows.length, clients.join(', '), '');
+      importLog_(f.getName(), m.warnings.length ? 'OK (uwagi)' : 'OK', rows.length, m.clients.join(', '), m.warnings.slice(0, 10).join(' | '));
     }
   } finally { lock.releaseLock(); }
 }
@@ -692,24 +901,53 @@ function validatePlan_(rows) {
   return e;
 }
 
-/** Podmienia wiersze klientów z `rows`, reszta zostaje; kolumny układane wg PLAN_HEADERS (starsze arkusze też). */
-function writePlanRows_(rows) {
+/**
+ * Czysta funkcja: nowy plan klientów z pliku + reszta zakładki Plan.
+ * Zrobione jednostki (Sesje) klientów z pliku zostają z dotychczasowego planu; wiersze pliku dla nich są pomijane
+ * (uwaga), a gdy blok w pliku i w planie się różni — błąd (tygodnie trzeba numerować ciągle).
+ */
+function mergePlan_(existing, incoming, ses) {
+  const lc = v => String(v === undefined || v === null ? '' : v).toLowerCase();
+  const blk = r => String(r.blok === undefined || r.blok === null ? '' : r.blok).trim();
+  const unit = r => [lc(r.klient), r.tydzien, r.jednostka].join('|');
+  const clients = [...new Set(incoming.map(r => lc(r.klient)))];
+  const done = {};
+  ses.forEach(s => { done[unit(s)] = 1; });
+  const others = [], kept = [], keptBlock = {};
+  existing.forEach(r => {
+    if (r.klient === '' || r.klient === undefined) return;
+    if (clients.indexOf(lc(r.klient)) < 0) others.push(r);
+    else if (done[unit(r)]) { kept.push(r); keptBlock[unit(r)] = blk(r); }
+  });
+  const errors = [], warnings = [], fresh = [], skipped = {};
+  incoming.forEach(r => {
+    const u = unit(r);
+    if (!(u in keptBlock)) { fresh.push(r); return; }
+    if (blk(r) && keptBlock[u] !== blk(r)) {                              // plik z blokiem ≠ blok zrobionej jednostki
+      const was = keptBlock[u] || NO_BLOCK;
+      if (!skipped[u]) errors.push(lc(r.klient) + ' tyg. ' + r.tydzien + ' ' + r.jednostka + ': już zrobiona w bloku ' + was +
+        ', plik ma blok ' + blk(r) + ' — numeruj tygodnie dalej (np. od ' + (Math.max(...existing.filter(e => lc(e.klient) === lc(r.klient)).map(e => Number(e.tydzien) || 0)) + 1) + ')');
+    } else if (!skipped[u]) warnings.push(lc(r.klient) + ' tyg. ' + r.tydzien + ' ' + r.jednostka + ': zrobiona, zostaje bez zmian');
+    skipped[u] = 1;
+  });
+  return { rows: others.concat(kept, fresh), clients, errors, warnings };
+}
+
+/** Zapisuje całą zakładkę Plan (wiersze z mergePlan_); kolumny układane wg PLAN_HEADERS (starsze arkusze też). */
+function writePlanRows_(all0) {
   const ss = SpreadsheetApp.getActive();
   const sh = ss.getSheetByName('Plan') || ss.insertSheet('Plan');
-  const clients = [...new Set(rows.map(r => String(r.klient).toLowerCase()))];
-  const keep = tableOf_('Plan').filter(r => r.klient !== '' && clients.indexOf(String(r.klient).toLowerCase()) < 0);
   const toRow = r => PLAN_HEADERS.map(h => {
     let v = r[h] === undefined || r[h] === null ? '' : r[h];
     if (h === 'klient') v = String(v).toLowerCase();
     if (h === 'powt' || h === 'data') v = v instanceof Date ? fmtDate_(v) : String(v);
     return v;
   });
-  const all = [PLAN_HEADERS].concat(keep.map(toRow), rows.map(toRow));
+  const all = [PLAN_HEADERS].concat(all0.map(toRow));
   sh.clearContents();
   ['E:E', 'J:J', 'L:L'].forEach(a => sh.getRange(a).setNumberFormat('@'));   // przed zapisem: „6-8” nie zmieni się w datę
   sh.getRange(1, 1, all.length, PLAN_HEADERS.length).setValues(all);
   sh.setFrozenRows(1);
-  return clients;
 }
 
 function importLog_(file, status, n, clients, msg) {
