@@ -1,6 +1,6 @@
 // Service worker: pliki aplikacji w pamięci telefonu → start bez sieci.
 // Zmień VERSION przy każdej publikacji, żeby telefony pobrały nową wersję.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'trening-' + VERSION;
 const SHELL = ['./', 'index.html', 'config.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png'];
 
