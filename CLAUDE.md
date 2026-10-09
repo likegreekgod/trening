@@ -4,6 +4,12 @@ Aplikacja, w której klienci trenera personalnego (ciężary, siła, sylwetka) w
 
 Rozmawiaj z Damianem po polsku, zwięźle. Interfejs aplikacji jest po polsku.
 
+## Dokumenty
+
+- `docs/decyzje.md`: ustalenia projektowe, odrzucone pomysły, otwarte zadania. Nowe ustalenia dopisuj **na górze**, z datą. Przed propozycją zmiany sprawdź „Odrzucone i dlaczego”.
+- `docs/ui-v2-spec.md`: specyfikacja interfejsu v2 (obowiązująca przy pracy nad v2).
+- `docs/ui-v2-prototyp.html`: prototyp v2 na danych przykładowych, wzorzec wyglądu i kod komponentów (`track()`, `analyse()`, `sugOly`, `verdict`). Docelowy styl: **Pomost**; wariant „Obecny” służy tylko do porównania.
+
 ## Architektura
 
 ```
@@ -17,9 +23,10 @@ Filmy: telefon → Drive bezpośrednio (sesja resumable otwierana przez startUpl
 ```
 
 - `web/index.html` to jeden plik (HTML + CSS + JS), bez bundlera i frameworka. Cała komunikacja z serwerem idzie przez funkcję `call(fn, ...args)`.
-- `apps-script/Code.gs` jest powiązany z arkuszem `Trening – Aplikacja (dane)` (konto damian.trepka@gmail.com). API: `doPost` → `API_FNS` (getData, logSet, logSession, deleteSet, startUpload, uploadChunk). Pierwszym argumentem każdej funkcji jest klucz klienta.
+- `apps-script/Code.gs` jest powiązany z arkuszem `Trening – Aplikacja (dane)` (konto trenera, właściciel arkusza; `clasp login` musi być na tym samym koncie). API: `doPost` → `API_FNS` (getData, logSet, logSession, deleteSet, startUpload, uploadChunk). Pierwszym argumentem każdej funkcji jest klucz klienta.
 - `apps-script/Index.html` to stara wersja działająca przez `doGet` i `google.script.run` (linki `/exec?k=`). Zostaje na okres przejściowy. Nowe funkcje rób w `web/index.html`; starą wersję poprawiaj tylko przy błędach.
 - Klucz klienta w linku (`?k=k` + 11 znaków hex) jest jedynym zabezpieczeniem. PWA zapamiętuje go w `localStorage` („key”).
+- Nowe zapisy to nowe akcje w `API_FNS` wywoływane przez `call()` (np. `saveDyspozycja`), nigdy `google.script.run`.
 
 ## Polecenia
 
@@ -52,6 +59,13 @@ Zasady zgodności:
 - Nowe kolumny Log i Sesje dopisuj tylko **na końcu** nagłówków. `sheet_()` sam uzupełnia nagłówek w istniejącym arkuszu.
 - Nie zmieniaj formatu `id`.
 - Stare kolumny (bol_kolano, bol_bark) wypełniaj dalej.
+
+Zmiany planowane w v2 (szczegóły: `docs/ui-v2-spec.md`, „Zmiany w arkuszu”):
+- Klienci: `zamiana` (TAK/NIE), `skala` (RPE/RIR), `sufit_oly` (ułamek, domyślnie 0,05);
+- Plan: opcjonalna kolumna `zamienniki` (nazwy rozdzielone „;”);
+- Log: `ocena`, `vbt_peak`, `wysokosc_cm`, `sciezka`, `zamiana`;
+- nowa zakładka `Dyspozycja`.
+Arkusz zawsze zapisuje RPE (RIR = 10 − RPE to tylko widok). Ocena podejścia w bojach trafia do `rpe`/`typ`, więc Podsumowanie_OLY liczy się bez zmian.
 
 ## Plany treningowe
 
@@ -92,6 +106,16 @@ Konwencje Damiana:
   - kolory tylko przez zmienne w `:root`;
   - jasny motyw przez `prefers-color-scheme`.
 
+### Zasady v2
+
+- v2 powstaje w `web/`. `apps-script/Index.html` zostaje bez zmian (tylko poprawki błędów).
+- Styl Pomost: ostre rogi 2 px, linie zamiast kart, zakładki podkreślone akcentem. Tokeny kolorów z tabeli w specyfikacji, jasny i ciemny motyw przez `prefers-color-scheme`.
+- Etykiety ≥ 12 px (obok zasad dostępności wyżej).
+- Czcionki (Big Shoulders Display, Instrument Sans, IBM Plex Mono) jako woff2 w `web/fonts/` (licencja OFL), dopisane do cache w `sw.js`. Bez linku do Google Fonts; to jedyny wyjątek od zasady „wszystko inline”.
+- Różnice między klientami tylko flagami z zakładki Klienci (`zamiana`, `skala`, `sufit_oly`) zwracanymi w `cfg` z getData.
+- Nie zmieniaj logiki zapisu: format id serii, typy serii (R/D/FAIL), kolejka offline, wysyłka filmów na Drive (resumable + 4 MB), tryby PROSTY i PRO.
+- Czyste funkcje z prototypu (`sugOly`, `verdict`, `analyse`, przeliczenie RPE/RIR) wydzielaj tak, żeby dało się je testować w Node.
+
 ## Podsumowanie (Code.gs, sekcja PODSUMOWANIE)
 
 `computeSummary_(plan, log, ses, klienci)` to czysta funkcja, testowana w `tests/code.test.js`. Liczy trzy zakładki:
@@ -110,6 +134,7 @@ Przy zmianie reguł dopisz scenariusz testowy (syntetyczne tygodnie) i sprawdź,
   - przejrzyj zrzut 390×844 (Playwright);
   - sprawdź payloady wysyłane do API.
 - Nie dodawaj zależności do `web/`: wszystko inline, bez CDN, bo aplikacja musi działać offline.
+- v2: testy jednostkowe dla `sugOly`, `verdict`, `analyse` i przeliczenia RPE/RIR; Playwright z atrapą `call()`/`fetch`, zrzuty 390×844 w jasnym i ciemnym motywie, tryby PROSTY i PRO, tryb offline.
 
 ## Znane pułapki
 
@@ -125,3 +150,4 @@ Przy zmianie reguł dopisz scenariusz testowy (syntetyczne tygodnie) i sprawdź,
 ## RODO
 
 Filmy i dane o bólu to dane osobowe, w tym dane o zdrowiu. Arkusz i foldery są prywatne. Repozytorium jest publiczne, więc nie commituj danych klientów, kluczy, eksportów arkusza ani `.clasp.json`.
+Dotyczy to też identyfikatorów arkusza i folderów Drive oraz zrzutów ekranu: w kodzie, testach i zrzutach tylko dane syntetyczne.
