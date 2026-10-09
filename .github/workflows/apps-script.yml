@@ -1,0 +1,46 @@
+name: Wdrożenie Apps Script
+# Po scaleniu zmian w apps-script/ do main: testy → clasp push → nowa wersja istniejącego wdrożenia (adres /exec bez zmian).
+# Sekrety repozytorium (Settings → Secrets and variables → Actions):
+#   CLASPRC_JSON   zawartość ~/.clasprc.json po `clasp login` (konto właściciela arkusza)
+#   SCRIPT_ID      Apps Script → Ustawienia projektu → Identyfikator skryptu
+#   DEPLOYMENT_ID  Wdróż → Zarządzaj wdrożeniami → Identyfikator wdrożenia (AKfy…)
+on:
+  push:
+    branches: [main]
+    paths: ['apps-script/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: apps-script
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:code
+      - name: Konfiguracja clasp
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+        run: |
+          test -n "$CLASPRC_JSON" && test -n "$SCRIPT_ID" || { echo "Brak sekretów CLASPRC_JSON / SCRIPT_ID"; exit 1; }
+          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+          printf '{"scriptId":"%s","rootDir":"apps-script"}' "$SCRIPT_ID" > .clasp.json
+      - name: clasp push
+        run: npx clasp push --force
+      - name: clasp deploy (istniejące wdrożenie)
+        env:
+          DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
+        run: |
+          test -n "$DEPLOYMENT_ID" || { echo "Brak sekretu DEPLOYMENT_ID"; exit 1; }
+          npx clasp deploy -i "$DEPLOYMENT_ID" -d "$(git log -1 --pretty=%s | cut -c1-90)"
+      - name: Sprzątanie
+        if: always()
+        run: rm -f ~/.clasprc.json .clasp.json

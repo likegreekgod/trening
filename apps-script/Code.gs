@@ -14,6 +14,8 @@
  * Plan, kolumna „drop” (opcjonalna): liczba zaplanowanych drop setów po ostatniej serii.
  * Log, seria: 1…n robocze, n+1… dodatkowe, R1… rozgrzewka, D1… drop set.
  * Log, typ: DROP, FAIL (nieudana) lub DROP+FAIL; puste = zwykła seria.
+ * Plan bez dat (kolumna „data” pusta): jednostka zamknięta dostaje datę wykonania z Sesji, niezamknięta — dzisiejszą.
+ *   Dzięki temu aplikacja otwiera pierwszą niezrobioną jednostkę, a Log/Sesje/podsumowanie mają faktyczne daty.
  */
 
 const ROOT_FOLDER_NAME = 'Trening – Klienci';
@@ -83,15 +85,17 @@ function getData(key) {
       extra: ix < 0 || r[ix] === '' || r[ix] === null ? null : (Number(r[ix]) || 0),
       drop: idr < 0 ? 0 : (Number(r[idr]) || 0)
     }));
+  const sessions = readRows_('Sesje', SES_HEADERS, client.id);
+  fillDates_(rows, sessions, today_());
   return { cfg: { name: client.name, pain: client.pain, simple: client.simple, extra: client.extra },
-    plan: rows, logs: readRows_('Log', LOG_HEADERS, client.id), sessions: readRows_('Sesje', SES_HEADERS, client.id) };
+    plan: rows, logs: readRows_('Log', LOG_HEADERS, client.id), sessions: sessions };
 }
 
 /** Zapis jednej serii. Idempotentny po id (klient|tydz|jedn|nr|seria). */
 function logSet(key, s) {
   const client = mustClient_(key);
   const id = [client.id, s.week, s.day, s.order, s.set].join('|');
-  upsert_('Log', LOG_HEADERS, id, [id, new Date(), client.id, s.week, s.day, s.date, s.order, s.name,
+  upsert_('Log', LOG_HEADERS, id, [id, new Date(), client.id, s.week, s.day, s.date || today_(), s.order, s.name,
     s.set, s.kg, s.reps, s.rpe, s.vbt, s.done ? 'TAK' : '', s.video || '', s.note || '', s.typ || '']);
   return { ok: true, id: id };
 }
@@ -115,7 +119,7 @@ function deleteSet(key, s) {
 function logSession(key, s) {
   const client = mustClient_(key);
   const id = [client.id, s.week, s.day].join('|');
-  upsert_('Sesje', SES_HEADERS, id, [id, new Date(), client.id, s.week, s.day, s.date,
+  upsert_('Sesje', SES_HEADERS, id, [id, new Date(), client.id, s.week, s.day, s.date || today_(),
     s.knee, s.shoulder, s.feel, s.minutes, s.note || '', s.start || '', s.end || '', s.pain || '', s.painMax === undefined ? '' : s.painMax, s.rpeSession === undefined ? '' : s.rpeSession]);
   return { ok: true };
 }
@@ -123,6 +127,7 @@ function logSession(key, s) {
 /** Start wgrywania filmu: tworzy sesję resumable w Drive, zwraca uploadId. */
 function startUpload(key, meta) {
   const client = mustClient_(key);
+  meta.date = meta.date || today_();
   const folder = sessionFolder_(client, meta.date, meta.day);
   const safe = String(meta.name).replace(/[^\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ \-]/g, '').slice(0, 40);
   const ext = (String(meta.fileName).match(/\.[a-z0-9]+$/i) || ['.mp4'])[0];
@@ -253,6 +258,26 @@ function fmtDate_(d) {
   return String(d).slice(0, 10);
 }
 
+/** Dzisiejsza data w strefie skryptu (YYYY-MM-DD). */
+function today_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+/** Data z Sesji: tekst „YYYY-MM-DD” albo ISO z readRows_ (komórka-data → UTC) → dzień w strefie skryptu. */
+function sesDay_(v) {
+  const t = String(v === null || v === undefined ? '' : v);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(t)) return fmtDate_(new Date(t));
+  return /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : '';
+}
+
+/** Plan bez dat: jednostka zamknięta → data z Sesji, niezamknięta → dziś. Wiersze z datą bez zmian. */
+function fillDates_(rows, sessions, today) {
+  if (!rows.some(r => !r.date)) return;
+  const done = {};
+  sessions.forEach(s => { const d = sesDay_(s.data); if (d) done[s.tydzien + '|' + s.jednostka] = d; });
+  rows.forEach(r => { if (!r.date) r.date = done[r.week + '|' + r.day] || today; });
+}
+
 function rootFolder_() {
   const props = PropertiesService.getScriptProperties();
   const id = props.getProperty('ROOT_FOLDER_ID');
@@ -326,7 +351,7 @@ function linki() {
 
 /* ================== PODSUMOWANIE (dla trenera) ==================
  * Uruchom `podsumowanie` (albo menu Trening → Odśwież podsumowanie). `instalujPodsumowanie` = codziennie ok. 5:00.
- * Tydzień = pon–niedz wg daty jednostki z planu. Liczone tylko serie wykonane (✓), bez rozgrzewki (R…).
+ * Tydzień = pon–niedz wg daty jednostki z planu (plan bez dat: data z Sesji). Liczone tylko serie wykonane (✓), bez rozgrzewki (R…).
  * Miary: wykonanie planu, serie robocze / twarde (RPE ≥ 7, FAIL, DROP), tonaż [kg], NL i średnia intensywność [%1RM]
  * dla ćwiczeń z % w planie, % FAIL, serie dodatkowe + drop, sRPE-TL = RPE sesji × min [AU] (Foster 2001),
  * ACWR „uncoupled” = sRPE-TL tygodnia ÷ średnia 4 poprzednich tygodni (Gabbett 2016, Lolli 2019; min. 3 tyg. historii), monotonia i strain (Foster 1998), zmiana e1RM ćwiczeń głównych
@@ -429,11 +454,13 @@ function weekOf_(d) {
 }
 
 function computeSummary_(plan, log, ses, klienci) {
-  const P = {}, B = {}, D = {}, M = {};
+  const P = {}, B = {}, D = {}, M = {}, SD = {};
   (klienci || []).forEach(k => { M[String(k.klient_id).toLowerCase()] = String(k.masters || '').trim().toUpperCase() === 'TAK'; });
   const g0 = () => ({ R: 0, P: 0, CR: 0, CP: 0, PS: 0, I: 0 });
   const key = (...a) => a.map(String).join('|');
   plan.forEach(r => { P[key(String(r.klient).toLowerCase(), r.tydzien, r.jednostka, r.nr)] = r; });
+  // plan bez dat: data jednostki = data wykonania z Sesji (jednostki niezrobione nie wchodzą do tygodnia)
+  ses.forEach(s => { if (!blank_(s.data)) SD[key(String(s.klient).toLowerCase(), s.tydzien, s.jednostka)] = s.data; });
   const acc = (c, w) => B[c + '|' + w] || (B[c + '|' + w] = { c, w, planW: {}, sess: 0, planned: 0, planTon: 0, donePlanned: 0, work: 0, hard: 0,
     ton: 0, nl: 0, intSum: 0, fail: 0, addDrop: 0, e1: {}, rpeDiff: [], feel: [], pain: NaN, srpe: 0, srpeN: 0, ex: {},
     strWork: 0, strFail: 0, olyAny: false,
@@ -441,7 +468,8 @@ function computeSummary_(plan, log, ses, klienci) {
          hiSets: 0, hiMade: 0, loSets: 0, loMiss: 0 } });
 
   plan.forEach(r => {
-    const c = String(r.klient).toLowerCase(), w = weekOf_(r.data);
+    const c = String(r.klient).toLowerCase();
+    const w = weekOf_(blank_(r.data) ? SD[key(c, r.tydzien, r.jednostka)] : r.data);
     if (!c || !w) return;
     const a = acc(c, w); a.planned += n_(r.serie) || 0; a.planW[r.tydzien] = 1;
     const pk = n_(r.kg), pr = repsOf_(r.powt);

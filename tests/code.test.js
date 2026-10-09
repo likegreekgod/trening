@@ -80,3 +80,21 @@ test('computeSummary_: ciężarowiec masters – spalone < 85% i VBT', () => {
   assert.equal(r.rows[3][C.SUM_HEADERS.indexOf('status')], '🔴 za dużo');
   assert.equal(r.rows[0][C.SUM_HEADERS.indexOf('fail_%')], 0);              // spalone boje nie wchodzą do fail_%
 });
+
+test('fillDates_: plan bez dat → data z Sesji albo dzisiejsza', () => {
+  const rows = [{ week: 1, day: 'T1', date: '' }, { week: 1, day: 'T2', date: '' }, { week: 1, day: 'T3', date: '2026-10-08' }];
+  C.fillDates_(rows, [{ tydzien: 1, jednostka: 'T1', data: '2026-10-05' }], '2026-10-09');
+  assert.deepEqual(rows.map(r => r.date), ['2026-10-05', '2026-10-09', '2026-10-08']);
+  assert.equal(C.sesDay_(''), '');
+});
+
+test('computeSummary_: plan bez dat → tydzień z daty Sesji, jednostki niezrobione pominięte', () => {
+  const plan = [1, 2].map(w => ({ klient: 'robert', tydzien: w, jednostka: 'T1', data: '', nr: 1, cwiczenie: 'Przysiad', prio: 'A', serie: 3, powt: '5', kg: 80 }));
+  const log = [1, 2, 3].map(s => ({ klient: 'robert', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr_cw: 1, cwiczenie: 'Przysiad', seria: s, kg: 80, powt: 5, rpe: 7, wykonane: 'TAK' }));
+  const ses = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', data: d(1, 0), samopoczucie: 4, czas_min: 60, rpe_sesji: 6 }];
+  const r = C.computeSummary_(plan, log, ses, []);
+  const H = C.SUM_HEADERS;
+  assert.equal(r.rows.length, 1);
+  assert.equal(r.rows[0][H.indexOf('tydzien_od')], d(1, 0));
+  assert.equal(r.rows[0][H.indexOf('wykonanie_%')], 100);
+});
