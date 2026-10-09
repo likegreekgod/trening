@@ -42,6 +42,7 @@ git push                         # zmiany w web/ → GitHub Actions → GitHub P
 
 Każda zmiana w `web/` wymaga podbicia `VERSION` w `web/sw.js`, bo inaczej telefony mogą trzymać starą wersję.
 Każda zmiana w `Code.gs` wymaga `gas:push` i `gas:deploy`. Bez deploy telefon dalej rozmawia ze starą wersją API.
+Robi to automatycznie `.github/workflows/apps-script.yml` po scaleniu zmian w `apps-script/**` do `main` (testy → `clasp push` → nowa wersja istniejącego wdrożenia). Sekrety repozytorium: `CLASPRC_JSON`, `SCRIPT_ID`, `DEPLOYMENT_ID`. `clasp push` zastępuje cały projekt Apps Script plikami z `apps-script/`, więc poprawki zrobione tylko w edytorze Apps Script przepadną: najpierw przenieś je do repo.
 
 ## Dane (arkusz)
 
