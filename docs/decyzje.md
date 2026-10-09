@@ -2,6 +2,22 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-09 · Plan wdrożenia v2, wdrażanie, historia klienta
+
+Analiza i podział na PR-y: `docs/ui-v2-plan.md`.
+
+- Kroki 5–7 zrobione: `Code.gs` w Apps Script przez clasp, `Plan.gs` usunięty, `PWA_URL`, setup, wyzwalacze, nowe linki; adres /exec w `web/config.js`; test na telefonie (instalacja, zapis serii, film, tryb samolotowy) zaliczony.
+- Wdrażanie backendu: GitHub Action `apps-script.yml` po scaleniu zmian w `apps-script/**` do `main` (testy → `clasp push` → nowa wersja istniejącego wdrożenia). Sekrety `CLASPRC_JSON`, `SCRIPT_ID`, `DEPLOYMENT_ID`. Poprawki robione tylko w edytorze Apps Script przepadają przy następnym push (tak było z „plan bez dat”, przeniesione do repo).
+- Bez sieci film nie trafia do kolejki (za duży do pamięci przeglądarki); w v2 czytelny komunikat zamiast „Błąd wgrywania”.
+- Przyciski spoza specyfikacji zostają: „⇣ Jak 1. seria”, „+ Seria (N)”, „✓ Wszystko jak w planie”, ✕.
+- FAIL przechodzi z listy RPE do pola ✓/✕, także w trybie PROSTY (ściągawka do poprawy).
+- Ręczne pole VBT m/s znika z wiersza serii; wpis prędkości z urządzenia (np. Enode) w oknie kamery, zapis dalej do `vbt_ms`.
+- Czyste funkcje v2 w `web/lib.js` (wyjątek od „index.html to jeden plik”), dopisane do cache `sw.js`, testowane w Node.
+- Światła sędziowskie to luźne skojarzenie: tabela ocen bez zmian (Walka = 1 białe + 2 czerwone). Temat zamknięty.
+- Daty w planie są wstępne i opcjonalne (puste = dziś). Klient może przesunąć niezrobioną jednostkę (`przesunJednostke`, zapis w Plan, offline przez kolejkę); po zmianie propozycja „przesuń też kolejne (o N dni)”. Zrobiona jednostka ma datę z Sesji i ta liczy się w podsumowaniu. Nowy plik planu nadpisuje przesunięcia.
+- Historia klienta: ciągła numeracja tygodni u klienta (id serii bez zmian), opcjonalna kolumna Plan `blok` (w aplikacji „Blok N · tydz. M”). Wczytanie planu nie usuwa wykonanych jednostek, plik z tygodniem kolidującym z wykonanymi jednostkami innego bloku trafia do `_plany/bledy`.
+- Nowa zakładka `Bloki` (klient × blok, liczona automatycznie: daty, wykonanie, tonaż, e1RM / najlepsze boje, rekordy, sRPE, samopoczucie, dyspozycja, ból, statusy) z kolumną `wnioski` trenera, zachowywaną przy przeliczaniu. Projekt claude.ai czyta `Bloki` przed nowym planem.
+
 ## 2026-10-09 · Interfejs v2 (rozmowa o redesignie)
 
 Specyfikacja: `docs/ui-v2-spec.md`, prototyp: `docs/ui-v2-prototyp.html`.
@@ -114,14 +130,14 @@ Komunikacja ekranu z mózgiem przez jedną funkcję `call()`: POST typu text/pla
 
 ### Otwarte zadania
 
-- Krok 5: wkleić nowy Code.gs, usunąć Plan.gs, dodać PWA_URL, uruchomić setup, instalujWyzwalacze i linki, wdrożyć nową wersję, zapisać adres /exec.
-- Krok 6: wpisać adres /exec do `web/config.js`, poczekać na publikację przez Actions.
-- Krok 7: test na telefonie (instalacja, zapis serii, film, tryb samolotowy), potem nowe linki dla klientów.
-- Sklonować repozytorium w VS Code i zainstalować rozszerzenie Claude Code. Skonfigurować clasp: włączyć Apps Script API, `.clasp.json` z ID skryptu, ID wdrożenia dla `gas:deploy`.
+- ~~Kroki 5–7~~ zrobione 09.10.2026 (wpis na górze). Do zrobienia: wysłać klientom nowe linki z kolumny E.
+- ~~Konfiguracja clasp~~ zrobiona 09.10.2026 (GitHub Action `apps-script.yml`).
+- Sprawdzić, czy dotychczasowe plany miały ciągłą numerację tygodni u klienta (ryzyko nadpisania Logu przy bloku zaczynającym się od tygodnia 1).
+- v2 według `docs/ui-v2-plan.md`, zaczynając od PR 1 (backend).
 - W zakładce Klienci ustawić masters = TAK tam, gdzie dotyczy.
-- Grupowanie tygodni w podsumowaniu: z daty z planu na faktyczną datę treningu (jednostki bywają przesuwane).
+- Grupowanie tygodni w podsumowaniu: z daty z planu na faktyczną datę treningu (jednostki bywają przesuwane). W v2 PR 1 (data z Sesji dla zrobionych jednostek).
 - Zaktualizować wersje akcji w `pages.yml` (ostrzeżenie o wycofaniu Node.js 20).
-- Zaktualizować skill trenerski: folder `_plany` zamiast Plan.gs, nowy podział pracy.
+- Zaktualizować skill trenerski: folder `_plany` zamiast Plan.gs, nowy podział pracy; kolumna `blok`, ciągła numeracja tygodni, daty opcjonalne, czytanie zakładki `Bloki`.
 - Sprawdzić eksport danych w aplikacji Enode i zapytać producenta o API dla partnerów.
 - Prototyp v1 analizy ścieżki sztangi na jednym filmie bocznym (najlepiej z równoległym pomiarem Enode).
 - Do decyzji później: kolumna partia (serie twarde na grupę mięśniową), alert mailowy (ból > 3/10, ≥ 2 FAIL), link do instruktażu przy ćwiczeniu, deload z planu zamiast „Tydz. 6” na sztywno.
