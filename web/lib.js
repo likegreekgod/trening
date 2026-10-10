@@ -53,6 +53,66 @@
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
   };
 
+  /* ---------- daty jednostek (RRRR-MM-DD, liczone w UTC, bez stref) ---------- */
+  const utc = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+  L.addDays = (s, n) => new Date(utc(s) + n * 864e5).toISOString().slice(0, 10);
+  L.dayDiff = (a, b) => Math.round((utc(b) - utc(a)) / 864e5);
+  /** „06.10” */
+  L.ddmm = s => s ? s.slice(8, 10) + '.' + s.slice(5, 7) : '';
+  L.weekday = s => s ? ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'][new Date(utc(s)).getUTCDay()] : '';
+  L.monthShort = s => s ? ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'][+s.slice(5, 7) - 1] : '';
+
+  /** jednostki planu: [{week, day, date, title, block, rows}] posortowane po dacie */
+  L.units = plan => {
+    const m = new Map();
+    plan.forEach(r => {
+      const k = r.week + '|' + r.day;
+      if (!m.has(k)) m.set(k, { week: r.week, day: r.day, date: r.date || '', title: r.title || '', block: r.block || '', rows: [] });
+      m.get(k).rows.push(r);
+    });
+    return [...m.values()].sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.week - b.week || String(a.day).localeCompare(String(b.day)));
+  };
+
+  /** tygodnie lżejsze z planu (deload): planowany tonaż ≤ 75% średniej z maks. 3 poprzednich (jak w podsumowaniu) */
+  L.lightWeeks = plan => {
+    const ton = {};
+    plan.forEach(r => {
+      const kg = typeof r.kg === 'number' ? r.kg : NaN, reps = L.repsDefault(r.reps);
+      ton[r.week] = (ton[r.week] || 0) + (kg > 0 && reps > 0 ? (Number(r.sets) || 0) * reps * kg : 0);
+    });
+    const ws = Object.keys(ton).map(Number).sort((a, b) => a - b), out = new Set();
+    ws.forEach((w, i) => {
+      const prev = ws.slice(Math.max(0, i - 3), i).map(x => ton[x]).filter(v => v > 0);
+      if (prev.length && ton[w] > 0 && ton[w] <= 0.75 * prev.reduce((s, v) => s + v, 0) / prev.length) out.add(w);
+    });
+    return out;
+  };
+
+  /** „Blok B2 · tydz. 1”: numer tygodnia liczony od pierwszego tygodnia bloku; bez kolumny blok → null */
+  L.blockInfo = (plan, week) => {
+    const r = plan.find(x => x.week === week && x.block);
+    if (!r) return null;
+    const first = Math.min(...plan.filter(x => x.block === r.block).map(x => x.week));
+    return { block: r.block, n: week - first + 1 };
+  };
+
+  /** serie robocze zrobione / zaplanowane i tonaż jednostki (bez rozgrzewki) z wpisów Logu {seria: log} per ćwiczenie */
+  L.unitStats = (exs, logsOf) => {
+    let done = 0, all = 0, ton = 0;
+    exs.forEach(ex => {
+      const L2 = logsOf(ex) || {};
+      all += Number(ex.sets) || 0;
+      Object.keys(L2).forEach(s => {
+        const l = L2[s];
+        if (l.wykonane !== 'TAK' || /^R/i.test(s)) return;
+        if (/^\d+$/.test(s) && +s <= ex.sets) done++;
+        const kg = parseFloat(String(l.kg).replace(',', '.')), reps = parseFloat(String(l.powt).replace(',', '.'));
+        if (kg > 0 && reps > 0) ton += kg * reps;
+      });
+    });
+    return { done, all, ton: Math.round(ton) };
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -51,6 +51,43 @@ test('plateZone: kolor talerza wg % 1RM', () => {
     ['p5', 'p10', 'p10', 'p15', 'p15', 'p20', 'p20', 'p25', '']);
 });
 
+test('addDays, dayDiff, ddmm, weekday', () => {
+  assert.equal(L.addDays('2026-10-30', 3), '2026-11-02');
+  assert.equal(L.addDays('2026-10-25', 1), '2026-10-26');       // zmiana czasu nie przesuwa dnia
+  assert.equal(L.dayDiff('2026-10-06', '2026-10-09'), 3);
+  assert.equal(L.dayDiff('2026-10-09', '2026-10-06'), -3);
+  assert.equal(L.ddmm('2026-10-06'), '06.10');
+  assert.equal(L.weekday('2026-10-06'), 'wt');
+  assert.equal(L.monthShort('2026-10-06'), 'paź');
+  assert.equal(L.monthShort(''), '');
+});
+
+const P = (week, day, date, kg, extra) => Object.assign({ week, day, date, title: 'J' + day, sets: 4, reps: '5', kg }, extra || {});
+test('units: jednostki planu po dacie', () => {
+  const u = L.units([P(1, 'T2', '2026-10-08', 50), P(1, 'T1', '2026-10-06', 50), P(1, 'T1', '2026-10-06', 30)]);
+  assert.deepEqual(u.map(x => [x.day, x.rows.length]), [['T1', 2], ['T2', 1]]);
+});
+
+test('lightWeeks: tydzień lżejszy z planu', () => {
+  const plan = [1, 2, 3, 4].map(w => P(w, 'T1', '', w === 4 ? 60 : 100)).concat([P(2, 'T2', '', 'BW')]);
+  assert.deepEqual([...L.lightWeeks(plan)], [4]);
+  assert.deepEqual([...L.lightWeeks([P(1, 'T1', '', 50)])], []);
+});
+
+test('blockInfo: numer tygodnia w bloku', () => {
+  const plan = [P(1, 'T1', '', 50, { block: 'B1' }), P(7, 'T1', '', 50, { block: 'B2' }), P(8, 'T1', '', 50, { block: 'B2' })];
+  assert.deepEqual(L.blockInfo(plan, 8), { block: 'B2', n: 2 });
+  assert.deepEqual(L.blockInfo(plan, 1), { block: 'B1', n: 1 });
+  assert.equal(L.blockInfo([P(1, 'T1', '', 50)], 1), null);
+});
+
+test('unitStats: serie zrobione/wszystkie i tonaż bez rozgrzewki', () => {
+  const exs = [{ order: 1, sets: 3 }, { order: 2, sets: 2 }];
+  const logs = { 1: { R1: { wykonane: 'TAK', kg: 40, powt: 5 }, 1: { wykonane: 'TAK', kg: '50', powt: 5 }, 2: { wykonane: '', kg: 50, powt: 5 }, 4: { wykonane: 'TAK', kg: 50, powt: 5 } },
+    2: { D1: { wykonane: 'TAK', kg: '22,5', powt: 10 } } };
+  assert.deepEqual(L.unitStats(exs, ex => logs[ex.order]), { done: 1, all: 5, ton: 250 + 250 + 225 });
+});
+
 test('localDate: data w strefie telefonu', () => {
   assert.equal(L.localDate(new Date(2026, 9, 10, 0, 30)), '2026-10-10');
   assert.match(L.localDate(), /^\d{4}-\d{2}-\d{2}$/);
