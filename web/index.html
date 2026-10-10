@@ -41,6 +41,7 @@
           --panel:#050806;--light-off:#26302a;color-scheme:dark}
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  [hidden]{display:none!important}                      /* atrybut hidden wygrywa z display:grid/flex */
   body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 var(--f-body)}
   button,input,select,textarea{font:inherit;color:inherit}
   button{cursor:pointer}
@@ -225,6 +226,45 @@
   .prow .plbl{font:700 18px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;color:var(--ink-2)}
   .prow .plbl small{font:400 13px var(--f-body);text-transform:none;letter-spacing:0;color:var(--muted)}
   .empty{color:var(--muted);text-align:center;padding:40px 0}
+
+  /* timer przerwy: ciemny pasek na całą szerokość nad dolnym menu, bursztynowe cyfry */
+  #rest{position:fixed;left:0;right:0;bottom:calc(59px + env(safe-area-inset-bottom,0px));z-index:7;background:var(--panel);color:var(--light-white);
+        padding:8px 16px 0;display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center}
+  .rtop{display:grid;min-width:0}
+  .rlbl{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rtime{font:800 46px/1 var(--f-display);letter-spacing:.04em;color:var(--light-amber);font-variant-numeric:tabular-nums}
+  .rbtns{display:flex;gap:6px}
+  .rbtns button{min-height:44px;min-width:52px;border:1px solid var(--light-off);background:transparent;color:var(--light-white);border-radius:2px;
+                font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;padding:0 8px}
+  .rbar{grid-column:1/-1;height:3px;background:var(--light-off);margin:6px -16px 0}
+  .rbar i{display:block;height:100%;background:var(--light-amber);width:100%}
+  body.resting main{padding-bottom:calc(190px + env(safe-area-inset-bottom,0px))}
+  body.resting #toast{bottom:calc(170px + env(safe-area-inset-bottom,0px))}
+
+  /* okno od dołu (kalkulator talerzy, później zamiana ćwiczenia i kamera) */
+  #sheet{position:fixed;inset:0;z-index:20;background:color-mix(in srgb,var(--panel) 55%,transparent)}
+  .sh-in{position:absolute;left:0;right:0;bottom:0;max-height:88vh;overflow:auto;background:var(--surface);border-top:3px solid var(--ink-2);
+         padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:grid;gap:12px;max-width:640px;margin:0 auto}
+  .sh-in h2{margin:0;font:800 28px/1 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink-2)}
+  .sh-in .sub{margin:-6px 0 0}
+  .fl{display:grid;gap:6px;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .fl input{font:700 26px/1 var(--f-display);min-height:48px;text-transform:none;letter-spacing:.01em}
+  .seg{display:flex}
+  .seg button,.btn.tg{flex:1;min-height:44px;border:1px solid var(--ink-2);background:transparent;color:var(--ink-2);border-radius:0;
+                      font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase}
+  .seg button+button{border-left:0}
+  .seg button[aria-pressed="true"],.btn.tg[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
+  .pl-bar{display:flex;align-items:center;gap:3px;min-height:96px;padding:6px 0}
+  .pl-bar .sleeve{width:36px;height:12px;background:var(--olive)}
+  .pl-bar .clamp{width:8px;height:22px;background:var(--olive)}
+  .pp{display:grid;place-items:center;width:30px;border:1px solid var(--ink);border-radius:2px;font:700 12px/1 var(--f-body)}
+  .pp.p25{height:92px;background:var(--p25);color:var(--light-white)}
+  .pp.p20{height:92px;background:var(--p20);color:var(--light-white)}
+  .pp.p15{height:80px;background:var(--p15);color:var(--panel)}
+  .pp.p10{height:66px;background:var(--p10);color:var(--light-white)}
+  .pp.p5{height:50px;background:var(--p5);color:var(--panel)}
+  .pp.ps{height:38px;background:var(--surface-2);color:var(--ink)}
+  .pl-txt{margin:0;font:500 16px var(--f-mono)}
 </style>
 </head>
 <body>
@@ -239,6 +279,12 @@
   <button type="button" data-tab="trening"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6M6 6v12M18 6v12M21 9v6M6 12h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>Trening</button>
   <button type="button" data-tab="plan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>Plan</button>
 </nav>
+<div id="rest" hidden role="timer" aria-live="off">
+  <div class="rtop"><span class="rlbl" id="rlbl">Przerwa</span><b class="rtime" id="rtime">0:00</b></div>
+  <div class="rbtns"><button type="button" data-r="-15">−15</button><button type="button" data-r="15">+15</button><button type="button" data-r="0">Pomiń</button></div>
+  <div class="rbar"><i id="rfill"></i></div>
+</div>
+<div id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheet-t"><div class="sh-in" id="sheet-in"></div></div>
 <div id="toast"></div>
 
 <script src="config.js"></script>
@@ -273,7 +319,7 @@ const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
 const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
-  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop } = window.TL;
+  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, restSec, fmtClock, plates } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -329,6 +375,7 @@ function markStart(){
   if (!cur.day || curSess().id) return;           // jednostka już zamknięta – nie liczymy od nowa
   const m = tGet();
   if (!m[skey()]) { m[skey()] = Date.now(); tSet(m); tick(); }
+  wake(true);
 }
 function fmtDur(ms){
   const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60;
@@ -343,6 +390,84 @@ function clockText(){
 }
 function tick(){ document.querySelectorAll('.clock').forEach(e => e.textContent = clockText()); }
 setInterval(tick, 1000);
+
+/* ---------- przerwa po serii (A 2:00, B 1:30, K 1:00) ---------- */
+let REST = null;   // {end, total}
+function startRest(ex){
+  const total = restSec(ex.prio);
+  REST = { end: Date.now() + total * 1000, total };
+  $("#rlbl").textContent = "Przerwa · " + ex.name;
+  $("#rest").hidden = false; document.body.classList.add("resting");
+  restTick();
+}
+function stopRest(){ REST = null; $("#rest").hidden = true; document.body.classList.remove("resting"); }
+function restTick(){
+  if (!REST) return;
+  const left = (REST.end - Date.now()) / 1000;
+  if (left <= 0) { stopRest(); if (navigator.vibrate) navigator.vibrate([200, 100, 200]); toast("Koniec przerwy."); return; }
+  $("#rtime").textContent = fmtClock(left);
+  $("#rfill").style.width = Math.min(100, 100 * left / REST.total) + "%";
+}
+setInterval(restTick, 250);
+document.querySelectorAll("[data-r]").forEach(b => b.onclick = () => {
+  if (!REST) return;
+  const d = +b.dataset.r;
+  if (!d) { stopRest(); return; }
+  REST.end += d * 1000; REST.total = Math.max(REST.total, (REST.end - Date.now()) / 1000); restTick();
+});
+
+/* ---------- ekran bez wygaszania: od pierwszego wpisu do „Zakończ” (Wake Lock) ---------- */
+let WAKE = null, WAKE_ON = false;
+async function wake(on){
+  WAKE_ON = on;
+  try {
+    if (on && !WAKE && navigator.wakeLock) {
+      WAKE = navigator.wakeLock.request("screen");                 // obietnica: drugie dotknięcie nie prosi ponownie
+      const w = await WAKE; WAKE = w; w.addEventListener("release", () => { if (WAKE === w) WAKE = null; });
+      if (!WAKE_ON) { WAKE = null; w.release(); }
+    }
+    if (!on && WAKE) { const w = await WAKE; WAKE = null; await w.release(); }
+  } catch (e) { WAKE = null; }
+}
+// system zwalnia blokadę po schowaniu aplikacji → po powrocie prosimy ponownie
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && WAKE_ON) wake(true); });
+
+/* ---------- okno (arkusz od dołu) i kalkulator talerzy ---------- */
+function openSheet(html){
+  $("#sheet-in").innerHTML = html; $("#sheet").hidden = false;
+  const f = $("#sheet-in input, #sheet-in button"); if (f) f.focus();
+}
+function closeSheet(){ $("#sheet").hidden = true; $("#sheet-in").innerHTML = ""; }
+$("#sheet").addEventListener("click", e => { if (e.target.id === "sheet" || e.target.closest("[data-close]")) closeSheet(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+let BAR = 20, COLLARS = true;
+try { const s = JSON.parse(localStorage.getItem("pl_" + KEY) || "null"); if (s) { BAR = s.bar; COLLARS = s.col; } } catch (e) {}
+const plateCls = p => ({ 25: "p25", 20: "p20", 15: "p15", 10: "p10", 5: "p5" })[p] || "ps";
+function openPlates(ex){
+  const rows = [...document.querySelectorAll(`.set[data-o="${ex.order}"]:not([data-k="w"])`)];
+  const next = rows.find(r => !r.dataset.st) || rows[rows.length - 1];
+  const kg0 = next ? num(next.querySelector(".kg").value) : ex.kg;
+  openSheet(`<h2 id="sheet-t">Talerze</h2><p class="sub">${esc(ex.name)} · na każdą stronę</p>
+    <label class="fl">Ciężar na sztandze (kg)<input id="pl-kg" inputmode="decimal" value="${esc(fmtKg(kg0))}"></label>
+    <div class="seg" role="group" aria-label="Gryf">${[20, 15].map(b => `<button type="button" data-bar="${b}">Gryf ${b} kg</button>`).join("")}</div>
+    <button type="button" class="btn sm tg" id="pl-col">Zamki 2 × 2,5 kg</button>
+    <div id="pl-out" aria-live="polite"></div>
+    <button type="button" class="btn p" data-close>Zamknij</button>`);
+  const draw = () => {
+    document.querySelectorAll("[data-bar]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.bar === BAR));
+    $("#pl-col").setAttribute("aria-pressed", COLLARS);
+    try { localStorage.setItem("pl_" + KEY, JSON.stringify({ bar: BAR, col: COLLARS })); } catch (e) {}
+    const kg = num($("#pl-kg").value), r = plates(kg, BAR, COLLARS ? 5 : 0);
+    $("#pl-out").innerHTML = !isNum(kg) ? "<p>Wpisz ciężar w kg.</p>"
+      : r.under ? `<p>Mniej niż gryf${COLLARS ? " z zamkami" : ""} (${fmtKg(BAR + (COLLARS ? 5 : 0))} kg).</p>`
+      : `<div class="pl-bar" aria-hidden="true"><span class="sleeve"></span>${r.side.map(p => `<span class="pp ${plateCls(p)}">${fmtKg(p)}</span>`).join("")}<span class="clamp"></span></div>
+         <p class="pl-txt">${r.side.length ? r.side.map(fmtKg).join(" + ") + " kg" : "Sam gryf" + (COLLARS ? " z zamkami" : "")}${r.rest ? ` · brakuje ${fmtKg(r.rest)} kg (nie ma takich talerzy)` : ""}</p>`;
+  };
+  $("#pl-kg").oninput = draw;
+  document.querySelectorAll("[data-bar]").forEach(b => b.onclick = () => { BAR = +b.dataset.bar; draw(); });
+  $("#pl-col").onclick = () => { COLLARS = !COLLARS; draw(); };
+  draw();
+}
 
 /* ---------- dane ---------- */
 // ostatnie dane trzymane w telefonie → aplikacja otwiera się od razu, także bez sieci
@@ -641,6 +766,7 @@ function card(ex){
       ${ex.sets > 1 ? `<button class="btn sm" data-copy="${ex.order}">⇣ Jak 1. seria</button>` : ''}
       ${allowX > 0 ? `<button class="btn sm x" data-extra="${ex.order}" ${extra >= allowX ? 'hidden' : ''}>+ Seria (${Math.max(0, allowX - extra)})</button>` : ''}
       <button class="btn sm d" data-drop="${ex.order}">+ Drop</button>
+      <button class="btn sm" data-plates="${ex.order}">Talerze</button>
     </div>`;
   const dropInfo = plannedDrops(ex) ? `<div class="hint">+ ${plannedDrops(ex)} × drop set po ostatniej serii (ok. −20% ciężaru, do upadku technicznego).</div>` : '';
   return `<div class="card ${ex.prio === 'K' ? 'k' : ''}" data-card="${ex.order}">
@@ -744,6 +870,7 @@ function bindRow(row, ex, s0){
       kg: num(q('.kg').value), reps: num(q('.reps').value),
       rpe: fail ? '' : rpeOf(row), vbt: q('.vbt') ? num(q('.vbt').value) : '',
       done: st !== '', video: prev.film_link || '', typ };
+    if (!row.dataset.st && st && kind !== 'w') startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce
     setState(row, st, true);
     LOGS['local' + lid(ex, set)] = { id: 'local' + lid(ex, set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ };
     refreshStats();
@@ -783,6 +910,7 @@ function bind(exs, s0){
   };
   document.querySelectorAll('.set[data-o]').forEach(row => bindRow(row, exOf(row.dataset.o), s0));
   exs.forEach(ex => refreshDel(ex.order));
+  document.querySelectorAll('[data-plates]').forEach(b => b.onclick = () => openPlates(exOf(b.dataset.plates)));
   // tryb prosty: zaznacz wszystkie niezapisane serie robocze ćwiczenia
   document.querySelectorAll('[data-all]').forEach(b => b.onclick = () => {
     const todo = [...document.querySelectorAll(`.set[data-o="${b.dataset.all}"][data-k="p"][data-st=""] .ok`)];
@@ -840,6 +968,7 @@ function bind(exs, s0){
     if (inp.files[0]) { markStart(); uploadVideo(ex, s0, inp.files[0]); }
   });
   $('#saveSess').onclick = () => {
+    stopRest(); wake(false);
     const s = curSess(), k = skey();
     const pains = {};
     document.querySelectorAll('.pl.on').forEach(c => {

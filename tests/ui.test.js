@@ -250,6 +250,73 @@ test('Serie: bez sieci pole żółte, także po ponownym otwarciu', async () => 
   await ctx.close();
 });
 
+// --- PR 5: przerwa, Wake Lock, talerze ---
+const KPLAN = Object.assign({}, PRO, { plan: PRO.plan.concat([{ week: 1, day: 'T1', title: 'FBW A', date: '2026-10-06', order: 3, name: 'Plank', prio: 'K', sets: 2, reps: '30 s', pct: null, kg: 'BW', rpe: '', note: '', extra: 0, drop: 0 }]) });
+
+test('Przerwa: start po ✓ (A 2:00, K 1:00), ±15 s, Pomiń, koniec z wibracją; nie po rozgrzewce', async () => {
+  const { ctx, p } = await page([], false, { data: KPLAN });
+  await p.clock.install({ time: new Date('2026-10-06T16:00:00') });
+  await p.addInitScript(() => { window.__vib = []; navigator.vibrate = v => { window.__vib.push(v); return true; }; });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('[data-warm="1"]'); await p.fill('.set[data-s="R1"] .kg', '20'); await p.click('.set[data-s="R1"] .ok');
+  assert.equal(await p.isHidden('#rest'), true);                                  // rozgrzewka bez przerwy
+  await p.click('.set[data-o="1"][data-s="1"] .ok');
+  assert.equal(await p.isVisible('#rest'), true);
+  assert.equal(await p.textContent('#rtime'), '2:00');
+  assert.match(await p.textContent('#rlbl'), /Wyciskanie/);
+  await p.click('[data-r="15"]'); assert.equal(await p.textContent('#rtime'), '2:15');
+  await p.click('[data-r="-15"]'); await p.click('[data-r="-15"]'); assert.equal(await p.textContent('#rtime'), '1:45');
+  await p.clock.runFor(30000); assert.equal(await p.textContent('#rtime'), '1:15');
+  await p.click('.set[data-o="1"][data-s="1"] .ok');                             // ✓ → ✕: przerwa się nie restartuje
+  assert.equal(await p.textContent('#rtime'), '1:15');
+  await p.click('[data-r="0"]'); assert.equal(await p.isHidden('#rest'), true);
+  await p.click('.set[data-o="3"][data-s="1"] .ok');                             // K → 1:00
+  assert.equal(await p.textContent('#rtime'), '1:00');
+  await p.clock.runFor(61000);
+  assert.equal(await p.isHidden('#rest'), true);
+  assert.deepEqual(await p.evaluate(() => window.__vib.filter(v => Array.isArray(v) && v[0] === 200).length), 1);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Wake Lock: ekran nie gaśnie od pierwszego wpisu do „Zakończ”', async () => {
+  const { ctx, p } = await page([], false, { data: PRO });
+  await p.addInitScript(() => {
+    window.__wl = [];
+    Object.defineProperty(navigator, 'wakeLock', { value: { request: async t => { window.__wl.push('request:' + t);
+      return { release: async () => { window.__wl.push('release'); }, addEventListener() {} }; } } });
+  });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.deepEqual(await p.evaluate(() => window.__wl), []);
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.click('.set[data-o="1"][data-s="2"] .ok'); await p.waitForTimeout(100);
+  assert.deepEqual(await p.evaluate(() => window.__wl), ['request:screen']);
+  await p.click('#saveSess'); await p.waitForTimeout(200);
+  assert.deepEqual(await p.evaluate(() => window.__wl), ['request:screen', 'release']);
+  await ctx.close();
+});
+
+test('Talerze: na stronę z gryfem 20/15 kg i zamkami, ciężar następnej serii, okno dostępne', async () => {
+  const { ctx, p } = await page([], false, { data: PRO });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('.set[data-o="1"][data-s="1"] .ok');
+  await p.fill('.set[data-o="1"][data-s="2"] .kg', '60');
+  await p.click('[data-plates="1"]');
+  assert.equal(await p.inputValue('#pl-kg'), '60');                              // pierwsza niezrobiona seria
+  assert.equal((await p.textContent('.pl-txt')).trim(), '15 + 2,5 kg');
+  await p.click('[data-bar="15"]'); assert.equal((await p.textContent('.pl-txt')).trim(), '20 kg');
+  await p.click('#pl-col'); assert.equal((await p.textContent('.pl-txt')).trim(), '20 + 2,5 kg');
+  await p.fill('#pl-kg', '14'); assert.match(await p.textContent('#pl-out'), /Mniej niż gryf/);
+  await p.fill('#pl-kg', '142,5'); assert.deepEqual(await p.$$eval('.pp', s => s.map(x => x.className)), ['pp p25', 'pp p25', 'pp p10', 'pp ps', 'pp ps']);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'talerze.png') }); }
+  await p.keyboard.press('Escape'); assert.equal(await p.isHidden('#sheet'), true);
+  await p.click('[data-plates="1"]');
+  assert.equal(await p.getAttribute('[data-bar="15"]', 'aria-pressed'), 'true');     // gryf zapamiętany
+  await p.click('[data-close]'); assert.equal(await p.isHidden('#sheet'), true);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('offline: czcionki i lib.js z pamięci service workera', async () => {
   const { ctx, p } = await page([]);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
