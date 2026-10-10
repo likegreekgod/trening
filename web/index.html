@@ -140,9 +140,8 @@
 
   /* serie = wiersze tabeli */
   .sets{display:grid;gap:0;margin-top:8px}
-  .set{display:grid;grid-template-columns:44px 1fr 1fr 64px 44px;gap:6px;align-items:center;border-bottom:1px solid var(--line);padding:4px 0}
-  .set.vbt{grid-template-columns:44px 1fr 1fr 58px 58px 44px}
-  .set.simple{grid-template-columns:44px 1fr 1fr 96px 44px}
+  .set{display:grid;grid-template-columns:44px 1fr 1fr 62px 44px 44px;gap:6px;align-items:center;border-bottom:1px solid var(--line);padding:4px 0}
+  .set.simple{grid-template-columns:44px 1fr 1fr 80px 44px 44px;gap:5px}
   .set.set-head{border-bottom:1px solid var(--ink-2);padding:0 0 6px;margin-top:10px}
   .set .n{position:relative;min-height:44px;display:flex;align-items:center;justify-content:center;
           font:700 21px/1 var(--f-display);color:var(--ink)}
@@ -179,7 +178,6 @@
        display:flex;align-items:flex-end;justify-content:flex-end;font:700 12px/1 var(--f-body)}
   .del.arm{background:var(--bad);color:var(--surface);align-items:center;justify-content:center;border-radius:2px}
 
-  .vid{margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .btn{border:1px solid var(--ink-2);background:transparent;color:var(--ink-2);border-radius:2px;padding:10px 12px;min-height:44px;
        font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;display:inline-flex;align-items:center;justify-content:center}
   .btn.p{background:var(--primary);border-color:var(--primary);color:var(--on-primary);width:100%;padding:12px;
@@ -191,7 +189,11 @@
   .btn.all{width:100%;margin-top:8px;border-color:var(--ok);color:var(--ok);border-width:2px}
   .bar{height:3px;background:var(--surface-2);flex:1 1 120px;overflow:hidden;display:none}
   .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
-  .vlinks a{color:var(--ink-2);font-size:14px;margin-right:10px;text-underline-offset:3px}
+  /* kamera przy serii: obrys = brak, wypełniona akcentem = jest film albo prędkość */
+  .cam{height:44px;border:1px solid var(--line);border-radius:2px;background:transparent;color:var(--muted);display:grid;place-items:center;padding:0}
+  .cam svg{width:22px;height:22px}
+  .cam.has{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .sh-in a.btn{text-decoration:none}
 
   /* podsumowanie jednostki */
   .sess .cn{margin-bottom:4px}
@@ -573,7 +575,7 @@ function helpCard(){
     <li>Żółte pole = seria czeka na wysłanie (brak zasięgu). Wyśle się sama.</li>
     <li>Rwanie i podrzut: dotknij świateł i oceń podejście (Łatwo, Średnio, Walka, Spalone). Pod spodem pojawi się propozycja ciężaru na kolejne serie.</li>
     <li>Dodałeś wiersz przez pomyłkę? Dotknij <b>✕</b> przy jego numerze, a potem <b>„usuń?”</b>.</li>
-    <li>Film jest opcjonalny: „Dodaj film”. Najlepiej krótki, nagrany w 720p.</li>
+    <li>Film jest opcjonalny: ikona kamery przy serii. Najlepiej krótki, nagrany w 720p. Potrzebny jest zasięg.</li>
     <li>Na koniec przewiń w dół i dotknij <b>„Zakończ i zapisz trening”</b>.</li>
   </ol></details>`;
 }
@@ -839,19 +841,21 @@ function rpeOf(row){
 /** seria czeka w kolejce offline → pole żółte także po ponownym otwarciu */
 const queued = (ex, set) => qGet().some(it => it.fn === 'logSet' && it.payload.week === cur.week && it.payload.day === cur.day && it.payload.order === ex.order && String(it.payload.set) === String(set));
 const STATE_TXT = { '': 'niezapisana – dotknij: zrobiona', ok: 'zrobiona – dotknij: nieudana', x: 'nieudana – dotknij: wyczyść' };
+const CAM_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h12v10H3zM15 10l6-3v10l-6-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter"/></svg>';
 function rowHtml(ex, set, kind, def){
-  const vbt = !SIMPLE && ex.pct !== null;
-  const cls = SIMPLE ? 'simple' : (vbt ? 'vbt' : '');
+  const cls = SIMPLE ? 'simple' : '';
   const l = getLog(ex, set) || {}, d = def || {};
   const kg = !blank(l.kg) ? l.kg : kind === 'p' ? ex.kg : (blank(d.kg) ? '' : d.kg);
   const reps = !blank(l.powt) ? l.powt : kind === 'p' ? (repsDefault(ex.reps) || '') : (blank(d.reps) ? '' : d.reps);
   const fail = /FAIL/.test(l.typ || ''), st = l.wykonane !== 'TAK' ? '' : fail ? 'x' : 'ok';
   const drop = (kind === 'p' || kind === 'x') && /DROP/.test(l.typ || '');
   const ph = kind === 'w' || kind === 'd' ? ' placeholder="kg"' : '', phr = kind === 'w' || kind === 'd' ? ' placeholder="powt."' : '';
-  const rpeCell = kind === 'w' ? '<div class="lbl">rozgrzewka</div>' : effortSel(l);
-  const vbtCell = !vbt ? '' : kind === 'w' ? '<div></div>'
-    : `<input inputmode="decimal" class="vbt" placeholder="m/s" value="${esc(fmtKg(l.vbt_ms || ''))}" aria-label="VBT m/s">`;
+  const rpeCell = kind === 'w' ? `<div class="lbl">${SIMPLE ? 'rozgrzewka' : 'rozgrz.'}</div>` : effortSel(l);
   const oly = isOly(ex) && kind !== 'w', q = oly ? rateOf(l) : '';
+  // kamera przy serii roboczej, dodatkowej i drop (nie przy rozgrzewce); wypełniona = jest film albo prędkość
+  const has = !!l.film_link || !blank(l.vbt_ms);
+  const camCell = kind === 'w' ? '<div></div>'
+    : `<button type="button" class="cam ${has ? 'has' : ''}" aria-label="Film${SIMPLE ? '' : ' i prędkość'}: seria ${setLabel(set, kind)}${has ? ' (dodano)' : ''}">${CAM_SVG}</button>`;
   // robocze i dodatkowe: dotknięcie numeru zmienia typ serii (zwykła → drop → nieudana); boje: ocena światłami
   const num0 = !oly && (kind === 'p' || kind === 'x')
     ? `<button type="button" class="nt" aria-label="Seria ${setLabel(set, kind)}: ${fail ? 'nieudana' : drop ? 'drop' : 'zwykła'}, dotknij, aby zmienić typ">${setLabel(set, kind)}<small></small></button>`
@@ -860,37 +864,33 @@ function rowHtml(ex, set, kind, def){
       <div class="n">${num0}</div>
       <input inputmode="decimal" class="kg" value="${esc(fmtKg(kg))}"${ph} aria-label="kg">
       <input inputmode="numeric" class="reps" value="${esc(reps)}"${phr} aria-label="powtórzenia">
-      ${vbtCell}
       <button type="button" class="lt ${queued(ex, set) ? 'pend' : ''}" aria-label="Ocena: ${q ? RATE[q].label : 'brak'} – dotknij, aby ocenić">${lightsHtml(q)}<small>${q ? RATE[q].label : 'oceń'}</small></button>
+      ${camCell}
     </div>`;
   return `<div class="set ${cls} k-${kind} ${fail ? 'fail' : ''} ${drop ? 't-d' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}" data-st="${st}">
       <div class="n">${num0}</div>
       <input inputmode="decimal" class="kg" value="${esc(fmtKg(kg))}"${ph} aria-label="kg">
       <input inputmode="numeric" class="reps" value="${esc(reps)}"${phr} aria-label="powtórzenia">
       ${rpeCell}
-      ${vbtCell}
       <button class="ok ${queued(ex, set) ? 'pend' : ''}" aria-label="Seria ${STATE_TXT[st]}">${st === 'x' ? '✕' : '✓'}</button>
+      ${camCell}
     </div>`;
 }
 const setLabel = (set, kind) => (kind === 'w' || kind === 'd' || SIMPLE) ? set : 'S' + set;
 const dropDefault = (ex, fromKg) => window.TL.dropDefault(ex.kg, fromKg);   // ~80% ostatniego ciężaru, w dół do 2,5 kg
 function card(ex){
-  const vbt = !SIMPLE && ex.pct !== null;
   const { warm, extra, drop } = loggedSets(ex), allowX = allowedExtra(ex), nd = Math.max(drop, plannedDrops(ex));
   let rows = '', allDone = true;
   for (let i = 1; i <= warm; i++) rows += rowHtml(ex, 'R' + i, 'w');
   for (let i = 1; i <= ex.sets; i++) { rows += rowHtml(ex, i, 'p'); const l = getLog(ex, i); if (!l || l.wykonane !== 'TAK') allDone = false; }
   for (let i = ex.sets + 1; i <= ex.sets + extra; i++) rows += rowHtml(ex, i, 'x');
   for (let i = 1; i <= nd; i++) rows += rowHtml(ex, 'D' + i, 'd', dropDefault(ex));
-  const L = exLogs(ex);
-  const vids = Object.keys(L).filter(s => L[s].film_link)
-    .map(s => `<a href="${esc(L[s].film_link)}" target="_blank">film ${/^[RD]/.test(s) ? s : (SIMPLE ? 'seria ' : 'S') + s}</a>`);
   const oly = isOly(ex);
   const head = oly
-    ? `<div class="set-head set ${SIMPLE ? 'simple' : vbt ? 'vbt' : ''}"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div>${vbt ? '<div class="lbl">VBT</div>' : ''}<div class="lbl hl2">ocena</div></div>`
+    ? `<div class="set-head set ${SIMPLE ? 'simple' : ''}"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl hl2">ocena</div><div></div></div>`
     : SIMPLE
-    ? `<div class="set-head set simple"><div class="lbl">#</div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">jak ciężko?</div><div></div></div>`
-    : `<div class="set-head set ${vbt ? 'vbt' : ''}"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">${SCALE}</div>${vbt ? '<div class="lbl">VBT</div>' : ''}<div></div></div>`;
+    ? `<div class="set-head set simple"><div class="lbl">#</div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">jak ciężko?</div><div></div><div></div></div>`
+    : `<div class="set-head set"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">${SCALE}</div><div></div><div></div></div>`;
   const tools = `<div class="tools">
       <button class="btn sm" data-warm="${ex.order}">+ Rozgrzewka</button>
       ${ex.sets > 1 ? `<button class="btn sm" data-copy="${ex.order}">⇣ Jak 1. seria</button>` : ''}
@@ -912,11 +912,6 @@ function card(ex){
     <div class="sets">${rows}</div>
     ${tools}
     ${SIMPLE && !allDone && !oly ? `<button class="btn all" data-all="${ex.order}">✓ Wszystko jak w planie</button>` : ''}
-    <div class="vid">
-      <label class="btn">Dodaj film<input type="file" accept="video/*" hidden data-vo="${ex.order}"></label>
-      <div class="bar" id="bar${ex.order}"><i></i></div>
-      <span class="vlinks">${vids.join('')}</span>
-    </div>
   </div>`;
 }
 /* ---------- podsumowanie: przyciski zamiast suwaków, ból z wyborem miejsca ---------- */
@@ -997,27 +992,37 @@ function setState(row, st, pend){
   btn.setAttribute('aria-label', 'Seria ' + STATE_TXT[st] + (pend ? ' (czeka na zapis)' : ''));
   if (nt) nt.setAttribute('aria-label', 'Seria ' + nt.firstChild.textContent + ': ' + (st === 'x' ? 'nieudana' : row.classList.contains('t-d') ? 'drop' : 'zwykła') + ', dotknij, aby zmienić typ');
 }
+/** wpis serii do Logu z bieżącego stanu wiersza; film i prędkość z dotychczasowego wpisu */
+function payloadOf(row, ex, s0){
+  const set = setKey(row.dataset.s), prev = getLog(ex, set) || {}, st = row.dataset.st, lt = !!row.querySelector('.lt');
+  const fail = st === 'x', drop = row.dataset.k === 'd' || row.classList.contains('t-d');
+  const ocena = lt && st ? row.dataset.rate || '' : '';
+  return { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
+    kg: num(row.querySelector('.kg').value), reps: num(row.querySelector('.reps').value),
+    rpe: fail ? '' : lt ? (ocena ? RATE[ocena].rpe : '') : rpeOf(row), vbt: blank(prev.vbt_ms) ? '' : prev.vbt_ms,
+    done: st !== '', video: prev.film_link || '', typ: [drop ? 'DROP' : '', fail ? 'FAIL' : ''].filter(Boolean).join('+'), ocena, swap: swapText(ex.swap) };
+}
+/** wpis od razu widoczny lokalnie (przed odpowiedzią serwera / w kolejce) */
+function putLocal(ex, p){
+  LOGS['local' + lid(ex, p.set)] = { id: 'local' + lid(ex, p.set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '',
+    film_link: p.video, typ: p.typ, ocena: p.ocena, zamiana: p.swap };
+}
 function bindRow(row, ex, s0){
-  const kind = row.dataset.k, set = setKey(row.dataset.s);
-  const btn = row.querySelector('.ok'), nt = row.querySelector('.nt'), lt = row.querySelector('.lt');
+  const kind = row.dataset.k;
+  const btn = row.querySelector('.ok'), nt = row.querySelector('.nt'), lt = row.querySelector('.lt'), cam = row.querySelector('.cam');
   const save = (st, oc) => {
     markStart();
-    const prev = getLog(ex, set) || {}, q = c => row.querySelector(c);
-    const fail = st === 'x', drop = kind === 'd' || row.classList.contains('t-d');
-    const typ = [drop ? 'DROP' : '', fail ? 'FAIL' : ''].filter(Boolean).join('+');
-    const ocena = lt && st ? oc || '' : '';
-    if (lt) row.dataset.rate = ocena;
-    const p = { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
-      kg: num(q('.kg').value), reps: num(q('.reps').value),
-      rpe: fail ? '' : lt ? (ocena ? RATE[ocena].rpe : '') : rpeOf(row), vbt: q('.vbt') ? num(q('.vbt').value) : '',
-      done: st !== '', video: prev.film_link || '', typ, ocena, swap: swapText(ex.swap) };
-    if (!row.dataset.st && st && kind !== 'w') startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce
+    const was = row.dataset.st;
+    if (lt) row.dataset.rate = st ? oc || '' : '';
     setState(row, st, true);
-    LOGS['local' + lid(ex, set)] = { id: 'local' + lid(ex, set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ, ocena, zamiana: p.swap };
+    const p = payloadOf(row, ex, s0);
+    if (!was && st && kind !== 'w') startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce
+    putLocal(ex, p);
     refreshStats(); updateSug(ex);
     send('logSet', p).then(() => { if (row.dataset.st === st) setState(row, st); }).catch(() => {});
-    if (st && navigator.vibrate) navigator.vibrate(fail ? [30, 60, 30] : 30);
+    if (st && navigator.vibrate) navigator.vibrate(st === 'x' ? [30, 60, 30] : 30);
   };
+  if (cam) cam.onclick = () => openCam(ex, row, s0);
   if (btn) btn.onclick = () => save(row.dataset.st === '' ? 'ok' : row.dataset.st === 'ok' ? 'x' : '');
   // boje: dotknięcie świateł → wybór oceny pod wierszem
   if (lt) lt.onclick = () => {
@@ -1117,10 +1122,6 @@ function bind(exs, s0){
     if (saved) send('deleteSet', { week: cur.week, day: cur.day, order: ex.order, set }).catch(() => {});
     toast('Usunięto serię ' + set + '.');
   };
-  document.querySelectorAll('input[data-vo]').forEach(inp => inp.onchange = () => {
-    const ex = exs.find(e => e.order === +inp.dataset.vo);
-    if (inp.files[0]) { markStart(); uploadVideo(ex, s0, inp.files[0]); }
-  });
   $('#saveSess').onclick = () => {
     stopRest(); wake(false);
     const s = curSess(), k = skey();
@@ -1180,13 +1181,33 @@ async function relayUpload(meta, file, onProg){
   }
   return out;
 }
-async function uploadVideo(ex, s0, file){
-  // film przypisany do ostatniej zaznaczonej serii (roboczej/dodatkowej); brak → seria 1
-  const doneRows = document.querySelectorAll(`.set[data-o="${ex.order}"]:not([data-k="w"]):not([data-st=""])`);
-  const set = doneRows.length ? setKey(doneRows[doneRows.length - 1].dataset.s) : 1;
-  const bar = $('#bar' + ex.order), fill = bar.querySelector('i');
-  const prog = f => fill.style.width = Math.max(2, Math.round(100 * f)) + '%';
-  bar.style.display = 'block'; prog(0); setSync('wgrywanie filmu…');
+const NO_NET = 'Brak sieci: film dodasz po odzyskaniu zasięgu. Serie zapisują się normalnie i wyślą same.';
+const camMark = (row, ex) => { const l = getLog(ex, setKey(row.dataset.s)) || {}, c = row.querySelector('.cam'); if (c) c.classList.toggle('has', !!l.film_link || !blank(l.vbt_ms)); };
+/** okno kamery serii: film na Drive i (PRO) prędkość wpisana z urządzenia, np. Enode */
+function openCam(ex, row, s0){
+  const set = setKey(row.dataset.s), l = getLog(ex, set) || {};
+  openSheet(`<h2 id="sheet-t">Film · seria ${esc(setLabel(set, row.dataset.k))}</h2><p class="sub">${esc(ex.name)}</p>
+    ${l.film_link ? `<a class="btn" href="${esc(l.film_link)}" target="_blank" rel="noopener">Otwórz zapisany film</a>` : ''}
+    <label class="btn p">${l.film_link ? 'Nagraj lub wybierz nowy film' : 'Nagraj lub wybierz film'}<input type="file" accept="video/*" hidden id="cam-file"></label>
+    <div class="bar" id="cam-bar"><i></i></div>
+    <p class="hint" id="cam-msg" hidden></p>
+    ${SIMPLE ? '' : `<label class="fl">Prędkość z urządzenia (m/s)<input id="cam-vbt" inputmode="decimal" value="${esc(fmtKg(blank(l.vbt_ms) ? '' : l.vbt_ms))}" placeholder="np. 0,85"></label>
+    <button type="button" class="btn" id="cam-vsave">Zapisz prędkość</button>`}
+    <button type="button" class="btn" data-close>Zamknij</button>`);
+  $('#cam-file').onchange = e => { const file = e.target.files[0]; if (file) { markStart(); uploadVideo(ex, s0, file, row); } };
+  const vs = $('#cam-vsave');
+  if (vs) vs.onclick = () => {
+    const v = num($('#cam-vbt').value), p = Object.assign(payloadOf(row, ex, s0), { vbt: isNum(v) ? v : '' });
+    putLocal(ex, p); camMark(row, ex);
+    send('logSet', p).catch(() => {});
+    closeSheet(); toast(isNum(v) ? 'Zapisano prędkość ' + fmtKg(v) + ' m/s.' : 'Usunięto prędkość.');
+  };
+}
+async function uploadVideo(ex, s0, file, row){
+  const set = setKey(row.dataset.s), msg = t => { const m = $('#cam-msg'); if (m) { m.textContent = t; m.hidden = false; } };
+  const prog = f => { const b = $('#cam-bar'); if (b) { b.style.display = 'block'; b.querySelector('i').style.width = Math.max(2, Math.round(100 * f)) + '%'; } };
+  if (navigator.onLine === false) { msg(NO_NET); return; }
+  prog(0); setSync('wgrywanie filmu…');
   const meta = { date: s0.date, day: cur.day, name: ex.name, set, fileName: file.name, mimeType: file.type || 'video/mp4', size: file.size };
   const t0 = Date.now();
   try {
@@ -1200,17 +1221,15 @@ async function uploadVideo(ex, s0, file){
       mode = 'przez serwer'; prog(0);
       out = await relayUpload(meta, file, prog);
     }
-    const prev = getLog(ex, set) || {};
-    const row = document.querySelector(`.set[data-o="${ex.order}"][data-s="${set}"]`);
-    const p = { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
-      kg: num(row.querySelector('.kg').value), reps: num(row.querySelector('.reps').value), rpe: /FAIL/.test(prev.typ || '') ? '' : row.querySelector('.lt') ? prev.rpe : rpeOf(row), typ: prev.typ || '', ocena: prev.ocena || '', swap: swapText(ex.swap),
-      vbt: row.querySelector('.vbt') ? num(row.querySelector('.vbt').value) : '', done: prev.wykonane === 'TAK', video: out.link,
-      note: 'film ' + mode + ', ' + Math.round(file.size / 1048576) + ' MB, ' + Math.round((Date.now() - t0) / 1000) + ' s' };
-    LOGS['local' + lid(ex, set)] = Object.assign({}, prev, { id: 'local' + lid(ex, set), film_link: out.link });
-    await send('logSet', p);
-    toast('Film wgrany ' + mode + ' (seria ' + set + ')'); render();
+    const p = Object.assign(payloadOf(row, ex, s0), { video: out.link,
+      note: 'film ' + mode + ', ' + Math.round(file.size / 1048576) + ' MB, ' + Math.round((Date.now() - t0) / 1000) + ' s' });
+    putLocal(ex, p); camMark(row, ex);
+    send('logSet', p).catch(() => {});
+    closeSheet(); toast('Film wgrany ' + mode + ' (seria ' + setLabel(set, row.dataset.k) + ').');
   } catch (e) {
-    toast('Błąd wgrywania: ' + e.message); setSync('błąd filmu'); bar.style.display = 'none';
+    const b = $('#cam-bar'); if (b) b.style.display = 'none';
+    const net = /Failed to fetch|NetworkError|Load failed/i.test(e.message);
+    msg(net ? NO_NET : 'Nie udało się wgrać filmu: ' + e.message); setSync(net ? 'brak sieci – film niewysłany' : 'błąd filmu');
   }
 }
 

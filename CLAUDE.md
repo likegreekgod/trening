@@ -105,6 +105,8 @@ Konwencje Damiana:
   - „Talerze”: okno `#sheet` z rozkładem na stronę (`plates`), gryf 20/15 kg i zamki 2 × 2,5 kg zapamiętane w `pl_<klucz>`.
   - boje (grupa R/P z kolumny `grupa` albo po nazwie, `isOly`): zamiast RPE i ✓ światła sędziowskie; ocena Łatwo / Średnio / Walka / Spalone → `rpe` 7 / 8 / 9,5 / FAIL + `ocena` L/S/W/X; propozycja ciężaru pod ostatnio ocenionym podejściem (`sugOly`, „Ustaw X kg”); w recepcie „max dziś” = `olyCap` (plan + `sufit_oly` × 1RM, przy dyspozycji „Uwaga”/„Zmęczenie” = plan).
   - „Zamień ćwiczenie” (tylko `cfg.swap`): zamienniki z kolumny planu `zamienniki` albo wg wzorca ruchu (`swapOptions`), powód z listy; zamiana w telefonie (`sw_<klucz>`) i w Logu (`zamiana` = „oryginał → zamiennik | powód”, `cwiczenie` = zamiennik); na innym telefonie odtwarzana z Logu.
+  - kamera przy każdej serii roboczej, dodatkowej i drop (`openCam`): film wgrywany do tej serii (Drive, bez zmian w wysyłce), bez sieci komunikat zamiast błędu (film nie trafia do kolejki); w PRO pole „Prędkość z urządzenia (m/s)” → `vbt_ms` (kolumny VBT w wierszu już nie ma);
+  - każdy zapis serii buduje `payloadOf(row, ex, s0)` (stan ✓/✕, ocena, typ, zamiana, film i prędkość z dotychczasowego wpisu), więc kolejne zapisy niczego nie kasują.
 - Podsumowanie jednostki:
   - RPE sesji 0–10;
   - samopoczucie 1–5;

@@ -33,7 +33,7 @@ async function page(calls, offline, opt = {}) {
     if (offline) return r.abort();
     const b = JSON.parse(r.request().postData() || '{}'); calls.push(b);
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, result: b.fn === 'getData' ? data : { ok: true } }) });
+      body: JSON.stringify({ ok: true, result: b.fn === 'getData' ? data : (opt.api && opt.api(b)) || { ok: true } }) });
   });
   const p = await ctx.newPage(); p.errors = []; p.on('pageerror', e => p.errors.push(e.message));
   p.external = []; p.on('request', q => { if (!q.url().startsWith(base) && !/\/macros\//.test(q.url())) p.external.push(q.url()); });
@@ -420,6 +420,57 @@ test('Zamiana: własna nazwa, a na innym telefonie zamiana odtworzona z Logu', a
   await p.click('[data-unswap="1"]'); await p.click('[data-swap="1"]');
   await p.fill('#sw-own', 'Przysiad na skrzynię'); await p.click('#sheet [data-why="Inny powód"]'); await p.click('#sw-ok');
   assert.equal(await p.textContent('.cn'), 'Przysiad na skrzynię');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+// --- PR 8: kamera przy serii, prędkość z urządzenia, komunikat bez sieci ---
+const DRIVE = b => b.fn === 'startUpload' ? { uploadId: 'u1', chunk: 4194304, url: null }
+  : b.fn === 'uploadChunk' ? { done: true, id: 'f1', link: 'https://drive.google.com/file/d/f1/view' } : null;
+const MP4 = { name: 'seria.mp4', mimeType: 'video/mp4', buffer: Buffer.from('x'.repeat(2000)) };
+
+test('Film: kamera przy każdej serii (nie przy rozgrzewce), wgranie do wybranej serii, prędkość z urządzenia', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: PRO, api: DRIVE });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('[data-warm="1"]');
+  assert.equal(await p.$('.set[data-s="R1"] .cam'), null);
+  assert.equal((await p.$$('.set[data-o="1"]:not([data-k="w"]) .cam')).length, 3);
+  assert.ok(await p.$('.set.oly .cam'));                                         // boje też
+  assert.equal(await p.$('[data-vo]'), null);                                    // nie ma już „Dodaj film” na ćwiczenie
+  await p.click('.set[data-o="1"][data-s="2"] .ok'); await p.waitForTimeout(80);
+  await p.click('.set[data-o="1"][data-s="2"] .cam');
+  assert.match(await p.textContent('#sheet-t'), /Film · seria S2/);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'film.png') }); }
+  await p.fill('#cam-vbt', '0,85'); await p.click('#cam-vsave'); await p.waitForTimeout(80);
+  assert.deepEqual((({ set, vbt, done }) => ({ set, vbt, done }))(lastSet(calls)), { set: 2, vbt: 0.85, done: true });
+  assert.equal(await p.$eval('.set[data-o="1"][data-s="2"] .cam', b => b.classList.contains('has')), true);
+  await p.click('.set[data-o="1"][data-s="2"] .cam');
+  await p.setInputFiles('#cam-file', MP4); await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.equal(calls.find(c => c.fn === 'startUpload').args[0].set, 2);
+  assert.deepEqual((({ set, vbt, video, done }) => ({ set, vbt, video, done }))(lastSet(calls)),
+    { set: 2, vbt: 0.85, video: 'https://drive.google.com/file/d/f1/view', done: true });    // film nie kasuje prędkości ani ✓
+  await p.click('.set[data-o="1"][data-s="2"] .ok'); await p.waitForTimeout(80);         // ✓ → ✕ zachowuje film
+  assert.equal(lastSet(calls).video, 'https://drive.google.com/file/d/f1/view');
+  await p.click('.set[data-o="1"][data-s="2"] .cam');
+  assert.equal(await p.getAttribute('#sheet a.btn', 'href'), 'https://drive.google.com/file/d/f1/view');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Film: bez sieci czytelny komunikat zamiast błędu; tryb PROSTY bez pola prędkości', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: DATA, api: DRIVE });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('.set[data-o="1"][data-s="1"] .cam');
+  assert.equal(await p.$('#cam-vbt'), null);
+  await ctx.setOffline(true);
+  await p.setInputFiles('#cam-file', MP4);
+  await p.waitForSelector('#cam-msg:not([hidden])');
+  assert.match(await p.textContent('#cam-msg'), /Brak sieci: film dodasz po odzyskaniu zasięgu/);
+  assert.equal(calls.filter(c => c.fn === 'startUpload').length, 0);
+  assert.equal(await p.isVisible('#sheet'), true);
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
