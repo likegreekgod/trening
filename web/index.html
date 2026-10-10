@@ -46,23 +46,68 @@
   button{cursor:pointer}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-  /* nagłówek: tytuł, synchronizacja, tygodnie i dni jako zakładki podkreślone akcentem */
-  header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:3px solid var(--ink-2);padding:10px 16px 0}
-  h1{margin:0 0 4px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;
-     font:800 26px/1.05 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink-2)}
-  #sync{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right}
+  /* nagłówek: tydzień · jednostka · data, tytuł, statystyki (czas, serie, tonaż) */
+  header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:3px solid var(--ink-2);padding:10px 16px 10px}
+  .hrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .eyebrow{font:600 12px/1.3 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  h1{margin:2px 0 0;font:800 25px/1.02 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink-2);
+     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  #sync{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right;flex:none}
+  .stats{display:flex;flex-wrap:wrap;gap:4px 0;margin-top:6px}
+  .stats:empty{display:none}
+  .stats span{display:flex;align-items:baseline;gap:6px;padding:0 12px;border-left:1px solid var(--line);
+              font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .stats span:first-child{padding-left:0;border-left:0}
+  .stats b{font:700 22px/1 var(--f-display);letter-spacing:.02em;color:var(--ink);text-transform:none}
+  .tag{border:1px solid var(--accent);color:var(--accent);padding:3px 6px;border-radius:2px}
   .row{display:flex;gap:0;overflow-x:auto;scrollbar-width:none}
   .row::-webkit-scrollbar{display:none}
-  #days{border-top:1px solid var(--line)}
   .chip{flex:0 0 auto;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--muted);border-radius:0;
         padding:8px 12px 6px;min-height:44px;font:700 17px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.03em}
   .chip.on{color:var(--ink-2);border-bottom-color:var(--accent)}
-  .chip.done::after{content:" ✓";color:var(--ok)}
   .chip small{display:block;font:500 12px/1.2 var(--f-mono);letter-spacing:0;text-transform:none}
-  main{padding:4px 16px 32px;max-width:640px;margin:0 auto}
-  .stitle{margin:12px 0 0;display:flex;justify-content:space-between;align-items:baseline;gap:8px;
-          font:600 12px/1.3 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-  .stitle .clock{font:700 20px/1 var(--f-display);letter-spacing:.04em;color:var(--ink);text-transform:none}
+  main{padding:4px 16px calc(96px + env(safe-area-inset-bottom,0px));max-width:640px;margin:0 auto}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* dolne menu: zakładka aktywna = pasek akcentu u góry */
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:8;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
+       background:var(--surface);border-top:1px solid var(--ink-2);padding-bottom:env(safe-area-inset-bottom,0px)}
+  .nav button{position:relative;border:0;background:transparent;min-height:58px;display:grid;place-items:center;gap:2px;padding:6px 0;
+              font:600 12px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .nav svg{width:22px;height:22px}
+  .nav button[aria-current="page"]{color:var(--ink-2)}
+  .nav button[aria-current="page"]::before{content:"";position:absolute;top:-1px;left:22%;right:22%;height:3px;background:var(--accent)}
+
+  /* ekran Plan */
+  .tabs{border-bottom:1px solid var(--line);margin:8px 0 0}
+  .strip{display:flex;gap:4px;margin:10px 0 2px;overflow-x:auto;scrollbar-width:none}
+  .dayb{flex:1 0 52px;min-height:64px;border:1px solid var(--line);border-radius:2px;background:transparent;color:var(--ink);
+        display:grid;justify-items:center;align-content:center;gap:2px;padding:4px}
+  .dayb small{font:600 12px/1 var(--f-body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .dayb b{font:700 22px/1 var(--f-display)}
+  .dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--olive);display:block}
+  .dayb.done .dot{background:var(--ok);border-color:var(--ok)}
+  .dayb.today{border-color:var(--accent)}
+  .dayb.today .dot{background:var(--accent);border-color:var(--accent)}
+  .unit{border-top:2px solid var(--ink-2);margin-top:18px;padding-top:10px}
+  .unit.done{border-top-color:var(--ok)}
+  .unit.today{border-top-color:var(--accent)}
+  .uh{display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:start}
+  .dd b{display:block;font:800 34px/1 var(--f-display);color:var(--ink-2)}
+  .dd small,.ut small{display:block;font:600 12px/1.3 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+  .ut{font-size:15px;color:var(--ink-2)}
+  .ut strong{font:700 22px/1 var(--f-display);text-transform:uppercase;color:var(--ink);margin-right:4px}
+  .unit details summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font:600 12px/1.2 var(--f-body);
+                        letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+  .unit ol{margin:0 0 6px;padding-left:22px}
+  .unit li{padding:6px 0;border-bottom:1px solid var(--line)}
+  .unit li > b{display:block;font-weight:600}
+  .unit li span{font-size:14px;color:var(--ink-2)}
+  .uact{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .btn.go{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+  .mvl{position:relative}
+  .mvl input{position:absolute;inset:-1px;opacity:0;width:auto;height:auto;border:0;padding:0;cursor:pointer}
+  .offer{margin-top:10px;border-left:4px solid var(--accent);padding:6px 0 6px 10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px}
 
   /* ćwiczenie = sekcja protokołu: linia 2 px nad nazwą, bez kart */
   .card{background:transparent;border:0;border-top:2px solid var(--ink-2);border-radius:0;padding:12px 0 16px;margin-top:18px}
@@ -139,7 +184,7 @@
   .timebox{display:flex;align-items:baseline;gap:12px;background:var(--panel);color:var(--light-white);border-radius:0;padding:10px 12px}
   .timebox .clock{font:800 34px/1 var(--f-display);letter-spacing:.04em;color:var(--light-amber);font-variant-numeric:tabular-nums}
   .timebox small{color:var(--light-white);opacity:.8;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
-  #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--panel);color:var(--light-white);
+  #toast{position:fixed;left:50%;bottom:calc(72px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel);color:var(--light-white);
          border-left:4px solid var(--light-amber);padding:10px 16px;border-radius:0;font-size:15px;display:none;z-index:9;max-width:calc(100% - 32px)}
   .scale{display:grid;gap:4px;margin-top:4px}
   .scale.s5{grid-template-columns:repeat(5,1fr)}
@@ -163,11 +208,16 @@
 </head>
 <body>
 <header>
-  <h1><span id="title">Trening</span><span id="sync">ładowanie…</span></h1>
-  <div class="row" id="weeks"></div>
-  <div class="row" id="days"></div>
+  <div class="hrow"><span class="eyebrow" id="eyebrow"></span><span id="sync">ładowanie…</span></div>
+  <h1 id="title">Trening</h1>
+  <div class="stats" id="stats"></div>
 </header>
 <main id="main"><div class="empty">Ładowanie planu…</div></main>
+<main id="plan" hidden></main>
+<nav class="nav" id="nav" hidden>
+  <button type="button" data-tab="trening"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6M6 6v12M18 6v12M21 9v6M6 12h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>Trening</button>
+  <button type="button" data-tab="plan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>Plan</button>
+</nav>
 <div id="toast"></div>
 
 <script src="config.js"></script>
@@ -182,18 +232,23 @@ const KEY = (() => {
 let PAIN = false;      // Klienci F „bol” = TAK → kolano i bark zawsze zaznaczone
 let SIMPLE = false;    // Klienci G „tryb” = PROSTY
 let EXTRA_DEF = 0;     // Klienci H „dod_serie”; Plan „dod_serie” nadpisuje
+let NAME = '';
 function applyCfg(c){
   if (!c) return;
   PAIN = !!c.pain; SIMPLE = !!c.simple; EXTRA_DEF = Number(c.extra) || 0;
-  $('#title').textContent = 'Trening · ' + c.name; document.title = 'Trening – ' + c.name;
+  NAME = c.name || ''; document.title = 'Trening – ' + c.name;
 }
-let PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
+let DATA = null, PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
+let TAB = 'trening';   // ekran z dolnego menu: trening | plan
+let PW = null;         // tydzień oglądany na ekranie Plan
+let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const RPE = ['', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10'];
 // tryb prosty: słowa zamiast RPE; w arkuszu nadal zapisuje się liczba RPE
 const EFFORT = [['', '–'], ['6', 'Lekko'], ['7.5', 'Średnio'], ['9', 'Ciężko'], ['10', 'Max']];
 const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
-const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate } = window.TL;
+const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate,
+  addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -264,14 +319,20 @@ setInterval(tick, 1000);
 const DK = 'd_' + KEY;
 function useData(d){
   applyCfg(d.cfg);
-  PLAN = d.plan; LOGS = {}; SESS = {};
+  DATA = d; PLAN = d.plan; LOGS = {}; SESS = {};
   d.logs.forEach(l => LOGS[l.id] = l);
   d.sessions.forEach(s => SESS[s.id] = s);
   // lokalne, jeszcze niewysłane zapisy z kolejki nadpisują dane z serwera
   qGet().forEach(it => {
     const p = it.payload;
     if (it.fn === 'logSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ: p.typ }; }
+    if (it.fn === 'przesunJednostke') applyMoves(p, false);
   });
+}
+/** nowe daty jednostek w planie (lokalnie; serwer dostaje je przez send/kolejkę); save = zapis w pamięci telefonu */
+function applyMoves(moves, save){
+  [].concat(moves || []).forEach(m => PLAN.forEach(r => { if (r.week === m.week && r.day === m.day) r.date = m.date; }));
+  if (save && DATA) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
 }
 function load(){
   if (!KEY) { $('#main').innerHTML = '<div class="empty">Otwórz aplikację z linku od trenera (zawiera Twój kod).</div>'; setSync(''); return; }
@@ -288,11 +349,6 @@ function load(){
     if (!cached) { $('#main').innerHTML = '<div class="empty">Błąd: ' + esc(e.message) + '</div>'; setSync('błąd'); }
     else setSync('offline – ostatnie dane');
   });
-}
-function sessionsOf(week){
-  const m = new Map();
-  PLAN.filter(r => r.week === week).forEach(r => { if (!m.has(r.day)) m.set(r.day, r); });
-  return [...m.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 function pickDefault(){
   const today = localDate();                         // strefa telefonu (UTC po północy dawało wczoraj)
@@ -316,7 +372,7 @@ function helpCard(){
   let seen = false;
   try { seen = !!localStorage.getItem(HK); localStorage.setItem(HK, '1'); } catch(e){}
   return `<details class="help" ${seen ? '' : 'open'}><summary>Jak to działa?</summary><ol>
-    <li>U góry wybierasz tydzień i dzień. Aplikacja sama otwiera najbliższy trening.</li>
+    <li>Aplikacja sama otwiera najbliższy trening. Inny dzień wybierzesz na dole w <b>„Plan”</b>: tam też zmienisz datę treningu.</li>
     <li>Ciężar i powtórzenia są już wpisane według planu. Zmieniaj je tylko, jeśli zrobiłeś inaczej.</li>
     <li>Po każdej serii wybierz, jak było ciężko, i dotknij <b>✓</b>. Zielony = zapisane.</li>
     <li>Całe ćwiczenie poszło zgodnie z planem? Dotknij <b>„✓ Wszystko jak w planie”</b>.</li>
@@ -330,23 +386,105 @@ function helpCard(){
 
 /* ---------- render ---------- */
 function render(){
-  const weeks = [...new Set(PLAN.map(r => r.week))].sort((a, b) => a - b);
-  $('#weeks').innerHTML = weeks.map(w => `<button class="chip ${w === cur.week ? 'on' : ''}" data-w="${w}">Tydz. ${w}${w === 6 ? ' · deload' : ''}</button>`).join('');
-  const ss = sessionsOf(cur.week);
-  if (!ss.some(s => s.day === cur.day)) cur.day = ss[0] && ss[0].day;
-  $('#days').innerHTML = ss.map(s => `<button class="chip ${s.day === cur.day ? 'on' : ''} ${sessDone(cur.week, s.day) ? 'done' : ''}" data-d="${s.day}">${s.day}<small>${s.date.slice(8, 10)}.${s.date.slice(5, 7)}</small></button>`).join('');
-  document.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { cur.week = +b.dataset.w; cur.day = null; render(); window.scrollTo(0, 0); });
-  document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { cur.day = b.dataset.d; render(); window.scrollTo(0, 0); });
+  $('#nav').hidden = !PLAN.length;
+  document.querySelectorAll('#nav [data-tab]').forEach(b => {
+    b.setAttribute('aria-current', b.dataset.tab === TAB ? 'page' : 'false');
+    b.onclick = () => { TAB = b.dataset.tab; if (TAB === 'plan') PW = cur.week; render(); window.scrollTo(0, 0); };
+  });
+  $('#main').hidden = TAB !== 'trening'; $('#plan').hidden = TAB !== 'plan';
+  if (TAB === 'plan') renderPlan(); else renderTrening();
+}
+function head(eyebrow, title, stats){
+  $('#eyebrow').textContent = eyebrow; $('#title').textContent = title; $('#stats').innerHTML = stats || '';
+}
+const weekLabel = w => { const b = blockInfo(PLAN, w); return b ? 'Blok ' + b.block + ' · tydz. ' + b.n : 'Tydz. ' + w; };
+/** czas, serie zrobione/wszystkie, tonaż bieżącej jednostki w nagłówku */
+function refreshStats(){
+  if (TAB !== 'trening') return;
+  const exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day);
+  const st = unitStats(exs, exLogs);
+  const sets = $('#st-sets'), ton = $('#st-ton');
+  if (sets) sets.textContent = st.done + '/' + st.all;
+  if (ton) ton.textContent = st.ton.toLocaleString('pl-PL');
+}
 
-  const exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order);
-  if (!exs.length) { $('#main').innerHTML = '<div class="empty">Brak planu.</div>'; return; }
+/* ---------- ekran Plan: tygodnie, dni z kropkami, jednostki, zmiana daty ---------- */
+function renderPlan(){
+  const weeks = [...new Set(PLAN.map(r => r.week))].sort((a, b) => a - b), light = lightWeeks(PLAN), today = localDate();
+  if (!weeks.includes(PW)) PW = weeks.includes(cur.week) ? cur.week : weeks[0];
+  const bi = blockInfo(PLAN, PW);
+  head(NAME ? 'Plan · ' + NAME : 'Plan', weekLabel(PW), light.has(PW) ? '<span class="tag">tydzień lżejszy</span>' : '');
+  const us = units(PLAN).filter(u => u.week === PW);
+  const state = u => sessDone(u.week, u.day) ? 'done' : u.date === today ? 'today' : '';
+  let h = `<div class="row tabs" role="tablist">` + weeks.map(w => {
+    const b = blockInfo(PLAN, w), sub = [b ? b.block : '', light.has(w) ? 'lżejszy' : ''].filter(Boolean).join(' · ');
+    return `<button class="chip ${w === PW ? 'on' : ''}" data-pw="${w}" role="tab" aria-selected="${w === PW}">Tydz. ${b ? b.n : w}${sub ? `<small>${esc(sub)}</small>` : ''}</button>`;
+  }).join('') + `</div>`;
+  h += `<div class="strip">` + us.map(u => `<button class="dayb ${state(u)}" data-jump="${u.week}|${esc(u.day)}"><small>${weekday(u.date)}</small><b>${ddmm(u.date).slice(0, 2)}</b><i class="dot" aria-hidden="true"></i><span class="sr">${esc(u.day)} ${state(u) === 'done' ? 'zrobiona' : state(u) === 'today' ? 'dziś' : 'zaplanowana'}</span></button>`).join('') + `</div>`;
+  us.forEach(u => {
+    const done = sessDone(u.week, u.day), k = u.week + '|' + u.day;
+    const exs = u.rows.slice().sort((a, b) => a.order - b.order);
+    const offer = lastMove && lastMove.week === u.week && lastMove.day === u.day
+      ? `<div class="offer"><span>Przesunięto na ${weekday(u.date)} ${ddmm(u.date)}.</span>
+          <button class="btn sm" data-shift>Przesuń też kolejne (${lastMove.delta > 0 ? '+' : ''}${lastMove.delta} ${Math.abs(lastMove.delta) === 1 ? 'dzień' : 'dni'})</button>
+          <button class="btn sm" data-noshift>Nie</button></div>` : '';
+    h += `<section class="unit ${state(u)}" id="u-${u.week}-${esc(u.day)}">
+      <div class="uh"><div class="dd"><b>${ddmm(u.date).slice(0, 2)}</b><small>${weekday(u.date)} · ${monthShort(u.date)}</small></div>
+        <div class="ut"><strong>${esc(u.day)}</strong> ${esc(u.title)}<small>${exs.length} ${plural(exs.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} · ${done ? 'zrobiona ✓' : u.date === today ? 'dziś' : u.date < today ? 'niezrobiona' : 'zaplanowana'}</small></div></div>
+      <details><summary>Ćwiczenia</summary><ol>${exs.map(ex => `<li><b>${esc(ex.name)}</b><span>${SIMPLE ? rxSimple(ex) : rxPro(ex)}</span></li>`).join('')}</ol></details>
+      <div class="uact"><button class="btn go" data-go="${k}">Przejdź do treningu</button>
+        ${done ? '' : `<label class="btn mvl">Zmień datę<input type="date" class="mv" data-mv="${k}" value="${u.date}" aria-label="Nowa data ${esc(u.day)}"></label>`}</div>
+      ${offer}</section>`;
+  });
+  $('#plan').innerHTML = h;
+  const unitOf = k => { const [w, d] = k.split('|'); return units(PLAN).find(u => String(u.week) === w && u.day === d); };
+  document.querySelectorAll('[data-pw]').forEach(b => b.onclick = () => { PW = +b.dataset.pw; lastMove = null; renderPlan(); });
+  document.querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
+    const u = unitOf(b.dataset.jump), s = document.getElementById('u-' + u.week + '-' + u.day);
+    s.querySelector('details').open = true; s.scrollIntoView({ block: 'start' });
+  });
+  document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
+    const u = unitOf(b.dataset.go); cur.week = u.week; cur.day = u.day; TAB = 'trening'; lastMove = null; render(); window.scrollTo(0, 0);
+  });
+  document.querySelectorAll('input[data-mv]').forEach(inp => inp.onchange = () => moveUnit(unitOf(inp.dataset.mv), inp.value));
+  const sh = $('[data-shift]'); if (sh) sh.onclick = shiftRest;
+  const ns = $('[data-noshift]'); if (ns) ns.onclick = () => { lastMove = null; renderPlan(); };
+}
+/** klient przesuwa niezrobioną jednostkę; potem propozycja przesunięcia kolejnych o tyle samo dni */
+function moveUnit(u, date){
+  if (!u || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date === u.date || sessDone(u.week, u.day)) return;
+  const move = { week: u.week, day: u.day, date };
+  lastMove = { week: u.week, day: u.day, from: u.date, delta: dayDiff(u.date, date) };
+  applyMoves([move], true);
+  send('przesunJednostke', [move]).catch(() => {});
+  renderPlan();
+}
+function shiftRest(){
+  if (!lastMove) return;
+  const m = lastMove, moves = units(PLAN)
+    .filter(u => !(u.week === m.week && u.day === m.day) && u.date > m.from && !sessDone(u.week, u.day))
+    .map(u => ({ week: u.week, day: u.day, date: addDays(u.date, m.delta) }));
+  lastMove = null;
+  if (moves.length) { applyMoves(moves, true); send('przesunJednostke', moves).catch(() => {}); }
+  toast(moves.length ? 'Przesunięto ' + moves.length + ' ' + plural(moves.length, 'jednostkę', 'jednostki', 'jednostek') + '.' : 'Brak kolejnych jednostek.');
+  renderPlan();
+}
+
+/* ---------- ekran Trening ---------- */
+function renderTrening(){
+  let exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order);
+  if (!exs.length) { pickDefault(); exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order); }
+  if (!exs.length) { head(NAME, 'Trening'); $('#main').innerHTML = '<div class="empty">Brak planu.</div>'; return; }
   const s0 = exs[0];
+  head(weekLabel(cur.week) + ' · ' + cur.day + ' · ' + weekday(s0.date) + ' ' + ddmm(s0.date) + (sessDone(cur.week, cur.day) ? ' · zrobiona ✓' : ''),
+    s0.title || cur.day,
+    `<span>Czas <b class="clock">${clockText()}</b></span><span>Serie <b id="st-sets"></b></span><span>Tonaż <b id="st-ton"></b> kg</span>`);
   let h = helpCard();
-  h += `<div class="stitle"><span>${esc(s0.title)} · ${s0.date.split('-').reverse().join('.')}</span><span>⏱ <span class="clock">${clockText()}</span></span></div>`;
   exs.forEach(ex => h += card(ex));
   h += sessCard(s0);
   $('#main').innerHTML = h;
   bind(exs, s0);
+  refreshStats();
 }
 function rxPro(ex){
   const hasKg = typeof ex.kg === 'number';
@@ -537,6 +675,7 @@ function bindRow(row, ex, s0){
       done: on, video: prev.film_link || '', typ };
     btn.className = 'ok pend';
     LOGS['local' + lid(ex, set)] = { id: 'local' + lid(ex, set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: on ? 'TAK' : '', film_link: p.video, typ };
+    refreshStats();
     send('logSet', p).then(() => btn.className = 'ok ' + (on ? 'on' : '')).catch(() => btn.className = 'ok pend');
     if (on && navigator.vibrate) navigator.vibrate(30);
   };
@@ -612,7 +751,7 @@ function bind(exs, s0){
     const row = del.closest('.set'), o = row.dataset.o, ex = exOf(o), set = setKey(row.dataset.s);
     const saved = !!getLog(ex, set), suffix = lid(ex, set);
     Object.keys(LOGS).forEach(k => { if (k.endsWith(suffix)) delete LOGS[k]; });
-    row.remove(); refreshDel(o);
+    row.remove(); refreshDel(o); refreshStats();
     if (saved) send('deleteSet', { week: cur.week, day: cur.day, order: ex.order, set }).catch(() => {});
     toast('Usunięto serię ' + set + '.');
   };

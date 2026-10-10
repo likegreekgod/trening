@@ -101,9 +101,10 @@ Konwencje Damiana:
   - samopoczucie 1–5;
   - ból 0–10 per miejsce;
   - wszystko dużymi przyciskami.
+- Ekrany z dolnego menu (`TAB`): Trening (nagłówek: tydzień/blok · jednostka · data, czas, serie, tonaż) i Plan (tygodnie, dni z kropkami, jednostki, „Przejdź do treningu”, „Zmień datę” → `przesunJednostke` + propozycja „przesuń też kolejne”). Dyspozycja i Postęp dojdą w PR 10–11.
 - Offline:
   - ostatnie getData leży w `localStorage` (`d_<klucz>`);
-  - zapisy bez sieci trafiają do kolejki `q_<klucz>` i wysyłają się po powrocie połączenia;
+  - zapisy bez sieci trafiają do kolejki `q_<klucz>` i wysyłają się po powrocie połączenia; `useData` nakłada niewysłane zapisy z kolejki (serie, przesunięcia dat) na dane z serwera;
   - `sw.js` trzyma pliki aplikacji w pamięci telefonu.
 - Dostępność:
   - bez `maximum-scale`;
