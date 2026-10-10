@@ -266,7 +266,7 @@ test('Przerwa: start po ✓ (A 2:00, K 1:00), ±15 s, Pomiń, koniec z wibracją
   assert.match(await p.textContent('#rlbl'), /Wyciskanie/);
   await p.click('[data-r="15"]'); assert.equal(await p.textContent('#rtime'), '2:15');
   await p.click('[data-r="-15"]'); await p.click('[data-r="-15"]'); assert.equal(await p.textContent('#rtime'), '1:45');
-  await p.clock.runFor(30000); assert.equal(await p.textContent('#rtime'), '1:15');
+  await p.clock.runFor(30300); assert.equal(await p.textContent('#rtime'), '1:15');   // wyświetlacz odświeża się co 250 ms
   await p.click('.set[data-o="1"][data-s="1"] .ok');                             // ✓ → ✕: przerwa się nie restartuje
   assert.equal(await p.textContent('#rtime'), '1:15');
   await p.click('[data-r="0"]'); assert.equal(await p.isHidden('#rest'), true);
@@ -313,6 +313,63 @@ test('Talerze: na stronę z gryfem 20/15 kg i zamkami, ciężar następnej serii
   await p.click('[data-plates="1"]');
   assert.equal(await p.getAttribute('[data-bar="15"]', 'aria-pressed'), 'true');     // gryf zapamiętany
   await p.click('[data-close]'); assert.equal(await p.isHidden('#sheet'), true);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+// --- PR 6: boje – światła, ocena, propozycja, max dziś ---
+const OLY = Object.assign({}, PRO, {
+  cfg: Object.assign({}, PRO.cfg, { olyCeil: 0.05 }),
+  plan: [{ week: 2, day: 'T1', title: 'Technika', date: '2026-10-13', order: 1, name: 'Rwanie', prio: 'A', sets: 4, reps: '2', pct: 0.7, kg: 70, rpe: '', note: '', extra: 0, drop: 0, block: '', group: 'R', swaps: [] }],
+  logs: [{ id: 'robert|1|T1|1|1', zapisano: '2026-10-06T10:00:00.000Z', cwiczenie: 'Rwanie', tydzien: 1, jednostka: 'T1', seria: 1, kg: 67.5, powt: 2, rpe: 9.5, ocena: 'W', wykonane: 'TAK', typ: '' }],
+  readiness: []
+});
+const rate = async (p, s, q) => { await p.click(`.set[data-s="${s}"] .lt`); await p.click(`.rate [data-q="${q}"]`); await p.waitForTimeout(80); };
+
+test('Boje: światła zamiast RPE, ocena → zapis, propozycja i „Ustaw X kg”, max dziś', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: OLY });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set.oly');
+  assert.match(await p.textContent('.rx'), /max dziś 75 kg/);                 // 1RM 100 × (0,7 + 0,05)
+  assert.equal((await p.textContent('.last')).trim(), 'Ostatnio: 67,5 kg × 2 · Walka');
+  assert.equal(await p.$('.set.oly .rpe'), null);
+  assert.equal(await p.$('.set.oly .ok'), null);
+  await p.click('.set[data-s="1"] .lt');
+  assert.deepEqual(await p.$$eval('.rate [data-q]', b => b.map(x => x.dataset.q)), ['L', 'S', 'W', 'X']);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'boje-ocena.png') }); }
+  await p.click('.rate [data-q="L"]'); await p.waitForTimeout(80);
+  assert.deepEqual((({ ocena, rpe, typ, done }) => ({ ocena, rpe, typ, done }))(lastSet(calls)), { ocena: 'L', rpe: 7, typ: '', done: true });
+  assert.equal(await p.getAttribute('.set[data-s="1"]', 'data-rate'), 'L');
+  assert.match(await p.textContent('.sug'), /Łatwo: możesz dołożyć 2,5 kg\. Sufit dziś 75 kg/);
+  await p.click('[data-setkg="72.5"]');
+  assert.deepEqual(await p.$$eval('.set.oly .kg', i => i.map(x => x.value)), ['70', '72,5', '72,5', '72,5']);
+  await rate(p, 2, 'L');
+  assert.equal(await p.$eval('.sug [data-setkg]', b => b.dataset.setkg), '75');
+  assert.equal((await p.$$('.sug')).length, 1);                                  // tylko pod ostatnio ocenionym
+  await p.click('[data-setkg="75"]');
+  await rate(p, 3, 'L');
+  assert.match(await p.textContent('.sug'), /to sufit dnia \(75 kg\)/);
+  assert.equal(await p.$('.sug [data-setkg]'), null);
+  await rate(p, 4, 'X');
+  assert.deepEqual((({ ocena, rpe, typ }) => ({ ocena, rpe, typ }))(lastSet(calls)), { ocena: 'X', rpe: '', typ: 'FAIL' });
+  assert.equal(await p.$('.sug'), null);                                         // brak serii do zrobienia
+  await p.click('.set[data-s="4"] .lt'); await p.click('.rate .rclr'); await p.waitForTimeout(80);
+  assert.deepEqual((({ ocena, done }) => ({ ocena, done }))(lastSet(calls)), { ocena: '', done: false });
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Boje: dwie spalone na tym samym ciężarze → −5% 1RM; słaba dyspozycja dnia → sufit = plan', async () => {
+  const today = await (async () => { const d = new Date(); const z = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); })();
+  const data = Object.assign({}, OLY, { readiness: [{ klient: 'robert', data: today, werdykt: 'Uwaga' }] });
+  const { ctx, p } = await page([], false, { data });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set.oly');
+  assert.match(await p.textContent('.rx'), /max dziś 70 kg/);
+  await rate(p, 1, 'L');
+  assert.match(await p.textContent('.sug'), /dyspozycja dnia: uwaga/);
+  await rate(p, 2, 'X'); await rate(p, 3, 'X');
+  assert.match(await p.textContent('.sug'), /Dwie spalone na 70 kg: zejdź o ok\. 5% 1RM do 65 kg/);
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });

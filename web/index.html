@@ -227,6 +227,27 @@
   .prow .plbl small{font:400 13px var(--f-body);text-transform:none;letter-spacing:0;color:var(--muted)}
   .empty{color:var(--muted);text-align:center;padding:40px 0}
 
+  /* boje: światła sędziowskie, wybór oceny, propozycja ciężaru */
+  .set .lt,.set-head .hl2{grid-column:span 2}
+  .lt{min-height:44px;border:0;border-radius:2px;background:var(--panel);color:var(--light-white);display:flex;align-items:center;justify-content:center;gap:8px;padding:0 8px}
+  .lt small{font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase}
+  .lt.pend{outline:3px solid var(--warn);outline-offset:-3px}
+  .lights{display:inline-flex;gap:4px}
+  .lights i{width:14px;height:14px;border-radius:50%;background:var(--light-off);display:block}
+  .lights i.w{background:var(--light-white)}
+  .lights i.r{background:var(--light-red)}
+  .rate{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .rate button{min-height:56px;border:1px solid var(--light-off);border-radius:2px;background:var(--panel);color:var(--light-white);
+               display:grid;justify-items:center;align-content:center;gap:3px;padding:6px}
+  .rate button[aria-pressed="true"]{outline:3px solid var(--light-amber);outline-offset:-3px}
+  .rate b{font:700 18px/1 var(--f-display);text-transform:uppercase;letter-spacing:.03em}
+  .rate small{font-size:12px;opacity:.85}
+  .rate .rclr{grid-column:1/-1;min-height:44px;background:transparent;color:var(--ink-2);border-color:var(--line)}
+  .sug{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-left:4px solid var(--muted);padding:6px 0 6px 10px;margin:6px 0;font-size:14px}
+  .sug.up{border-left-color:var(--ok)}
+  .sug.down{border-left-color:var(--warn)}
+  .rx .badge + b,.rx b{white-space:nowrap}
+
   /* timer przerwy: ciemny pasek na całą szerokość nad dolnym menu, bursztynowe cyfry */
   #rest{position:fixed;left:0;right:0;bottom:calc(59px + env(safe-area-inset-bottom,0px));z-index:7;background:var(--panel);color:var(--light-white);
         padding:8px 16px 0;display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center}
@@ -300,13 +321,15 @@ let PAIN = false;      // Klienci F „bol” = TAK → kolano i bark zawsze zaz
 let SIMPLE = false;    // Klienci G „tryb” = PROSTY
 let EXTRA_DEF = 0;     // Klienci H „dod_serie”; Plan „dod_serie” nadpisuje
 let NAME = '';
-let SCALE = 'RPE';     // Klienci K „skala” (RPE/RIR); przełącznik w nagłówku zapamiętany w telefonie (sc_<klucz>)
+let SCALE = 'RPE';
+let OLY_CEIL = 0.05;   // Klienci L „sufit_oly”: ułamek 1RM ponad plan dla bojów     // Klienci K „skala” (RPE/RIR); przełącznik w nagłówku zapamiętany w telefonie (sc_<klucz>)
 function applyCfg(c){
   if (!c) return;
   PAIN = !!c.pain; SIMPLE = !!c.simple; EXTRA_DEF = Number(c.extra) || 0;
   NAME = c.name || ''; document.title = 'Trening – ' + c.name;
   let own = null; try { own = localStorage.getItem('sc_' + KEY); } catch (e) {}
   SCALE = own || (c.scale === 'RIR' ? 'RIR' : 'RPE');
+  OLY_CEIL = c.olyCeil >= 0 ? Number(c.olyCeil) : 0.05;
 }
 let DATA = null, PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
 let TAB = 'trening';   // ekran z dolnego menu: trening | plan
@@ -319,7 +342,8 @@ const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
 const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
-  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, restSec, fmtClock, plates } = window.TL;
+  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, restSec, fmtClock, plates,
+  isOly, RATE, rateOf, olyCap, sugOly } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -480,7 +504,7 @@ function useData(d){
   // lokalne, jeszcze niewysłane zapisy z kolejki nadpisują dane z serwera
   qGet().forEach(it => {
     const p = it.payload;
-    if (it.fn === 'logSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ: p.typ }; }
+    if (it.fn === 'logSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ: p.typ, ocena: p.ocena || '' }; }
     if (it.fn === 'przesunJednostke') applyMoves(p, false);
   });
 }
@@ -534,6 +558,7 @@ function helpCard(){
     <li>Rozgrzewkę możesz dopisać przyciskiem <b>„+ Rozgrzewka”</b>, a <b>„⇣ Jak 1. seria”</b> przepisuje ciężar i powtórzenia do kolejnych serii.</li>
     <li>Seria się nie udała? Dotknij <b>✓</b> jeszcze raz: zmieni się w czerwony <b>✕</b> (nieudana). Trzecie dotknięcie czyści pole. Drop set (od razu lżej, do zmęczenia) dodajesz przyciskiem <b>„+ Drop”</b>.</li>
     <li>Żółte pole = seria czeka na wysłanie (brak zasięgu). Wyśle się sama.</li>
+    <li>Rwanie i podrzut: dotknij świateł i oceń podejście (Łatwo, Średnio, Walka, Spalone). Pod spodem pojawi się propozycja ciężaru na kolejne serie.</li>
     <li>Dodałeś wiersz przez pomyłkę? Dotknij <b>✕</b> przy jego numerze, a potem <b>„usuń?”</b>.</li>
     <li>Film jest opcjonalny: „Dodaj film”. Najlepiej krótki, nagrany w 720p.</li>
     <li>Na koniec przewiń w dół i dotknij <b>„Zakończ i zapisz trening”</b>.</li>
@@ -651,14 +676,51 @@ function rxPro(ex){
   const hasKg = typeof ex.kg === 'number', z = plateZone(ex.pct);
   return `${ex.sets}×${esc(ex.reps)}` + (ex.kg !== '' ? ` · <b>${esc(fmtKg(ex.kg))}${hasKg ? ' kg' : ''}</b>` : '') +
          (ex.pct !== null ? ` <span class="badge">${z ? `<i class="zone ${z}" aria-hidden="true"></i>` : ''}${Math.round(ex.pct * 1000) / 10}%</span>` : '') +
-         (ex.rpe === '' ? '' : SCALE === 'RIR' ? ` · RIR ≥${rirMin(ex.rpe)}` : ` · RPE ≤${esc(fmtKg(ex.rpe))}`);
+         (isOly(ex) ? maxToday(ex) : ex.rpe === '' ? '' : SCALE === 'RIR' ? ` · RIR ≥${rirMin(ex.rpe)}` : ` · RPE ≤${esc(fmtKg(ex.rpe))}`);
+}
+/* ---------- boje: sufit dnia (plan + sufit_oly × 1RM; słaba dyspozycja dnia → plan) ---------- */
+const dayOf = v => /T/.test(String(v)) ? localDate(new Date(v)) : String(v || '').slice(0, 10);
+/** dzisiejsza dyspozycja „Uwaga” / „Zmęczenie” → tekst do propozycji; inaczej '' */
+function weakToday(){
+  const r = ((DATA && DATA.readiness) || []).filter(x => dayOf(x.data) === localDate()).pop();
+  return r && /uwaga|zmęcz/i.test(r.werdykt || '') ? String(r.werdykt).toLowerCase() : '';
+}
+function capOf(ex){
+  const why = weakToday(), kg = isNum(ex.kg) ? ex.kg : NaN;
+  return { cap: olyCap(kg, ex.pct, OLY_CEIL, !!why), one: kg > 0 && ex.pct > 0 ? kg / ex.pct : 0, weak: !!why, why };
+}
+const maxToday = ex => { const c = capOf(ex).cap; return c ? ` · max dziś <b>${fmtKg(c)} kg</b>` : ''; };
+const lightsHtml = q => `<span class="lights" aria-hidden="true">${[...(RATE[q] ? RATE[q].lights : 'ooo')].map(c => `<i class="${c}"></i>`).join('')}</span>`;
+const RATE_HINT = { L: '3 białe', S: '2 białe, 1 czerwone', W: '1 białe, 2 czerwone', X: '3 czerwone' };
+const rateHtml = cur => `<div class="rate" role="group" aria-label="Ocena podejścia">` +
+  ['L', 'S', 'W', 'X'].map(q => `<button type="button" data-q="${q}" aria-pressed="${cur === q}">${lightsHtml(q)}<b>${RATE[q].label}</b><small>${RATE_HINT[q]}</small></button>`).join('') +
+  (cur ? '<button type="button" class="rclr" data-q="">Wyczyść ocenę</button>' : '') + '</div>';
+/** propozycja ciężaru pod ostatnio ocenionym podejściem (tylko gdy zostały serie) */
+function updateSug(ex){
+  if (!isOly(ex)) return;
+  document.querySelectorAll(`.sug[data-o="${ex.order}"]`).forEach(x => x.remove());
+  const rows = [...document.querySelectorAll(`.set[data-o="${ex.order}"]:not([data-k="w"])`)];
+  const model = rows.map(r => ({ kg: num(r.querySelector('.kg').value), rate: r.dataset.rate || '', done: !!r.dataset.st }));
+  let i = -1; model.forEach((m, j) => { if (m.done && m.rate) i = j; });
+  const s = i < 0 || !isNum(model[i].kg) ? null : sugOly(model, i, capOf(ex));
+  if (!s) return;
+  const at = rows[i].nextElementSibling && rows[i].nextElementSibling.classList.contains('rate') ? rows[i].nextElementSibling : rows[i];
+  at.insertAdjacentHTML('afterend', `<div class="sug ${s.lvl}" data-o="${ex.order}"><span>${esc(s.txt)}</span>` +
+    (s.kg !== model[i].kg ? `<button type="button" class="btn sm" data-setkg="${s.kg}">Ustaw ${fmtKg(s.kg)} kg</button>` : '') + '</div>');
+  const b = document.querySelector(`.sug[data-o="${ex.order}"] [data-setkg]`);
+  if (b) b.onclick = () => {
+    let n = 0;
+    rows.forEach(r => { if (!r.dataset.st) { r.querySelector('.kg').value = fmtKg(s.kg); n++; } });
+    toast('Ustawiono ' + fmtKg(s.kg) + ' kg w ' + n + ' ' + plural(n, 'serii', 'seriach', 'seriach') + '.');
+    updateSug(ex);
+  };
 }
 /** „Ostatnio: 105 kg × 5 · RPE 9” (PROSTY: słownie) – z poprzedniej jednostki z tym ćwiczeniem */
 function lastLine(ex){
   const t = lastTop(DATA ? DATA.logs : [], ex.name, cur.week, cur.day);
   if (!t) return '';
   const kg = typeof t.kg === 'number' ? fmtKg(t.kg) + ' kg' : esc(t.kg);
-  const eff = blank(t.rpe) ? '' : SIMPLE ? ' · ' + (EFFORT.find(e => e[0] === effortVal(t.rpe)) || ['', ''])[1]
+  const eff = isOly(ex) && RATE[t.ocena] ? ' · ' + RATE[t.ocena].label : blank(t.rpe) ? '' : SIMPLE ? ' · ' + (EFFORT.find(e => e[0] === effortVal(t.rpe)) || ['', ''])[1]
     : SCALE === 'RIR' ? ' · RIR ' + fmtKg(rirOfRpe(t.rpe)) : ' · RPE ' + fmtKg(t.rpe);
   return `<div class="last">Ostatnio: ${kg} × ${esc(t.reps)}${eff}</div>`;
 }
@@ -668,7 +730,7 @@ function rxSimple(ex){
   const repTxt = /^\d+$/.test(reps) ? `${r} ${plural(r, 'powtórzenie', 'powtórzenia', 'powtórzeń')}`
     : range ? `${range[1]}–${range[2]} ${plural(+range[2], 'powtórzenie', 'powtórzenia', 'powtórzeń')}` : esc(reps);
   return `${n} ${plural(n, 'seria', 'serie', 'serii')} po ${repTxt}` +
-         (ex.kg !== '' ? ` · <b>${esc(fmtKg(ex.kg))}${typeof ex.kg === 'number' ? ' kg' : ''}</b>` : '');
+         (ex.kg !== '' ? ` · <b>${esc(fmtKg(ex.kg))}${typeof ex.kg === 'number' ? ' kg' : ''}</b>` : '') + (isOly(ex) ? maxToday(ex) : '');
 }
 function hintSimple(ex){
   if (typeof ex.rpe !== 'number' || ex.rpe >= 10) return '';
@@ -732,10 +794,18 @@ function rowHtml(ex, set, kind, def){
   const rpeCell = kind === 'w' ? '<div class="lbl">rozgrzewka</div>' : effortSel(l);
   const vbtCell = !vbt ? '' : kind === 'w' ? '<div></div>'
     : `<input inputmode="decimal" class="vbt" placeholder="m/s" value="${esc(fmtKg(l.vbt_ms || ''))}" aria-label="VBT m/s">`;
-  // robocze i dodatkowe: dotknięcie numeru zmienia typ serii (zwykła → drop → nieudana)
-  const num0 = kind === 'p' || kind === 'x'
+  const oly = isOly(ex) && kind !== 'w', q = oly ? rateOf(l) : '';
+  // robocze i dodatkowe: dotknięcie numeru zmienia typ serii (zwykła → drop → nieudana); boje: ocena światłami
+  const num0 = !oly && (kind === 'p' || kind === 'x')
     ? `<button type="button" class="nt" aria-label="Seria ${setLabel(set, kind)}: ${fail ? 'nieudana' : drop ? 'drop' : 'zwykła'}, dotknij, aby zmienić typ">${setLabel(set, kind)}<small></small></button>`
     : `<span>${setLabel(set, kind)}</span>`;
+  if (oly) return `<div class="set ${cls} oly k-${kind} ${fail ? 'fail' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}" data-st="${st}" data-rate="${q}">
+      <div class="n">${num0}</div>
+      <input inputmode="decimal" class="kg" value="${esc(fmtKg(kg))}"${ph} aria-label="kg">
+      <input inputmode="numeric" class="reps" value="${esc(reps)}"${phr} aria-label="powtórzenia">
+      ${vbtCell}
+      <button type="button" class="lt ${queued(ex, set) ? 'pend' : ''}" aria-label="Ocena: ${q ? RATE[q].label : 'brak'} – dotknij, aby ocenić">${lightsHtml(q)}<small>${q ? RATE[q].label : 'oceń'}</small></button>
+    </div>`;
   return `<div class="set ${cls} k-${kind} ${fail ? 'fail' : ''} ${drop ? 't-d' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}" data-st="${st}">
       <div class="n">${num0}</div>
       <input inputmode="decimal" class="kg" value="${esc(fmtKg(kg))}"${ph} aria-label="kg">
@@ -758,7 +828,10 @@ function card(ex){
   const L = exLogs(ex);
   const vids = Object.keys(L).filter(s => L[s].film_link)
     .map(s => `<a href="${esc(L[s].film_link)}" target="_blank">film ${/^[RD]/.test(s) ? s : (SIMPLE ? 'seria ' : 'S') + s}</a>`);
-  const head = SIMPLE
+  const oly = isOly(ex);
+  const head = oly
+    ? `<div class="set-head set ${SIMPLE ? 'simple' : vbt ? 'vbt' : ''}"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div>${vbt ? '<div class="lbl">VBT</div>' : ''}<div class="lbl hl2">ocena</div></div>`
+    : SIMPLE
     ? `<div class="set-head set simple"><div class="lbl">#</div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">jak ciężko?</div><div></div></div>`
     : `<div class="set-head set ${vbt ? 'vbt' : ''}"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">${SCALE}</div>${vbt ? '<div class="lbl">VBT</div>' : ''}<div></div></div>`;
   const tools = `<div class="tools">
@@ -769,7 +842,7 @@ function card(ex){
       <button class="btn sm" data-plates="${ex.order}">Talerze</button>
     </div>`;
   const dropInfo = plannedDrops(ex) ? `<div class="hint">+ ${plannedDrops(ex)} × drop set po ostatniej serii (ok. −20% ciężaru, do upadku technicznego).</div>` : '';
-  return `<div class="card ${ex.prio === 'K' ? 'k' : ''}" data-card="${ex.order}">
+  return `<div class="card ${ex.prio === 'K' ? 'k' : ''} ${oly ? 'oly' : ''}" data-card="${ex.order}">
     <div class="ch"><div class="cn">${esc(ex.name)}</div><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span></div>
     <div class="rx">${SIMPLE ? rxSimple(ex) : rxPro(ex)}</div>
     ${lastLine(ex)}
@@ -779,7 +852,7 @@ function card(ex){
     ${head}
     <div class="sets">${rows}</div>
     ${tools}
-    ${SIMPLE && !allDone ? `<button class="btn all" data-all="${ex.order}">✓ Wszystko jak w planie</button>` : ''}
+    ${SIMPLE && !allDone && !oly ? `<button class="btn all" data-all="${ex.order}">✓ Wszystko jak w planie</button>` : ''}
     <div class="vid">
       <label class="btn">Dodaj film<input type="file" accept="video/*" hidden data-vo="${ex.order}"></label>
       <div class="bar" id="bar${ex.order}"><i></i></div>
@@ -851,8 +924,15 @@ function sessClick(e){
 }
 /** stan pola odhaczenia: '' (puste) → ok (✓ zrobiona) → x (✕ nieudana, FAIL); pend = czeka na zapis / w kolejce */
 function setState(row, st, pend){
-  const btn = row.querySelector('.ok'), nt = row.querySelector('.nt');
+  const btn = row.querySelector('.ok'), lt = row.querySelector('.lt'), nt = row.querySelector('.nt');
   row.dataset.st = st; row.classList.toggle('fail', st === 'x');
+  if (lt) {
+    const q = st ? row.dataset.rate : '';
+    lt.innerHTML = lightsHtml(q) + '<small>' + (q ? RATE[q].label : 'oceń') + '</small>';
+    lt.classList.toggle('pend', !!pend);
+    lt.setAttribute('aria-label', 'Ocena: ' + (q ? RATE[q].label : 'brak') + (pend ? ' (czeka na zapis)' : '') + ' – dotknij, aby ocenić');
+    return;
+  }
   btn.textContent = st === 'x' ? '✕' : '✓';
   btn.classList.toggle('pend', !!pend);
   btn.setAttribute('aria-label', 'Seria ' + STATE_TXT[st] + (pend ? ' (czeka na zapis)' : ''));
@@ -860,24 +940,36 @@ function setState(row, st, pend){
 }
 function bindRow(row, ex, s0){
   const kind = row.dataset.k, set = setKey(row.dataset.s);
-  const btn = row.querySelector('.ok'), nt = row.querySelector('.nt');
-  const save = st => {
+  const btn = row.querySelector('.ok'), nt = row.querySelector('.nt'), lt = row.querySelector('.lt');
+  const save = (st, oc) => {
     markStart();
     const prev = getLog(ex, set) || {}, q = c => row.querySelector(c);
     const fail = st === 'x', drop = kind === 'd' || row.classList.contains('t-d');
     const typ = [drop ? 'DROP' : '', fail ? 'FAIL' : ''].filter(Boolean).join('+');
+    const ocena = lt && st ? oc || '' : '';
+    if (lt) row.dataset.rate = ocena;
     const p = { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
       kg: num(q('.kg').value), reps: num(q('.reps').value),
-      rpe: fail ? '' : rpeOf(row), vbt: q('.vbt') ? num(q('.vbt').value) : '',
-      done: st !== '', video: prev.film_link || '', typ };
+      rpe: fail ? '' : lt ? (ocena ? RATE[ocena].rpe : '') : rpeOf(row), vbt: q('.vbt') ? num(q('.vbt').value) : '',
+      done: st !== '', video: prev.film_link || '', typ, ocena };
     if (!row.dataset.st && st && kind !== 'w') startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce
     setState(row, st, true);
-    LOGS['local' + lid(ex, set)] = { id: 'local' + lid(ex, set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ };
-    refreshStats();
+    LOGS['local' + lid(ex, set)] = { id: 'local' + lid(ex, set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ, ocena };
+    refreshStats(); updateSug(ex);
     send('logSet', p).then(() => { if (row.dataset.st === st) setState(row, st); }).catch(() => {});
     if (st && navigator.vibrate) navigator.vibrate(fail ? [30, 60, 30] : 30);
   };
-  btn.onclick = () => save(row.dataset.st === '' ? 'ok' : row.dataset.st === 'ok' ? 'x' : '');
+  if (btn) btn.onclick = () => save(row.dataset.st === '' ? 'ok' : row.dataset.st === 'ok' ? 'x' : '');
+  // boje: dotknięcie świateł → wybór oceny pod wierszem
+  if (lt) lt.onclick = () => {
+    const open = row.nextElementSibling && row.nextElementSibling.classList.contains('rate');
+    document.querySelectorAll('.rate').forEach(x => x.remove());
+    if (open) return;
+    row.insertAdjacentHTML('afterend', rateHtml(row.dataset.st ? row.dataset.rate : ''));
+    const box = row.nextElementSibling;
+    box.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { const r = b.dataset.q; box.remove(); save(r ? (r === 'X' ? 'x' : 'ok') : '', r); });
+    box.querySelector('button').focus();
+  };
   // typ serii pod numerem: zwykła → drop → nieudana → zwykła (niezapisana)
   if (nt) nt.onclick = () => {
     const st = row.dataset.st, isDrop = row.classList.contains('t-d');
@@ -886,7 +978,7 @@ function bindRow(row, ex, s0){
     row.classList.remove('t-d'); save('x');
   };
   // poprawka zapisanej serii (kg, powt., RPE) → zapis od razu, bez odznaczania
-  row.querySelectorAll('input, select').forEach(el => el.addEventListener('change', () => { if (row.dataset.st) save(row.dataset.st); }));
+  row.querySelectorAll('input, select').forEach(el => el.addEventListener('change', () => { if (row.dataset.st) save(row.dataset.st, row.dataset.rate); else updateSug(ex); }));
 }
 function bind(exs, s0){
   const exOf = o => exs.find(e => e.order === +o);
@@ -911,6 +1003,7 @@ function bind(exs, s0){
   document.querySelectorAll('.set[data-o]').forEach(row => bindRow(row, exOf(row.dataset.o), s0));
   exs.forEach(ex => refreshDel(ex.order));
   document.querySelectorAll('[data-plates]').forEach(b => b.onclick = () => openPlates(exOf(b.dataset.plates)));
+  exs.forEach(updateSug);
   // tryb prosty: zaznacz wszystkie niezapisane serie robocze ćwiczenia
   document.querySelectorAll('[data-all]').forEach(b => b.onclick = () => {
     const todo = [...document.querySelectorAll(`.set[data-o="${b.dataset.all}"][data-k="p"][data-st=""] .ok`)];
@@ -1049,7 +1142,7 @@ async function uploadVideo(ex, s0, file){
     const prev = getLog(ex, set) || {};
     const row = document.querySelector(`.set[data-o="${ex.order}"][data-s="${set}"]`);
     const p = { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
-      kg: num(row.querySelector('.kg').value), reps: num(row.querySelector('.reps').value), rpe: /FAIL/.test(prev.typ || '') ? '' : rpeOf(row), typ: prev.typ || '',
+      kg: num(row.querySelector('.kg').value), reps: num(row.querySelector('.reps').value), rpe: /FAIL/.test(prev.typ || '') ? '' : row.querySelector('.lt') ? prev.rpe : rpeOf(row), typ: prev.typ || '', ocena: prev.ocena || '',
       vbt: row.querySelector('.vbt') ? num(row.querySelector('.vbt').value) : '', done: prev.wykonane === 'TAK', video: out.link,
       note: 'film ' + mode + ', ' + Math.round(file.size / 1048576) + ' MB, ' + Math.round((Date.now() - t0) / 1000) + ' s' };
     LOGS['local' + lid(ex, set)] = Object.assign({}, prev, { id: 'local' + lid(ex, set), film_link: out.link });
