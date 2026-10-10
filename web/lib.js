@@ -134,6 +134,23 @@
     return { kg: isNaN(kgOf(top)) ? String(top.kg) : kgOf(top), reps: top.powt, rpe: top.rpe };
   };
 
+  /* ---------- przerwa i talerze ---------- */
+  /** przerwa po serii wg priorytetu (docelowo kolumna planu): A 2:00, B 1:30, K 1:00 */
+  L.restSec = prio => ({ A: 120, B: 90, K: 60 })[String(prio).toUpperCase()] || 90;
+  /** 95 → „1:35”, ujemne → „0:00” */
+  L.fmtClock = sec => { const s = Math.max(0, Math.ceil(sec)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  /** talerze na stronę (zachłannie): gryf 20/15 kg, zamki 2 × 2,5 kg; reszta = czego nie da się ułożyć */
+  L.PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
+  L.plates = (total, bar = 20, collars = 5) => {
+    const t = parseFloat(String(total).replace(',', '.'));
+    if (!(t > 0)) return { side: [], rest: 0, under: false };
+    let left = Math.round((t - bar - collars) / 2 * 100) / 100;
+    if (left < 0) return { side: [], rest: 0, under: true };
+    const side = [];
+    L.PLATES.forEach(p => { while (left >= p - 1e-9) { side.push(p); left = Math.round((left - p) * 100) / 100; } });
+    return { side, rest: left * 2, under: false };
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -98,6 +98,21 @@ test('lastTop: „Ostatnio” z poprzedniej jednostki, najcięższa zaliczona se
   assert.deepEqual(L.lastTop([l(1, 'T1', 1, 'BW', 10)], 'Przysiad', 2, 'T1'), { kg: 'BW', reps: 10, rpe: 8 });
 });
 
+test('restSec i fmtClock: przerwa A/B/K', () => {
+  assert.deepEqual(['A', 'B', 'K', 'k', ''].map(L.restSec), [120, 90, 60, 60, 90]);
+  assert.deepEqual([120, 95, 9, 0.2, -5].map(L.fmtClock), ['2:00', '1:35', '0:09', '0:01', '0:00']);
+});
+
+test('plates: talerze na stronę, gryf i zamki', () => {
+  assert.deepEqual(L.plates(60), { side: [15, 2.5], rest: 0, under: false });             // (60 − 20 − 5) / 2 = 17,5
+  assert.deepEqual(L.plates(60, 15).side, [20]);
+  assert.deepEqual(L.plates('142,5').side, [25, 25, 5, 2.5, 1.25]);                       // 58,75 na stronę
+  assert.deepEqual(L.plates(21), { side: [], rest: 0, under: true });
+  assert.deepEqual(L.plates(26), { side: [], rest: 1, under: false });                    // 0,5 na stronę – nie ma takiego talerza
+  assert.deepEqual(L.plates(20, 20, 0), { side: [], rest: 0, under: false });
+  assert.deepEqual(L.plates(''), { side: [], rest: 0, under: false });
+});
+
 test('localDate: data w strefie telefonu', () => {
   assert.equal(L.localDate(new Date(2026, 9, 10, 0, 30)), '2026-10-10');
   assert.match(L.localDate(), /^\d{4}-\d{2}-\d{2}$/);
