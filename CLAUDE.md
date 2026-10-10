@@ -95,7 +95,11 @@ Konwencje Damiana:
 - Serie:
   - dodatkowe przyciski „+ Rozgrzewka”, „⇣ Jak 1. seria”, „+ Seria (N)” i „+ Drop” (~80% ciężaru, w dół do 2,5 kg);
   - ✕ usuwa ostatni dodany wiersz w dwóch dotknięciach;
-  - „✗ Fail” w liście RPE.
+  - pole odhaczenia (`data-st`): puste → ✓ zrobiona → ✕ nieudana (typ FAIL, rpe puste) → puste; żółte (`pend`) = czeka w kolejce;
+  - dotknięcie numeru serii roboczej/dodatkowej: zwykła → drop (typ DROP) → nieudana;
+  - zmiana kg/powt./RPE w zapisanej serii zapisuje ją od razu;
+  - PRO: lista RPE albo RIR (0…5+) wg `cfg.scale` i przełącznika w nagłówku (`sc_<klucz>`); zapis zawsze w RPE;
+  - recepta: kwadrat w kolorze talerza wg % 1RM, „RIR ≥ n” przy skali RIR; „Ostatnio: kg × powt. · RPE” z poprzedniej jednostki (`lastTop`).
 - Podsumowanie jednostki:
   - RPE sesji 0–10;
   - samopoczucie 1–5;

@@ -121,6 +121,19 @@
   .badge.K{background:transparent;border:1px solid var(--olive);color:var(--muted)}
   .rx{margin:6px 0 4px;font-size:15px;color:var(--ink-2)}
   .rx b{font:500 16px var(--f-mono);color:var(--ink)}
+  .rx .badge{display:inline-flex;align-items:center;gap:5px;vertical-align:1px}
+  /* kolor talerza przy % 1RM: ≤60 biały, 61–70 zielony, 71–80 żółty, 81–90 niebieski, >90 czerwony */
+  .zone{display:inline-block;width:11px;height:11px;border:1px solid var(--ink);flex:none}
+  .zone.p5{background:var(--p5)}.zone.p10{background:var(--p10)}.zone.p15{background:var(--p15)}.zone.p20{background:var(--p20)}.zone.p25{background:var(--p25)}
+  .last{font-size:13px;color:var(--muted);margin:2px 0 4px}
+  /* przełącznik RPE / RIR w nagłówku */
+  .trow{display:flex;align-items:flex-start;gap:8px}
+  .trow h1{flex:1;min-width:0}
+  .sc{display:flex;flex:none}
+  .sc button{min-height:44px;min-width:48px;border:1px solid var(--ink-2);background:transparent;color:var(--muted);border-radius:0;
+             font:600 12px/1 var(--f-body);letter-spacing:.06em}
+  .sc button+button{border-left:0}
+  .sc button[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
   .note{font-size:14px;font-style:italic;color:var(--ink-2);margin:6px 0 8px;border-left:2px solid var(--olive);padding:2px 0 2px 10px}
   .hint{font-size:14px;color:var(--warn);margin:2px 0 6px}
 
@@ -143,15 +156,23 @@
   input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-2px}
   .lbl{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center}
   .ok{height:44px;border-radius:2px;border:2px solid var(--ink-2);background:transparent;color:var(--line);font:700 20px/1 var(--f-body);padding:0}
-  .ok.on{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+  .set[data-st="ok"] .ok{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+  .set[data-st="x"] .ok{background:var(--bad);border-color:var(--bad);color:var(--surface)}
   .ok.pend{background:var(--warn);border-color:var(--warn);color:var(--surface)}
+  /* numer serii jako przycisk typu: zwykła / drop / nieudana */
+  .nt{width:100%;min-height:44px;border:0;background:transparent;padding:0;display:grid;place-items:center;align-content:center;
+      font:700 21px/1 var(--f-display);color:var(--ink)}
+  .nt small{font:600 12px/1 var(--f-body);letter-spacing:.04em;text-transform:uppercase}
+  .set.t-d .nt{color:var(--accent)}
+  .set.t-d .nt small::after{content:"drop"}
+  .set[data-st="x"] .nt{color:var(--bad)}
+  .set[data-st="x"] .nt small::after{content:"fail"}
   .set.k-w .n{color:var(--olive);font-size:17px}
   .set.k-w input{color:var(--muted)}
   .set.k-x .n{color:var(--ink-2)}
   .set.k-d .n{color:var(--accent);font-size:17px}
   .set.fail .rpe{color:var(--bad)}
   .set.fail .kg,.set.fail .reps{color:var(--bad);text-decoration:line-through;text-decoration-thickness:2px}
-  .set.fail .ok.on{background:var(--bad);border-color:var(--bad)}
   /* ✕ przy ostatnim dodanym wierszu: cała komórka numeru to cel dotyku 44 px */
   .del{position:absolute;inset:0;border:0;background:transparent;color:var(--bad);padding:2px;
        display:flex;align-items:flex-end;justify-content:flex-end;font:700 12px/1 var(--f-body)}
@@ -209,7 +230,7 @@
 <body>
 <header>
   <div class="hrow"><span class="eyebrow" id="eyebrow"></span><span id="sync">ładowanie…</span></div>
-  <h1 id="title">Trening</h1>
+  <div class="trow"><h1 id="title">Trening</h1><span id="hx"></span></div>
   <div class="stats" id="stats"></div>
 </header>
 <main id="main"><div class="empty">Ładowanie planu…</div></main>
@@ -233,10 +254,13 @@ let PAIN = false;      // Klienci F „bol” = TAK → kolano i bark zawsze zaz
 let SIMPLE = false;    // Klienci G „tryb” = PROSTY
 let EXTRA_DEF = 0;     // Klienci H „dod_serie”; Plan „dod_serie” nadpisuje
 let NAME = '';
+let SCALE = 'RPE';     // Klienci K „skala” (RPE/RIR); przełącznik w nagłówku zapamiętany w telefonie (sc_<klucz>)
 function applyCfg(c){
   if (!c) return;
   PAIN = !!c.pain; SIMPLE = !!c.simple; EXTRA_DEF = Number(c.extra) || 0;
   NAME = c.name || ''; document.title = 'Trening – ' + c.name;
+  let own = null; try { own = localStorage.getItem('sc_' + KEY); } catch (e) {}
+  SCALE = own || (c.scale === 'RIR' ? 'RIR' : 'RPE');
 }
 let DATA = null, PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
 let TAB = 'trening';   // ekran z dolnego menu: trening | plan
@@ -248,7 +272,8 @@ const EFFORT = [['', '–'], ['6', 'Lekko'], ['7.5', 'Średnio'], ['9', 'Ciężk
 const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
 const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate,
-  addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats } = window.TL;
+  addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
+  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -270,6 +295,11 @@ async function flush(){
   const rest = [];
   for (const it of q) { try { await call(it.fn, it.payload); } catch(e) { rest.push(it); } }
   qSet(rest); setSync(rest.length ? 'offline – w kolejce (' + rest.length + ')' : 'zsynchronizowano ✓');
+  // wysłane serie przestają być żółte
+  document.querySelectorAll('.set .ok.pend').forEach(b => {
+    const r = b.closest('.set'), ex = PLAN.find(x => x.week === cur.week && x.day === cur.day && x.order === +r.dataset.o);
+    if (ex && !queued(ex, r.dataset.s)) b.classList.remove('pend');
+  });
 }
 window.addEventListener('online', flush);
 function setSync(t){ $('#sync').textContent = t; }
@@ -377,7 +407,8 @@ function helpCard(){
     <li>Po każdej serii wybierz, jak było ciężko, i dotknij <b>✓</b>. Zielony = zapisane.</li>
     <li>Całe ćwiczenie poszło zgodnie z planem? Dotknij <b>„✓ Wszystko jak w planie”</b>.</li>
     <li>Rozgrzewkę możesz dopisać przyciskiem <b>„+ Rozgrzewka”</b>, a <b>„⇣ Jak 1. seria”</b> przepisuje ciężar i powtórzenia do kolejnych serii.</li>
-    <li>Seria się nie udała? W liście „jak ciężko” wybierz <b>„✗ Fail”</b> (nieudana). Drop set (od razu lżej, do zmęczenia) dodajesz przyciskiem <b>„+ Drop”</b>.</li>
+    <li>Seria się nie udała? Dotknij <b>✓</b> jeszcze raz: zmieni się w czerwony <b>✕</b> (nieudana). Trzecie dotknięcie czyści pole. Drop set (od razu lżej, do zmęczenia) dodajesz przyciskiem <b>„+ Drop”</b>.</li>
+    <li>Żółte pole = seria czeka na wysłanie (brak zasięgu). Wyśle się sama.</li>
     <li>Dodałeś wiersz przez pomyłkę? Dotknij <b>✕</b> przy jego numerze, a potem <b>„usuń?”</b>.</li>
     <li>Film jest opcjonalny: „Dodaj film”. Najlepiej krótki, nagrany w 720p.</li>
     <li>Na koniec przewiń w dół i dotknij <b>„Zakończ i zapisz trening”</b>.</li>
@@ -394,8 +425,8 @@ function render(){
   $('#main').hidden = TAB !== 'trening'; $('#plan').hidden = TAB !== 'plan';
   if (TAB === 'plan') renderPlan(); else renderTrening();
 }
-function head(eyebrow, title, stats){
-  $('#eyebrow').textContent = eyebrow; $('#title').textContent = title; $('#stats').innerHTML = stats || '';
+function head(eyebrow, title, stats, extra){
+  $('#eyebrow').textContent = eyebrow; $('#title').textContent = title; $('#stats').innerHTML = stats || ''; $('#hx').innerHTML = extra || '';
 }
 const weekLabel = w => { const b = blockInfo(PLAN, w); return b ? 'Blok ' + b.block + ' · tydz. ' + b.n : 'Tydz. ' + w; };
 /** czas, serie zrobione/wszystkie, tonaż bieżącej jednostki w nagłówku */
@@ -478,7 +509,12 @@ function renderTrening(){
   const s0 = exs[0];
   head(weekLabel(cur.week) + ' · ' + cur.day + ' · ' + weekday(s0.date) + ' ' + ddmm(s0.date) + (sessDone(cur.week, cur.day) ? ' · zrobiona ✓' : ''),
     s0.title || cur.day,
-    `<span>Czas <b class="clock">${clockText()}</b></span><span>Serie <b id="st-sets"></b></span><span>Tonaż <b id="st-ton"></b> kg</span>`);
+    `<span>Czas <b class="clock">${clockText()}</b></span><span>Serie <b id="st-sets"></b></span><span>Tonaż <b id="st-ton"></b> kg</span>`,
+    (SIMPLE ? '' : `<span class="sc" role="group" aria-label="Skala">${['RPE', 'RIR'].map(s => `<button type="button" data-sc="${s}" aria-pressed="${SCALE === s}">${s}</button>`).join('')}</span>`));
+  document.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => {
+    SCALE = b.dataset.sc; try { localStorage.setItem('sc_' + KEY, SCALE); } catch (e) {}
+    renderTrening();
+  });
   let h = helpCard();
   exs.forEach(ex => h += card(ex));
   h += sessCard(s0);
@@ -487,10 +523,19 @@ function renderTrening(){
   refreshStats();
 }
 function rxPro(ex){
-  const hasKg = typeof ex.kg === 'number';
+  const hasKg = typeof ex.kg === 'number', z = plateZone(ex.pct);
   return `${ex.sets}×${esc(ex.reps)}` + (ex.kg !== '' ? ` · <b>${esc(fmtKg(ex.kg))}${hasKg ? ' kg' : ''}</b>` : '') +
-         (ex.pct !== null ? ` <span class="badge">${Math.round(ex.pct * 1000) / 10}%</span>` : '') +
-         (ex.rpe !== '' ? ` · RPE ≤${esc(fmtKg(ex.rpe))}` : '');
+         (ex.pct !== null ? ` <span class="badge">${z ? `<i class="zone ${z}" aria-hidden="true"></i>` : ''}${Math.round(ex.pct * 1000) / 10}%</span>` : '') +
+         (ex.rpe === '' ? '' : SCALE === 'RIR' ? ` · RIR ≥${rirMin(ex.rpe)}` : ` · RPE ≤${esc(fmtKg(ex.rpe))}`);
+}
+/** „Ostatnio: 105 kg × 5 · RPE 9” (PROSTY: słownie) – z poprzedniej jednostki z tym ćwiczeniem */
+function lastLine(ex){
+  const t = lastTop(DATA ? DATA.logs : [], ex.name, cur.week, cur.day);
+  if (!t) return '';
+  const kg = typeof t.kg === 'number' ? fmtKg(t.kg) + ' kg' : esc(t.kg);
+  const eff = blank(t.rpe) ? '' : SIMPLE ? ' · ' + (EFFORT.find(e => e[0] === effortVal(t.rpe)) || ['', ''])[1]
+    : SCALE === 'RIR' ? ' · RIR ' + fmtKg(rirOfRpe(t.rpe)) : ' · RPE ' + fmtKg(t.rpe);
+  return `<div class="last">Ostatnio: ${kg} × ${esc(t.reps)}${eff}</div>`;
 }
 function rxSimple(ex){
   const n = ex.sets, reps = String(ex.reps).trim(), r = parseInt(reps);
@@ -529,31 +574,50 @@ function loggedSets(ex){
   });
   return { warm, extra, drop };
 }
-function effortSel(l, kind){
-  const fail = /FAIL/.test(l.typ || '');
-  const opts = SIMPLE ? EFFORT : RPE.map(r => [r, r || '–']);
-  return `<select class="rpe" aria-label="${SIMPLE ? 'Jak ciężko' : 'RPE'}">` +
-    opts.map(([v, t]) => `<option ${!fail && (SIMPLE ? effortVal(l.rpe) === v : String(l.rpe) === v) ? 'selected' : ''} value="${v}">${t}</option>`).join('') +
-    `<option value="F" ${fail ? 'selected' : ''}>${SIMPLE ? '✗ Fail' : '✗'}</option></select>`;
+/** lista „jak ciężko”: PROSTY słownie, PRO w RPE albo RIR (0…5+); arkusz zawsze dostaje RPE. FAIL jest w polu ✓/✕. */
+function effortSel(l){
+  const v = /FAIL/.test(l.typ || '') ? '' : l.rpe;
+  if (SIMPLE) return `<select class="rpe" aria-label="Jak ciężko">` +
+    EFFORT.map(([x, t]) => `<option ${effortVal(v) === x ? 'selected' : ''} value="${x}">${t}</option>`).join('') + `</select>`;
+  if (SCALE === 'RIR') {
+    const r = blank(v) ? '' : String(rirOfRpe(v)), opts = [['', '–']].concat(RIR_OPTS.map(x => [String(x), x === 5 ? '5+' : String(x)]));
+    if (r !== '' && !opts.some(o => o[0] === r)) opts.push([r, fmtKg(+r)]);       // np. RPE 8,5 → RIR 1,5
+    return `<select class="rpe" data-sc="RIR" aria-label="RIR">` + opts.map(([x, t]) => `<option ${r === x ? 'selected' : ''} value="${x}">${t}</option>`).join('') + `</select>`;
+  }
+  return `<select class="rpe" aria-label="RPE">` + RPE.map(x => `<option ${String(v) === x ? 'selected' : ''} value="${x}">${x || '–'}</option>`).join('') + `</select>`;
 }
+/** RPE z listy wiersza (RIR → RPE) */
+function rpeOf(row){
+  const sel = row.querySelector('.rpe');
+  if (!sel || sel.value === '') return '';
+  return sel.dataset.sc === 'RIR' ? rpeOfRir(sel.value) : sel.value;
+}
+/** seria czeka w kolejce offline → pole żółte także po ponownym otwarciu */
+const queued = (ex, set) => qGet().some(it => it.fn === 'logSet' && it.payload.week === cur.week && it.payload.day === cur.day && it.payload.order === ex.order && String(it.payload.set) === String(set));
+const STATE_TXT = { '': 'niezapisana – dotknij: zrobiona', ok: 'zrobiona – dotknij: nieudana', x: 'nieudana – dotknij: wyczyść' };
 function rowHtml(ex, set, kind, def){
   const vbt = !SIMPLE && ex.pct !== null;
   const cls = SIMPLE ? 'simple' : (vbt ? 'vbt' : '');
   const l = getLog(ex, set) || {}, d = def || {};
   const kg = !blank(l.kg) ? l.kg : kind === 'p' ? ex.kg : (blank(d.kg) ? '' : d.kg);
   const reps = !blank(l.powt) ? l.powt : kind === 'p' ? (repsDefault(ex.reps) || '') : (blank(d.reps) ? '' : d.reps);
-  const done = l.wykonane === 'TAK', fail = /FAIL/.test(l.typ || '');
+  const fail = /FAIL/.test(l.typ || ''), st = l.wykonane !== 'TAK' ? '' : fail ? 'x' : 'ok';
+  const drop = (kind === 'p' || kind === 'x') && /DROP/.test(l.typ || '');
   const ph = kind === 'w' || kind === 'd' ? ' placeholder="kg"' : '', phr = kind === 'w' || kind === 'd' ? ' placeholder="powt."' : '';
-  const rpeCell = kind === 'w' ? '<div class="lbl">rozgrzewka</div>' : effortSel(l, kind);
+  const rpeCell = kind === 'w' ? '<div class="lbl">rozgrzewka</div>' : effortSel(l);
   const vbtCell = !vbt ? '' : kind === 'w' ? '<div></div>'
     : `<input inputmode="decimal" class="vbt" placeholder="m/s" value="${esc(fmtKg(l.vbt_ms || ''))}" aria-label="VBT m/s">`;
-  return `<div class="set ${cls} k-${kind} ${fail ? 'fail' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}">
-      <div class="n"><span>${setLabel(set, kind)}</span></div>
+  // robocze i dodatkowe: dotknięcie numeru zmienia typ serii (zwykła → drop → nieudana)
+  const num0 = kind === 'p' || kind === 'x'
+    ? `<button type="button" class="nt" aria-label="Seria ${setLabel(set, kind)}: ${fail ? 'nieudana' : drop ? 'drop' : 'zwykła'}, dotknij, aby zmienić typ">${setLabel(set, kind)}<small></small></button>`
+    : `<span>${setLabel(set, kind)}</span>`;
+  return `<div class="set ${cls} k-${kind} ${fail ? 'fail' : ''} ${drop ? 't-d' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}" data-st="${st}">
+      <div class="n">${num0}</div>
       <input inputmode="decimal" class="kg" value="${esc(fmtKg(kg))}"${ph} aria-label="kg">
       <input inputmode="numeric" class="reps" value="${esc(reps)}"${phr} aria-label="powtórzenia">
       ${rpeCell}
       ${vbtCell}
-      <button class="ok ${done ? 'on' : ''}" aria-label="zapisz serię">✓</button>
+      <button class="ok ${queued(ex, set) ? 'pend' : ''}" aria-label="Seria ${STATE_TXT[st]}">${st === 'x' ? '✕' : '✓'}</button>
     </div>`;
 }
 const setLabel = (set, kind) => (kind === 'w' || kind === 'd' || SIMPLE) ? set : 'S' + set;
@@ -571,7 +635,7 @@ function card(ex){
     .map(s => `<a href="${esc(L[s].film_link)}" target="_blank">film ${/^[RD]/.test(s) ? s : (SIMPLE ? 'seria ' : 'S') + s}</a>`);
   const head = SIMPLE
     ? `<div class="set-head set simple"><div class="lbl">#</div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">jak ciężko?</div><div></div></div>`
-    : `<div class="set-head set ${vbt ? 'vbt' : ''}"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">RPE</div>${vbt ? '<div class="lbl">VBT</div>' : ''}<div></div></div>`;
+    : `<div class="set-head set ${vbt ? 'vbt' : ''}"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">${SCALE}</div>${vbt ? '<div class="lbl">VBT</div>' : ''}<div></div></div>`;
   const tools = `<div class="tools">
       <button class="btn sm" data-warm="${ex.order}">+ Rozgrzewka</button>
       ${ex.sets > 1 ? `<button class="btn sm" data-copy="${ex.order}">⇣ Jak 1. seria</button>` : ''}
@@ -582,6 +646,7 @@ function card(ex){
   return `<div class="card ${ex.prio === 'K' ? 'k' : ''}" data-card="${ex.order}">
     <div class="ch"><div class="cn">${esc(ex.name)}</div><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span></div>
     <div class="rx">${SIMPLE ? rxSimple(ex) : rxPro(ex)}</div>
+    ${lastLine(ex)}
     ${SIMPLE ? hintSimple(ex) : ''}
     ${dropInfo}
     ${ex.note ? `<div class="note">${esc(ex.note)}</div>` : ''}
@@ -658,27 +723,43 @@ function sessClick(e){
   }
   return false;
 }
+/** stan pola odhaczenia: '' (puste) → ok (✓ zrobiona) → x (✕ nieudana, FAIL); pend = czeka na zapis / w kolejce */
+function setState(row, st, pend){
+  const btn = row.querySelector('.ok'), nt = row.querySelector('.nt');
+  row.dataset.st = st; row.classList.toggle('fail', st === 'x');
+  btn.textContent = st === 'x' ? '✕' : '✓';
+  btn.classList.toggle('pend', !!pend);
+  btn.setAttribute('aria-label', 'Seria ' + STATE_TXT[st] + (pend ? ' (czeka na zapis)' : ''));
+  if (nt) nt.setAttribute('aria-label', 'Seria ' + nt.firstChild.textContent + ': ' + (st === 'x' ? 'nieudana' : row.classList.contains('t-d') ? 'drop' : 'zwykła') + ', dotknij, aby zmienić typ');
+}
 function bindRow(row, ex, s0){
   const kind = row.dataset.k, set = setKey(row.dataset.s);
-  const btn = row.querySelector('.ok'), sel = row.querySelector('.rpe');
-  if (sel) sel.onchange = () => row.classList.toggle('fail', sel.value === 'F');
-  btn.onclick = () => {
+  const btn = row.querySelector('.ok'), nt = row.querySelector('.nt');
+  const save = st => {
     markStart();
-    const on = !btn.classList.contains('on');
-    const prev = getLog(ex, set) || {};
-    const q = c => row.querySelector(c);
-    const rv = sel ? sel.value : '';
-    const typ = [kind === 'd' ? 'DROP' : '', rv === 'F' ? 'FAIL' : ''].filter(Boolean).join('+');
+    const prev = getLog(ex, set) || {}, q = c => row.querySelector(c);
+    const fail = st === 'x', drop = kind === 'd' || row.classList.contains('t-d');
+    const typ = [drop ? 'DROP' : '', fail ? 'FAIL' : ''].filter(Boolean).join('+');
     const p = { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
       kg: num(q('.kg').value), reps: num(q('.reps').value),
-      rpe: rv === 'F' ? '' : rv, vbt: q('.vbt') ? num(q('.vbt').value) : '',
-      done: on, video: prev.film_link || '', typ };
-    btn.className = 'ok pend';
-    LOGS['local' + lid(ex, set)] = { id: 'local' + lid(ex, set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: on ? 'TAK' : '', film_link: p.video, typ };
+      rpe: fail ? '' : rpeOf(row), vbt: q('.vbt') ? num(q('.vbt').value) : '',
+      done: st !== '', video: prev.film_link || '', typ };
+    setState(row, st, true);
+    LOGS['local' + lid(ex, set)] = { id: 'local' + lid(ex, set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ };
     refreshStats();
-    send('logSet', p).then(() => btn.className = 'ok ' + (on ? 'on' : '')).catch(() => btn.className = 'ok pend');
-    if (on && navigator.vibrate) navigator.vibrate(30);
+    send('logSet', p).then(() => { if (row.dataset.st === st) setState(row, st); }).catch(() => {});
+    if (st && navigator.vibrate) navigator.vibrate(fail ? [30, 60, 30] : 30);
   };
+  btn.onclick = () => save(row.dataset.st === '' ? 'ok' : row.dataset.st === 'ok' ? 'x' : '');
+  // typ serii pod numerem: zwykła → drop → nieudana → zwykła (niezapisana)
+  if (nt) nt.onclick = () => {
+    const st = row.dataset.st, isDrop = row.classList.contains('t-d');
+    if (st === 'x') { save(''); return; }
+    if (!isDrop) { row.classList.add('t-d'); if (st) save(st); else setState(row, st); return; }
+    row.classList.remove('t-d'); save('x');
+  };
+  // poprawka zapisanej serii (kg, powt., RPE) → zapis od razu, bez odznaczania
+  row.querySelectorAll('input, select').forEach(el => el.addEventListener('change', () => { if (row.dataset.st) save(row.dataset.st); }));
 }
 function bind(exs, s0){
   const exOf = o => exs.find(e => e.order === +o);
@@ -704,7 +785,7 @@ function bind(exs, s0){
   exs.forEach(ex => refreshDel(ex.order));
   // tryb prosty: zaznacz wszystkie niezapisane serie robocze ćwiczenia
   document.querySelectorAll('[data-all]').forEach(b => b.onclick = () => {
-    const todo = [...document.querySelectorAll(`.set[data-o="${b.dataset.all}"][data-k="p"] .ok:not(.on):not(.pend)`)];
+    const todo = [...document.querySelectorAll(`.set[data-o="${b.dataset.all}"][data-k="p"][data-st=""] .ok`)];
     todo.forEach(btn => btn.click());
     b.style.display = 'none';
     toast('Zapisano ' + todo.length + ' ' + plural(todo.length, 'serię', 'serie', 'serii') + '.');
@@ -714,9 +795,8 @@ function bind(exs, s0){
     const o = b.dataset.copy, src = rowOf(o, 1);
     let n = 0;
     rowsOf(o).filter(r => r.dataset.k === 'p' || r.dataset.k === 'x').forEach(r => {
-      if (r === src || r.querySelector('.ok').classList.contains('on')) return;
+      if (r === src || r.dataset.st) return;
       ['.kg', '.reps', '.rpe'].forEach(c => { if (src.querySelector(c) && r.querySelector(c)) r.querySelector(c).value = src.querySelector(c).value; });
-      r.classList.toggle('fail', src.querySelector('.rpe').value === 'F');
       n++;
     });
     if (n) markStart();
@@ -819,8 +899,8 @@ async function relayUpload(meta, file, onProg){
 }
 async function uploadVideo(ex, s0, file){
   // film przypisany do ostatniej zaznaczonej serii (roboczej/dodatkowej); brak → seria 1
-  const doneBtns = document.querySelectorAll(`.set[data-o="${ex.order}"]:not([data-k="w"]) .ok.on`);
-  const set = doneBtns.length ? setKey(doneBtns[doneBtns.length - 1].closest('.set').dataset.s) : 1;
+  const doneRows = document.querySelectorAll(`.set[data-o="${ex.order}"]:not([data-k="w"]):not([data-st=""])`);
+  const set = doneRows.length ? setKey(doneRows[doneRows.length - 1].dataset.s) : 1;
   const bar = $('#bar' + ex.order), fill = bar.querySelector('i');
   const prog = f => fill.style.width = Math.max(2, Math.round(100 * f)) + '%';
   bar.style.display = 'block'; prog(0); setSync('wgrywanie filmu…');
@@ -840,7 +920,7 @@ async function uploadVideo(ex, s0, file){
     const prev = getLog(ex, set) || {};
     const row = document.querySelector(`.set[data-o="${ex.order}"][data-s="${set}"]`);
     const p = { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
-      kg: num(row.querySelector('.kg').value), reps: num(row.querySelector('.reps').value), rpe: row.querySelector('.rpe').value === 'F' ? '' : row.querySelector('.rpe').value, typ: prev.typ || '',
+      kg: num(row.querySelector('.kg').value), reps: num(row.querySelector('.reps').value), rpe: /FAIL/.test(prev.typ || '') ? '' : rpeOf(row), typ: prev.typ || '',
       vbt: row.querySelector('.vbt') ? num(row.querySelector('.vbt').value) : '', done: prev.wykonane === 'TAK', video: out.link,
       note: 'film ' + mode + ', ' + Math.round(file.size / 1048576) + ' MB, ' + Math.round((Date.now() - t0) / 1000) + ' s' };
     LOGS['local' + lid(ex, set)] = Object.assign({}, prev, { id: 'local' + lid(ex, set), film_link: out.link });

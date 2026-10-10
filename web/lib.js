@@ -113,6 +113,27 @@
     return { done, all, ton: Math.round(ton) };
   };
 
+  /**
+   * „Ostatnio”: najcięższa zaliczona seria robocza z ostatniej INNEJ jednostki z tym ćwiczeniem (po nazwie, bez wielkości liter).
+   * logs = wpisy Logu z serwera (cwiczenie, tydzien, jednostka, seria, kg, powt, rpe, typ, wykonane, zapisano).
+   */
+  L.lastTop = (logs, name, week, day) => {
+    const nm = String(name).trim().toLowerCase(), by = {};
+    logs.forEach(l => {
+      if (String(l.cwiczenie || '').trim().toLowerCase() !== nm || l.wykonane !== 'TAK') return;
+      if (String(l.tydzien) === String(week) && String(l.jednostka) === String(day)) return;
+      if (/^R/i.test(String(l.seria)) || /FAIL/.test(l.typ || '')) return;
+      const k = l.tydzien + '|' + l.jednostka, t = Date.parse(l.zapisano) || 0;
+      (by[k] = by[k] || { t: 0, rows: [] }).rows.push(l);
+      by[k].t = Math.max(by[k].t, t);
+    });
+    const last = Object.values(by).sort((a, b) => b.t - a.t)[0];
+    if (!last) return null;
+    const kgOf = l => parseFloat(String(l.kg).replace(',', '.'));
+    const top = last.rows.slice().sort((a, b) => (kgOf(b) || 0) - (kgOf(a) || 0) || (+b.powt || 0) - (+a.powt || 0))[0];
+    return { kg: isNaN(kgOf(top)) ? String(top.kg) : kgOf(top), reps: top.powt, rpe: top.rpe };
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);
