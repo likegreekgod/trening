@@ -131,7 +131,7 @@
     if (!last) return null;
     const kgOf = l => parseFloat(String(l.kg).replace(',', '.'));
     const top = last.rows.slice().sort((a, b) => (kgOf(b) || 0) - (kgOf(a) || 0) || (+b.powt || 0) - (+a.powt || 0))[0];
-    return { kg: isNaN(kgOf(top)) ? String(top.kg) : kgOf(top), reps: top.powt, rpe: top.rpe };
+    return { kg: isNaN(kgOf(top)) ? String(top.kg) : kgOf(top), reps: top.powt, rpe: top.rpe, ocena: String(top.ocena || '').toUpperCase() };
   };
 
   /* ---------- przerwa i talerze ---------- */
@@ -149,6 +149,72 @@
     const side = [];
     L.PLATES.forEach(p => { while (left >= p - 1e-9) { side.push(p); left = Math.round((left - p) * 100) / 100; } });
     return { side, rest: left * 2, under: false };
+  };
+
+  /* ---------- boje (rwanie R, podrzut P): ocena podejścia światłami i propozycja ciężaru ---------- */
+  /** grupa ćwiczenia: kolumna planu „grupa”, a bez niej rozpoznanie po nazwie (jak groupOf_ w Code.gs) */
+  L.groupOf = (g, name) => {
+    const G = String(g || '').trim().toUpperCase();
+    if (['R', 'P', 'CR', 'CP', 'PS', 'I'].indexOf(G) >= 0) return G;
+    const n = String(name || '').toLowerCase();
+    if (/(ciąg|pull).*(rwan|snatch)|(rwan|snatch).*(ciąg|pull)|high pull/.test(n)) return 'CR';
+    if (/(ciąg|pull).*(podrzut|zarzut|clean)|(zarzut|clean).*(ciąg|pull)/.test(n)) return 'CP';
+    if (/martwy|rdl|rumuń|romanian|good ?morning|wyciskan|bench|sots|dip/.test(n)) return 'I';
+    if (/rwan|snatch/.test(n)) return 'R';
+    if (/podrzut|zarzut|jerk|clean|wybicie|push press/.test(n)) return 'P';
+    if (/przysiad|squat/.test(n)) return 'PS';
+    return 'I';
+  };
+  L.isOly = ex => { const g = L.groupOf(ex.group, ex.name); return g === 'R' || g === 'P'; };
+  /** ocena → zapis: Łatwo rpe 7, Średnio 8, Walka 9,5, Spalone = FAIL bez rpe; światła: w = białe, r = czerwone */
+  L.RATE = {
+    L: { rpe: 7, label: 'Łatwo', lights: 'www' }, S: { rpe: 8, label: 'Średnio', lights: 'wwr' },
+    W: { rpe: 9.5, label: 'Walka', lights: 'wrr' }, X: { rpe: '', label: 'Spalone', lights: 'rrr' }
+  };
+  /** ocena zapisanego podejścia; starsze wpisy bez „ocena” → z typu FAIL albo RPE */
+  L.rateOf = l => {
+    if (!l || l.wykonane !== 'TAK') return '';
+    const o = String(l.ocena || '').toUpperCase();
+    if (L.RATE[o]) return o;
+    if (/FAIL/.test(l.typ || '')) return 'X';
+    const r = parseFloat(String(l.rpe).replace(',', '.'));
+    return isNaN(r) ? '' : r <= 7 ? 'L' : r <= 8.5 ? 'S' : 'W';
+  };
+  /** sufit dnia = floor_2,5(1RM × (procent + sufit_oly)); słaba dyspozycja (uwaga / zmęczenie) → ciężar z planu; bez % → null */
+  L.olyCap = (planKg, pct, ceil, weak) => {
+    if (!(pct > 0) || !(planKg > 0)) return weak && planKg > 0 ? planKg : null;
+    return weak ? planKg : L.floor25(planKg / pct * (pct + (ceil >= 0 ? ceil : 0.05)));
+  };
+  /**
+   * Propozycja pod ostatnio ocenionym podejściem, gdy zostały niezrobione serie.
+   * rows: podejścia robocze w kolejności [{kg, rate, done}], i: indeks ocenionego; o: {cap, one, weak, why}
+   * → {lvl: up|stay|down, kg, txt} albo null
+   */
+  L.sugOly = (rows, i, o = {}) => {
+    const r = rows[i];
+    if (!r || !r.done || !r.rate) return null;
+    if (rows.some((x, j) => j > i && x.done)) return null;                       // tylko ostatnie ocenione
+    if (!rows.some((x, j) => j > i && !x.done)) return null;                     // brak serii do zrobienia
+    const kg = r.kg, f = v => L.fmtKg(v) + ' kg', cap = o.cap;
+    const prev = rows.slice(0, i).reverse().find(x => x.done);
+    if (r.rate === 'L') {
+      if (cap === null || cap === undefined || kg + 2.5 <= cap)
+        return { lvl: 'up', kg: kg + 2.5, txt: 'Łatwo: możesz dołożyć 2,5 kg.' + (cap ? ' Sufit dziś ' + f(cap) + '.' : '') };
+      return { lvl: 'stay', kg, txt: o.weak ? `Łatwo, ale dyspozycja dnia: ${o.why || 'uwaga'}. Zostań przy ${f(kg)}.` : `Łatwo, ale to sufit dnia (${f(cap)}). Zostań.` };
+    }
+    if (r.rate === 'S') return { lvl: 'stay', kg, txt: `Średnio: zostań przy ${f(kg)}.` };
+    if (r.rate === 'W') {
+      if (prev && prev.rate === 'W') { const k = Math.max(2.5, kg - 2.5); return { lvl: 'down', kg: k, txt: `Druga walka z rzędu: zejdź do ${f(k)}.` }; }
+      return { lvl: 'stay', kg, txt: `Walka: nie dokładaj, zostań przy ${f(kg)}.` };
+    }
+    if (r.rate === 'X') {
+      let miss = 0;
+      for (let j = i; j >= 0; j--) { const x = rows[j]; if (!x.done) continue; if (x.rate === 'X' && x.kg === kg) miss++; else break; }
+      if (miss >= 2 && o.one > 0) { const k = Math.max(2.5, L.floor25(kg - o.one * 0.05)); return { lvl: 'down', kg: k, txt: `Dwie spalone na ${f(kg)}: zejdź o ok. 5% 1RM do ${f(k)}.` }; }
+      if (miss >= 2) { const k = Math.max(2.5, L.floor25(kg * 0.95)); return { lvl: 'down', kg: k, txt: `Dwie spalone na ${f(kg)}: zejdź do ${f(k)}.` }; }
+      return { lvl: 'stay', kg, txt: `Spalone: powtórz ${f(kg)}. Po drugiej spalonej zejdziesz o 5%.` };
+    }
+    return null;
   };
 
   root.TL = L;

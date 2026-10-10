@@ -67,7 +67,7 @@ Każdy PR w `web/` podbija `VERSION` w `sw.js`; `npm test` musi przechodzić. Po
 | 3. Nawigacja + Plan ✓ (10.10) | Dolne menu, ekran Plan (tygodnie, deload z planu, dni z kropkami, „Blok N · tydz. M”, zmiana daty jednostki), nagłówek treningu | Dyspozycja i Postęp ukryte do czasu PR 10–11 |
 | 4. Serie ✓ (10.10) | Nowy wiersz, ✓/✕ + stan „w kolejce”, typ pod numerem, RPE/RIR, recepta z RIR i kolorem talerza, „Ostatnio”, „dziś” w strefie lokalnej, ściągawka PROSTY | Payloady `logSet` bez zmian (testy) |
 | 5. Timer i talerze ✓ (10.10) | Pasek przerwy A/B/K, ±15 s, Pomiń; Wake Lock; kalkulator talerzy | |
-| 6. Boje | Światła, ocena → `rpe`/`typ`/`ocena`, `sugOly`, sufit dnia, „Ustaw X kg”, „max dziś” | Testy `sugOly` |
+| 6. Boje ✓ (10.10) | Światła, ocena → `rpe`/`typ`/`ocena`, `sugOly`, sufit dnia, „Ustaw X kg”, „max dziś” | Testy `sugOly` |
 | 7. Zamiana ćwiczenia | Zamienniki, powód, zapis `zamiana` | Flaga `zamiana = TAK` |
 | 8. Film przy serii | Kamera przy każdej serii, komunikat o braku sieci, ręczny wpis prędkości z urządzenia (m/s) | Wysyłka na Drive bez zmian |
 | 9. Ścieżka i VBT | `track()`, `analyse()`, kalibracja 450 mm, zapis `vbt_ms`, `vbt_peak`, `wysokosc_cm`, `sciezka` | Testy `analyse` na syntetycznym ruchu |

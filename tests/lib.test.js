@@ -93,9 +93,9 @@ test('lastTop: „Ostatnio” z poprzedniej jednostki, najcięższa zaliczona se
   const logs = [l(1, 'T1', 1, 100, 5), l(1, 'T1', 2, 102.5, 3), l(2, 'T1', 'R1', 140, 1), l(2, 'T1', 1, 105, 5, { rpe: 9 }),
     l(2, 'T1', 2, 110, 2, { typ: 'FAIL' }), l(2, 'T1', 3, 105, 4), l(3, 'T1', 1, 120, 5), l(2, 'T1', 1, 200, 5, { cwiczenie: 'Martwy' }),
     l(2, 'T2', 1, 300, 5, { wykonane: '' })];
-  assert.deepEqual(L.lastTop(logs, ' przysiad ', 3, 'T1'), { kg: 105, reps: 5, rpe: 9 });   // tydz. 3 = bieżąca jednostka
+  assert.deepEqual(L.lastTop(logs, ' przysiad ', 3, 'T1'), { kg: 105, reps: 5, rpe: 9, ocena: '' });   // tydz. 3 = bieżąca jednostka
   assert.equal(L.lastTop(logs, 'Wyciskanie', 3, 'T1'), null);
-  assert.deepEqual(L.lastTop([l(1, 'T1', 1, 'BW', 10)], 'Przysiad', 2, 'T1'), { kg: 'BW', reps: 10, rpe: 8 });
+  assert.deepEqual(L.lastTop([l(1, 'T1', 1, 'BW', 10)], 'Przysiad', 2, 'T1'), { kg: 'BW', reps: 10, rpe: 8, ocena: '' });
 });
 
 test('restSec i fmtClock: przerwa A/B/K', () => {
@@ -111,6 +111,44 @@ test('plates: talerze na stronę, gryf i zamki', () => {
   assert.deepEqual(L.plates(26), { side: [], rest: 1, under: false });                    // 0,5 na stronę – nie ma takiego talerza
   assert.deepEqual(L.plates(20, 20, 0), { side: [], rest: 0, under: false });
   assert.deepEqual(L.plates(''), { side: [], rest: 0, under: false });
+});
+
+test('groupOf / isOly: boje rozpoznane po nazwie albo z kolumny grupa', () => {
+  assert.deepEqual(['Rwanie', 'Zarzut i podrzut', 'Squat jerk zza karku', 'Ciąg rwaniowy', 'Przysiad przedni', 'Martwy ciąg'].map(n => L.groupOf('', n)),
+    ['R', 'P', 'P', 'CR', 'PS', 'I']);
+  assert.equal(L.groupOf('i', 'Rwanie z zawisu'), 'I');                       // kolumna planu wygrywa
+  assert.deepEqual([{ name: 'Rwanie' }, { name: 'Przysiad' }, { name: 'X', group: 'P' }].map(L.isOly), [true, false, true]);
+});
+
+test('rateOf: ocena z kolumny „ocena”, a dla starszych wpisów z FAIL / RPE', () => {
+  const T = (o) => Object.assign({ wykonane: 'TAK' }, o);
+  assert.deepEqual([T({ ocena: 'w' }), T({ typ: 'FAIL' }), T({ rpe: 7 }), T({ rpe: '8,5' }), T({ rpe: 9.5 }), T({}), { ocena: 'L' }].map(L.rateOf),
+    ['W', 'X', 'L', 'S', 'W', '', '']);
+});
+
+test('olyCap: sufit dnia', () => {
+  assert.equal(L.olyCap(70, 0.7, 0.05), 75);                                  // 1RM 100 × 0,75
+  assert.equal(L.olyCap(77.5, 0.75, 0.05, false), 82.5);                      // 1RM 103,3 × 0,8 = 82,67 → 82,5
+  assert.equal(L.olyCap(70, 0.7, 0.05, true), 70);                            // słaba dyspozycja = plan
+  assert.equal(L.olyCap(70, null, 0.05), null);
+});
+
+test('sugOly: propozycje wg tabeli ocen', () => {
+  const R = (kg, rate, done = true) => ({ kg, rate, done });
+  const open = R(70, '', false);
+  const s = (rows, i, o) => { const x = L.sugOly(rows, i, Object.assign({ cap: 75, one: 100 }, o)); return x && [x.lvl, x.kg]; };
+  assert.deepEqual(s([R(70, 'L'), open], 0), ['up', 72.5]);
+  assert.deepEqual(s([R(75, 'L'), open], 0), ['stay', 75]);                   // sufit
+  assert.match(L.sugOly([R(70, 'L'), open], 0, { cap: 70, weak: true, why: 'uwaga' }).txt, /dyspozycja dnia: uwaga/);
+  assert.deepEqual(s([R(70, 'L'), open], 0, { cap: null }), ['up', 72.5]);   // bez % w planie
+  assert.deepEqual(s([R(70, 'S'), open], 0), ['stay', 70]);
+  assert.deepEqual(s([R(70, 'W'), open], 0), ['stay', 70]);
+  assert.deepEqual(s([R(70, 'W'), R(70, 'W'), open], 1), ['down', 67.5]);
+  assert.deepEqual(s([R(70, 'X'), open], 0), ['stay', 70]);
+  assert.deepEqual(s([R(70, 'X'), R(70, 'X'), open], 1), ['down', 65]);       // −5% 1RM
+  assert.deepEqual(s([R(72.5, 'X'), R(70, 'X'), open], 1), ['stay', 70]);    // inne ciężary – liczy się od nowa
+  assert.deepEqual(s([R(70, 'L'), R(72.5, 'S'), open], 0), null);             // nie ostatnie ocenione
+  assert.deepEqual(s([R(70, 'L'), R(72.5, 'S')], 1), null);                   // brak serii do zrobienia
 });
 
 test('localDate: data w strefie telefonu', () => {
