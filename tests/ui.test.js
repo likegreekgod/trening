@@ -374,6 +374,56 @@ test('Boje: dwie spalone na tym samym ciężarze → −5% 1RM; słaba dyspozycj
   await ctx.close();
 });
 
+// --- PR 7: zamiana ćwiczenia ---
+const SWAPD = Object.assign({}, PRO, {
+  cfg: Object.assign({}, PRO.cfg, { swap: true }),
+  plan: [{ week: 1, day: 'T1', title: 'FBW A', date: '2026-10-06', order: 1, name: 'Przysiad tylny', prio: 'A', sets: 3, reps: '5', pct: null, kg: 100, rpe: 8, note: '', extra: 0, drop: 0, block: '', group: '', swaps: ['Leg press', 'Hack'] }]
+});
+
+test('Zamiana: tylko z flagą klienta; zamiennik + powód → nazwa i kolumna „zamiana”, cofnięcie', async () => {
+  const off = await page([], false, { data: PRO });
+  await off.p.goto(base + '?k=kabc'); await off.p.waitForSelector('.set');
+  assert.equal(await off.p.$('[data-swap]'), null);                               // zamiana = NIE
+  await off.ctx.close();
+
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: SWAPD });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('[data-swap="1"]');
+  assert.deepEqual(await p.$$eval('#sheet [data-to]', b => b.map(x => x.textContent)), ['Leg press', 'Hack']);   // z kolumny planu
+  assert.equal(await p.isDisabled('#sw-ok'), true);
+  await p.click('#sheet [data-to="Leg press"]'); await p.click('#sheet [data-why="Ból"]');
+  assert.equal(await p.isVisible('#sw-hint'), true);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'zamiana.png') }); }
+  await p.click('#sheet [data-why="Sprzęt zajęty"]'); await p.click('#sw-ok');
+  assert.equal(await p.textContent('.cn'), 'Leg press');
+  assert.match(await p.textContent('.swapped'), /Zamiast: Przysiad tylny · Sprzęt zajęty/);
+  await p.click('.set[data-s="1"] .ok'); await p.waitForTimeout(100);
+  assert.deepEqual((({ name, swap }) => ({ name, swap }))(lastSet(calls)), { name: 'Leg press', swap: 'Przysiad tylny → Leg press | Sprzęt zajęty' });
+  await p.reload(); await p.waitForSelector('.set');                             // zamiana zapamiętana
+  assert.equal(await p.textContent('.cn'), 'Leg press');
+  await p.click('[data-unswap="1"]');
+  assert.equal(await p.textContent('.cn'), 'Przysiad tylny');
+  await p.click('.set[data-s="2"] .ok'); await p.waitForTimeout(100);
+  assert.deepEqual((({ name, swap }) => ({ name, swap }))(lastSet(calls)), { name: 'Przysiad tylny', swap: '' });
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Zamiana: własna nazwa, a na innym telefonie zamiana odtworzona z Logu', async () => {
+  const data = Object.assign({}, SWAPD, { logs: [{ id: 'robert|1|T1|1|1', zapisano: '2026-10-06T10:00:00.000Z', cwiczenie: 'Goblet squat', tydzien: 1, jednostka: 'T1', seria: 1, kg: 30, powt: 10, rpe: 7, wykonane: 'TAK', typ: '', zamiana: 'Przysiad tylny → Goblet squat | Brak sprzętu' }] });
+  const { ctx, p } = await page([], false, { data });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  assert.equal(await p.textContent('.cn'), 'Goblet squat');
+  assert.match(await p.textContent('.swapped'), /Brak sprzętu/);
+  await p.click('[data-unswap="1"]'); await p.click('[data-swap="1"]');
+  await p.fill('#sw-own', 'Przysiad na skrzynię'); await p.click('#sheet [data-why="Inny powód"]'); await p.click('#sw-ok');
+  assert.equal(await p.textContent('.cn'), 'Przysiad na skrzynię');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('offline: czcionki i lib.js z pamięci service workera', async () => {
   const { ctx, p } = await page([]);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');

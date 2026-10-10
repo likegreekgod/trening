@@ -151,6 +151,20 @@ test('sugOly: propozycje wg tabeli ocen', () => {
   assert.deepEqual(s([R(70, 'L'), R(72.5, 'S')], 1), null);                   // brak serii do zrobienia
 });
 
+test('swapOptions, swapText, parseSwap: zamiana ćwiczenia', () => {
+  assert.deepEqual(L.swapOptions({ name: 'Przysiad tylny', swaps: ['Leg press', ' Hack ', 'Leg press', ''] }), ['Leg press', 'Hack']);
+  assert.deepEqual(L.swapOptions({ name: 'Przysiad tylny' }).slice(0, 2), ['Goblet squat', 'Wypychanie nogami (leg press)']);
+  assert.equal(L.swapOptions({ name: 'Ciąg rwaniowy' })[0], 'Ciąg z zawisu');
+  assert.equal(L.swapOptions({ name: 'Rwanie' })[0], 'Rwanie z zawisu');
+  assert.equal(L.swapOptions({ name: 'Wyciskanie sztangi na ławce płaskiej' })[0], 'Wyciskanie hantli na ławce');
+  assert.deepEqual(L.swapOptions({ name: 'Plank boczny' }), []);
+  const s = { from: 'Przysiad tylny', to: 'Leg press', why: 'Sprzęt zajęty' };
+  assert.equal(L.swapText(s), 'Przysiad tylny → Leg press | Sprzęt zajęty');
+  assert.deepEqual(L.parseSwap(L.swapText(s)), s);
+  assert.equal(L.swapText(null), '');
+  assert.equal(L.parseSwap(''), null);
+});
+
 test('localDate: data w strefie telefonu', () => {
   assert.equal(L.localDate(new Date(2026, 9, 10, 0, 30)), '2026-10-10');
   assert.match(L.localDate(), /^\d{4}-\d{2}-\d{2}$/);

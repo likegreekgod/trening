@@ -227,6 +227,15 @@
   .prow .plbl small{font:400 13px var(--f-body);text-transform:none;letter-spacing:0;color:var(--muted)}
   .empty{color:var(--muted);text-align:center;padding:40px 0}
 
+  /* zamiana ćwiczenia */
+  .swb{margin-top:6px}
+  .swapped{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;font-size:14px;color:var(--ink-2);border-left:4px solid var(--accent);padding:2px 0 2px 10px}
+  .opts{display:grid;gap:4px}
+  .opts.why{grid-template-columns:1fr 1fr}
+  .opt{min-height:48px;border:1px solid var(--ink-2);border-radius:2px;background:transparent;color:var(--ink);text-align:left;padding:8px 12px;font-size:15px}
+  .opt[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
   /* boje: światła sędziowskie, wybór oceny, propozycja ciężaru */
   .set .lt,.set-head .hl2{grid-column:span 2}
   .lt{min-height:44px;border:0;border-radius:2px;background:var(--panel);color:var(--light-white);display:flex;align-items:center;justify-content:center;gap:8px;padding:0 8px}
@@ -270,6 +279,8 @@
   .sh-in .sub{margin:-6px 0 0}
   .fl{display:grid;gap:6px;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
   .fl input{font:700 26px/1 var(--f-display);min-height:48px;text-transform:none;letter-spacing:.01em}
+  .fl input::placeholder{font:400 16px var(--f-body);color:var(--muted);opacity:1}
+  #sw-own{font:400 17px/1.3 var(--f-body)}
   .seg{display:flex}
   .seg button,.btn.tg{flex:1;min-height:44px;border:1px solid var(--ink-2);background:transparent;color:var(--ink-2);border-radius:0;
                       font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase}
@@ -321,8 +332,9 @@ let PAIN = false;      // Klienci F „bol” = TAK → kolano i bark zawsze zaz
 let SIMPLE = false;    // Klienci G „tryb” = PROSTY
 let EXTRA_DEF = 0;     // Klienci H „dod_serie”; Plan „dod_serie” nadpisuje
 let NAME = '';
-let SCALE = 'RPE';
-let OLY_CEIL = 0.05;   // Klienci L „sufit_oly”: ułamek 1RM ponad plan dla bojów     // Klienci K „skala” (RPE/RIR); przełącznik w nagłówku zapamiętany w telefonie (sc_<klucz>)
+let SCALE = 'RPE';     // Klienci K „skala” (RPE/RIR); przełącznik w nagłówku zapamiętany w telefonie (sc_<klucz>)
+let OLY_CEIL = 0.05;   // Klienci L „sufit_oly”: ułamek 1RM ponad plan dla bojów
+let SWAP = false;      // Klienci J „zamiana” = TAK → przycisk „Zamień” przy ćwiczeniu
 function applyCfg(c){
   if (!c) return;
   PAIN = !!c.pain; SIMPLE = !!c.simple; EXTRA_DEF = Number(c.extra) || 0;
@@ -330,6 +342,7 @@ function applyCfg(c){
   let own = null; try { own = localStorage.getItem('sc_' + KEY); } catch (e) {}
   SCALE = own || (c.scale === 'RIR' ? 'RIR' : 'RPE');
   OLY_CEIL = c.olyCeil >= 0 ? Number(c.olyCeil) : 0.05;
+  SWAP = !!c.swap;
 }
 let DATA = null, PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
 let TAB = 'trening';   // ekran z dolnego menu: trening | plan
@@ -343,7 +356,7 @@ const $ = s => document.querySelector(s);
 const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
   RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, restSec, fmtClock, plates,
-  isOly, RATE, rateOf, olyCap, sugOly } = window.TL;
+  isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -504,7 +517,7 @@ function useData(d){
   // lokalne, jeszcze niewysłane zapisy z kolejki nadpisują dane z serwera
   qGet().forEach(it => {
     const p = it.payload;
-    if (it.fn === 'logSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ: p.typ, ocena: p.ocena || '' }; }
+    if (it.fn === 'logSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ: p.typ, ocena: p.ocena || '', zamiana: p.swap || '' }; }
     if (it.fn === 'przesunJednostke') applyMoves(p, false);
   });
 }
@@ -651,10 +664,54 @@ function shiftRest(){
   renderPlan();
 }
 
+/* ---------- zamiana ćwiczenia: zapis w telefonie (sw_<klucz>) i w Logu (kolumna „zamiana”) ---------- */
+const SWK = 'sw_' + KEY;
+function swGet(){ try { return JSON.parse(localStorage.getItem(SWK) || '{}'); } catch (e) { return {}; } }
+const swKey = ex => cur.week + '|' + cur.day + '|' + ex.order;
+/** ćwiczenie z naniesioną zamianą: telefon (także „cofnięta” = null) ma pierwszeństwo przed wpisami z Logu */
+function withSwap(ex){
+  const m = swGet(), k = swKey(ex);
+  let s = k in m ? m[k] : null;
+  if (!(k in m)) { const l = Object.values(exLogs(ex)).find(x => x.zamiana); s = l ? parseSwap(l.zamiana) : null; }
+  return s && s.to ? Object.assign({}, ex, { name: s.to, swap: s }) : ex;
+}
+function setSwap(ex, s){
+  const m = swGet(); m[swKey(ex)] = s;
+  try { localStorage.setItem(SWK, JSON.stringify(m)); } catch (e) {}
+}
+function openSwap(ex){
+  const opts = swapOptions(ex);
+  let to = '', why = '';
+  openSheet(`<h2 id="sheet-t">Zamień ćwiczenie</h2><p class="sub">Zamiast: ${esc(ex.name)}</p>
+    ${opts.length ? `<div class="opts" role="group" aria-label="Zamiennik">${opts.map(o => `<button type="button" class="opt" data-to="${esc(o)}">${esc(o)}</button>`).join('')}</div>` : ''}
+    <label class="fl">${opts.length ? 'Albo inne ćwiczenie' : 'Ćwiczenie zamiast'}<input id="sw-own" placeholder="nazwa" autocomplete="off"></label>
+    <div class="fl">Powód</div>
+    <div class="opts why" role="group" aria-label="Powód">${SWAP_WHY.map(w => `<button type="button" class="opt" data-why="${w}">${w}</button>`).join('')}</div>
+    <p class="hint" id="sw-hint" hidden>Ból: na końcu treningu zaznacz miejsce i oceń ból 0–10 w podsumowaniu.</p>
+    <button type="button" class="btn p" id="sw-ok" disabled>Zamień</button>
+    <button type="button" class="btn" data-close>Anuluj</button>`);
+  const upd = () => {
+    document.querySelectorAll('#sheet [data-to]').forEach(b => b.setAttribute('aria-pressed', b.dataset.to === to));
+    document.querySelectorAll('#sheet [data-why]').forEach(b => b.setAttribute('aria-pressed', b.dataset.why === why));
+    $('#sw-hint').hidden = why !== 'Ból';
+    $('#sw-ok').disabled = !to || !why;
+  };
+  document.querySelectorAll('#sheet [data-to]').forEach(b => b.onclick = () => { to = b.dataset.to; $('#sw-own').value = ''; upd(); });
+  document.querySelectorAll('#sheet [data-why]').forEach(b => b.onclick = () => { why = b.dataset.why; upd(); });
+  $('#sw-own').oninput = e => { to = e.target.value.trim(); upd(); };
+  $('#sw-ok').onclick = () => {
+    setSwap(ex, { from: ex.name, to, why }); closeSheet();
+    toast('Zamieniono na: ' + to + '. Serie zapiszą się pod nową nazwą.');
+    renderTrening();
+  };
+  upd();
+}
+
 /* ---------- ekran Trening ---------- */
 function renderTrening(){
   let exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order);
   if (!exs.length) { pickDefault(); exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order); }
+  exs = exs.map(withSwap);
   if (!exs.length) { head(NAME, 'Trening'); $('#main').innerHTML = '<div class="empty">Brak planu.</div>'; return; }
   const s0 = exs[0];
   head(weekLabel(cur.week) + ' · ' + cur.day + ' · ' + weekday(s0.date) + ' ' + ddmm(s0.date) + (sessDone(cur.week, cur.day) ? ' · zrobiona ✓' : ''),
@@ -844,6 +901,8 @@ function card(ex){
   const dropInfo = plannedDrops(ex) ? `<div class="hint">+ ${plannedDrops(ex)} × drop set po ostatniej serii (ok. −20% ciężaru, do upadku technicznego).</div>` : '';
   return `<div class="card ${ex.prio === 'K' ? 'k' : ''} ${oly ? 'oly' : ''}" data-card="${ex.order}">
     <div class="ch"><div class="cn">${esc(ex.name)}</div><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span></div>
+    ${ex.swap ? `<div class="swapped"><span>Zamiast: ${esc(ex.swap.from)} · ${esc(ex.swap.why)}</span><button type="button" class="btn sm" data-unswap="${ex.order}">Cofnij zamianę</button></div>`
+      : SWAP ? `<button type="button" class="btn sm swb" data-swap="${ex.order}">⇄ Zamień ćwiczenie</button>` : ''}
     <div class="rx">${SIMPLE ? rxSimple(ex) : rxPro(ex)}</div>
     ${lastLine(ex)}
     ${SIMPLE ? hintSimple(ex) : ''}
@@ -951,10 +1010,10 @@ function bindRow(row, ex, s0){
     const p = { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
       kg: num(q('.kg').value), reps: num(q('.reps').value),
       rpe: fail ? '' : lt ? (ocena ? RATE[ocena].rpe : '') : rpeOf(row), vbt: q('.vbt') ? num(q('.vbt').value) : '',
-      done: st !== '', video: prev.film_link || '', typ, ocena };
+      done: st !== '', video: prev.film_link || '', typ, ocena, swap: swapText(ex.swap) };
     if (!row.dataset.st && st && kind !== 'w') startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce
     setState(row, st, true);
-    LOGS['local' + lid(ex, set)] = { id: 'local' + lid(ex, set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ, ocena };
+    LOGS['local' + lid(ex, set)] = { id: 'local' + lid(ex, set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ, ocena, zamiana: p.swap };
     refreshStats(); updateSug(ex);
     send('logSet', p).then(() => { if (row.dataset.st === st) setState(row, st); }).catch(() => {});
     if (st && navigator.vibrate) navigator.vibrate(fail ? [30, 60, 30] : 30);
@@ -1004,6 +1063,8 @@ function bind(exs, s0){
   exs.forEach(ex => refreshDel(ex.order));
   document.querySelectorAll('[data-plates]').forEach(b => b.onclick = () => openPlates(exOf(b.dataset.plates)));
   exs.forEach(updateSug);
+  document.querySelectorAll('[data-swap]').forEach(b => b.onclick = () => openSwap(exOf(b.dataset.swap)));
+  document.querySelectorAll('[data-unswap]').forEach(b => b.onclick = () => { setSwap(exOf(b.dataset.unswap), null); toast('Wrócono do ćwiczenia z planu.'); renderTrening(); });
   // tryb prosty: zaznacz wszystkie niezapisane serie robocze ćwiczenia
   document.querySelectorAll('[data-all]').forEach(b => b.onclick = () => {
     const todo = [...document.querySelectorAll(`.set[data-o="${b.dataset.all}"][data-k="p"][data-st=""] .ok`)];
@@ -1142,7 +1203,7 @@ async function uploadVideo(ex, s0, file){
     const prev = getLog(ex, set) || {};
     const row = document.querySelector(`.set[data-o="${ex.order}"][data-s="${set}"]`);
     const p = { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
-      kg: num(row.querySelector('.kg').value), reps: num(row.querySelector('.reps').value), rpe: /FAIL/.test(prev.typ || '') ? '' : row.querySelector('.lt') ? prev.rpe : rpeOf(row), typ: prev.typ || '', ocena: prev.ocena || '',
+      kg: num(row.querySelector('.kg').value), reps: num(row.querySelector('.reps').value), rpe: /FAIL/.test(prev.typ || '') ? '' : row.querySelector('.lt') ? prev.rpe : rpeOf(row), typ: prev.typ || '', ocena: prev.ocena || '', swap: swapText(ex.swap),
       vbt: row.querySelector('.vbt') ? num(row.querySelector('.vbt').value) : '', done: prev.wykonane === 'TAK', video: out.link,
       note: 'film ' + mode + ', ' + Math.round(file.size / 1048576) + ' MB, ' + Math.round((Date.now() - t0) / 1000) + ' s' };
     LOGS['local' + lid(ex, set)] = Object.assign({}, prev, { id: 'local' + lid(ex, set), film_link: out.link });
