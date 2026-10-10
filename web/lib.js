@@ -217,6 +217,30 @@
     return null;
   };
 
+  /* ---------- zamiana ćwiczenia ---------- */
+  L.SWAP_WHY = ['Sprzęt zajęty', 'Ból', 'Brak sprzętu', 'Inny powód'];
+  // zamienniki wg wzorca ruchu, gdy plan nie ma kolumny „zamienniki” (kolejność = pierwszy pasujący wzorzec)
+  const SWAP_BY = [
+    [/ciąg.*(rwan|zarzut)|(snatch|clean) pull/, ['Ciąg z zawisu', 'Ciąg z bloków', 'Wysokie przyciąganie (high pull)']],
+    [/rwan|snatch/, ['Rwanie z zawisu', 'Rwanie siłowe (power snatch)', 'Rwanie z bloków']],
+    [/zarzut|podrzut|clean|jerk/, ['Zarzut z zawisu', 'Zarzut siłowy (power clean)', 'Podrzut ze stojaków']],
+    [/martwy|rdl|rumuń|good ?morning|hip thrust/, ['Martwy ciąg rumuński z hantlami', 'Hip thrust', 'Przyciąganie linki między nogami']],
+    [/przysiad|squat|wykrok|split/, ['Goblet squat', 'Wypychanie nogami (leg press)', 'Bułgarski przysiad', 'Przysiad na suwnicy (hack)']],
+    [/wyciskan.*(leż|ław)|bench|pomp/, ['Wyciskanie hantli na ławce', 'Pompki', 'Wyciskanie na maszynie']],
+    [/wyciskan|press/, ['Wyciskanie hantli siedząc', 'Wyciskanie landmine', 'Wyciskanie na maszynie nad głowę']],
+    [/wiosł|row|podciąg|ściąg|pull/, ['Wiosłowanie hantlem', 'Wiosłowanie na wyciągu', 'Ściąganie drążka wyciągu']]
+  ];
+  /** zamienniki: kolumna planu (ex.swaps) albo lista dla wzorca ruchu; bez oryginału i powtórzeń */
+  L.swapOptions = ex => {
+    const own = (ex.swaps || []).map(s => String(s).trim()).filter(Boolean);
+    const n = String(ex.name || '').toLowerCase(), hit = SWAP_BY.find(([re]) => re.test(n));
+    const list = own.length ? own : hit ? hit[1] : [];
+    return [...new Set(list)].filter(s => s.toLowerCase() !== n);
+  };
+  /** „Przysiad → Leg press | Ból” ↔ {from, to, why} (kolumna Log „zamiana”) */
+  L.swapText = s => s && s.to ? `${s.from} → ${s.to} | ${s.why}` : '';
+  L.parseSwap = t => { const m = /^(.+?) → (.+?)(?: \| (.*))?$/.exec(String(t || '').trim()); return m ? { from: m[1], to: m[2], why: m[3] || '' } : null; };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);

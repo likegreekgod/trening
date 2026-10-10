@@ -104,6 +104,7 @@ Konwencje Damiana:
   - Wake Lock od pierwszego wpisu do „Zakończ” (ponownie po powrocie do aplikacji);
   - „Talerze”: okno `#sheet` z rozkładem na stronę (`plates`), gryf 20/15 kg i zamki 2 × 2,5 kg zapamiętane w `pl_<klucz>`.
   - boje (grupa R/P z kolumny `grupa` albo po nazwie, `isOly`): zamiast RPE i ✓ światła sędziowskie; ocena Łatwo / Średnio / Walka / Spalone → `rpe` 7 / 8 / 9,5 / FAIL + `ocena` L/S/W/X; propozycja ciężaru pod ostatnio ocenionym podejściem (`sugOly`, „Ustaw X kg”); w recepcie „max dziś” = `olyCap` (plan + `sufit_oly` × 1RM, przy dyspozycji „Uwaga”/„Zmęczenie” = plan).
+  - „Zamień ćwiczenie” (tylko `cfg.swap`): zamienniki z kolumny planu `zamienniki` albo wg wzorca ruchu (`swapOptions`), powód z listy; zamiana w telefonie (`sw_<klucz>`) i w Logu (`zamiana` = „oryginał → zamiennik | powód”, `cwiczenie` = zamiennik); na innym telefonie odtwarzana z Logu.
 - Podsumowanie jednostki:
   - RPE sesji 0–10;
   - samopoczucie 1–5;
