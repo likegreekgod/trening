@@ -107,6 +107,7 @@ Konwencje Damiana:
   - „Zamień ćwiczenie” (tylko `cfg.swap`): zamienniki z kolumny planu `zamienniki` albo wg wzorca ruchu (`swapOptions`), powód z listy; zamiana w telefonie (`sw_<klucz>`) i w Logu (`zamiana` = „oryginał → zamiennik | powód”, `cwiczenie` = zamiennik); na innym telefonie odtwarzana z Logu.
   - kamera przy każdej serii roboczej, dodatkowej i drop (`openCam`): film wgrywany do tej serii (Drive, bez zmian w wysyłce), bez sieci komunikat zamiast błędu (film nie trafia do kolejki); w PRO pole „Prędkość z urządzenia (m/s)” → `vbt_ms` (kolumny VBT w wierszu już nie ma);
   - każdy zapis serii buduje `payloadOf(row, ex, s0)` (stan ✓/✕, ocena, typ, zamiana, film i prędkość z dotychczasowego wpisu), więc kolejne zapisy niczego nie kasują.
+  - PRO, okno kamery, tryb „Film + ścieżka + VBT” (`vbtStage`): suwak do startu powtórzenia, dotknięcie środka i krawędzi talerza (450 mm = kalibracja), `track()` śledzi talerz co 1/30 s (SAD na zmniejszonym obrazie), `analyse()` liczy powtórzenia; boje i ciągi: v max i uniesienie, pozostałe: najlepsze MCV i spadek; zapis `vbt_ms`, `vbt_peak`, `wysokosc_cm`, `sciezka` (JSON, cm, co 2 klatki), potem film na Drive. Analiza działa bez sieci. Wczesna wersja: dokładność sprawdzona tylko na ruchu syntetycznym (`tests/synth.js`), do walidacji z czujnikiem.
 - Podsumowanie jednostki:
   - RPE sesji 0–10;
   - samopoczucie 1–5;

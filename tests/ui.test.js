@@ -475,6 +475,88 @@ test('Film: bez sieci czytelny komunikat zamiast błędu; tryb PROSTY bez pola p
   await ctx.close();
 });
 
+// --- PR 9: ścieżka sztangi i VBT z filmu ---
+const SY = require('./synth');
+// talerz narysowany na klatce: ciemny krążek z jasną piastą i paskiem na tle w pasy (żeby dopasowanie wzorca miało fakturę)
+const DRAW_PLATE = `(ctx, x, y, R, W, H) => {
+  for (let i = 0; i < 24; i++) { ctx.fillStyle = i % 2 ? '#7b8077' : '#969b92'; ctx.fillRect(0, i * H / 24, W, H / 24 + 1); }
+  ctx.fillStyle = '#1c1c1c'; ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.fill();
+  ctx.fillStyle = '#d0d0d0'; ctx.beginPath(); ctx.arc(x, y, R * 0.25, 0, 7); ctx.fill();
+  ctx.fillStyle = '#c8372d'; ctx.fillRect(x - R * 0.8, y - 2, R * 1.6, 4);
+}`;
+
+test('Śledzenie talerza: obraz syntetyczny → v max i uniesienie jak w ruchu wzorcowym', async () => {
+  const { ctx, p } = await page([], false, { data: OLY });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  const R = 60, PXM = 2 * R / 0.45, dur = 1.5;                                  // ciąg + wejście pod sztangę
+  const frames = Array.from({ length: Math.round(dur * 30) + 1 }, (_, k) => { const q = SY.snatchAt(k / 30); return [360 + q.x * PXM, 1000 - q.y * PXM]; });
+  const r = await p.evaluate(async ({ frames, R, draw }) => {
+    const plate = eval(draw);
+    const src = { w: 720, h: 1280, t0: 0, t1: (frames.length - 1) / 30,
+      draw: async (c, t, W, H) => { const [x, y] = frames[Math.min(frames.length - 1, Math.round(t * 30))], k = W / 720; plate(c, x * k, y * k, R * k, W, H); } };
+    const pts = await track(src, { x: frames[0][0], y: frames[0][1] }, R, null, {});
+    const res = TL.analyse(pts, 'R'), out = TL.vbtOut(res);
+    return { n: pts.length, reps: res.reps.length, vmax: res.vmax, h: res.h, path: out.path.length, top: Math.max(...pts.map(q => q.y)) };
+  }, { frames, R, draw: DRAW_PLATE });
+  const vTrue = SY.trueVmax(SY.snatchAt, 0.95);
+  assert.equal(r.n, frames.length);
+  assert.equal(r.reps, 1);
+  assert.ok(Math.abs(r.vmax - vTrue) <= 0.08, `v max ${r.vmax.toFixed(2)} vs ${vTrue.toFixed(2)} m/s`);
+  assert.ok(Math.abs(r.h - 96) <= 3, 'uniesienie ' + r.h + ' cm');
+  assert.ok(Math.abs(r.top - 0.96) <= 0.02, 'najwyższy punkt ' + r.top.toFixed(3) + ' m');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Okno kamery: „Film + ścieżka + VBT” na nagranym pliku → wynik, zapis analizy i filmu', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: OLY, api: DRIVE });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await rate(p, 1, 'S');
+  await p.click('.set[data-s="1"] .cam'); await p.click('#sheet [data-m="vbt"]');
+  assert.equal(await p.isVisible('#cam-tip'), true);
+  // film 360×640 nagrany w przeglądarce: 0,5 s bezruchu, potem ciąg jak w ruchu wzorcowym (talerz r = 30 px)
+  await p.evaluate(async ({ draw, pos }) => {
+    const plate = eval(draw), c = document.createElement('canvas'); c.width = 360; c.height = 640;
+    const g = c.getContext('2d'), rec = new MediaRecorder(c.captureStream(30), { mimeType: 'video/webm;codecs=vp8' }), parts = [];
+    rec.ondataavailable = e => parts.push(e.data);
+    const done = new Promise(r => rec.onstop = r);
+    plate(g, pos[0][0], pos[0][1], 30, 360, 640); rec.start();
+    const t0 = performance.now();
+    await new Promise(res => { const step = () => { const k = Math.min(pos.length - 1, Math.floor((performance.now() - t0) / 1000 * 30));
+      plate(g, pos[k][0], pos[k][1], 30, 360, 640); if (k >= pos.length - 1) res(); else requestAnimationFrame(step); }; step(); });
+    rec.stop(); await done;
+    const dt = new DataTransfer(); dt.items.add(new File([new Blob(parts, { type: 'video/webm' })], 'rwanie.webm', { type: 'video/webm' }));
+    const inp = document.querySelector('#cam-file'); inp.files = dt.files; inp.dispatchEvent(new Event('change', { bubbles: true }));
+  }, { draw: DRAW_PLATE, pos: Array.from({ length: 61 }, (_, k) => { const q = SY.snatchAt(Math.max(0, k / 30 - 0.5)); return [180 + q.x * 133.3, 520 - q.y * 133.3]; }) });
+  await p.waitForFunction(() => /dotknij środka talerza/.test(document.querySelector('#vhint').textContent), null, { timeout: 15000 });
+  const box = await p.$eval('#vc', c => ({ k: c.getBoundingClientRect().width / c.width }));
+  await p.click('#vc', { position: { x: 180 * box.k, y: 520 * box.k } });
+  assert.match(await p.textContent('#vhint'), /krawędzi talerza/);
+  await p.click('#vc', { position: { x: 210 * box.k, y: 520 * box.k } });
+  assert.match(await p.textContent('#vhint'), /(59|60|61) px = 450 mm/);
+  await p.click('#vgo');
+  await p.waitForSelector('#vsave', { timeout: 60000 });
+  const m = await p.$$eval('.metric b', b => b.map(x => parseFloat(x.textContent.replace(',', '.'))));
+  assert.ok(m[0] > 1.2 && m[0] < 3.2, 'v max ' + m[0]);                          // nagranie w czasie rzeczywistym: tylko rząd wielkości
+  assert.ok(m[1] > 80 && m[1] < 112, 'uniesienie ' + m[1]);
+  assert.ok(await p.$('#vres svg.path .trace'));
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'vbt.png'), fullPage: false }); }
+  await p.click('#vsave'); await p.waitForSelector('#sheet', { state: 'hidden', timeout: 15000 });
+  const sets = calls.filter(c => c.fn === 'logSet').map(c => c.args[0]);
+  const an = sets.find(s => s.path), last = sets[sets.length - 1];
+  assert.ok(an.vbt > 1.2 && an.vbtPeak >= an.vbt && an.height > 80 && JSON.parse(an.path).length > 5);
+  assert.deepEqual((({ ocena, rpe, done }) => ({ ocena, rpe, done }))(an), { ocena: 'S', rpe: 8, done: true });   // ocena boju zachowana
+  assert.equal(last.video, 'https://drive.google.com/file/d/f1/view');
+  assert.equal(last.path, an.path);                                              // film nie kasuje analizy
+  await p.click('.set[data-s="1"] .cam');
+  assert.match(await p.textContent('.saved'), /Zapisana analiza: v max/);
+  assert.ok(await p.$('.saved svg.path'));
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('offline: czcionki i lib.js z pamięci service workera', async () => {
   const { ctx, p } = await page([]);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
