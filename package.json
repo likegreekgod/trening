@@ -3,7 +3,7 @@
   "private": true,
   "description": "Aplikacja treningowa dla klientów: PWA (GitHub Pages) + Google Apps Script + Arkusze",
   "scripts": {
-    "test": "node --test tests/code.test.js tests/ui.test.js",
+    "test": "node --test tests/code.test.js tests/lib.test.js tests/ui.test.js",
     "test:code": "node --test tests/code.test.js",
     "validate": "node tools/validate-plan.js",
     "serve": "npx --yes serve web -l 8080",

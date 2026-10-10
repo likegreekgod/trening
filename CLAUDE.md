@@ -23,7 +23,7 @@ Filmy: telefon → Drive bezpośrednio (sesja resumable otwierana przez startUpl
        awaryjnie przez serwer w kawałkach 4 MB (uploadChunk).
 ```
 
-- `web/index.html` to jeden plik (HTML + CSS + JS), bez bundlera i frameworka. Cała komunikacja z serwerem idzie przez funkcję `call(fn, ...args)`.
+- `web/index.html` to jeden plik (HTML + CSS + JS), bez bundlera i frameworka; czyste funkcje (bez DOM) są w `web/lib.js` (`window.TL`, testy `tests/lib.test.js`), czcionki w `web/fonts/`. Cała komunikacja z serwerem idzie przez funkcję `call(fn, ...args)`.
 - `apps-script/Code.gs` jest powiązany z arkuszem `Trening – Aplikacja (dane)` (konto trenera, właściciel arkusza; `clasp login` musi być na tym samym koncie). API: `doPost` → `API_FNS` (getData, logSet, logSession, deleteSet, startUpload, uploadChunk, saveDyspozycja, przesunJednostke). Pierwszym argumentem każdej funkcji jest klucz klienta.
 - `apps-script/Index.html` to stara wersja działająca przez `doGet` i `google.script.run` (linki `/exec?k=`). Zostaje na okres przejściowy. Nowe funkcje rób w `web/index.html`; starą wersję poprawiaj tylko przy błędach.
 - Klucz klienta w linku (`?k=k` + 11 znaków hex) jest jedynym zabezpieczeniem. PWA zapamiętuje go w `localStorage` („key”).
@@ -32,7 +32,7 @@ Filmy: telefon → Drive bezpośrednio (sesja resumable otwierana przez startUpl
 ## Polecenia
 
 ```bash
-npm test                         # testy Node (Code.gs w piaskownicy) + UI w Playwright z atrapą API
+npm test                         # testy Node (Code.gs w piaskownicy, web/lib.js) + UI w Playwright z atrapą API; zrzuty w tests/screens/
 npm run test:code                # tylko logika serwera
 node tools/validate-plan.js plans/x.json   # sprawdzenie planu przed wrzuceniem na Drive
 npm run serve                    # podgląd web/ na http://localhost:8080 (API z config.js)
@@ -136,7 +136,7 @@ Przy zmianie reguł dopisz scenariusz testowy (syntetyczne tygodnie) i sprawdź,
 - `npm test` musi przechodzić przed każdym commitem.
 - Przy zmianach UI:
   - sprawdź oba tryby (PROSTY i PRO) i oba motywy;
-  - przejrzyj zrzut 390×844 (Playwright);
+  - przejrzyj zrzuty 390×844 w `tests/screens/` (PROSTY/PRO × jasny/ciemny; tworzy je `npm test`, poza repo);
   - sprawdź payloady wysyłane do API.
 - Nie dodawaj zależności do `web/`: wszystko inline, bez CDN, bo aplikacja musi działać offline.
 - v2: testy jednostkowe dla `sugOly`, `verdict`, `analyse` i przeliczenia RPE/RIR; Playwright z atrapą `call()`/`fetch`, zrzuty 390×844 w jasnym i ciemnym motywie, tryby PROSTY i PRO, tryb offline.

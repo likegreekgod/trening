@@ -4,7 +4,8 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { chromium } = require('playwright');
 
 const WEB = path.join(__dirname, '..', 'web');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.woff2': 'font/woff2' };
+const SCREENS = path.join(__dirname, 'screens');   // zrzuty 390×844 do przejrzenia (poza repo, .gitignore)
 const DATA = {
   cfg: { name: 'Robert', pain: false, simple: true, extra: 1 },
   plan: [
@@ -25,17 +26,20 @@ test.before(async () => {
 });
 test.after(async () => { await browser.close(); server.close(); });
 
-async function page(calls, offline) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+async function page(calls, offline, opt = {}) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: opt.scheme || 'light' });
+  const data = opt.data || DATA;
   await ctx.route('**/macros/**', async r => {
     if (offline) return r.abort();
     const b = JSON.parse(r.request().postData() || '{}'); calls.push(b);
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, result: b.fn === 'getData' ? DATA : { ok: true } }) });
+      body: JSON.stringify({ ok: true, result: b.fn === 'getData' ? data : { ok: true } }) });
   });
   const p = await ctx.newPage(); p.errors = []; p.on('pageerror', e => p.errors.push(e.message));
+  p.external = []; p.on('request', q => { if (!q.url().startsWith(base) && !/\/macros\//.test(q.url())) p.external.push(q.url()); });
   return { ctx, p };
 }
+const PRO = Object.assign({}, DATA, { cfg: Object.assign({}, DATA.cfg, { simple: false }) });
 
 test('bez klucza: komunikat o linku od trenera', async () => {
   const { ctx, p } = await page([]);
@@ -65,6 +69,52 @@ test('offline: po wcześniejszym otwarciu plan z pamięci telefonu', async () =>
   await ctx.unroute('**/macros/**'); await ctx.route('**/macros/**', r => r.abort());
   await p.goto(base); await p.waitForSelector('.set[data-o="1"]');          // bez ?k= – klucz z pamięci
   assert.match(await p.textContent('#sync'), /offline/);
+  await ctx.close();
+});
+
+// Pomost: tokeny jasny/ciemny, czcionki lokalne, etykiety ≥ 12 px, cele dotyku ≥ 44 px; zrzuty do tests/screens/
+const BG = { light: 'rgb(237, 244, 242)', dark: 'rgb(15, 22, 18)' };
+for (const scheme of ['light', 'dark']) for (const [mode, data] of [['PROSTY', DATA], ['PRO', PRO]]) {
+  test(`Pomost ${mode} ${scheme}: kolory, czcionki, rozmiary, zrzut`, async () => {
+    const { ctx, p } = await page([], false, { scheme, data });
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+    await p.click('[data-warm="1"]');                                           // wiersz z ✕ też musi mieć cel 44 px
+    await p.evaluate(() => document.fonts.ready);
+    assert.equal(await p.evaluate(() => getComputedStyle(document.body).backgroundColor), BG[scheme]);
+    assert.ok(await p.evaluate(() => document.fonts.check('700 20px "Big Shoulders Display"') && document.fonts.check('16px "Instrument Sans"')
+      && [...document.fonts].some(f => f.family.includes('Big Shoulders') && f.status === 'loaded')), 'czcionki z web/fonts');
+    const bad = await p.evaluate(() => {
+      const out = [], vis = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; };
+      for (const e of document.querySelectorAll('body *')) {
+        if (!vis(e) || ![...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
+        const fs = parseFloat(getComputedStyle(e).fontSize);
+        if (fs < 12) out.push('etykieta ' + fs + 'px: ' + e.textContent.trim().slice(0, 20));
+      }
+      for (const e of document.querySelectorAll('button, select, input:not([type=file]), textarea, label.btn, summary')) {
+        if (!vis(e)) continue;
+        const r = e.getBoundingClientRect();
+        if (r.height < 44 - 0.5 || (e.tagName === 'BUTTON' && r.width < 44 - 0.5)) out.push('cel ' + Math.round(r.width) + '×' + Math.round(r.height) + ': ' + (e.className || e.tagName) + ' ' + (e.textContent || '').trim().slice(0, 15));
+      }
+      return out;
+    });
+    assert.deepEqual(bad, []);
+    assert.equal(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'bez poziomego przewijania');
+    assert.deepEqual(p.external, [], 'bez zapytań do zewnętrznych serwerów (Google Fonts itp.)');
+    assert.deepEqual(p.errors, []);
+    fs.mkdirSync(SCREENS, { recursive: true });
+    await p.screenshot({ path: path.join(SCREENS, `${mode}-${scheme}.png`) });
+    await p.screenshot({ path: path.join(SCREENS, `${mode}-${scheme}-cala.png`), fullPage: true });
+    await ctx.close();
+  });
+}
+
+test('offline: czcionki i lib.js z pamięci service workera', async () => {
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.evaluate(() => navigator.serviceWorker.ready);
+  const cached = await p.evaluate(async () => { const c = await caches.open((await caches.keys())[0]); return (await c.keys()).map(r => new URL(r.url).pathname); });
+  for (const f of ['/lib.js', '/fonts/big-shoulders-display-latin-wght-normal.woff2', '/fonts/instrument-sans-latin-ext-wght-normal.woff2'])
+    assert.ok(cached.includes(f), 'w pamięci: ' + f);
   await ctx.close();
 });
 
