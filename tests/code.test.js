@@ -98,3 +98,98 @@ test('computeSummary_: plan bez dat → tydzień z daty Sesji, jednostki niezrob
   assert.equal(r.rows[0][H.indexOf('tydzien_od')], d(1, 0));
   assert.equal(r.rows[0][H.indexOf('wykonanie_%')], 100);
 });
+
+// --- backend v2 ---
+test('olyCeil_: sufit_oly jako ułamek albo procent, domyślnie 0,05', () => {
+  assert.equal(C.olyCeil_(''), 0.05);
+  assert.equal(C.olyCeil_(undefined), 0.05);
+  assert.equal(C.olyCeil_('0,05'), 0.05);
+  assert.equal(C.olyCeil_(0.1), 0.1);
+  assert.equal(C.olyCeil_(5), 0.05);
+  assert.equal(C.olyCeil_('7%'), 0.07);
+  assert.equal(C.olyCeil_('abc'), 0.05);
+});
+
+test('logV2_: kolumny Log v2, stara aplikacja = puste', () => {
+  assert.deepEqual(Array.from(C.logV2_({})), ['', '', '', '', '']);
+  const r = C.logV2_({ ocena: 'w', vbtPeak: 1.92, height: 0, path: [[0, 0], [1.5, 40]], swap: 'Przysiad → Leg press | Sprzęt zajęty' });
+  assert.deepEqual(Array.from(r), ['W', 1.92, 0, '[[0,0],[1.5,40]]', 'Przysiad → Leg press | Sprzęt zajęty']);
+  assert.equal(C.logV2_({ ocena: 'Z' })[0], '');
+  assert.equal(C.logV2_({ path: 'x'.repeat(50000) })[3], '');
+});
+
+test('planMoves_: przesuwa tylko niezrobione jednostki klienta', () => {
+  const plan = [
+    { klient: 'robert', tydzien: 1, jednostka: 'T1', nr: 1 }, { klient: 'robert', tydzien: 1, jednostka: 'T1', nr: 2 },
+    { klient: 'robert', tydzien: 1, jednostka: 'T2', nr: 1 }, { klient: 'ewa', tydzien: 1, jednostka: 'T2', nr: 1 }];
+  const ses = [{ tydzien: 1, jednostka: 'T1' }];
+  const r = C.planMoves_(plan, ses, 'robert', [
+    { week: 1, day: 'T1', date: '2026-10-10' }, { week: 1, day: 'T2', date: '2026-10-11' },
+    { week: 1, day: 'T3', date: '2026-10-12' }, { week: 1, day: 'T2', date: '11.10.2026' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.rows)), [[2, '2026-10-11']]);
+  assert.deepEqual(r.skipped.map(s => s.why), ['jednostka zrobiona', 'brak w planie', 'zła data']);
+});
+
+test('validatePlan_: data opcjonalna, ale wpisana musi być RRRR-MM-DD', () => {
+  const row = { klient: 'robert', tydzien: 7, jednostka: 'T1', nr: 1, cwiczenie: 'Przysiad', serie: 3, powt: '5', blok: 'B2' };
+  assert.deepEqual(Array.from(C.validatePlan_([row])), []);
+  assert.match(C.validatePlan_([Object.assign({}, row, { data: '7.10' })]).join(), /RRRR-MM-DD/);
+});
+
+test('mergePlan_: zrobione jednostki zostają, kolizja bloków = błąd', () => {
+  const R = (k, w, j, nr, blok) => ({ klient: k, tydzien: w, jednostka: j, nr, cwiczenie: 'X' + nr, serie: 3, powt: '5', blok: blok || '' });
+  const existing = [R('robert', 1, 'T1', 1), R('robert', 1, 'T2', 1), R('ewa', 1, 'T1', 1)];
+  const ses = [{ klient: 'robert', tydzien: 1, jednostka: 'T1' }];
+  // poprawka bieżącego planu (bez bloku): zrobiona T1 zostaje, T2 z pliku
+  let m = C.mergePlan_(existing, [R('robert', 1, 'T1', 1), R('robert', 1, 'T1', 2), R('robert', 1, 'T2', 5)], ses);
+  assert.equal(m.errors.length, 0);
+  assert.equal(m.warnings.length, 1);
+  assert.deepEqual(m.rows.map(r => r.klient + r.jednostka + r.nr), ['ewaT11', 'robertT11', 'robertT25']);
+  // nowy blok B2 znów od tygodnia 1 → błąd z podpowiedzią numeracji
+  m = C.mergePlan_(existing, [R('robert', 1, 'T1', 1, 'B2')], ses);
+  assert.equal(m.errors.length, 1);
+  assert.match(m.errors[0], /\(bez bloku\).*B2.*od 2/);
+  // B2 numerowany dalej → OK, zrobiona jednostka B1 zostaje
+  m = C.mergePlan_([R('robert', 1, 'T1', 1, 'B1')], [R('robert', 2, 'T1', 1, 'B2')], ses);
+  assert.deepEqual([m.errors.length, m.rows.length], [0, 2]);
+});
+
+test('computeSummary_: tydzień wg faktycznej daty treningu (Sesje.start)', () => {
+  const plan = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', data: '2026-10-05', nr: 1, cwiczenie: 'Przysiad', prio: 'A', serie: 1, powt: '5', kg: 100 }];
+  const log = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', data: '2026-10-05', nr_cw: 1, cwiczenie: 'Przysiad', seria: 1, kg: 100, powt: 5, rpe: 8, wykonane: 'TAK' }];
+  const ses = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', data: '2026-10-05', start: '2026-09-28T15:51:43.380Z', samopoczucie: 4, czas_min: 60, rpe_sesji: 7 }];
+  const r = C.computeSummary_(plan, log, ses, []);
+  assert.deepEqual(r.rows.map(x => x[1]), ['2026-09-28']);
+  assert.equal(C.unitDates_([{ klient: 'a', tydzien: 1, jednostka: 'T1', start: '2026-09-28T22:30:00Z' }])['a|1|T1'], '2026-09-29'); // Warszawa
+});
+
+test('computeBlocks_ i keepNotes_: historia bloków z wnioskami trenera', () => {
+  const plan = [], log = [], ses = [];
+  [[1, 'B1', 100], [2, 'B1', 105], [3, 'B2', 110]].forEach(([w, blok, kg]) => {
+    plan.push({ klient: 'robert', tydzien: w, jednostka: 'T1', data: d(w, 0), nr: 1, cwiczenie: 'Przysiad', prio: 'A', serie: 2, powt: '5', kg, blok });
+    plan.push({ klient: 'robert', tydzien: w, jednostka: 'T1', data: d(w, 0), nr: 2, cwiczenie: 'Rwanie', prio: 'A', serie: 1, powt: '1', kg: kg - 20, blok, grupa: 'R' });
+    if (w === 3) return;                                                    // tydzień 3 jeszcze niezrobiony
+    for (let s = 1; s <= 2; s++) log.push({ klient: 'robert', tydzien: w, jednostka: 'T1', data: d(w, 0), nr_cw: 1, cwiczenie: 'Przysiad', seria: s, kg, powt: 5, rpe: 8, wykonane: 'TAK' });
+    log.push({ klient: 'robert', tydzien: w, jednostka: 'T1', data: d(w, 0), nr_cw: 2, cwiczenie: 'Rwanie', seria: 1, kg: kg - 20, powt: 1, wykonane: 'TAK' });
+    ses.push({ klient: 'robert', tydzien: w, jednostka: 'T1', data: d(w, 0), samopoczucie: 4, czas_min: 60, rpe_sesji: 7, bol_max: w });
+  });
+  const dys = [{ klient: 'robert', data: d(1, 0), werdykt: 'Dobra dyspozycja' }, { klient: 'robert', data: d(2, 0), werdykt: 'Uwaga' }];
+  const sum = C.computeSummary_(plan, log, ses, []);
+  const H = C.BLOK_HEADERS, rows = C.computeBlocks_(plan, log, ses, dys, sum.rows);
+  const b1 = rows.find(r => r[1] === 'B1'), b2 = rows.find(r => r[1] === 'B2');
+  const v = (r, h) => r[H.indexOf(h)];
+  assert.equal(v(b1, 'tygodnie'), '1–2');
+  assert.equal(v(b1, 'jednostki'), '2/2');
+  assert.equal(v(b1, 'wykonanie_%'), 100);
+  assert.equal(v(b1, 'tonaz_kg'), 2 * 5 * 100 + 80 + 2 * 5 * 105 + 85);
+  assert.match(v(b1, 'e1RM_zm'), /^Przysiad 123→130 \(\+5%\)$/);
+  assert.equal(v(b1, 'najlepsze_boje'), 'R 85 kg (Rwanie)');
+  assert.equal(v(b1, 'dyspozycja'), 'Dobra dyspozycja 1, Uwaga 1');
+  assert.equal(v(b1, 'bol_max'), 2);
+  assert.deepEqual([v(b2, 'jednostki'), v(b2, 'wykonanie_%')], ['0/1', 0]);
+  const old = [{ klient: 'robert', blok: 'B1', wnioski: 'Przysiad +5%, zostaw objętość' }, { klient: 'robert', blok: 'B0', od: '2026-06-01', wnioski: 'stary blok' }];
+  const out = C.keepNotes_(rows, old), W = H.indexOf('wnioski');
+  assert.equal(out.find(r => r[1] === 'B1')[W], 'Przysiad +5%, zostaw objętość');
+  assert.equal(out.find(r => r[1] === 'B2')[W], '');
+  assert.equal(out.find(r => r[1] === 'B0')[W], 'stary blok');
+});

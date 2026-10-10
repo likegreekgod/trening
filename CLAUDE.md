@@ -24,7 +24,7 @@ Filmy: telefon → Drive bezpośrednio (sesja resumable otwierana przez startUpl
 ```
 
 - `web/index.html` to jeden plik (HTML + CSS + JS), bez bundlera i frameworka. Cała komunikacja z serwerem idzie przez funkcję `call(fn, ...args)`.
-- `apps-script/Code.gs` jest powiązany z arkuszem `Trening – Aplikacja (dane)` (konto trenera, właściciel arkusza; `clasp login` musi być na tym samym koncie). API: `doPost` → `API_FNS` (getData, logSet, logSession, deleteSet, startUpload, uploadChunk). Pierwszym argumentem każdej funkcji jest klucz klienta.
+- `apps-script/Code.gs` jest powiązany z arkuszem `Trening – Aplikacja (dane)` (konto trenera, właściciel arkusza; `clasp login` musi być na tym samym koncie). API: `doPost` → `API_FNS` (getData, logSet, logSession, deleteSet, startUpload, uploadChunk, saveDyspozycja, przesunJednostke). Pierwszym argumentem każdej funkcji jest klucz klienta.
 - `apps-script/Index.html` to stara wersja działająca przez `doGet` i `google.script.run` (linki `/exec?k=`). Zostaje na okres przejściowy. Nowe funkcje rób w `web/index.html`; starą wersję poprawiaj tylko przy błędach.
 - Klucz klienta w linku (`?k=k` + 11 znaków hex) jest jedynym zabezpieczeniem. PWA zapamiętuje go w `localStorage` („key”).
 - Nowe zapisy to nowe akcje w `API_FNS` wywoływane przez `call()` (np. `saveDyspozycja`), nigdy `google.script.run`.
@@ -47,32 +47,35 @@ Robi to automatycznie `.github/workflows/apps-script.yml` po scaleniu zmian w `a
 
 ## Dane (arkusz)
 
-**Plan** (PLAN_HEADERS w Code.gs): klient, tydzien, jednostka, tytul, data (RRRR-MM-DD, tekst), nr, cwiczenie, prio (A/B/K), serie, powt (tekst: „8”, „6-8”, „8/str”, „1+1”), procent (ułamek), kg (liczba lub tekst: BW, guma), rpe_max, uwagi, dod_serie, drop, grupa (R/P/CR/CP/PS/I).
+**Plan** (PLAN_HEADERS w Code.gs): klient, tydzien, jednostka, tytul, data (RRRR-MM-DD, tekst; opcjonalna = wstępna, klient może przesunąć), nr, cwiczenie, prio (A/B/K), serie, powt (tekst: „8”, „6-8”, „8/str”, „1+1”), procent (ułamek), kg (liczba lub tekst: BW, guma), rpe_max, uwagi, dod_serie, drop, grupa (R/P/CR/CP/PS/I), zamienniki („;”), blok (np. B2).
 Kolumny E (data), J (powt) i L (kg) muszą mieć format `@` ustawiony PRZED zapisem, bo inaczej Arkusze zamienią „6-8” w datę.
+Tygodnie u klienta numeruj **ciągle** między blokami (blok 2 od tyg. 7): id serii nie zawiera bloku, więc powtórzony numer tygodnia nadpisałby Log.
 
-**Klienci**: A klucz, B klient_id, C imie, D aktywny (TAK/NIE), E link, F bol (TAK), G tryb (PROSTY/PRO), H dod_serie, I masters (TAK).
+**Klienci**: A klucz, B klient_id, C imie, D aktywny (TAK/NIE), E link, F bol (TAK), G tryb (PROSTY/PRO), H dod_serie, I masters (TAK), J zamiana (TAK/NIE), K skala (RPE/RIR), L sufit_oly (ułamek lub %, domyślnie 0,05). `getData` zwraca je w `cfg` jako `swap`, `scale`, `olyCeil`.
 
-**Log**: id = klient|tydzien|jednostka|nr|seria (upsert), zapisano, klient, tydzien, jednostka, data, nr_cw, cwiczenie, seria, kg, powt, rpe, vbt_ms, wykonane, film_link, uwagi, typ.
+**Log**: id = klient|tydzien|jednostka|nr|seria (upsert), zapisano, klient, tydzien, jednostka, data, nr_cw, cwiczenie, seria, kg, powt, rpe, vbt_ms, wykonane, film_link, uwagi, typ, ocena (L/S/W/X), vbt_peak, wysokosc_cm, sciezka (JSON), zamiana („oryginał → zamiennik | powód”).
 Wartości `seria`: 1…n robocze, n+1… dodatkowe, R1… rozgrzewka, D1… drop set. Wartości `typ`: DROP / FAIL / DROP+FAIL.
+`logSet` przyjmuje pola v2: `ocena`, `vbtPeak`, `height`, `path`, `swap` (brak = puste, stara aplikacja działa bez zmian).
 
 **Sesje**: id = klient|tydzien|jednostka, …, samopoczucie (1–5), czas_min, uwagi, start, koniec, bol („miejsce:0–10; …”), bol_max, rpe_sesji (0–10, CR-10).
+Kolumna `data` w Sesjach to data z planu; faktyczny dzień treningu to `start` (`unitDates_`) i według niego podsumowanie grupuje tygodnie.
+
+**Dyspozycja**: id = klient|data (jeden wpis dziennie), zapisano, klient, data, cmj1–3, cmj_sr, sen, stres, zmeczenie, bolesnosc, hooper_suma, vbt_test, werdykt, powody. Zapis: `saveDyspozycja`; `getData` zwraca `readiness`.
+
+**Bloki** (liczone w `podsumowanie`, `computeBlocks_`): klient × blok, daty, tygodnie, jednostki, wykonanie, tonaż, zmiana e1RM, najlepsze boje, sRPE, samopoczucie, dyspozycja, ból, statusy, **wnioski** (wpisuje trener; `keepNotes_` zachowuje je przy przeliczaniu).
 
 Zasady zgodności:
 - Nowe kolumny Log i Sesje dopisuj tylko **na końcu** nagłówków. `sheet_()` sam uzupełnia nagłówek w istniejącym arkuszu.
 - Nie zmieniaj formatu `id`.
 - Stare kolumny (bol_kolano, bol_bark) wypełniaj dalej.
 
-Zmiany planowane w v2 (szczegóły: `docs/ui-v2-spec.md`, „Zmiany w arkuszu”):
-- Klienci: `zamiana` (TAK/NIE), `skala` (RPE/RIR), `sufit_oly` (ułamek, domyślnie 0,05);
-- Plan: opcjonalna kolumna `zamienniki` (nazwy rozdzielone „;”);
-- Log: `ocena`, `vbt_peak`, `wysokosc_cm`, `sciezka`, `zamiana`;
-- nowa zakładka `Dyspozycja`.
+Zmiany w arkuszu z v2 (`docs/ui-v2-spec.md`, „Zmiany w arkuszu”) są już w Code.gs (PR 1 v2); korzysta z nich interfejs w kolejnych PR-ach.
 Arkusz zawsze zapisuje RPE (RIR = 10 − RPE to tylko widok). Ocena podejścia w bojach trafia do `rpe`/`typ`, więc Podsumowanie_OLY liczy się bez zmian.
 
 ## Plany treningowe
 
 Plany tworzy Claude w projekcie claude.ai („Trener personalny (OLY)”) i zapisuje je jako JSON do `Trening – Klienci/_plany/` na Drive.
-`wczytajPlany()` działa z wyzwalacza co 15 min albo z menu „Trening”. Kolejno: waliduje plik (`validatePlan_`), podmienia wiersze klientów z pliku, przenosi plik do `_plany/wczytane` albo `_plany/bledy` i zapisuje wynik w zakładce Import.
+`wczytajPlany()` działa z wyzwalacza co 15 min albo z menu „Trening”. Kolejno: waliduje plik (`validatePlan_`), podmienia wiersze klientów z pliku (`mergePlan_`: jednostki zrobione zostają; zrobiona jednostka z innym blokiem w pliku = błąd), przenosi plik do `_plany/wczytane` albo `_plany/bledy` i zapisuje wynik w zakładce Import.
 Konwencje Damiana:
 - % z max;
 - kg zaokrąglane **w dół** do 2,5 kg;
