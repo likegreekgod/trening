@@ -88,6 +88,16 @@ test('unitStats: serie zrobione/wszystkie i tonaż bez rozgrzewki', () => {
   assert.deepEqual(L.unitStats(exs, ex => logs[ex.order]), { done: 1, all: 5, ton: 250 + 250 + 225 });
 });
 
+test('lastTop: „Ostatnio” z poprzedniej jednostki, najcięższa zaliczona seria', () => {
+  const l = (w, d, s, kg, powt, extra) => Object.assign({ cwiczenie: 'Przysiad', tydzien: w, jednostka: d, seria: s, kg, powt, rpe: 8, wykonane: 'TAK', zapisano: `2026-10-0${w}T10:00:00Z` }, extra || {});
+  const logs = [l(1, 'T1', 1, 100, 5), l(1, 'T1', 2, 102.5, 3), l(2, 'T1', 'R1', 140, 1), l(2, 'T1', 1, 105, 5, { rpe: 9 }),
+    l(2, 'T1', 2, 110, 2, { typ: 'FAIL' }), l(2, 'T1', 3, 105, 4), l(3, 'T1', 1, 120, 5), l(2, 'T1', 1, 200, 5, { cwiczenie: 'Martwy' }),
+    l(2, 'T2', 1, 300, 5, { wykonane: '' })];
+  assert.deepEqual(L.lastTop(logs, ' przysiad ', 3, 'T1'), { kg: 105, reps: 5, rpe: 9 });   // tydz. 3 = bieżąca jednostka
+  assert.equal(L.lastTop(logs, 'Wyciskanie', 3, 'T1'), null);
+  assert.deepEqual(L.lastTop([l(1, 'T1', 1, 'BW', 10)], 'Przysiad', 2, 'T1'), { kg: 'BW', reps: 10, rpe: 8 });
+});
+
 test('localDate: data w strefie telefonu', () => {
   assert.equal(L.localDate(new Date(2026, 9, 10, 0, 30)), '2026-10-10');
   assert.match(L.localDate(), /^\d{4}-\d{2}-\d{2}$/);

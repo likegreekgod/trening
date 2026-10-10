@@ -146,6 +146,9 @@ for (const scheme of ['light', 'dark']) for (const [mode, data] of [['PROSTY', D
     const { ctx, p } = await page([], false, { scheme, data });
     await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
     await p.click('[data-warm="1"]');                                           // wiersz z ✕ też musi mieć cel 44 px
+    // stany do zrzutu: S1 ✓, S2 ✕, S3 drop
+    await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.click('.set[data-o="1"][data-s="2"] .ok'); await p.click('.set[data-o="1"][data-s="2"] .ok');
+    await p.click('.set[data-o="1"][data-s="3"] .nt');
     await p.evaluate(() => document.fonts.ready);
     assert.equal(await p.evaluate(() => getComputedStyle(document.body).backgroundColor), BG[scheme]);
     assert.ok(await p.evaluate(() => document.fonts.check('700 20px "Big Shoulders Display"') && document.fonts.check('16px "Instrument Sans"')
@@ -165,6 +168,87 @@ for (const scheme of ['light', 'dark']) for (const [mode, data] of [['PROSTY', D
     await ctx.close();
   });
 }
+
+// --- PR 4: serie ✓/✕, typ pod numerem, RPE/RIR, „Ostatnio”, kolor talerza ---
+const lastSet = calls => calls.filter(c => c.fn === 'logSet').map(c => c.args[0]).pop();
+const SERIES = Object.assign({}, PRO, {
+  cfg: Object.assign({}, PRO.cfg, { scale: 'RIR' }),
+  plan: [{ week: 2, day: 'T1', title: 'FBW A', date: '2026-10-13', order: 1, name: 'Przysiad', prio: 'A', sets: 3, reps: '5', pct: 0.7, kg: 70, rpe: 8, note: '', extra: 0, drop: 0, block: '', group: '', swaps: [] }],
+  logs: [1, 2].map(s => ({ id: `robert|1|T1|1|${s}`, zapisano: '2026-10-06T10:00:00.000Z', cwiczenie: 'Przysiad', tydzien: 1, jednostka: 'T1', seria: s, kg: s === 1 ? 65 : 67.5, powt: 5, rpe: s === 1 ? 7 : 8.5, wykonane: 'TAK', typ: '' }))
+});
+
+test('Serie: ✓ → ✕ (FAIL) → puste, poprawka zapisanej serii zapisuje od razu', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: PRO });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const row = '.set[data-o="1"][data-s="1"]';
+  await p.click(row + ' .ok'); await p.waitForTimeout(100);
+  assert.deepEqual((({ done, typ, rpe }) => ({ done, typ, rpe }))(lastSet(calls)), { done: true, typ: '', rpe: '' });
+  await p.selectOption(row + ' .rpe', '8'); await p.waitForTimeout(100);
+  assert.equal(lastSet(calls).rpe, '8');                                  // zmiana RPE po ✓ → nowy zapis
+  await p.fill(row + ' .kg', '52,5'); await p.press(row + ' .kg', 'Tab'); await p.waitForTimeout(100);
+  assert.equal(lastSet(calls).kg, 52.5);
+  await p.click(row + ' .ok'); await p.waitForTimeout(100);
+  assert.deepEqual((({ done, typ, rpe }) => ({ done, typ, rpe }))(lastSet(calls)), { done: true, typ: 'FAIL', rpe: '' });
+  assert.equal(await p.textContent(row + ' .ok'), '✕');
+  assert.equal(await p.$eval(row + ' .kg', e => getComputedStyle(e).textDecorationLine), 'line-through');
+  await p.click(row + ' .ok'); await p.waitForTimeout(100);
+  assert.deepEqual((({ done, typ }) => ({ done, typ }))(lastSet(calls)), { done: false, typ: '' });
+  assert.equal(await p.getAttribute(row, 'data-st'), '');
+  assert.equal(await p.$$eval('.rpe option', o => o.filter(x => /✗|Fail/.test(x.textContent)).length), 0);   // FAIL już nie w liście
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Serie: dotknięcie numeru zwykła → drop → nieudana, drop zapisuje typ DROP', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: PRO });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const row = '.set[data-o="1"][data-s="2"]';
+  await p.click(row + ' .nt'); await p.waitForTimeout(100);
+  assert.equal(calls.filter(c => c.fn === 'logSet').length, 0);           // niezapisana: tylko zmiana typu
+  assert.match(await p.textContent(row + ' .nt'), /S2/);
+  assert.equal(await p.$eval(row, r => r.classList.contains('t-d')), true);
+  await p.click(row + ' .ok'); await p.waitForTimeout(100);
+  assert.equal(lastSet(calls).typ, 'DROP');
+  await p.click(row + ' .nt'); await p.waitForTimeout(100);
+  assert.deepEqual((({ done, typ }) => ({ done, typ }))(lastSet(calls)), { done: true, typ: 'FAIL' });
+  await p.click(row + ' .nt'); await p.waitForTimeout(100);
+  assert.deepEqual((({ done, typ }) => ({ done, typ }))(lastSet(calls)), { done: false, typ: '' });
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Serie: skala RIR z flagi klienta, przełącznik w nagłówku, „Ostatnio”, kolor talerza', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: SERIES });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.match(await p.textContent('.rx'), /RIR ≥2/);
+  assert.equal(await p.textContent('.set-head .lbl:nth-child(4)'), 'RIR');
+  assert.deepEqual(await p.$$eval('.set[data-s="1"] .rpe option', o => o.map(x => x.textContent)), ['–', '0', '1', '2', '3', '4', '5+']);
+  assert.ok(await p.$('.rx .zone.p10'));                                   // 70% → zielony talerz
+  assert.equal((await p.textContent('.last')).trim(), 'Ostatnio: 67,5 kg × 5 · RIR 1,5');
+  await p.selectOption('.set[data-s="1"] .rpe', '2'); await p.click('.set[data-s="1"] .ok'); await p.waitForTimeout(100);
+  assert.equal(lastSet(calls).rpe, 8);                                    // arkusz dostaje RPE
+  await p.click('[data-sc="RPE"]');
+  assert.match(await p.textContent('.rx'), /RPE ≤8/);
+  assert.equal(await p.$eval('.set[data-s="1"] .rpe', s => s.value), '8');
+  assert.equal(await p.evaluate(() => localStorage.getItem('sc_kabc')), 'RPE');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Serie: bez sieci pole żółte, także po ponownym otwarciu', async () => {
+  const { ctx, p } = await page([], false, { data: PRO });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await ctx.unroute('**/macros/**'); await ctx.route('**/macros/**', r => r.abort());
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(200);
+  assert.equal(await p.$eval('.set[data-o="1"][data-s="1"] .ok', b => b.classList.contains('pend')), true);
+  await p.goto(base); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await p.$eval('.set[data-o="1"][data-s="1"] .ok', b => b.classList.contains('pend')), true);
+  assert.equal(await p.getAttribute('.set[data-o="1"][data-s="1"]', 'data-st'), 'ok');
+  await ctx.close();
+});
 
 test('offline: czcionki i lib.js z pamięci service workera', async () => {
   const { ctx, p } = await page([]);
