@@ -2,6 +2,22 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-11 · v2 wdrożone (PR 1–11 z `docs/ui-v2-plan.md`)
+
+- Wszystkie 11 PR-ów v2 scalone i opublikowane 09–11.10.2026; `npm test`: 74 testy (logika serwera, `web/lib.js`, UI w Playwright w obu motywach i trybach).
+- Uzupełnienia względem specyfikacji, przyjęte w trakcie:
+  - seria czekająca w kolejce offline zostaje żółta także po ponownym otwarciu aplikacji;
+  - poprawka kg / powt. / RPE w zapisanej serii zapisuje się od razu;
+  - bez kolumny planu `zamienniki` aplikacja podsuwa zamienniki wg wzorca ruchu, klient może wpisać własną nazwę;
+  - kalendarz obciążenia: poziom dnia względem najcięższego dnia z 12 tygodni; skala w jednej barwie sprawdzona walidatorem kontrastu;
+  - boje rozpoznawane po nazwie, gdy kolumna `grupa` jest pusta (jak w podsumowaniu); `grupa = I` wyłącza światła.
+- Znane ograniczenia:
+  - analiza ścieżki i VBT z filmu sprawdzona tylko na ruchu i obrazie syntetycznym; do walidacji z czujnikiem Enode na prawdziwym nagraniu;
+  - koniec przerwy nie wibruje pewnie przy zablokowanym telefonie (dopiero wersja ze sklepu da powiadomienie);
+  - film wymaga sieci (nie trafia do kolejki); analiza z filmu działa bez sieci;
+  - pierwsze dni dyspozycji bez sygnałów, dopóki nie ma średnich (Hooper 7, CMJ i prędkość 5 wpisów).
+- Do zrobienia: skill trenerski w claude.ai (kolumna `blok`, ciągła numeracja tygodni, `zamienniki`, czytanie zakładki `Bloki`); test na telefonie prawdziwego wgrania filmu i analizy; decyzja, czy dyspozycję pokazywać wszystkim klientom, czy dodać flagę.
+
 ## 2026-10-09 · Plan wdrożenia v2, wdrażanie, historia klienta
 
 Analiza i podział na PR-y: `docs/ui-v2-plan.md`.

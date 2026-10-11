@@ -244,6 +244,44 @@ test('verdict: progi ze specyfikacji i werdykt', () => {
   assert.match(r.out[0][1], /CMJ -10% vs Twoja średnia \(36 vs 40 cm\)/);
 });
 
+// --- postęp ---
+const PP = [{ week: 1, day: 'T1', order: 1, name: 'Przysiad', prio: 'A', group: '', pct: 0.8, kg: 80, block: 'B1' },
+  { week: 1, day: 'T1', order: 2, name: 'Rwanie', prio: 'A', group: 'R', pct: 0.7, kg: 70, block: 'B1' },
+  { week: 2, day: 'T1', order: 1, name: 'Przysiad', prio: 'A', group: '', pct: 0.85, kg: 85, block: 'B1' },
+  { week: 2, day: 'T1', order: 2, name: 'Rwanie', prio: 'A', group: 'R', pct: 0.95, kg: 95, block: 'B1' },
+  { week: 2, day: 'T1', order: 3, name: 'Plank', prio: 'K', group: '', pct: null, kg: 'BW', block: 'B1' }];
+const LG = (w, nr, s, kg, powt, rpe, extra) => Object.assign({ tydzien: w, jednostka: 'T1', nr_cw: nr, seria: s, kg, powt, rpe, wykonane: 'TAK', typ: '', data: w === 1 ? '2026-09-28' : '2026-10-05',
+  cwiczenie: nr === 1 ? 'Przysiad' : nr === 2 ? 'Rwanie' : 'Plank' }, extra || {});
+const LOGS = [LG(1, 1, 'R1', 40, 5, ''), LG(1, 1, 1, 80, 5, 8), LG(1, 1, 2, 80, 5, 9), LG(1, 2, 1, 70, 2, 7), LG(1, 2, 2, 72.5, 2, '', { typ: 'FAIL' }),
+  LG(2, 1, 1, 85, 5, 8), LG(2, 1, 2, 85, 4, '', { wykonane: '' }), LG(2, 2, 1, 95, 1, 9.5), LG(2, 3, 1, 'BW', 30, '')];
+
+test('doneSets, e1rm, strengthSeries, records: siła z Logu', () => {
+  const sets = L.doneSets(LOGS, PP, { '2|T1': '2026-10-07' });                 // faktyczna data jednostki zamiast daty z planu
+  assert.equal(sets.length, 7);                                               // bez rozgrzewki i niewykonanej
+  assert.equal(sets.find(s => s.week === 2).date, '2026-10-07');
+  assert.equal(Math.round(L.e1rm(80, 5, 8) * 10) / 10, 98.7);                 // 80 × (1 + 7/30)
+  assert.ok(isNaN(L.e1rm(80, 5, '')));
+  assert.deepEqual(L.strengthSeries(sets, 'Przysiad'), [{ date: '2026-09-28', v: 98.7, block: 'B1', pr: true }, { date: '2026-10-07', v: 104.8, block: 'B1', pr: true }]);
+  assert.deepEqual(L.strengthSeries(sets, 'Rwanie').map(p => p.v), [70, 95]);  // boje: zaliczone kg, spalone 72,5 się nie liczy
+  assert.deepEqual(L.records(sets).map(r => [r.name, r.oly, r.best, r.date]), [['Przysiad', false, 104.8, '2026-10-07'], ['Rwanie', true, 95, '2026-10-07']]);
+});
+
+test('weeklyTonnage, zoneReps, loadCalendar, readySeries: objętość i obciążenie', () => {
+  const sets = L.doneSets(LOGS, PP);
+  const wt = L.weeklyTonnage(sets, '2026-10-11', 3);
+  assert.deepEqual(wt, [{ week: '2026-09-21', ton: 0 }, { week: '2026-09-28', ton: 80 * 5 * 2 + 70 * 2 + 72.5 * 2 }, { week: '2026-10-05', ton: 85 * 5 + 95 }]);
+  // strefy: przysiad to nie grupa I (PS); 80/100 = 80% → żółty, 85% → niebieski; rwanie 70% → zielony, 95% → czerwony; spalone pominięte
+  assert.deepEqual(L.zoneReps(sets), { p5: 0, p10: 2, p15: 10, p20: 5, p25: 1 });
+  const cal = L.loadCalendar([{ date: '2026-09-28', rpe: 7, min: 60 }], sets, '2026-10-07', 2);
+  assert.equal(cal.length, 14);
+  assert.equal(cal[0].date, '2026-09-28');                                     // poniedziałek
+  assert.deepEqual([cal[0].load, cal[7].load, cal[1].load], [420, 5, 0]);      // sRPE 7 × 60; bez sesji: tonaż / 100
+  assert.deepEqual([cal[0].level, cal[7].level, cal[1].level], [4, 1, 0]);
+  assert.equal(cal[13].future, true);
+  assert.deepEqual(L.readySeries([{ data: '2026-10-02', cmj_sr: '41,5' }, { data: '2026-10-01', cmj_sr: 40 }, { data: '2026-10-03', cmj_sr: '' }], 'cmj_sr'),
+    [{ date: '2026-10-01', v: 40 }, { date: '2026-10-02', v: 41.5 }]);
+});
+
 test('localDate: data w strefie telefonu', () => {
   assert.equal(L.localDate(new Date(2026, 9, 10, 0, 30)), '2026-10-10');
   assert.match(L.localDate(), /^\d{4}-\d{2}-\d{2}$/);

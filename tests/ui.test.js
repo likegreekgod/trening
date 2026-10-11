@@ -642,6 +642,74 @@ test('CMJ z filmu: wybicie i lądowanie → czas lotu → wysokość, ustawienie
   await ctx.close();
 });
 
+// --- PR 11: postęp ---
+// 8 tygodni historii syntetycznej do dziś: przysiad (e1RM rośnie, tydz. 5 słabszy), rwanie, sesje z faktyczną datą, dyspozycja
+const PROG = (() => {
+  const day = n => { const d = new Date(); d.setDate(d.getDate() + n); const z = x => String(x).padStart(2, '0'); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); };
+  const plan = [], logs = [], sessions = [], readiness = [];
+  for (let w = 1; w <= 8; w++) {
+    const date = day(-7 * (8 - w) - 1), block = w <= 4 ? 'B1' : 'B2', sq = 100 + 2.5 * w - (w === 5 ? 7.5 : 0), sn = 60 + 2.5 * w;
+    plan.push({ week: w, day: 'T1', title: 'Siła', date, order: 1, name: 'Przysiad tylny', prio: 'A', sets: 3, reps: '5', pct: 0.8, kg: sq, rpe: 8, note: '', extra: 0, drop: 0, block, group: '', swaps: [] },
+      { week: w, day: 'T1', title: 'Siła', date, order: 2, name: 'Rwanie', prio: 'A', sets: 3, reps: '2', pct: w === 8 ? 0.92 : 0.75, kg: sn, rpe: '', note: '', extra: 0, drop: 0, block, group: 'R', swaps: [] });
+    if (w === 8) continue;                                                       // bieżący tydzień jeszcze niezrobiony
+    for (let s = 1; s <= 3; s++) {
+      logs.push({ id: `robert|${w}|T1|1|${s}`, zapisano: date + 'T17:00:00.000Z', cwiczenie: 'Przysiad tylny', tydzien: w, jednostka: 'T1', data: date, nr_cw: 1, seria: s, kg: sq, powt: 5, rpe: 8, wykonane: 'TAK', typ: '' });
+      logs.push({ id: `robert|${w}|T1|2|${s}`, zapisano: date + 'T17:20:00.000Z', cwiczenie: 'Rwanie', tydzien: w, jednostka: 'T1', data: date, nr_cw: 2, seria: s, kg: sn, powt: 2, rpe: 8, ocena: 'S', wykonane: 'TAK', typ: w === 3 && s === 3 ? 'FAIL' : '' });
+    }
+    sessions.push({ id: `robert|${w}|T1`, tydzien: w, jednostka: 'T1', data: date, start: date + 'T16:00:00.000Z', samopoczucie: 4, czas_min: w === 4 ? 80 : 60, rpe_sesji: w === 4 ? 9 : 6 });
+    readiness.push({ id: 'robert|' + date, klient: 'robert', data: date, cmj_sr: 40 + (w === 5 ? -3 : w * 0.3), hooper_suma: 12, vbt_test: 1 + w / 100, werdykt: 'Dobra dyspozycja' });
+  }
+  return Object.assign({}, PRO, { plan, logs, sessions, readiness });
+})();
+
+for (const scheme of ['light', 'dark']) test(`Postęp ${scheme}: siła z rekordami, objętość ze strefami i kalendarzem, dyspozycja`, async () => {
+  const { ctx, p } = await page([], false, { data: PROG, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('#nav [data-tab="postep"]'); await p.waitForSelector('#postep svg.chart');
+  const shot = async n => { if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `postep-${n}-${scheme}.png`), fullPage: true }); } };
+  // Siła: 7 punktów, rekordy = każdy nowy szczyt (tydz. 5 słabszy → nie rekord), blok B2 zaznaczony
+  assert.deepEqual(await p.$$eval('#p-ex option', o => o.map(x => x.textContent)), ['Przysiad tylny', 'Rwanie']);
+  assert.equal((await p.$$('svg.chart .pt')).length, 7);
+  assert.equal((await p.$$('svg.chart .pt.pr')).length, 6);
+  assert.match(await p.textContent('.stat'), /Najlepsze e1RM\s*144,9/);             // 117,5 kg × (1 + 7/30)
+  assert.ok((await p.textContent('svg.chart')).includes('B2'));
+  await p.click('svg.chart .hit >> nth=4', { force: true });
+  assert.match(await p.textContent('.tip'), /· 129,5 kg$/);                          // tydz. 5: 105 kg × 5 @ RPE 8
+  assert.equal((await p.$$('details.tbl tbody tr')).length, 7);
+  assert.deepEqual(await a11y(p), []); await shot('sila');
+  await p.selectOption('#p-ex', 'Rwanie');
+  assert.match(await p.textContent('.stat'), /Najlepsze zaliczone\s*77,5/);
+  // Objętość
+  await p.click('[data-pt="obj"]');
+  assert.equal((await p.$$('svg.chart .tbar')).length, 7);                           // 7 tygodni z treningiem z 12
+  assert.ok(await p.$eval('svg.chart .tbar', b => { const r = b.getBoundingClientRect(); return r.height > 40 && r.width > 15 && getComputedStyle(b).display !== 'none'; }), 'słupki widoczne');
+  assert.equal((await p.$$('.calg i')).length, 84);
+  assert.equal((await p.$$('.calg i.h4')).length, 1);                                // najcięższy dzień: RPE 9 × 80 min
+  assert.match(await p.textContent('#postep'), /61–70%.*71–80%/s);
+  const z = await p.$$eval('.zbar i', s => s.map(x => x.className));
+  assert.deepEqual(z, ['p15']);                                                      // przysiad 80% i rwanie 75% → żółty
+  await p.click('.calg i.h4'); assert.match(await p.textContent('.card:last-of-type .tip'), /obciążenie 720/);
+  assert.deepEqual(await a11y(p), []); await shot('objetosc');
+  // Dyspozycja
+  await p.click('[data-pt="dys"]');
+  assert.equal((await p.$$('svg.chart')).length, 2);
+  assert.ok(await p.$('svg.chart .band'));
+  assert.deepEqual(await a11y(p), []); await shot('dyspozycja');
+  assert.deepEqual(p.external, []); assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Postęp: bez historii czytelne komunikaty zamiast pustych wykresów', async () => {
+  const { ctx, p } = await page([], false, { data: PRO });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('#nav [data-tab="postep"]');
+  assert.match(await p.textContent('#postep'), /Wykres pojawi się po pierwszych treningach/);
+  await p.click('[data-pt="obj"]'); assert.match(await p.textContent('#postep'), /Objętość pojawi się/);
+  await p.click('[data-pt="dys"]'); assert.match(await p.textContent('#postep'), /po pierwszych zapisach na ekranie Dyspozycja/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('offline: czcionki i lib.js z pamięci service workera', async () => {
   const { ctx, p } = await page([]);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
@@ -657,6 +725,6 @@ test('PWA: manifest i service worker', async () => {
   await p.goto(base + '?k=kabc'); await p.waitForTimeout(500);
   const m = await p.evaluate(async () => (await fetch(document.querySelector('link[rel=manifest]').href)).json());
   assert.equal(m.display, 'standalone'); assert.ok(m.icons.some(i => i.sizes === '512x512'));
-  assert.ok(await p.evaluate(async () => !!(await navigator.serviceWorker.getRegistration())));
+  assert.ok(await p.evaluate(async () => !!(await navigator.serviceWorker.ready)));   // czeka na rejestrację zamiast zgadywać czas
   await ctx.close();
 });
