@@ -203,6 +203,47 @@ test('analyse / vbtOut / pathSVG: brak ruchu i rysunek', () => {
   assert.equal(L.pathSVG([]), '');
 });
 
+// --- dyspozycja dnia ---
+test('cmjHeight: h = 1,22625·t²', () => {
+  assert.ok(Math.abs(L.cmjHeight(0.5) - 30.66) < 0.01);
+  assert.ok(Math.abs(L.cmjHeight(0.6) - 44.15) < 0.01);
+  assert.ok(isNaN(L.cmjHeight(0)));
+});
+
+test('readyBase: średnie z historii bez dzisiejszego wpisu (Hooper 7, CMJ i prędkość 5 ostatnich)', () => {
+  const rows = Array.from({ length: 9 }, (_, i) => ({ data: `2026-10-0${i + 1}`, hooper_suma: 10 + i, cmj_sr: String(40 + i).replace('.', ','), vbt_test: i < 2 ? '' : 1 + i / 100 }));
+  const b = L.readyBase(rows, '2026-10-09');
+  assert.equal(b.hooper, (11 + 12 + 13 + 14 + 15 + 16 + 17) / 7);                 // 7 ostatnich przed dziś
+  assert.equal(b.cmj, (43 + 44 + 45 + 46 + 47) / 5);
+  assert.ok(Math.abs(b.vbt - (1.03 + 1.04 + 1.05 + 1.06 + 1.07) / 5) < 1e-9);
+  assert.ok(isNaN(L.readyBase([], '2026-10-09').cmj));
+});
+
+test('verdict: progi ze specyfikacji i werdykt', () => {
+  const base = { cmj: 40, hooper: 12, vbt: 1.0 };
+  const H = s => { const q = [3, 3, 3, 3]; for (let e = s - 12, i = 0; e > 0; i++) if (q[i % 4] < 7) { q[i % 4]++; e--; } return { sen: q[0], stres: q[1], zmeczenie: q[2], bolesnosc: q[3] }; };   // ankieta o sumie s
+  const v = (cur, b = base) => { const r = L.verdict(cur, b); return [r.lvl, r.out.map(o => o[0]).join()]; };
+  assert.deepEqual(v({ cmj: [40, 41, 39], hooper: H(12), vbt: 1.0 }), ['ok', 'ok,ok,ok']);
+  assert.deepEqual(v({ cmj: [38, 38, 38] }), ['warn', 'warn']);                  // −5%
+  assert.deepEqual(v({ cmj: [36, 36, 36] }), ['warn', 'bad']);                   // −10%: jeden czerwony = Uwaga
+  assert.deepEqual(v({ cmj: [38.2] }), ['ok', 'ok']);                            // −4,5%
+  assert.deepEqual(v({ hooper: H(16) }), ['warn', 'warn']);                      // +4
+  assert.deepEqual(v({ hooper: H(15) }), ['ok', 'ok']);
+  assert.deepEqual(v({ hooper: H(19) }), ['warn', 'bad']);                       // +7
+  assert.deepEqual(v({ vbt: 0.95 }), ['warn', 'warn']);                          // −0,05
+  assert.deepEqual(v({ vbt: 0.9 }), ['warn', 'bad']);                            // −0,10
+  assert.deepEqual(v({ vbt: 0.96 }), ['ok', 'ok']);
+  assert.deepEqual(v({ cmj: [36], vbt: 0.95 }), ['bad', 'bad,warn']);            // czerwony + pomarańczowy
+  assert.deepEqual(v({ cmj: [36], hooper: H(19) }), ['bad', 'bad,bad']);         // dwa czerwone
+  assert.deepEqual(v({ cmj: [38], vbt: 0.95 }), ['warn', 'warn,warn']);          // dwa pomarańczowe = Uwaga
+  assert.deepEqual(v({}), ['none', '']);
+  assert.deepEqual(v({ hooper: { sen: 3, stres: 3 } }), ['none', '']);           // niepełna ankieta nie liczy się
+  assert.deepEqual(v({ cmj: [30], hooper: H(25), vbt: 0.5 }, {}), ['ok', 'ok,ok,ok']);   // bez historii brak sygnałów
+  const r = L.verdict({ cmj: [36, 37, 35], hooper: H(19) }, base);
+  assert.equal(r.title, 'Zmęczenie'); assert.equal(r.cmjAvg, 36); assert.equal(r.hs, 19);
+  assert.match(r.out[0][1], /CMJ -10% vs Twoja średnia \(36 vs 40 cm\)/);
+});
+
 test('localDate: data w strefie telefonu', () => {
   assert.equal(L.localDate(new Date(2026, 9, 10, 0, 30)), '2026-10-10');
   assert.match(L.localDate(), /^\d{4}-\d{2}-\d{2}$/);

@@ -557,6 +557,91 @@ test('Okno kamery: „Film + ścieżka + VBT” na nagranym pliku → wynik, zap
   await ctx.close();
 });
 
+// --- PR 10: dyspozycja dnia ---
+const HIST = Object.assign({}, PRO, { readiness: [1, 2, 3, 4, 5, 6].map(i => ({ id: 'robert|2026-09-0' + i, klient: 'robert', data: '2026-09-0' + i, cmj_sr: 40, hooper_suma: 12, vbt_test: 1, werdykt: 'Dobra dyspozycja' })) });
+const hooper = async (p, v) => { for (const q of ['sen', 'stres', 'zmeczenie', 'bolesnosc']) await p.click(`#dysp .scale[data-q="${q}"] [data-v="${v}"]`); };
+
+test('Dyspozycja: ankieta, skoki i prędkość → werdykt wg progów, zapis, baner na treningu', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: HIST });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  assert.match(await p.textContent('#go-dysp'), /Nie zmierzono dziś/);
+  await p.click('#go-dysp'); await p.waitForSelector('#dysp .verdict');
+  assert.equal(await p.getAttribute('#nav [data-tab="dysp"]', 'aria-current'), 'page');
+  assert.equal(await p.textContent('.verdict h2'), 'Brak pomiaru');
+  await hooper(p, 4);                                                           // suma 16 = średnia 12 + 4 → uwaga
+  assert.equal(await p.textContent('.verdict h2'), 'Uwaga');
+  for (const i of [0, 1, 2]) { await p.fill(`#dysp input[data-j="${i}"]`, '38'); await p.press(`#dysp input[data-j="${i}"]`, 'Tab'); }
+  assert.equal(await p.textContent('.verdict h2'), 'Uwaga');                    // dwa pomarańczowe
+  assert.match(await p.textContent('.verdict'), /CMJ -5% vs Twoja średnia \(38 vs 40 cm\)/);
+  await p.fill('#rd-vbt', '0,9'); await p.press('#rd-vbt', 'Tab');
+  assert.equal(await p.textContent('.verdict h2'), 'Zmęczenie');                // czerwony + pomarańczowe
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'dyspozycja.png'), fullPage: true }); }
+  await p.click('#rd-save'); await p.waitForTimeout(100);
+  const s = calls.find(c => c.fn === 'saveDyspozycja').args[0];
+  assert.deepEqual({ cmj: s.cmj, cmjAvg: s.cmjAvg, hooper: s.hooper, vbt: s.vbt, verdict: s.verdict, n: s.reasons.length },
+    { cmj: [38, 38, 38], cmjAvg: 38, hooper: { sen: 4, stres: 4, zmeczenie: 4, bolesnosc: 4, suma: 16 }, vbt: 0.9, verdict: 'Zmęczenie', n: 3 });
+  assert.match(s.date, /^\d{4}-\d{2}-\d{2}$/);
+  await p.click('#nav [data-tab="trening"]');
+  assert.match(await p.textContent('#go-dysp'), /Zmęczenie.*Napisz do trenera/);
+  assert.equal(await p.$eval('#go-dysp', b => b.className), 'ready bad');
+  await p.reload(); await p.waitForSelector('.set');                            // dzisiejsze pomiary zostają w telefonie
+  await p.click('#nav [data-tab="dysp"]');
+  assert.equal(await p.inputValue('#rd-vbt'), '0,9');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Dyspozycja: bez sieci zapis czeka w kolejce i baner działa; bez historii brak sygnałów', async () => {
+  const { ctx, p } = await page([], false, { data: PRO });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await ctx.unroute('**/macros/**'); await ctx.route('**/macros/**', r => r.abort());
+  await p.click('#nav [data-tab="dysp"]'); await hooper(p, 7);
+  assert.equal(await p.textContent('.verdict h2'), 'Dobra dyspozycja');          // nie ma jeszcze średniej
+  assert.match(await p.textContent('.verdict'), /pierwsze ankiety budują Twoją średnią/);
+  await p.click('#rd-save'); await p.waitForTimeout(200);
+  assert.deepEqual(await p.evaluate(() => JSON.parse(localStorage.getItem('q_kabc')).map(x => x.fn)), ['saveDyspozycja']);
+  await p.goto(base); await p.waitForSelector('.set');
+  assert.match(await p.textContent('#go-dysp'), /Dobra dyspozycja/);
+  await ctx.close();
+});
+
+test('CMJ z filmu: wybicie i lądowanie → czas lotu → wysokość, ustawienie slow-mo, zapis jako skok', async () => {
+  const { ctx, p } = await page([], false, { data: PRO });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('#nav [data-tab="dysp"]'); await p.click('#cmj-vid');
+  await p.selectOption('#cmj-preset', 'n60');
+  await p.evaluate(async () => {                                                // krótki film nagrany w przeglądarce (treść bez znaczenia)
+    const c = document.createElement('canvas'); c.width = 160; c.height = 120; const g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(30), { mimeType: 'video/webm;codecs=vp8' }), parts = [];
+    rec.ondataavailable = e => parts.push(e.data); const done = new Promise(r => rec.onstop = r);
+    rec.start(); const t0 = performance.now();
+    await new Promise(res => { const step = () => { const t = performance.now() - t0; g.fillStyle = '#888'; g.fillRect(0, 0, 160, 120); g.fillStyle = '#111'; g.fillRect(20 + t / 20, 40, 20, 40); t > 1500 ? res() : requestAnimationFrame(step); }; step(); });
+    rec.stop(); await done;
+    const dt = new DataTransfer(); dt.items.add(new File([new Blob(parts, { type: 'video/webm' })], 'skok.webm', { type: 'video/webm' }));
+    const inp = document.querySelector('#cmj-file'); inp.files = dt.files; inp.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await p.waitForFunction(() => { const v = document.querySelector('#cmj-v'); return v && isFinite(v.duration) && v.readyState >= 2; }, null, { timeout: 15000 });
+  const seek = async f => { await p.evaluate(x => new Promise(res => { const v = document.querySelector('#cmj-v'), s = document.querySelector('#cmj-s'); v.addEventListener('seeked', res, { once: true }); s.value = x; s.dispatchEvent(new Event('input')); setTimeout(res, 2000); }), f); };
+  assert.equal(await p.isDisabled('#cmj-save'), true);
+  await seek(200); await p.click('#cmj-k');
+  await seek(600); await p.click('#cmj-l');
+  const t = await p.evaluate(() => { const v = document.querySelector('#cmj-v'); return v.currentTime; });
+  const kv = await p.$$eval('#cmj-out .kv b', b => b.map(x => parseFloat(x.textContent.replace(',', '.'))));
+  assert.ok(Math.abs(kv[1] - t) < 0.002 && kv[1] > kv[0]);
+  const flight = kv[1] - kv[0], h = 1.22625 * flight * flight * 100;
+  assert.ok(Math.abs(parseFloat((await p.textContent('#cmj-h')).replace(',', '.')) - h) <= 0.1, 'wysokość ' + h.toFixed(1));
+  assert.deepEqual(await a11y(p), []);
+  await p.selectOption('#cmj-preset', 'x4');                                    // plik zwolniony ×4 → czas lotu ÷ 4
+  assert.ok(Math.abs(parseFloat((await p.textContent('#cmj-h')).replace(',', '.')) - h / 16) <= 0.1);
+  await p.selectOption('#cmj-preset', 'n60');
+  const shown = (await p.textContent('#cmj-h')).trim();
+  if (h <= 90) { await p.click('#cmj-save'); assert.equal(await p.inputValue('#dysp input[data-j="0"]'), shown); }
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('offline: czcionki i lib.js z pamięci service workera', async () => {
   const { ctx, p } = await page([]);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');

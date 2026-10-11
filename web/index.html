@@ -247,9 +247,32 @@
       font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase}
   .pl.on{background:var(--ink-2);color:var(--bg)}
   .prow{margin-top:12px}
-  .prow .plbl{font:700 18px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;color:var(--ink-2)}
-  .prow .plbl small{font:400 13px var(--f-body);text-transform:none;letter-spacing:0;color:var(--muted)}
+  .prow .plbl,.q .plbl{font:700 18px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;color:var(--ink-2)}
+  .prow .plbl small,.q .plbl small{font:400 13px var(--f-body);text-transform:none;letter-spacing:0;color:var(--muted)}
   .empty{color:var(--muted);text-align:center;padding:40px 0}
+
+  /* dyspozycja dnia: baner na treningu, werdykt, ankieta, skoki */
+  .ready{width:100%;margin-top:12px;border:0;border-left:4px solid var(--muted);background:transparent;color:var(--ink-2);text-align:left;
+         padding:8px 0 8px 12px;min-height:44px;display:grid;gap:2px;font-size:14px}
+  .ready b{font:700 18px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;color:var(--ink)}
+  .ready.ok{border-left-color:var(--ok)}.ready.warn{border-left-color:var(--warn)}.ready.bad{border-left-color:var(--bad)}
+  .verdict{margin-top:12px;border-left:6px solid var(--muted);padding:6px 0 6px 12px}
+  .verdict.ok{border-left-color:var(--ok)}.verdict.warn{border-left-color:var(--warn)}.verdict.bad{border-left-color:var(--bad)}
+  .verdict h2{margin:0;font:800 30px/1 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink)}
+  .verdict ul{list-style:none;margin:8px 0;padding:0;display:grid;gap:4px;font-size:14px}
+  .verdict li i{font-style:normal;font-weight:700;display:inline-block;width:1.2em}
+  .verdict li.ok i{color:var(--ok)}.verdict li.warn i{color:var(--warn)}.verdict li.bad i{color:var(--bad)}
+  .verdict p{margin:0;color:var(--ink-2)}
+  .scale.s7{grid-template-columns:repeat(7,1fr)}
+  .q{margin-top:12px}
+  .jumps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0}
+  .jumps input{text-align:center}
+  .kv{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink-2)}
+  .kv b{font:500 15px var(--f-mono);color:var(--ink)}
+  #dysp .card .btn{margin-top:10px}
+  #dysp > .btn.p{margin-top:18px}
+  .vbox video{display:block;max-width:100%;max-height:52vh}
+  .fl select{min-height:48px;font:400 16px var(--f-body);text-transform:none;letter-spacing:0}
 
   /* zamiana ćwiczenia */
   .swb{margin-top:6px}
@@ -330,9 +353,11 @@
   <div class="stats" id="stats"></div>
 </header>
 <main id="main"><div class="empty">Ładowanie planu…</div></main>
+<main id="dysp" hidden></main>
 <main id="plan" hidden></main>
 <nav class="nav" id="nav" hidden>
   <button type="button" data-tab="trening"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6M6 6v12M18 6v12M21 9v6M6 12h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>Trening</button>
+  <button type="button" data-tab="dysp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 13h5l2-6 4 12 3-9 1 3h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter"/></svg>Dyspozycja</button>
   <button type="button" data-tab="plan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>Plan</button>
 </nav>
 <div id="rest" hidden role="timer" aria-live="off">
@@ -369,7 +394,7 @@ function applyCfg(c){
   SWAP = !!c.swap;
 }
 let DATA = null, PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
-let TAB = 'trening';   // ekran z dolnego menu: trening | plan
+let TAB = 'trening';   // ekran z dolnego menu: trening | dysp | plan
 let PW = null;         // tydzień oglądany na ekranie Plan
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const RPE = ['', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10'];
@@ -381,7 +406,8 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
   RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, restSec, fmtClock, plates,
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
-  PLATE_M, analyse, vbtOut, pathSVG, groupOf } = window.TL;
+  PLATE_M, analyse, vbtOut, pathSVG, groupOf,
+  cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -545,6 +571,7 @@ function useData(d){
     const p = it.payload;
     if (it.fn === 'logSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ: p.typ, ocena: p.ocena || '', zamiana: p.swap || '', vbt_peak: p.vbtPeak, wysokosc_cm: p.height, sciezka: p.path }; }
     if (it.fn === 'przesunJednostke') applyMoves(p, false);
+    if (it.fn === 'saveDyspozycja') applyReady(p, false);
   });
 }
 /** nowe daty jednostek w planie (lokalnie; serwer dostaje je przez send/kolejkę); save = zapis w pamięci telefonu */
@@ -611,8 +638,8 @@ function render(){
     b.setAttribute('aria-current', b.dataset.tab === TAB ? 'page' : 'false');
     b.onclick = () => { TAB = b.dataset.tab; if (TAB === 'plan') PW = cur.week; render(); window.scrollTo(0, 0); };
   });
-  $('#main').hidden = TAB !== 'trening'; $('#plan').hidden = TAB !== 'plan';
-  if (TAB === 'plan') renderPlan(); else renderTrening();
+  $('#main').hidden = TAB !== 'trening'; $('#plan').hidden = TAB !== 'plan'; $('#dysp').hidden = TAB !== 'dysp';
+  if (TAB === 'plan') renderPlan(); else if (TAB === 'dysp') renderDysp(); else renderTrening();
 }
 function head(eyebrow, title, stats, extra){
   $('#eyebrow').textContent = eyebrow; $('#title').textContent = title; $('#stats').innerHTML = stats || ''; $('#hx').innerHTML = extra || '';
@@ -626,6 +653,108 @@ function refreshStats(){
   const sets = $('#st-sets'), ton = $('#st-ton');
   if (sets) sets.textContent = st.done + '/' + st.all;
   if (ton) ton.textContent = st.ton.toLocaleString('pl-PL');
+}
+
+/* ---------- ekran Dyspozycja: ankieta Hoopera, CMJ, prędkość na rozgrzewce → werdykt ---------- */
+const RDK = 'rd_' + KEY;
+let RD = null;   // dzisiejsze pomiary (szkic w telefonie do czasu „Zapisz”)
+const readyRows = () => ((DATA && DATA.readiness) || []).map(x => Object.assign({}, x, { data: dayOf(x.data) }));
+const todayRow = () => readyRows().filter(x => x.data === localDate()).pop();
+function rdLoad(){
+  const t = localDate();
+  if (RD && RD.date === t) return RD;
+  let d = null; try { d = JSON.parse(localStorage.getItem(RDK) || 'null'); } catch (e) {}
+  if (d && d.date === t) return RD = d;
+  const r = todayRow(), n = v => isNum(num(v)) ? num(v) : '';
+  return RD = r ? { date: t, cmj: [r.cmj1, r.cmj2, r.cmj3].map(n), hooper: Object.fromEntries(HOOPER.map(q => [q[0], +r[q[0]] || 0])), vbt: n(r.vbt_test), saved: true }
+    : { date: t, cmj: ['', '', ''], hooper: {}, vbt: '', saved: false };
+}
+const rdKeep = () => { try { localStorage.setItem(RDK, JSON.stringify(RD)); } catch (e) {} };
+/** zapisany wpis od razu w danych aplikacji (baner, sufit dnia w bojach, średnie); save = pamięć telefonu */
+function applyReady(p, save){
+  if (!DATA) return;
+  const hq = p.hooper || {};
+  const row = { id: 'local|' + p.date, data: p.date, cmj1: (p.cmj || [])[0], cmj2: (p.cmj || [])[1], cmj3: (p.cmj || [])[2], cmj_sr: p.cmjAvg,
+    sen: hq.sen, stres: hq.stres, zmeczenie: hq.zmeczenie, bolesnosc: hq.bolesnosc, hooper_suma: hq.suma, vbt_test: p.vbt, werdykt: p.verdict, powody: (p.reasons || []).join('; ') };
+  DATA.readiness = (DATA.readiness || []).filter(x => dayOf(x.data) !== p.date).concat([row]);
+  if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
+}
+const READY_MARK = { ok: '✓', warn: '!', bad: '✗' };
+/** baner dyspozycji dnia na ekranie treningu: kolor + zalecenie, dotknięcie → ekran Dyspozycja */
+function readyBanner(){
+  const r = todayRow();
+  const lvl = !r ? 'none' : /zmęcz/i.test(r.werdykt || '') ? 'bad' : /uwaga/i.test(r.werdykt || '') ? 'warn' : 'ok';
+  return `<button type="button" class="ready ${lvl}" id="go-dysp">` + (r ? `<b>${esc(r.werdykt)}</b><span>${READY_ADVICE[lvl]}</span>`
+    : '<b>Dyspozycja dnia</b><span>Nie zmierzono dziś. Dotknij: ankieta, skok i prędkość, ok. 3 min.</span>') + '</button>';
+}
+function renderDysp(){
+  const rd = rdLoad(), base = readyBase(readyRows(), rd.date), v = verdict(rd, base);
+  const f1 = x => isFinite(x) ? fmtKg(Math.round(x * 10) / 10) : '–', f2 = x => isFinite(x) ? fmtKg(Math.round(x * 100) / 100) : '–';
+  head('Przed treningiem · ok. 3 min', 'Dyspozycja dnia', '');
+  $('#dysp').innerHTML = `<div class="verdict ${v.lvl}" aria-live="polite"><h2>${v.title}</h2>
+      ${v.out.length ? `<ul>${v.out.map(o => `<li class="${o[0]}"><i aria-hidden="true">${READY_MARK[o[0]]}</i> ${esc(o[1])}</li>`).join('')}</ul>` : ''}<p>${v.advice}</p></div>
+    <section class="card"><div class="cn">1 · Ankieta</div><div class="sub">Skala 1–7, wyżej = gorzej.${isFinite(v.hs) ? ' Suma dziś: <b>' + v.hs + '</b>' + (isFinite(base.hooper) ? ', średnio ' + Math.round(base.hooper) : '') + '.' : ''}</div>
+      ${HOOPER.map(([k, n, hint]) => `<div class="q"><div class="plbl">${n} <small>${hint}</small></div><div class="scale s7" data-q="${k}" role="group" aria-label="${n}">` +
+        [1, 2, 3, 4, 5, 6, 7].map(i => `<button type="button" class="pv n ${rd.hooper[k] === i ? 'on' : ''}" data-v="${i}" aria-pressed="${rd.hooper[k] === i}">${i}</button>`).join('') + '</div></div>').join('')}</section>
+    <section class="card"><div class="cn">2 · Skok CMJ</div><div class="sub">3 skoki, ręce na biodrach, 30 s przerwy. Wpisz cm albo zmierz z filmu slow-mo.</div>
+      <div class="jumps">${rd.cmj.map((c, i) => `<label class="fl">Skok ${i + 1}<input inputmode="decimal" data-j="${i}" value="${esc(fmtKg(c))}" placeholder="cm"></label>`).join('')}</div>
+      <div class="kv"><span>Średnia dziś</span><b>${f1(v.cmjAvg)} cm</b></div><div class="kv"><span>Twoja średnia (5 testów)</span><b>${f1(base.cmj)} cm</b></div>
+      <button type="button" class="btn" id="cmj-vid">Zmierz skok z filmu</button></section>
+    <section class="card"><div class="cn">3 · Prędkość na rozgrzewce</div><div class="sub">Zawsze to samo ćwiczenie i ten sam ciężar, 1 powtórzenie, najlepsza próba. Wynik z analizy filmu albo z urządzenia.</div>
+      <label class="fl">Prędkość (m/s)<input id="rd-vbt" inputmode="decimal" value="${esc(fmtKg(rd.vbt))}" placeholder="np. 1,05"></label>
+      <div class="kv"><span>Twoja średnia (5 pomiarów)</span><b>${f2(base.vbt)} m/s</b></div></section>
+    <button type="button" class="btn p" id="rd-save">${rd.saved ? 'Zapisz zmiany' : 'Zapisz dyspozycję'}</button>
+    <p class="sub">${rd.saved ? 'Dzisiejsza dyspozycja jest zapisana.' : 'Pomiary zostają w telefonie, dopóki nie dotkniesz „Zapisz”.'} To wskazówka do rozmowy z trenerem, nie diagnoza.</p>`;
+  const keep = () => { const y = window.scrollY; rd.saved = false; rdKeep(); renderDysp(); window.scrollTo(0, y); };
+  document.querySelectorAll('#dysp .scale[data-q] button').forEach(b => b.onclick = () => { rd.hooper[b.parentElement.dataset.q] = +b.dataset.v; keep(); });
+  document.querySelectorAll('#dysp input[data-j]').forEach(i => i.onchange = () => { const x = num(i.value); rd.cmj[+i.dataset.j] = isNum(x) ? x : ''; keep(); });
+  $('#rd-vbt').onchange = e => { const x = num(e.target.value); rd.vbt = isNum(x) ? x : ''; keep(); };
+  $('#cmj-vid').onclick = () => openCMJ(rd, keep);
+  $('#rd-save').onclick = () => {
+    if (v.lvl === 'none') { toast('Najpierw wypełnij ankietę, wpisz skok albo prędkość.'); return; }
+    const p = { date: rd.date, cmj: rd.cmj, cmjAvg: isFinite(v.cmjAvg) ? Math.round(v.cmjAvg * 10) / 10 : '',
+      hooper: isFinite(v.hs) ? Object.assign({}, rd.hooper, { suma: v.hs }) : {}, vbt: rd.vbt, verdict: v.title, reasons: v.out.filter(o => o[0] !== 'ok').map(o => o[1]) };
+    applyReady(p, true); rd.saved = true; rdKeep();
+    send('saveDyspozycja', p).then(() => toast('Zapisano: ' + v.title + '.')).catch(() => toast('Brak sieci – zapiszę, gdy wróci połączenie.'));
+    renderDysp();
+  };
+}
+/** skok CMJ z filmu slow-mo: ostatnia klatka na ziemi i pierwsza po lądowaniu → czas lotu → wysokość */
+function openCMJ(rd, done){
+  let preset = CMJ_PRESETS[0], tk = null, tl = null, url = null, vid = null;
+  let slot = rd.cmj.findIndex(x => !isNum(x)); if (slot < 0) slot = 0;
+  openSheet(`<h2 id="sheet-t">CMJ z filmu</h2><p class="sub">Telefon na podłodze 2–3 m z boku, kadr na stopy. Zaznacz ostatnią klatkę na ziemi i pierwszą po lądowaniu.</p>
+    <label class="fl">Jak nagrano<select id="cmj-preset">${CMJ_PRESETS.map(q => `<option value="${q[0]}">${q[1]}</option>`).join('')}</select></label>
+    <label class="btn p">Nagraj lub wybierz film<input type="file" accept="video/*" hidden id="cmj-file"></label>
+    <div id="cmj-stage"><p class="sub">Wysokość = 1,22625 · t² (t = czas lotu w s). Przy 240 kl/s błąd jednej klatki to ok. ±0,5 cm, przy 30 kl/s ok. ±4 cm.</p></div>
+    <button type="button" class="btn" data-close>Zamknij</button>`);
+  SHEET_ON_CLOSE = () => { if (url) URL.revokeObjectURL(url); };
+  const upd = () => {
+    const o = $('#cmj-out'); if (!o) return;
+    const tF = tk !== null && tl !== null ? (tl - tk) * preset[3] : NaN, hh = cmjHeight(tF), ok = hh > 0 && hh <= 90;
+    o.innerHTML = `<div class="kv"><span>Wybicie</span><b>${tk !== null ? fmtKg(Math.round(tk * 1000) / 1000) + ' s' : '–'}</b></div><div class="kv"><span>Lądowanie</span><b>${tl !== null ? fmtKg(Math.round(tl * 1000) / 1000) + ' s' : '–'}</b></div>
+      <div class="metrics"><div class="metric"><span>Czas lotu</span><b id="cmj-t">${tF > 0 ? Math.round(tF * 1000) : '–'}</b><small>ms</small></div><div class="metric"><span>Wysokość</span><b id="cmj-h">${hh > 0 ? fmtKg(Math.round(hh * 10) / 10) : '–'}</b><small>cm</small></div><div class="metric"><span>Skok</span><b>${slot + 1}</b><small>z 3</small></div></div>
+      ${hh > 90 ? '<p class="hint">Ponad 90 cm: film jest pewnie zapisany w zwolnionym tempie. Zmień „Jak nagrano” na ×8 lub ×4.</p>' : ''}
+      <button type="button" class="btn p" id="cmj-save" ${ok ? '' : 'disabled'}>Zapisz jako skok ${slot + 1}</button>`;
+    $('#cmj-save').onclick = () => { rd.cmj[slot] = Math.round(hh * 10) / 10; closeSheet(); done(); };
+  };
+  $('#cmj-preset').onchange = e => { preset = CMJ_PRESETS.find(q => q[0] === e.target.value); upd(); };
+  $('#cmj-file').onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(file); tk = tl = null;
+    $('#cmj-stage').innerHTML = `<div class="vbox"><video id="cmj-v" muted playsinline preload="auto"></video></div>
+      <label class="fl">Przewiń film<input type="range" class="scrub" id="cmj-s" min="0" max="1000" value="0"></label>
+      <div class="seg" role="group" aria-label="Klatka po klatce"><button type="button" data-step="-5">−5</button><button type="button" data-step="-1">−1 kl.</button><button type="button" data-step="1">+1 kl.</button><button type="button" data-step="5">+5</button></div>
+      <div class="seg"><button type="button" id="cmj-k">To wybicie</button><button type="button" id="cmj-l">To lądowanie</button></div><div id="cmj-out"></div>`;
+    vid = $('#cmj-v'); vid.src = url;
+    vid.addEventListener('loadedmetadata', () => fixDuration(vid).then(() => { vid.currentTime = 0; }));
+    vid.addEventListener('error', () => { $('#cmj-out').innerHTML = '<p class="hint">Ta przeglądarka nie odtworzy tego pliku. Nagraj film w formacie MP4 (H.264).</p>'; });
+    $('#cmj-s').oninput = ev => { if (isFinite(vid.duration)) vid.currentTime = vid.duration * ev.target.value / 1000; };
+    document.querySelectorAll('#sheet [data-step]').forEach(b => b.onclick = () => { vid.currentTime = Math.max(0, Math.min(vid.duration || 0, vid.currentTime + (+b.dataset.step) * preset[2])); });
+    $('#cmj-k').onclick = () => { tk = vid.currentTime; upd(); };
+    $('#cmj-l').onclick = () => { tl = vid.currentTime; upd(); };
+    upd();
+  };
 }
 
 /* ---------- ekran Plan: tygodnie, dni z kropkami, jednostki, zmiana daty ---------- */
@@ -748,12 +877,13 @@ function renderTrening(){
     SCALE = b.dataset.sc; try { localStorage.setItem('sc_' + KEY, SCALE); } catch (e) {}
     renderTrening();
   });
-  let h = helpCard();
+  let h = readyBanner() + helpCard();
   exs.forEach(ex => h += card(ex));
   h += sessCard(s0);
   $('#main').innerHTML = h;
   bind(exs, s0);
   refreshStats();
+  $('#go-dysp').onclick = () => { TAB = 'dysp'; render(); window.scrollTo(0, 0); };
 }
 function rxPro(ex){
   const hasKg = typeof ex.kg === 'number', z = plateZone(ex.pct);

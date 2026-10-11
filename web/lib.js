@@ -306,6 +306,61 @@
       `<text class="axis" x="${(X(0) + 4).toFixed(1)}" y="${H - 6}">pion startu · poziom ×2</text></svg>`;
   };
 
+  /* ---------- dyspozycja dnia: ankieta Hoopera, CMJ, prędkość na rozgrzewce ---------- */
+  const nf = v => parseFloat(String(v === null || v === undefined ? '' : v).replace(',', '.'));
+  L.mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN;
+  /** wysokość skoku z czasu lotu: h = g·t²/8 = 1,22625·t² [m] → cm */
+  L.cmjHeight = tFlight => tFlight > 0 ? 1.22625 * tFlight * tFlight * 100 : NaN;
+  /** jak nagrano film ze skokiem: [id, opis, krok klatki s, mnożnik czasu pliku → czas rzeczywisty] */
+  L.CMJ_PRESETS = [['s240', 'Slow-mo 240 kl/s', 1 / 240, 1], ['s120', 'Slow-mo 120 kl/s', 1 / 120, 1],
+    ['x8', 'Slow-mo zapisane ×8 (plik 30 kl/s)', 1 / 30, 1 / 8], ['x4', 'Slow-mo zapisane ×4 (plik 30 kl/s)', 1 / 30, 1 / 4], ['n60', 'Zwykły film 60 kl/s', 1 / 60, 1]];
+  L.HOOPER = [['sen', 'Sen', '1 = bardzo dobry'], ['stres', 'Stres', '1 = brak'], ['zmeczenie', 'Zmęczenie', '1 = brak'], ['bolesnosc', 'Bolesność mięśni', '1 = brak']];
+  /** średnie z historii (zakładka Dyspozycja) bez dzisiejszego wpisu: Hooper z 7 ostatnich, CMJ i prędkość z 5 */
+  L.readyBase = (rows, today) => {
+    const day = r => String(r.data instanceof Date ? r.data.toISOString() : r.data || '').slice(0, 10);
+    const past = (rows || []).filter(r => day(r) && day(r) !== today).sort((a, b) => day(a).localeCompare(day(b)));
+    const last = (key, n) => past.map(r => nf(r[key])).filter(v => isFinite(v) && v > 0).slice(-n);
+    return { hooper: L.mean(last('hooper_suma', 7)), cmj: L.mean(last('cmj_sr', 5)), vbt: L.mean(last('vbt_test', 5)) };
+  };
+  L.READY_TITLE = { ok: 'Dobra dyspozycja', warn: 'Uwaga', bad: 'Zmęczenie', none: 'Brak pomiaru' };
+  L.READY_ADVICE = { ok: 'Trening według planu.', warn: 'Trening według planu, bez dokładania ponad plan i bez serii dodatkowych.',
+    bad: 'Napisz do trenera przed treningiem. Na razie: ciężary −10% i bez serii dodatkowych.', none: 'Wypełnij ankietę, wpisz skoki albo prędkość z rozgrzewki.' };
+  /**
+   * cur: {cmj: [cm…], hooper: {sen, stres, zmeczenie, bolesnosc} 1–7, vbt m/s}; base: readyBase
+   * Progi: Hooper +4 uwaga / +7 czerwony; CMJ −5% / −10%; prędkość −0,05 / −0,10 m/s.
+   * ≥2 czerwone albo czerwony + pomarańczowy → Zmęczenie; 1 sygnał → Uwaga; brak → Dobra dyspozycja.
+   */
+  L.verdict = (cur, base = {}) => {
+    const out = []; let red = 0, amb = 0, n = 0;
+    const f1 = v => L.fmtKg(Math.round(v * 10) / 10), f2 = v => L.fmtKg(Math.round(v * 100) / 100), sg = v => (v > 0 ? '+' : '') ;
+    const jumps = (cur.cmj || []).map(nf).filter(v => isFinite(v) && v > 0), cmjAvg = L.mean(jumps);
+    if (jumps.length) {
+      n++;
+      if (isFinite(base.cmj)) {
+        const d = (cmjAvg - base.cmj) / base.cmj * 100, t = 'CMJ ' + sg(d) + f1(d) + '% vs Twoja średnia (' + f1(cmjAvg) + ' vs ' + f1(base.cmj) + ' cm)';
+        if (d <= -10) { red++; out.push(['bad', t]); } else if (d <= -5) { amb++; out.push(['warn', t]); } else out.push(['ok', t]);
+      } else out.push(['ok', 'CMJ ' + f1(cmjAvg) + ' cm (pierwsze testy budują Twoją średnią)']);
+    }
+    const h = cur.hooper || {}, hv = L.HOOPER.map(q => nf(h[q[0]])), hs = hv.every(v => v >= 1 && v <= 7) ? hv.reduce((s, v) => s + v, 0) : NaN;
+    if (isFinite(hs)) {
+      n++;
+      if (isFinite(base.hooper)) {
+        const d = hs - base.hooper, t = 'Ankieta ' + hs + ' (średnio ' + Math.round(base.hooper) + ')';
+        if (d >= 7) { red++; out.push(['bad', t]); } else if (d >= 4) { amb++; out.push(['warn', t]); } else out.push(['ok', t]);
+      } else out.push(['ok', 'Ankieta ' + hs + ' (pierwsze ankiety budują Twoją średnią)']);
+    }
+    const vb = nf(cur.vbt);
+    if (isFinite(vb) && vb > 0) {
+      n++;
+      if (isFinite(base.vbt)) {
+        const d = vb - base.vbt, t = 'Prędkość ' + sg(d) + f2(d) + ' m/s vs średnia';
+        if (d <= -0.10 + 1e-9) { red++; out.push(['bad', t]); } else if (d <= -0.05 + 1e-9) { amb++; out.push(['warn', t]); } else out.push(['ok', t]);
+      } else out.push(['ok', 'Prędkość ' + f2(vb) + ' m/s (pierwsze pomiary budują Twoją średnią)']);
+    }
+    const lvl = !n ? 'none' : red >= 2 || (red && amb) ? 'bad' : red || amb ? 'warn' : 'ok';
+    return { lvl, title: L.READY_TITLE[lvl], advice: L.READY_ADVICE[lvl], out, cmjAvg, hs };
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);
