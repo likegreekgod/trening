@@ -61,6 +61,12 @@ Wyślij klientom nowe linki z kolumny E. Stare linki (`…/exec?k=…`) działaj
 2. W ciągu 15 min plan wczyta się sam. Od razu: menu arkusza **Trening → Wczytaj plany z Drive**.
 3. Wynik jest w zakładce **Import**. Plik z błędami trafia do `_plany/bledy`, a opis błędu do kolumny „bledy”.
 
+Zasady dla kolejnych bloków:
+- **Tygodnie numeruj u klienta ciągle** (blok 1 = tygodnie 1–6, blok 2 zaczyna się od 7). Numer tygodnia jest częścią identyfikatora serii w Logu, więc powtórzony numer nadpisałby stare wyniki.
+- Każdy wiersz planu ma kolumnę `blok` (np. `B2`). Aplikacja pokazuje klientowi „Blok B2 · tydz. 1”.
+- Jednostki już zrobione zostają w planie bez zmian. Plik, który nadpisałby zrobioną jednostkę innego bloku, jest odrzucany z podpowiedzią numeracji.
+- `data` jest wstępna (klient może ją przesunąć), `zamienniki` to nazwy rozdzielone „;”.
+
 ## Rozwój aplikacji w Claude Code
 
 1. Sklonuj repozytorium (GitHub Desktop albo `git clone https://github.com/LOGIN/trening`) i otwórz folder w Claude Code.
