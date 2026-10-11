@@ -113,7 +113,8 @@ Konwencje Damiana:
   - samopoczucie 1–5;
   - ból 0–10 per miejsce;
   - wszystko dużymi przyciskami.
-- Ekrany z dolnego menu (`TAB`): Trening (nagłówek: tydzień/blok · jednostka · data, czas, serie, tonaż; baner dyspozycji dnia), Dyspozycja i Plan (tygodnie, dni z kropkami, jednostki, „Przejdź do treningu”, „Zmień datę” → `przesunJednostke` + propozycja „przesuń też kolejne”). Postęp dojdzie w PR 11.
+- Ekrany z dolnego menu (`TAB`): Trening (nagłówek: tydzień/blok · jednostka · data, czas, serie, tonaż; baner dyspozycji dnia), Dyspozycja i Plan (tygodnie, dni z kropkami, jednostki, „Przejdź do treningu”, „Zmień datę” → `przesunJednostke` + propozycja „przesuń też kolejne”). oraz Postęp.
+- Postęp (`renderPostep`, cała historia z `DATA.logs`): Siła (wybór ćwiczenia głównego, e1RM albo najlepsze zaliczone kg w bojach, rekordy akcentem, początek bloku zaznaczony), Objętość (tonaż tygodniowy 12 tyg., strefy % 1RM w kolorach talerzy z liczbami, kalendarz obciążenia 12 tyg. w skali `--h1…--h4`), Dyspozycja (CMJ z pasem średniej ±5%, prędkość na rozgrzewce). Wykresy to SVG budowane w `chartLine` / `chartBars`, jedna seria i jedna oś na wykres, pod każdym tabela z danymi; dane liczą funkcje z `lib.js` (`doneSets`, `strengthSeries`, `records`, `weeklyTonnage`, `zoneReps`, `loadCalendar`, `readySeries`).
 - Dyspozycja dnia (`renderDysp`): ankieta Hoopera 1–7, 3 skoki CMJ (cm ręcznie albo z filmu slow-mo: `openCMJ`, h = 1,22625·t²), prędkość na rozgrzewce; `verdict()` porównuje ze średnimi z historii (`readyBase`: Hooper 7, CMJ i prędkość 5 ostatnich wpisów) wg progów ze specyfikacji; zapis `saveDyspozycja` (offline przez kolejkę), szkic dnia w `rd_<klucz>`. Werdykt „Uwaga”/„Zmęczenie” obniża sufit dnia w bojach do ciężaru z planu.
 - Offline:
   - ostatnie getData leży w `localStorage` (`d_<klucz>`);

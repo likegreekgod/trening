@@ -361,6 +361,76 @@
     return { lvl, title: L.READY_TITLE[lvl], advice: L.READY_ADVICE[lvl], out, cmjAvg, hs };
   };
 
+  /* ---------- postęp: siła, objętość, obciążenie (cała historia z Logu) ---------- */
+  const mondayOf = d => L.addDays(d, -((new Date(utc(d)).getUTCDay() + 6) % 7));
+  /** e1RM = kg × (1 + (powt. + RIR) / 30), RIR = 10 − RPE; jak w podsumowaniu: tylko serie z RPE ≥ 5 */
+  L.e1rm = (kg, reps, rpe) => kg > 0 && reps > 0 && rpe >= 5 ? kg * (1 + (reps + (10 - rpe)) / 30) : NaN;
+  /**
+   * Serie z Logu z kontekstem planu. plan: wiersze getData (week, day, order, prio, group, pct, kg, block);
+   * dates: {tydzień|jednostka → faktyczny dzień}. Bez rozgrzewki, tylko wykonane.
+   */
+  L.doneSets = (logs, plan, dates = {}) => {
+    const P = {}; plan.forEach(r => { P[r.week + '|' + r.day + '|' + r.order] = r; });
+    return logs.filter(l => l.wykonane === 'TAK' && !/^R/i.test(String(l.seria))).map(l => {
+      const p = P[l.tydzien + '|' + l.jednostka + '|' + l.nr_cw] || {}, kg = nf(l.kg), reps = nf(l.powt), rpe = nf(l.rpe);
+      const name = String(l.cwiczenie || p.name || ''), date = dates[l.tydzien + '|' + l.jednostka] || String(l.data || '').slice(0, 10);
+      const one = p.pct > 0 && typeof p.kg === 'number' && p.kg > 0 ? p.kg / p.pct : NaN;
+      return { name, date, week: +l.tydzien, block: p.block || '', prio: p.prio || '', grp: L.groupOf(p.group, name), kg, reps, rpe,
+        fail: /FAIL/.test(l.typ || ''), rel: kg > 0 && one > 0 ? kg / one : NaN };
+    }).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s.date));
+  };
+  /** siła w czasie dla ćwiczenia: boje (R/P) = najlepsze zaliczone kg dnia, pozostałe = najlepsze e1RM dnia; pr = rekord do tego dnia */
+  L.strengthSeries = (sets, name) => {
+    const by = {};
+    sets.filter(s => s.name === name && !s.fail).forEach(s => {
+      const v = s.grp === 'R' || s.grp === 'P' ? s.kg : L.e1rm(s.kg, s.reps, s.rpe);
+      if (!(v > 0)) return;
+      if (!by[s.date] || v > by[s.date].v) by[s.date] = { date: s.date, v, block: s.block };
+    });
+    let best = 0;
+    return Object.values(by).sort((a, b) => a.date.localeCompare(b.date)).map(p => { const pr = p.v > best; if (pr) best = p.v; return Object.assign(p, { v: Math.round(p.v * 10) / 10, pr }); });
+  };
+  /** ćwiczenia główne (prio A) z co najmniej jednym wynikiem: [{name, oly, best, date, n}] od najczęściej robionych */
+  L.records = sets => {
+    const names = [...new Set(sets.filter(s => s.prio === 'A').map(s => s.name))];
+    return names.map(name => {
+      const ser = L.strengthSeries(sets, name), top = ser.filter(p => p.pr).pop();
+      return top ? { name, oly: sets.some(s => s.name === name && (s.grp === 'R' || s.grp === 'P')), best: top.v, date: top.date, n: ser.length } : null;
+    }).filter(Boolean).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+  };
+  /** tonaż tygodniowy (pon–niedz), ostatnie n tygodni do tygodnia z dziś włącznie, tygodnie bez treningu = 0 */
+  L.weeklyTonnage = (sets, today, n = 12) => {
+    const t = {}; sets.forEach(s => { if (s.kg > 0 && s.reps > 0) { const w = mondayOf(s.date); t[w] = (t[w] || 0) + s.kg * s.reps; } });
+    const end = mondayOf(today), out = [];
+    for (let i = n - 1; i >= 0; i--) { const w = L.addDays(end, -7 * i); out.push({ week: w, ton: Math.round(t[w] || 0) }); }
+    return out;
+  };
+  /** powtórzenia zaliczone w strefach % 1RM dla bojów, ciągów i przysiadów (bez grupy I): ≤60, 61–70, 71–80, 81–90, >90 */
+  L.ZONES = [['p5', '≤60%'], ['p10', '61–70%'], ['p15', '71–80%'], ['p20', '81–90%'], ['p25', '>90%']];
+  L.zoneReps = sets => {
+    const z = { p5: 0, p10: 0, p15: 0, p20: 0, p25: 0 };
+    sets.forEach(s => { if (s.grp !== 'I' && !s.fail && s.rel > 0 && s.reps > 0) z[L.plateZone(s.rel)] += s.reps; });
+    return z;
+  };
+  /**
+   * kalendarz obciążenia: 12 tygodni × 7 dni do końca bieżącego tygodnia. Obciążenie dnia = RPE sesji × minuty (sRPE),
+   * a bez nich tonaż dnia / 100. level 0–4: 0 = brak, 1–4 = ćwiartki względem najcięższego dnia w okresie.
+   */
+  L.loadCalendar = (sessions, sets, today, weeks = 12) => {
+    const load = {}, ton = {};
+    sets.forEach(s => { if (s.kg > 0 && s.reps > 0) ton[s.date] = (ton[s.date] || 0) + s.kg * s.reps; });
+    sessions.forEach(s => { const r = nf(s.rpe), m = nf(s.min); if (s.date && r >= 0 && m > 0) load[s.date] = (load[s.date] || 0) + r * m; });
+    Object.keys(ton).forEach(d => { if (!(load[d] > 0)) load[d] = ton[d] / 100; });
+    const start = L.addDays(mondayOf(today), -7 * (weeks - 1)), days = [];
+    for (let i = 0; i < weeks * 7; i++) { const d = L.addDays(start, i); days.push({ date: d, load: Math.round(load[d] || 0), future: d > today }); }
+    const max = Math.max(0, ...days.map(d => d.load));
+    days.forEach(d => { d.level = d.load > 0 ? Math.max(1, Math.ceil(4 * d.load / max)) : 0; });
+    return days;
+  };
+  /** pomiary dyspozycji w czasie: [{date, v}] dla klucza (cmj_sr, vbt_test) */
+  L.readySeries = (rows, key) => (rows || []).map(r => ({ date: String(r.data || '').slice(0, 10), v: nf(r[key]) }))
+    .filter(p => p.v > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.date)).sort((a, b) => a.date.localeCompare(b.date));
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);
