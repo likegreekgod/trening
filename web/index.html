@@ -194,6 +194,28 @@
   .cam svg{width:22px;height:22px}
   .cam.has{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
   .sh-in a.btn{text-decoration:none}
+  /* analiza ścieżki i VBT */
+  .vbox{background:var(--panel);display:grid;place-items:center}
+  .vbox canvas{max-width:100%;max-height:52vh;width:auto;height:auto;display:block;touch-action:manipulation}   /* pionowy film nie spycha wyników poza ekran */
+  .scrub{min-height:44px;padding:0;border:0;background:transparent;accent-color:var(--accent)}
+  .metrics{display:flex;gap:0;margin:4px 0}
+  .metric{flex:1;padding:0 10px;border-left:1px solid var(--line);display:grid;gap:2px}
+  .metric:first-child{padding-left:0;border-left:0}
+  .metric span{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .metric b{font:800 30px/1 var(--f-display);color:var(--ink)}
+  .metric small{font-size:12px;color:var(--muted)}
+  svg.path{width:100%;height:auto;display:block;margin:4px auto}
+  svg.path .grid{stroke:var(--line);stroke-width:1}
+  svg.path .axis{font:500 12px var(--f-mono);fill:var(--muted)}
+  svg.path .plumb{stroke:var(--olive);stroke-dasharray:3 4;stroke-width:1}
+  svg.path .trace{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+  svg.path .start{fill:var(--ink-2)}
+  table.reps{width:100%;border-collapse:collapse;font:500 14px var(--f-mono)}
+  table.reps th{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right;padding:6px 4px;border-bottom:1px solid var(--ink-2)}
+  table.reps td{text-align:right;padding:6px 4px;border-bottom:1px solid var(--line)}
+  table.reps th:first-child,table.reps td:first-child{text-align:left}
+  .saved{border-left:4px solid var(--accent);padding-left:10px}
+  .saved p{margin:0 0 4px}
 
   /* podsumowanie jednostki */
   .sess .cn{margin-bottom:4px}
@@ -358,7 +380,8 @@ const $ = s => document.querySelector(s);
 const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
   RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, restSec, fmtClock, plates,
-  isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap } = window.TL;
+  isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
+  PLATE_M, analyse, vbtOut, pathSVG, groupOf } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -476,7 +499,8 @@ function openSheet(html){
   $("#sheet-in").innerHTML = html; $("#sheet").hidden = false;
   const f = $("#sheet-in input, #sheet-in button"); if (f) f.focus();
 }
-function closeSheet(){ $("#sheet").hidden = true; $("#sheet-in").innerHTML = ""; }
+let SHEET_ON_CLOSE = null;
+function closeSheet(){ const f = SHEET_ON_CLOSE; SHEET_ON_CLOSE = null; if (f) f(); $("#sheet").hidden = true; $("#sheet-in").innerHTML = ""; }
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet" || e.target.closest("[data-close]")) closeSheet(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
 let BAR = 20, COLLARS = true;
@@ -519,7 +543,7 @@ function useData(d){
   // lokalne, jeszcze niewysłane zapisy z kolejki nadpisują dane z serwera
   qGet().forEach(it => {
     const p = it.payload;
-    if (it.fn === 'logSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ: p.typ, ocena: p.ocena || '', zamiana: p.swap || '' }; }
+    if (it.fn === 'logSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ: p.typ, ocena: p.ocena || '', zamiana: p.swap || '', vbt_peak: p.vbtPeak, wysokosc_cm: p.height, sciezka: p.path }; }
     if (it.fn === 'przesunJednostke') applyMoves(p, false);
   });
 }
@@ -853,7 +877,7 @@ function rowHtml(ex, set, kind, def){
   const rpeCell = kind === 'w' ? `<div class="lbl">${SIMPLE ? 'rozgrzewka' : 'rozgrz.'}</div>` : effortSel(l);
   const oly = isOly(ex) && kind !== 'w', q = oly ? rateOf(l) : '';
   // kamera przy serii roboczej, dodatkowej i drop (nie przy rozgrzewce); wypełniona = jest film albo prędkość
-  const has = !!l.film_link || !blank(l.vbt_ms);
+  const has = !!l.film_link || !blank(l.vbt_ms) || !!l.sciezka;
   const camCell = kind === 'w' ? '<div></div>'
     : `<button type="button" class="cam ${has ? 'has' : ''}" aria-label="Film${SIMPLE ? '' : ' i prędkość'}: seria ${setLabel(set, kind)}${has ? ' (dodano)' : ''}">${CAM_SVG}</button>`;
   // robocze i dodatkowe: dotknięcie numeru zmienia typ serii (zwykła → drop → nieudana); boje: ocena światłami
@@ -1000,12 +1024,13 @@ function payloadOf(row, ex, s0){
   return { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
     kg: num(row.querySelector('.kg').value), reps: num(row.querySelector('.reps').value),
     rpe: fail ? '' : lt ? (ocena ? RATE[ocena].rpe : '') : rpeOf(row), vbt: blank(prev.vbt_ms) ? '' : prev.vbt_ms,
+    vbtPeak: blank(prev.vbt_peak) ? '' : prev.vbt_peak, height: blank(prev.wysokosc_cm) ? '' : prev.wysokosc_cm, path: prev.sciezka || '',
     done: st !== '', video: prev.film_link || '', typ: [drop ? 'DROP' : '', fail ? 'FAIL' : ''].filter(Boolean).join('+'), ocena, swap: swapText(ex.swap) };
 }
 /** wpis od razu widoczny lokalnie (przed odpowiedzią serwera / w kolejce) */
 function putLocal(ex, p){
   LOGS['local' + lid(ex, p.set)] = { id: 'local' + lid(ex, p.set), kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '',
-    film_link: p.video, typ: p.typ, ocena: p.ocena, zamiana: p.swap };
+    film_link: p.video, typ: p.typ, ocena: p.ocena, zamiana: p.swap, vbt_peak: p.vbtPeak, wysokosc_cm: p.height, sciezka: p.path };
 }
 function bindRow(row, ex, s0){
   const kind = row.dataset.k;
@@ -1182,19 +1207,178 @@ async function relayUpload(meta, file, onProg){
   return out;
 }
 const NO_NET = 'Brak sieci: film dodasz po odzyskaniu zasięgu. Serie zapisują się normalnie i wyślą same.';
-const camMark = (row, ex) => { const l = getLog(ex, setKey(row.dataset.s)) || {}, c = row.querySelector('.cam'); if (c) c.classList.toggle('has', !!l.film_link || !blank(l.vbt_ms)); };
-/** okno kamery serii: film na Drive i (PRO) prędkość wpisana z urządzenia, np. Enode */
+const camMark = (row, ex) => { const l = getLog(ex, setKey(row.dataset.s)) || {}, c = row.querySelector('.cam'); if (c) c.classList.toggle('has', !!l.film_link || !blank(l.vbt_ms) || !!l.sciezka); };
+/* ---------- śledzenie talerza na klatkach filmu: dopasowanie wzorca (SAD) na zmniejszonym szarym obrazie, co 1/30 s ---------- */
+/**
+ * src: { w, h, t0, t1, draw(ctx, t, W, H) → Promise } – klatka z chwili t narysowana na ctx (film albo obraz testowy)
+ * c0: środek talerza, r0: promień [px filmu]; talerz 450 mm kalibruje skalę.
+ * Wynik: [{t, x, y}] w metrach, y w górę, względem pierwszej klatki.
+ */
+async function track(src, c0, r0, onProg, abort){
+  const k = Math.min(1, 28 / r0), rw = r0 * k, W = Math.round(src.w * k), H = Math.round(src.h * k);
+  const wc = document.createElement('canvas'); wc.width = W; wc.height = H;
+  const wx = wc.getContext('2d', { willReadFrequently: true });
+  const th = Math.max(8, Math.round(rw * 0.75)), sr = Math.max(8, Math.round(rw * 0.7)), side = 2 * th + 1;
+  const grey = img => { const d = img.data, g = new Float32Array(img.width * img.height); for (let i = 0, j = 0; i < d.length; i += 4, j++) g[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; return g; };
+  let cx = c0.x * k, cy = c0.y * k, tpl = null;
+  const pts = [], dt = 1 / 30;
+  for (let t = src.t0; t <= src.t1 + 1e-6; t += dt) {
+    if (abort && abort.stop) break;
+    await src.draw(wx, t, W, H);
+    const x0 = Math.max(0, Math.floor(cx - th - sr)), y0 = Math.max(0, Math.floor(cy - th - sr));
+    const x1 = Math.min(W, Math.ceil(cx + th + sr + 1)), y1 = Math.min(H, Math.ceil(cy + th + sr + 1));
+    const rg = x1 - x0, hg = y1 - y0;
+    if (rg < side || hg < side) break;                                          // talerz wyszedł z kadru
+    const g = grey(wx.getImageData(x0, y0, rg, hg));
+    if (!tpl) {
+      tpl = new Float32Array(side * side);
+      const ox = Math.round(cx - th) - x0, oy = Math.round(cy - th) - y0;
+      for (let j = 0; j < side; j++) for (let i = 0; i < side; i++) tpl[j * side + i] = g[(oy + j) * rg + ox + i];
+      pts.push({ t, x: cx / k, y: cy / k });
+      continue;
+    }
+    let best = Infinity, bx = 0, by = 0; const sc = {};
+    for (let dy = -sr; dy <= sr; dy++) for (let dx = -sr; dx <= sr; dx++) {
+      const ox = Math.round(cx - th + dx) - x0, oy = Math.round(cy - th + dy) - y0;
+      if (ox < 0 || oy < 0 || ox + side > rg || oy + side > hg) continue;
+      let s = 0;
+      for (let j = 0; j < side && s < best; j += 2) { const ro = (oy + j) * rg + ox, to = j * side; for (let i = 0; i < side; i += 2) { const d = g[ro + i] - tpl[to + i]; s += d < 0 ? -d : d; } }
+      sc[dx + ',' + dy] = s;
+      if (s < best) { best = s; bx = dx; by = dy; }
+    }
+    // dokładność poniżej piksela: parabola przez sąsiednie wyniki
+    const sub = (a, b, c) => { const den = a - 2 * b + c; return den > 0 ? 0.5 * (a - c) / den : 0; };
+    const fx = sc[(bx - 1) + ',' + by] != null && sc[(bx + 1) + ',' + by] != null ? sub(sc[(bx - 1) + ',' + by], best, sc[(bx + 1) + ',' + by]) : 0;
+    const fy = sc[bx + ',' + (by - 1)] != null && sc[bx + ',' + (by + 1)] != null ? sub(sc[bx + ',' + (by - 1)], best, sc[bx + ',' + (by + 1)]) : 0;
+    cx = Math.round(cx) + bx + Math.max(-.5, Math.min(.5, fx)); cy = Math.round(cy) + by + Math.max(-.5, Math.min(.5, fy));
+    const ox = Math.round(cx - th) - x0, oy = Math.round(cy - th) - y0;
+    if (ox >= 0 && oy >= 0 && ox + side <= rg && oy + side <= hg)                 // wzorzec powoli nadąża za zmianą wyglądu talerza
+      for (let j = 0; j < side; j++) for (let i = 0; i < side; i++) { const q = j * side + i; tpl[q] = 0.85 * tpl[q] + 0.15 * g[(oy + j) * rg + ox + i]; }
+    pts.push({ t, x: cx / k, y: cy / k });
+    if (onProg) onProg((t - src.t0) / (src.t1 - src.t0), cx / k, cy / k);
+  }
+  if (!pts.length) return [];
+  const m = PLATE_M / (2 * r0);
+  return pts.map(p => ({ t: p.t - pts[0].t, x: (p.x - pts[0].x) * m, y: -(p.y - pts[0].y) * m }));
+}
+/** film jako źródło klatek: przewinięcie do t i rysunek; analiza najwyżej 20 s od wybranego startu */
+const videoSource = v => ({ w: v.videoWidth, h: v.videoHeight, t0: v.currentTime, t1: Math.min(v.duration, v.currentTime + 20),
+  draw: (ctx, t, W, H) => new Promise(res => {
+    let ok = false;
+    const done = () => { if (ok) return; ok = true; v.removeEventListener('seeked', done); ctx.drawImage(v, 0, 0, W, H); res(); };
+    v.addEventListener('seeked', done); v.currentTime = t; setTimeout(done, 1500);
+  }) });
+/** filmy nagrane w przeglądarce nie mają długości w nagłówku: przewinięcie na koniec ją ustala */
+const fixDuration = v => new Promise(res => {
+  if (isFinite(v.duration)) return res();
+  const on = () => { if (isFinite(v.duration)) { v.removeEventListener('durationchange', on); res(); } };
+  v.addEventListener('durationchange', on); v.currentTime = 1e101; setTimeout(res, 4000);
+});
+const f2 = v => fmtKg(Math.round(v * 100) / 100);
+function vbtResult(res){
+  if (!res.reps.length) return '<p class="hint">Nie wykryłem powtórzenia (ruch w górę ≥ 15 cm). Sprawdź, czy talerz był widoczny przez cały film i czy dotknąłeś jego środka.</p>';
+  const M = (l, v, u) => `<div class="metric"><span>${l}</span><b>${v}</b>${u ? `<small>${u}</small>` : ''}</div>`;
+  const m = res.kind === 'oly' ? M('v max', f2(res.vmax), 'm/s') + M('Uniesienie', res.h, 'cm') + M('Powt.', res.reps.length)
+    : M('MCV najlepsze', f2(res.mcv), 'm/s') + M('Spadek', Math.round(res.loss), '%') + M('Powt.', res.reps.length);
+  return `<div class="metrics">${m}</div>${pathSVG(vbtOut(res).path)}
+    <table class="reps"><thead><tr><th>Powt.</th><th>MCV m/s</th><th>v peak m/s</th><th>Zakres cm</th></tr></thead><tbody>` +
+    res.reps.map(r => `<tr><td>${r.n}</td><td>${f2(r.mcv)}</td><td>${f2(r.peak)}</td><td>${Math.round(r.dy * 100)}</td></tr>`).join('') + '</tbody></table>';
+}
+/** tryb „Film + ścieżka + VBT”: start powtórzenia suwakiem, środek i krawędź talerza, analiza w telefonie */
+function vbtStage(file, ex, row, s0){
+  const stage = $('#cam-stage'), url = URL.createObjectURL(file), abort = { stop: false, busy: false, done: false };
+  let c0 = null, r0 = null, ds = 1, res = null;
+  SHEET_ON_CLOSE = () => { abort.stop = true; URL.revokeObjectURL(url); };
+  stage.innerHTML = `<div class="vbox"><canvas id="vc" width="360" height="200" role="img" aria-label="Klatka filmu: dotknij środka talerza, potem jego krawędzi"></canvas></div>
+    <p class="hint" id="vhint" aria-live="polite">Wczytuję film…</p>
+    <label class="fl">Start powtórzenia<input type="range" class="scrub" id="vs" min="0" max="1000" value="0"></label>
+    <div class="bar" id="vpg"><i></i></div><div id="vres"></div>
+    <div class="uact"><button type="button" class="btn" id="vreset">Od nowa</button><button type="button" class="btn go" id="vgo" disabled>Analizuj</button></div>`;
+  const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.preload = 'auto'; video.src = url;
+  const cv = $('#vc'), cx = cv.getContext('2d'), hint = $('#vhint'), css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const paint = () => {
+    cx.drawImage(video, 0, 0, cv.width, cv.height);
+    if (c0 && !abort.done) {
+      cx.strokeStyle = cx.fillStyle = css('--accent'); cx.lineWidth = 2;
+      cx.beginPath(); cx.arc(c0.x * ds, c0.y * ds, (r0 || 4) * ds, 0, 7); cx.stroke();
+      cx.beginPath(); cx.arc(c0.x * ds, c0.y * ds, 3, 0, 7); cx.fill();
+    }
+  };
+  video.addEventListener('loadedmetadata', async () => {
+    ds = 360 / video.videoWidth; cv.width = 360; cv.height = Math.round(video.videoHeight * ds);
+    await fixDuration(video);
+    video.currentTime = Math.min(0.05, (video.duration || 1) / 2);
+  });
+  video.addEventListener('seeked', () => { if (!abort.busy) { paint(); if (!c0) hint.textContent = 'Przesuń suwak do startu powtórzenia, potem dotknij środka talerza.'; } });
+  video.addEventListener('error', () => { hint.textContent = 'Ta przeglądarka nie odtworzy tego pliku. Nagraj film w formacie MP4 (H.264).'; });
+  $('#vs').addEventListener('input', e => { if (isFinite(video.duration) && !abort.busy) video.currentTime = video.duration * e.target.value / 1000; });
+  cv.addEventListener('click', e => {
+    if (abort.busy || !video.videoWidth) return;
+    const b = cv.getBoundingClientRect(), px = (e.clientX - b.left) * cv.width / b.width / ds, py = (e.clientY - b.top) * cv.height / b.height / ds;
+    if (!c0) { c0 = { x: px, y: py }; hint.textContent = 'Teraz dotknij krawędzi talerza (kalibracja: 450 mm).'; }
+    else if (!r0) {
+      r0 = Math.hypot(px - c0.x, py - c0.y);
+      if (r0 < 6) { r0 = null; hint.textContent = 'Za blisko środka. Dotknij samej krawędzi talerza.'; return; }
+      hint.textContent = 'Talerz: ' + Math.round(2 * r0) + ' px = 450 mm. Dotknij „Analizuj”.'; $('#vgo').disabled = false;
+    }
+    paint();
+  });
+  $('#vreset').onclick = () => { if (abort.busy) return; abort.done = false; c0 = null; r0 = null; res = null; $('#vgo').disabled = true; $('#vres').innerHTML = ''; paint(); hint.textContent = 'Dotknij środka talerza.'; };
+  $('#vgo').onclick = async () => {
+    abort.busy = true; $('#vgo').disabled = true;
+    const pg = $('#vpg'); pg.style.display = 'block'; hint.textContent = 'Śledzę talerz…';
+    const px = [];
+    try {
+      const pts = await track(videoSource(video), c0, r0, (p, x, y) => {
+        px.push([x, y]); pg.querySelector('i').style.width = Math.round(p * 100) + '%';
+        paint(); cx.fillStyle = css('--light-amber'); cx.beginPath(); cx.arc(x * ds, y * ds, 4, 0, 7); cx.fill();
+      }, abort);
+      if (abort.stop) return;
+      res = analyse(pts, groupOf(ex.group, ex.name));
+      hint.textContent = 'Gotowe: ' + pts.length + ' klatek.';
+      paint(); cx.strokeStyle = css('--accent'); cx.lineWidth = 2.5; cx.beginPath();
+      px.forEach((q, i) => i ? cx.lineTo(q[0] * ds, q[1] * ds) : cx.moveTo(q[0] * ds, q[1] * ds)); cx.stroke();
+      $('#vres').innerHTML = vbtResult(res) + (res.reps.length ? '<button type="button" class="btn p" id="vsave">Zapisz przy serii</button>' : '');
+      const sv = $('#vsave');
+      if (sv) sv.onclick = () => {
+        const o = vbtOut(res), p = Object.assign(payloadOf(row, ex, s0), { vbt: o.vbt, vbtPeak: o.vbtPeak, height: o.height, path: JSON.stringify(o.path) });
+        putLocal(ex, p); camMark(row, ex);
+        send('logSet', p).catch(() => {});
+        if (navigator.onLine === false) { closeSheet(); toast('Analiza zapisana. Film dodasz po odzyskaniu zasięgu.'); }
+        else { sv.disabled = true; toast('Analiza zapisana, wysyłam film…'); uploadVideo(ex, s0, file, row); }
+      };
+    } catch (err) { hint.textContent = 'Analiza przerwana: ' + err.message; }
+    pg.style.display = 'none'; abort.busy = false; abort.done = true; $('#vgo').disabled = false;
+  };
+}
+/** okno kamery serii: film na Drive, (PRO) analiza ścieżki i VBT z filmu, prędkość wpisana z urządzenia, np. Enode */
 function openCam(ex, row, s0){
   const set = setKey(row.dataset.s), l = getLog(ex, set) || {};
+  let mode = 'film', saved = '';
+  if (!SIMPLE && (l.sciezka || !blank(l.vbt_peak))) {
+    let pts = []; try { pts = JSON.parse(l.sciezka || '[]'); } catch (e) {}
+    saved = `<div class="saved"><p>Zapisana analiza: ${isOly(ex) ? 'v max' : 'MCV'} <b>${fmtKg(l.vbt_ms)} m/s</b>${blank(l.wysokosc_cm) ? '' : ` · <b>${fmtKg(l.wysokosc_cm)} cm</b>`}</p>${pathSVG(pts)}</div>`;
+  }
   openSheet(`<h2 id="sheet-t">Film · seria ${esc(setLabel(set, row.dataset.k))}</h2><p class="sub">${esc(ex.name)}</p>
     ${l.film_link ? `<a class="btn" href="${esc(l.film_link)}" target="_blank" rel="noopener">Otwórz zapisany film</a>` : ''}
+    ${saved}
+    ${SIMPLE ? '' : `<div class="seg" role="group" aria-label="Co zrobić z filmem"><button type="button" data-m="film">Tylko film</button><button type="button" data-m="vbt">Film + ścieżka + VBT</button></div>
+    <p class="sub" id="cam-tip" hidden>Nagraj z boku, cały talerz w kadrze, telefon nieruchomo. Analiza działa w telefonie, także bez sieci.</p>`}
     <label class="btn p">${l.film_link ? 'Nagraj lub wybierz nowy film' : 'Nagraj lub wybierz film'}<input type="file" accept="video/*" hidden id="cam-file"></label>
+    <div id="cam-stage"></div>
     <div class="bar" id="cam-bar"><i></i></div>
     <p class="hint" id="cam-msg" hidden></p>
     ${SIMPLE ? '' : `<label class="fl">Prędkość z urządzenia (m/s)<input id="cam-vbt" inputmode="decimal" value="${esc(fmtKg(blank(l.vbt_ms) ? '' : l.vbt_ms))}" placeholder="np. 0,85"></label>
     <button type="button" class="btn" id="cam-vsave">Zapisz prędkość</button>`}
     <button type="button" class="btn" data-close>Zamknij</button>`);
-  $('#cam-file').onchange = e => { const file = e.target.files[0]; if (file) { markStart(); uploadVideo(ex, s0, file, row); } };
+  const setMode = m => { mode = m; document.querySelectorAll('#sheet [data-m]').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === m)); const t = $('#cam-tip'); if (t) t.hidden = m !== 'vbt'; };
+  document.querySelectorAll('#sheet [data-m]').forEach(b => b.onclick = () => setMode(b.dataset.m));
+  setMode(mode);
+  $('#cam-file').onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    markStart();
+    if (mode === 'vbt') vbtStage(file, ex, row, s0); else uploadVideo(ex, s0, file, row);
+  };
   const vs = $('#cam-vsave');
   if (vs) vs.onclick = () => {
     const v = num($('#cam-vbt').value), p = Object.assign(payloadOf(row, ex, s0), { vbt: isNum(v) ? v : '' });

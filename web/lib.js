@@ -241,6 +241,71 @@
   L.swapText = s => s && s.to ? `${s.from} → ${s.to} | ${s.why}` : '';
   L.parseSwap = t => { const m = /^(.+?) → (.+?)(?: \| (.*))?$/.exec(String(t || '').trim()); return m ? { from: m[1], to: m[2], why: m[3] || '' } : null; };
 
+  /* ---------- ścieżka sztangi i VBT z filmu (wczesna wersja; walidacja z czujnikiem – patrz docs/ui-v2-spec.md) ---------- */
+  L.PLATE_M = 0.45;   // talerz 450 mm = kalibracja
+  L.smooth = (a, w) => { const h = Math.floor(w / 2); return a.map((_, i) => { let s = 0, n = 0; for (let j = i - h; j <= i + h; j++) if (j >= 0 && j < a.length) { s += a[j]; n++; } return s / n; }); };
+  /**
+   * pts: [{t [s], x, y [m]}], y w górę, względem startu. Powtórzenie = ruch w górę ≥ 15 cm.
+   * Boje i ciągi (R/P/CR/CP): v max [m/s], uniesienie [cm], ścieżka przycięta do wejścia pod sztangę.
+   * Pozostałe: najlepsze MCV [m/s], spadek prędkości w serii [%].
+   */
+  L.analyse = (pts, grp) => {
+    const t = pts.map(p => p.t), y = L.smooth(pts.map(p => p.y), 3), x = L.smooth(pts.map(p => p.x), 5);
+    const v = y.map((_, i) => { const a = Math.max(0, i - 1), b = Math.min(y.length - 1, i + 1); return b > a ? (y[b] - y[a]) / (t[b] - t[a]) : 0; });
+    const segs = []; let i = 0;
+    while (i < v.length) {
+      if (v[i] > 0.1) {
+        let s = i; while (s > 0 && v[s - 1] > 0.05) s--;
+        let e = i; while (e < v.length - 1 && v[e + 1] > 0.05) e++;
+        const dy = y[e] - y[s];
+        if (dy >= 0.15) { let pk = 0; for (let k = s; k <= e; k++) pk = Math.max(pk, v[k]); segs.push({ s, e, dy, dur: t[e] - t[s], mcv: dy / (t[e] - t[s]), peak: pk, top: y[e] }); }
+        i = e + 1;
+      } else i++;
+    }
+    const ymin = y.length ? Math.min(...y) : 0, oly = ['R', 'P', 'CR', 'CP'].indexOf(grp) >= 0;
+    let reps = segs;
+    if (oly) { const pulls = segs.filter(s => s.peak >= 1.2); if (pulls.length) reps = pulls; }
+    reps = reps.map((s, k) => Object.assign({}, s, { n: k + 1, h: s.top - ymin }));
+    const res = { kind: oly ? 'oly' : 'str', reps, x, y, t, v };
+    if (!reps.length) return res;
+    res.peak = Math.max(...reps.map(r => r.peak));
+    if (oly) {
+      res.vmax = res.peak; res.h = Math.round(Math.max(...reps.map(r => r.h)) * 100);
+      const last = reps[reps.length - 1]; let lo = last.e;
+      for (let k = last.e; k < y.length && t[k] - t[last.e] <= 0.7; k++) if (y[k] < y[lo]) lo = k;
+      res.crop = [Math.max(0, reps[0].s - 3), Math.min(y.length - 1, lo + 3)];
+    } else {
+      const best = Math.max(...reps.map(r => r.mcv)), lastM = reps[reps.length - 1].mcv;
+      res.mcv = best; res.loss = (best - lastM) / best * 100;
+      res.h = Math.round(reps.find(r => r.mcv === best).dy * 100);
+    }
+    return res;
+  };
+  /** zapis do Log: vbt_ms (MCV albo v max), vbt_peak, wysokosc_cm, sciezka = punkty co 2 klatki w cm [[x, y], …] */
+  L.vbtOut = res => {
+    if (!res || !res.reps.length) return null;
+    const c = res.crop || [0, res.x.length - 1], path = [], r1 = v => Math.round(v * 10) / 10;
+    for (let k = c[0]; k <= c[1]; k += 2) path.push([r1(res.x[k] * 100), r1(res.y[k] * 100)]);
+    const r2 = v => Math.round(v * 100) / 100;
+    return { vbt: r2(res.kind === 'oly' ? res.vmax : res.mcv), vbtPeak: r2(res.peak), height: res.h, path };
+  };
+  /** rysunek ścieżki z punktów w cm (poziom ×2, żeby było widać odchylenie od pionu startu) */
+  L.pathSVG = pts => {
+    if (!pts || pts.length < 2) return '';
+    const xs = pts.map(p => p[0] * 2), ys = pts.map(p => p[1]);
+    const pad = 24, minx = Math.min(...xs, -10), maxx = Math.max(...xs, 10), miny = Math.min(...ys), maxy = Math.max(...ys);
+    const H = 240, sc = (H - 2 * pad) / Math.max(1, maxy - miny), W = Math.max(200, Math.min(340, (maxx - minx) * sc + 2 * pad + 30));
+    const cx = W / 2 - ((minx + maxx) / 2) * sc, X = v => cx + v * sc, Y = v => H - pad - (v - miny) * sc;
+    const d = xs.map((v, i) => (i ? 'L' : 'M') + X(v).toFixed(1) + ',' + Y(ys[i]).toFixed(1)).join('');
+    let grid = '';
+    for (let g = Math.ceil(miny / 20) * 20; g <= maxy; g += 20)
+      grid += `<line class="grid" x1="0" x2="${W.toFixed(0)}" y1="${Y(g).toFixed(1)}" y2="${Y(g).toFixed(1)}"/><text class="axis" x="2" y="${(Y(g) - 3).toFixed(1)}">${Math.round(g - miny)} cm</text>`;
+    return `<svg class="path" viewBox="0 0 ${W.toFixed(0)} ${H}" role="img" aria-label="Ścieżka sztangi" style="max-width:${W.toFixed(0)}px">${grid}` +
+      `<line class="plumb" x1="${X(0).toFixed(1)}" x2="${X(0).toFixed(1)}" y1="${pad - 6}" y2="${H - pad + 4}"/>` +
+      `<path class="trace" d="${d}"/><circle class="start" cx="${X(xs[0]).toFixed(1)}" cy="${Y(ys[0]).toFixed(1)}" r="5"/>` +
+      `<text class="axis" x="${(X(0) + 4).toFixed(1)}" y="${H - 6}">pion startu · poziom ×2</text></svg>`;
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);

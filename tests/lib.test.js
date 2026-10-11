@@ -165,6 +165,44 @@ test('swapOptions, swapText, parseSwap: zamiana ćwiczenia', () => {
   assert.equal(L.parseSwap(''), null);
 });
 
+// --- ścieżka i VBT na ruchu syntetycznym (tests/synth.js) ---
+const SY = require('./synth');
+test('analyse: rwanie → v max, uniesienie, ścieżka przycięta do wejścia pod sztangę', () => {
+  const pts = SY.snatch(), r = L.analyse(pts, 'R'), vTrue = SY.trueVmax(SY.snatchAt, 0.95);
+  assert.equal(r.kind, 'oly');
+  assert.equal(r.reps.length, 1);                                              // wstanie z przysiadu to nie drugi ciąg
+  assert.ok(Math.abs(r.vmax - vTrue) <= 0.06, `v max ${r.vmax.toFixed(2)} vs ${vTrue.toFixed(2)}`);
+  assert.ok(Math.abs(r.h - 96) <= 2, 'uniesienie ' + r.h);
+  assert.ok(pts[r.crop[1]].t < 1.6 && pts[r.crop[1]].t > 1.0, 'koniec ścieżki po wejściu pod sztangę, przed wstaniem');
+  const o = L.vbtOut(r);
+  assert.equal(o.vbt, Math.round(r.vmax * 100) / 100);
+  assert.equal(o.height, r.h);
+  assert.ok(o.path.length >= 10 && o.path.length <= 30 && o.path.every(p => p.length === 2));
+  assert.ok(JSON.stringify(o.path).length < 1000);                             // mieści się w komórce z zapasem
+});
+
+test('analyse: siła → MCV każdego powtórzenia, najlepsze MCV, spadek prędkości', () => {
+  const r = L.analyse(SY.strength(), 'PS');
+  assert.equal(r.kind, 'str');
+  assert.equal(r.reps.length, 3);
+  SY.UP.forEach((up, i) => assert.ok(Math.abs(r.reps[i].mcv - SY.ROM / up) <= 0.04, `powt. ${i + 1}: ${r.reps[i].mcv.toFixed(2)} vs ${(SY.ROM / up).toFixed(2)}`));
+  assert.ok(Math.abs(r.mcv - SY.ROM / 0.6) <= 0.04);
+  assert.ok(Math.abs(r.loss - 25) <= 4, 'spadek ' + r.loss.toFixed(1));       // (0,833 − 0,625) / 0,833
+  assert.ok(Math.abs(r.h - 50) <= 3);
+  const o = L.vbtOut(r);
+  assert.ok(o.vbtPeak >= o.vbt);
+});
+
+test('analyse / vbtOut / pathSVG: brak ruchu i rysunek', () => {
+  const still = Array.from({ length: 60 }, (_, k) => ({ t: k / 30, x: 0, y: 0.01 * Math.sin(k) }));
+  assert.equal(L.analyse(still, 'PS').reps.length, 0);
+  assert.equal(L.vbtOut(L.analyse(still, 'PS')), null);
+  const svg = L.pathSVG(L.vbtOut(L.analyse(SY.snatch(), 'R')).path);
+  assert.match(svg, /^<svg class="path"[^>]*role="img"/);
+  assert.match(svg, /<path class="trace" d="M[\d.]+,[\d.]+L/);
+  assert.equal(L.pathSVG([]), '');
+});
+
 test('localDate: data w strefie telefonu', () => {
   assert.equal(L.localDate(new Date(2026, 9, 10, 0, 30)), '2026-10-10');
   assert.match(L.localDate(), /^\d{4}-\d{2}-\d{2}$/);

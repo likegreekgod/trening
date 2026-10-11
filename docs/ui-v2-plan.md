@@ -70,7 +70,7 @@ Każdy PR w `web/` podbija `VERSION` w `sw.js`; `npm test` musi przechodzić. Po
 | 6. Boje ✓ (10.10) | Światła, ocena → `rpe`/`typ`/`ocena`, `sugOly`, sufit dnia, „Ustaw X kg”, „max dziś” | Testy `sugOly` |
 | 7. Zamiana ćwiczenia ✓ (10.10) | Zamienniki, powód, zapis `zamiana` | Flaga `zamiana = TAK` |
 | 8. Film przy serii ✓ (10.10) | Kamera przy każdej serii, komunikat o braku sieci, ręczny wpis prędkości z urządzenia (m/s) | Wysyłka na Drive bez zmian |
-| 9. Ścieżka i VBT | `track()`, `analyse()`, kalibracja 450 mm, zapis `vbt_ms`, `vbt_peak`, `wysokosc_cm`, `sciezka` | Testy `analyse` na syntetycznym ruchu |
+| 9. Ścieżka i VBT ✓ (10.10) | `track()`, `analyse()`, kalibracja 450 mm, zapis `vbt_ms`, `vbt_peak`, `wysokosc_cm`, `sciezka` | Testy `analyse` na syntetycznym ruchu |
 | 10. Dyspozycja | Hooper, CMJ, prędkość na rozgrzewce, `verdict`, baner | Testy `verdict` |
 | 11. Postęp | Siła i rekordy, objętość i strefy, kalendarz 12 tyg., dyspozycja; cała historia z podziałem na bloki | Wykresy w SVG, bez bibliotek |
 
