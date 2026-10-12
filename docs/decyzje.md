@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-12 · Uwagi klientów po v2
+
+- „Wszystko jak w planie” pokazywało „Zapisano 0 serii”, gdy klient odhaczył serie ręcznie, a przycisk został na ekranie. Teraz przycisk jest widoczny tylko, gdy są niezapisane serie z planu (znika po odhaczeniu, wraca po wyczyszczeniu serii).
+- Przypadkowo włączony trening (czas rusza od pierwszego wpisu w pole): jeśli od startu minęło ponad 30 min bez żadnej zapisanej serii, pierwsza zapisana seria zaczyna liczenie od nowa; w podsumowaniu jest „Licz czas od teraz” (dwa dotknięcia) i pole „Popraw czas (min)”, także po zapisaniu jednostki.
+- Czas dalej startuje od pierwszego wpisu, a nie od pierwszej zapisanej serii, żeby rozgrzewka i ustawianie sprzętu wchodziły do czasu treningu (sRPE-TL).
+
 ## 2026-10-12 · Plan v3 (przegląd dla trenera, menu Trening, instruktaż i partie)
 
 Plan i stan: `docs/plan-v3.md`.

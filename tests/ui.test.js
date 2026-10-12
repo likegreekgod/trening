@@ -631,10 +631,10 @@ test('CMJ z filmu: wybicie i lądowanie → czas lotu → wysokość, ustawienie
   const kv = await p.$$eval('#cmj-out .kv b', b => b.map(x => parseFloat(x.textContent.replace(',', '.'))));
   assert.ok(Math.abs(kv[1] - t) < 0.002 && kv[1] > kv[0]);
   const flight = kv[1] - kv[0], h = 1.22625 * flight * flight * 100;
-  assert.ok(Math.abs(parseFloat((await p.textContent('#cmj-h')).replace(',', '.')) - h) <= 0.1, 'wysokość ' + h.toFixed(1));
+  assert.ok(Math.abs(parseFloat((await p.textContent('#cmj-h')).replace(',', '.')) - h) <= 0.3, 'wysokość ' + h.toFixed(1));   // czasy na ekranie zaokrąglone do 0,001 s
   assert.deepEqual(await a11y(p), []);
   await p.selectOption('#cmj-preset', 'x4');                                    // plik zwolniony ×4 → czas lotu ÷ 4
-  assert.ok(Math.abs(parseFloat((await p.textContent('#cmj-h')).replace(',', '.')) - h / 16) <= 0.1);
+  assert.ok(Math.abs(parseFloat((await p.textContent('#cmj-h')).replace(',', '.')) - h / 16) <= 0.1 + 0.3 / 16);
   await p.selectOption('#cmj-preset', 'n60');
   const shown = (await p.textContent('#cmj-h')).trim();
   if (h <= 90) { await p.click('#cmj-save'); assert.equal(await p.inputValue('#dysp input[data-j="0"]'), shown); }
@@ -706,6 +706,58 @@ test('Postęp: bez historii czytelne komunikaty zamiast pustych wykresów', asyn
   assert.match(await p.textContent('#postep'), /Wykres pojawi się po pierwszych treningach/);
   await p.click('[data-pt="obj"]'); assert.match(await p.textContent('#postep'), /Objętość pojawi się/);
   await p.click('[data-pt="dys"]'); assert.match(await p.textContent('#postep'), /po pierwszych zapisach na ekranie Dyspozycja/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+// --- uwagi klientów 12.10: „Wszystko jak w planie” i przypadkowy start czasu ---
+test('„Wszystko jak w planie”: znika po ręcznym odhaczeniu serii, wraca po wyczyszczeniu, nigdy „0 serii”', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await p.isVisible('[data-all="1"]'), true);
+  for (const s of [1, 2, 3]) await p.click(`.set[data-o="1"][data-s="${s}"] .ok`);
+  assert.equal(await p.isHidden('[data-all="1"]'), true);                        // wszystko odhaczone ręcznie → przycisk znika
+  await p.click('.set[data-o="1"][data-s="2"] .ok'); await p.click('.set[data-o="1"][data-s="2"] .ok');   // ✓ → ✕ → puste
+  assert.equal(await p.isVisible('[data-all="1"]'), true);
+  const before = calls.filter(c => c.fn === 'logSet').length;
+  await p.click('[data-all="1"]'); await p.waitForTimeout(100);
+  assert.equal(await p.textContent('#toast'), 'Zapisano 1 serię.');
+  assert.equal(calls.filter(c => c.fn === 'logSet').length, before + 1);
+  assert.equal(await p.isHidden('[data-all="1"]'), true);
+  await p.reload(); await p.waitForSelector('.set[data-o="1"]');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Czas treningu: przypadkowy start 2 h wcześniej → liczy od pierwszej zapisanej serii; „Licz czas od teraz”; ręczna poprawka minut', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: PRO });
+  await p.clock.install({ time: new Date('2026-10-06T14:00:00') });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.fill('.set[data-o="1"][data-s="1"] .kg', '55');                        // przypadkowe dotknięcie pola: czas rusza
+  await p.clock.fastForward(2 * 3600 * 1000); await p.clock.runFor(1100);
+  assert.match(await p.textContent('#stats .clock'), /^2:00:0\d$/);
+  await p.click('.set[data-o="1"][data-s="1"] .ok');                             // pierwsza seria po 2 h
+  assert.equal(await p.textContent('#toast'), 'Czas treningu liczę od teraz.');
+  await p.clock.runFor(1100);
+  assert.match(await p.textContent('#stats .clock'), /^00:0[0-2]$/);
+  await p.clock.fastForward(40 * 60000);
+  await p.click('.set[data-o="1"][data-s="2"] .ok');                             // kolejne serie już nie zerują
+  await p.clock.runFor(1100);
+  assert.match(await p.textContent('#stats .clock'), /^40:0\d$/);
+  // ręczne „Licz czas od teraz”: dwa dotknięcia
+  await p.click('#t-reset'); assert.match(await p.textContent('#t-reset'), /Na pewno/);
+  await p.click('#t-reset'); await p.clock.fastForward(5 * 60000); await p.clock.runFor(1100);
+  assert.match(await p.textContent('#stats .clock'), /^05:0\d$/);
+  await p.click('#saveSess'); await p.waitForTimeout(0); await p.clock.runFor(300);
+  assert.equal(calls.find(c => c.fn === 'logSession').args[0].minutes, 5);
+  // po zapisaniu: poprawka minut ręcznie
+  await p.waitForSelector('#smin'); assert.equal(await p.inputValue('#smin'), '5');
+  assert.equal(await p.$('#t-reset'), null);
+  await p.fill('#smin', '62'); await p.click('#saveSess'); await p.clock.runFor(300);
+  assert.equal(calls.filter(c => c.fn === 'logSession').pop().args[0].minutes, 62);
+  assert.deepEqual(await a11y(p), []);
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });

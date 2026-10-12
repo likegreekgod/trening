@@ -103,6 +103,8 @@ Konwencje Damiana:
   - zmiana kg/powt./RPE w zapisanej serii zapisuje ją od razu;
   - PRO: lista RPE albo RIR (0…5+) wg `cfg.scale` i przełącznika w nagłówku (`sc_<klucz>`); zapis zawsze w RPE;
   - recepta: kwadrat w kolorze talerza wg % 1RM, „RIR ≥ n” przy skali RIR; „Ostatnio: kg × powt. · RPE” z poprzedniej jednostki (`lastTop`).
+  - „✓ Wszystko jak w planie” (PROSTY) widoczne tylko przy niezapisanych seriach z planu (`refreshAll`);
+  - czas jednostki: start od pierwszego wpisu; pierwsza zapisana seria po > 30 min bez serii restartuje go (`LATE_START_MIN`, `restartClock`); w podsumowaniu „Licz czas od teraz” i ręczna poprawka minut (`#smin` ma pierwszeństwo);
   - po zaliczeniu serii (✓/✕, nie rozgrzewka) timer przerwy nad dolnym menu: A 2:00, B 1:30, K 1:00 (`restSec`), −15 / +15 / Pomiń, wibracja na koniec;
   - Wake Lock od pierwszego wpisu do „Zakończ” (ponownie po powrocie do aplikacji);
   - „Talerze”: okno `#sheet` z rozkładem na stronę (`plates`), gryf 20/15 kg i zamki 2 × 2,5 kg zapamiętane w `pl_<klucz>`.
