@@ -290,20 +290,47 @@ test('exInfo_ i missingExercises_: kompleksy składają się z części', () => 
   assert.deepEqual(Array.from(C.missingExercises_(plan, [])), ['Back Squat (wysoko)', 'Jerk + Żuraw', 'martwy ciąg', 'Przysiad tylny', 'Żuraw']);
 });
 
-test('seedRows_ i CW_BAZA: baza ćwiczeń do wczytania', () => {
-  assert.deepEqual(plain(C.seedRows_([['Front Squat', 'abcdefghijk', 'czworogłowe'], ['Nowe', 'IDID_123-xy', 'barki; triceps', 'Nowe 2'], ['', 'x', '']], CW)),
-    [['Nowe', 'Nowe 2', 'https://www.youtube.com/watch?v=IDID_123-xy', 'barki; triceps', '', '']]);
+test('cwSync_: nowe wiersze, dopisane aliasy, usuwane zaślepki; ręczne wpisy zostają', () => {
+  const baza = [['Front Squat', 'abcdefghijk', 'czworogłowe', 'Przysiad przedni; FS'], ['Nowe', 'IDID_123-xy', 'barki; triceps', 'Nowe 2'], ['Bez filmu', '', 'łydki', ''], ['', 'x', '', '']];
+  const sheet = CW.concat([{ cwiczenie: 'Przysiad przedni (pauza)' }, { cwiczenie: 'Żuraw' }, { cwiczenie: 'Front Squat' }]);
+  sheet[10] = Object.assign({}, sheet[10], { aliasy: 'fs; Mój alias' });
+  const s = plain(C.cwSync_(baza, sheet));
+  assert.deepEqual(s.add, [['Nowe', 'Nowe 2', 'https://www.youtube.com/watch?v=IDID_123-xy', 'barki; triceps', '', ''], ['Bez filmu', '', '', 'łydki', '', '']]);
+  assert.deepEqual(s.aliases, [{ i: 10, value: 'fs; Mój alias; Przysiad przedni' }]);   // ręczny alias zostaje, „FS” już jest
+  assert.deepEqual(s.drop, [11, 13]);                                            // zaślepki z dopasowaniem; „Żuraw” zostaje do uzupełnienia
+  assert.deepEqual(plain(C.cwSync_(baza, [])).add.length, 3);
+  assert.deepEqual(plain(C.cwBaza_([['A', 'id1', 'p', 'x'], ['B', 'id2', '']], { A: 'y; z', B: 'b' }, [['D', 'd1; d2', 'łydki']])),
+    [['A', 'id1', 'p', 'x; y; z'], ['B', 'id2', '', 'b'], ['D', '', 'łydki', 'd1; d2']]);
+});
+
+test('zaślepka nie zasłania aliasu, „tempo” to dopisek', () => {
+  const rows = [{ cwiczenie: 'Split Squat', aliasy: 'Split Stance Squat', instruktaz: 'https://example.test/ss' }, { cwiczenie: 'Split Stance Squat' }];
+  const ix = C.exIndex_(rows);
+  assert.equal(C.exFind_(ix, 'Split Stance Squat').name, 'Split Squat');
+  assert.equal(C.exFind_(ix, 'Split squat (tylna stopa na podłodze), tempo 3-1-1').name, 'Split Squat');
+  assert.deepEqual(Array.from(C.missingExercises_([{ cwiczenie: 'Split Stance Squat' }, { cwiczenie: 'Żuraw' }], rows.concat([{ cwiczenie: 'Żuraw' }]))), ['Żuraw']);
+});
+
+test('CW_BAZA, CW_ALIASY, CW_DODATKI: baza ćwiczeń do wczytania', () => {
   const B = Array.from(C.CW_BAZA), PARTS = ['pośladki', 'dwugłowe uda', 'czworogłowe', 'barki', 'prostowniki grzbietu', 'brzuch', 'plecy', 'triceps', 'skośne brzucha', 'kapturowe', 'biceps', 'klatka', 'przywodziciele', 'przedramiona'];
   assert.equal(B.length, 624);
   assert.equal(new Set(B.map(b => C.exKey_(b[0]))).size, B.length);
   B.forEach(b => { assert.ok(b.length === 3 || b.length === 4); assert.match(b[1], /^[\w-]{6,20}$/); b[2].split('; ').filter(Boolean).forEach(p => assert.ok(PARTS.includes(p), b[0] + ': ' + p)); });
-  const rows = plain(C.seedRows_(B, [])), ix = C.exIndex_(rows.map(r => Object.fromEntries(C.CW_HEADERS.map((h, i) => [h, r[i]])))), f = n => (C.exFind_(ix, n) || {}).name || null;
-  assert.equal(rows.length, 624);
+  const names = B.map(b => b[0]), D = Array.from(C.CW_DODATKI);
+  Object.keys(C.CW_ALIASY).forEach(k => assert.ok(names.includes(k), 'alias do nieistniejącego ćwiczenia: ' + k));
+  D.forEach(d => { assert.equal(d.length, 3); assert.ok(!names.includes(d[0]), d[0]); assert.ok(d[2]); });
+  const all = C.cwBaza_(B, C.CW_ALIASY, D), s = C.cwSync_(all, []);
+  assert.equal(s.add.length, 624 + D.length);
+  const rows = plain(s.add).map(r => Object.fromEntries(C.CW_HEADERS.map((h, i) => [h, r[i]]))), ix = C.exIndex_(rows), f = n => (C.exFind_(ix, n) || {}).name || null;
+  const keys = {}; rows.forEach(r => [r.cwiczenie].concat(r.aliasy.split(';')).map(C.exKey_).filter(Boolean).forEach(k => { assert.ok(!keys[k], 'powtórzona nazwa lub alias: ' + k); keys[k] = 1; }));
+  assert.deepEqual(plain(C.cwSync_(all, rows)), { add: [], aliases: [], drop: [] });   // drugie wczytanie nic nie zmienia
   assert.deepEqual(['Snatch Pull', 'Power Clean from Block', 'Chin Up', 'DB Lateral Raise', 'SL RDL', 'Block Power Snatch (nad kolanem)', 'Jerk Dip z pauzą 3 s', 'Back Squat 1¼'].map(f),
     ['Snatch Pull', 'Block Power Clean', 'Chin-up', 'Dumbbell Lateral Raise', 'Single-Leg RDL', 'Block Power Snatch', 'Jerk Dip', '1-1/4 Back Squat']);
-  assert.deepEqual(['Slow Snatch', 'Ring Dips', 'Sotts Press', 'Weighted Pull-up'].map(f), Array(4).fill(null));   // bez zgadywania: alias albo własny wiersz
+  assert.deepEqual(['Przysiad tylny', 'Ciąg rwaniowy (z podłogi, do pełnego wyprostu)', 'Wykroki bułgarskie (hantle), tempo 3-1-X', 'Sotts Press', 'Wypychanie na suwnicy', 'Power jerk z rack — 2 s pauza w dipie + 3 s fiksacja'].map(f),
+    ['Back Squat', 'Snatch Pull', 'Bulgarian Split Squat', 'Press In Snatch (Sots Press)', 'Leg Press', 'Pause Power Jerk']);
+  assert.deepEqual(['Slow Snatch', 'Ring Y-Raise', 'Drop Squat to Jump'].map(f), Array(3).fill(null));   // bez zgadywania: alias albo własny wiersz
   assert.deepEqual(C.exInfo_(ix, 'Hang Clean (nad kolanem) + Jerk').infos.map(i => i.n), ['Hang Clean', 'Split Jerk']);   // „Jerk” to alias Split Jerk
-  assert.deepEqual([C.exInfo_(ix, 'Snatch').parts.length, C.exInfo_(ix, 'Back Squat').parts.length > 0], [0, true]);   // boje bez partii
+  assert.deepEqual([C.exInfo_(ix, 'Snatch').parts.length, C.exInfo_(ix, 'Back Squat').parts.length > 0, C.exInfo_(ix, 'Suwnica').infos.length], [0, true, 0]);   // boje bez partii, dodatki bez filmu
 });
 
 test('computeParts_: serie i serie twarde na partię, zamiana liczy zamiennik', () => {
