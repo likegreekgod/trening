@@ -447,6 +447,7 @@ test('Film: kamera przy każdej serii (nie przy rozgrzewce), wgranie do wybranej
   assert.deepEqual((({ set, vbt, done }) => ({ set, vbt, done }))(lastSet(calls)), { set: 2, vbt: 0.85, done: true });
   assert.equal(await p.$eval('.set[data-o="1"][data-s="2"] .cam', b => b.classList.contains('has')), true);
   await p.click('.set[data-o="1"][data-s="2"] .cam');
+  assert.deepEqual(await p.$eval('#sheet input[type=file]', i => i.map(x => [x.id, x.accept, x.getAttribute('capture')])), [['cam-rec', 'video/*', 'environment'], ['cam-file', 'video/*', null]]);   // osobno aparat i wybór pliku
   await p.setInputFiles('#cam-file', MP4); await p.waitForSelector('#sheet', { state: 'hidden' });
   assert.equal(calls.find(c => c.fn === 'startUpload').args[0].set, 2);
   assert.deepEqual((({ set, vbt, video, done }) => ({ set, vbt, video, done }))(lastSet(calls)),
