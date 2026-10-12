@@ -5,7 +5,7 @@ Ustalenia z 12.10.2026 (decyzje w `docs/decyzje.md`). Każdy PR przechodzi `npm 
 | PR | Zakres | Gdzie | Stan |
 |---|---|---|---|
 | 1 | Zakładka `Przegląd` (klient × dziś, najpilniejsi na górze) + menu „Przegląd klientów” | arkusz | ✓ 12.10 |
-| 2 | Menu Trening: „Odśwież linki”, „Zainstaluj wyzwalacze”, „Sprawdź arkusz” (diagnostyka). „Dodaj klienta” już jest (12.10, osobna sesja) | arkusz | |
+| 2 | Menu Trening: „Odśwież linki”, „Zainstaluj wyzwalacze”, „Sprawdź arkusz” (diagnostyka). „Dodaj klienta” już jest (12.10, osobna sesja) | arkusz | ✓ 12.10 |
 | 3 | Zakładka `Ćwiczenia` (słownik: nazwa, link do instruktażu, partia, domyślne zamienniki, grupa); przycisk „Jak wykonać” w aplikacji; serie twarde na partię w Podsumowaniu i w Postęp → Objętość | arkusz + aplikacja | |
 | 4 | Alert mailowy raz dziennie rano, tylko gdy ktoś ma sygnał do reakcji; adres we właściwościach skryptu | arkusz | |
 

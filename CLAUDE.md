@@ -78,7 +78,7 @@ Arkusz zawsze zapisuje RPE (RIR = 10 − RPE to tylko widok). Ocena podejścia w
 ## Plany treningowe
 
 Plany tworzy Claude w projekcie claude.ai („Trener personalny (OLY)”) i zapisuje je jako JSON do `Trening – Klienci/_plany/` na Drive.
-`wczytajPlany()` działa z wyzwalacza co 15 min albo z menu „Trening”. Kolejno: waliduje plik (`validatePlan_`), podmienia wiersze klientów z pliku (`mergePlan_`: jednostki zrobione zostają; zrobiona jednostka z innym blokiem w pliku = błąd), przenosi plik do `_plany/wczytane` albo `_plany/bledy` i zapisuje wynik w zakładce Import.
+`wczytajPlany()` działa z wyzwalacza co 15 min albo z menu „Trening”. Menu „Trening” (`onOpen`) ma też: Przegląd klientów, Dodaj klienta, Odśwież linki klientów, Sprawdź arkusz (`diagnose_`, czysta funkcja z testem) i Zainstaluj wyzwalacze; okna w arkuszu mogą używać `google.script.run`, bo to interfejs trenera, a nie `web/`. Kolejno: waliduje plik (`validatePlan_`), podmienia wiersze klientów z pliku (`mergePlan_`: jednostki zrobione zostają; zrobiona jednostka z innym blokiem w pliku = błąd), przenosi plik do `_plany/wczytane` albo `_plany/bledy` i zapisuje wynik w zakładce Import.
 Konwencje Damiana:
 - % z max;
 - kg zaokrąglane **w dół** do 2,5 kg;
