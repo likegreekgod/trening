@@ -2,6 +2,17 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-12 · Plan v3 (przegląd dla trenera, menu Trening, instruktaż i partie)
+
+Plan i stan: `docs/plan-v3.md`.
+
+- Kolejność: zakładka `Przegląd` → menu Trening → zakładka `Ćwiczenia` z instruktażem i partiami → alert mailowy.
+- Instruktaż i partia mięśniowa ze słownika w nowej zakładce `Ćwiczenia`, a nie z kolumn planu (wpis raz, działa we wszystkich planach).
+- Alert mailowy raz dziennie rano i tylko przy sygnale do reakcji; adres we właściwościach skryptu, nie w repozytorium.
+- Jednostka zaległa = niezrobiona ≥ 2 dni po dacie z planu (klienci przesuwają treningi).
+- Wiadomość od trenera w aplikacji: pominięta (brak potrzeby). Przypomnienia o treningu: odłożone do wersji ze sklepu.
+- „Dodaj klienta” w menu Trening dodała 12.10 osobna sesja Claude (commit wprost do `main`, wdrożony); kolejne zmiany znów przez PR-y.
+
 ## 2026-10-11 · v2 wdrożone (PR 1–11 z `docs/ui-v2-plan.md`)
 
 - Wszystkie 11 PR-ów v2 scalone i opublikowane 09–11.10.2026; `npm test`: 74 testy (logika serwera, `web/lib.js`, UI w Playwright w obu motywach i trybach).

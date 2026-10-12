@@ -205,3 +205,37 @@ test('slugId_ i buildClientRow_: nowy klient z menu', () => {
   assert.match(C.buildClientRow_({ imie: 'A', dod_serie: '9' }, [], 'k').error, /0–5/);
   assert.equal(C.buildClientRow_({ imie: 'Ewa', id: 'Ewa K' }, [], 'k').id, 'ewa-k');
 });
+
+test('computeOverview_: przegląd klientów – sygnały, zaległe, koniec planu, kolejność wg pilności', () => {
+  const today = '2026-10-12';                                                  // poniedziałek
+  const P = (k, j, data, nr, cw, x) => Object.assign({ klient: k, tydzien: 1, jednostka: j, data, nr, cwiczenie: cw, prio: 'A', serie: 3, powt: '5', kg: 80 }, x || {});
+  const L = (k, j, nr, cw, s, x) => Object.assign({ klient: k, tydzien: 1, jednostka: j, data: '2026-10-05', nr_cw: nr, cwiczenie: cw, seria: s, kg: 80, powt: 5, rpe: 8, wykonane: 'TAK', typ: '', zapisano: new Date('2026-10-06T17:00:00Z') }, x || {});
+  const klienci = [{ klient_id: 'anna', imie: 'Anna', aktywny: 'TAK' }, { klient_id: 'bob', imie: 'Bob', aktywny: 'TAK' }, { klient_id: 'cel', imie: 'Cel', aktywny: 'NIE' },
+    { klient_id: 'dan', imie: 'Dan', aktywny: '' }, { klient_id: 'ewa', imie: 'Ewa', aktywny: 'TAK' }];
+  const plan = [P('anna', 'T1', '2026-10-05', 1, 'Przysiad'), P('anna', 'T1', '2026-10-05', 2, 'Wiosłowanie'), P('anna', 'T2', '2026-10-08', 1, 'Przysiad'),
+    P('anna', 'T3', '2026-10-14', 1, 'Przysiad'), P('anna', 'T4', '2026-10-16', 1, 'Przysiad'), P('cel', 'T1', '2026-10-01', 1, 'Przysiad'),
+    P('dan', 'T1', '2026-09-01', 1, 'Przysiad'), P('ewa', 'T1', '2026-10-10', 1, 'Rwanie', { procent: 0.8, grupa: 'R' })];
+  const log = [L('anna', 'T1', 1, 'Przysiad', 1), L('anna', 'T1', 1, 'Przysiad', 2, { typ: 'FAIL', rpe: '' }), L('anna', 'T1', 1, 'Przysiad', 3, { typ: 'FAIL', rpe: '', film_link: 'https://drive.example/f1' }),
+    L('anna', 'T1', 2, 'Wiosłowanie hantlem', 1, { zamiana: 'Wiosłowanie → Wiosłowanie hantlem | Ból' }),
+    L('dan', 'T1', 1, 'Przysiad', 1, { data: '2026-09-01', zapisano: new Date('2026-09-01T10:30:00Z') }),
+    L('ewa', 'T1', 1, 'Rwanie', 1, { typ: 'FAIL', rpe: '', data: '2026-10-10', zapisano: new Date('2026-10-10T17:00:00Z') }),
+    L('ewa', 'T1', 1, 'Rwanie', 2, { typ: 'FAIL', rpe: '', data: '2026-10-10', zapisano: new Date('2026-10-10T17:05:00Z') })];
+  const ses = [{ klient: 'anna', tydzien: 1, jednostka: 'T1', data: '2026-10-05', start: '2026-10-06T16:00:00.000Z', samopoczucie: 2, czas_min: 60, rpe_sesji: 8, bol: 'kolano:5; bark:1', bol_max: 5, uwagi: 'Kolano boli\npo schodach.' },
+    { klient: 'dan', tydzien: 1, jednostka: 'T1', data: '2026-09-01', start: '2026-09-01T10:00:00.000Z', samopoczucie: 4, czas_min: 50 }];
+  const dys = [{ klient: 'anna', data: '2026-10-11', werdykt: 'Zmęczenie' }, { klient: 'anna', data: '2026-10-01', werdykt: 'Uwaga' }, { klient: 'ewa', data: '2026-10-12', werdykt: 'Uwaga' }];
+  const sum = [Object.assign(new Array(C.SUM_HEADERS.length).fill(''), { 0: 'anna', 1: '2026-10-05', [C.SUM_HEADERS.indexOf('status')]: '🟠 uwaga' })];
+  const rows = C.computeOverview_(plan, log, ses, klienci, dys, sum, { today });
+  const H = C.PRZ_HEADERS, v = (r, h) => r[H.indexOf(h)];
+  assert.deepEqual(rows.map(r => [r[0], v(r, 'pilnosc')]), [['anna', 13], ['ewa', 3], ['dan', 2], ['bob', 1]]);   // nieaktywny „cel” pominięty
+  const a = rows[0];
+  assert.equal(v(a, 'do_reakcji'), 'ból kolano 5/10 (06.10); 2× FAIL: Przysiad; dyspozycja: Zmęczenie (11.10); samopoczucie 2/5 (06.10); ' +
+    'zamiana (ból): Wiosłowanie → Wiosłowanie hantlem; zaległe: T2 08.10; plan kończy się za 4 dni');
+  assert.deepEqual([v(a, 'ostatni_trening'), v(a, 'dni_temu'), v(a, 'ten_tydzien'), v(a, 'zalegle'), v(a, 'filmy_7dni'), v(a, 'koniec_planu_dni')],
+    ['2026-10-06', 6, '0/2', 1, 1, 4]);                                          // faktyczny dzień z Sesje.start, nie data z planu
+  assert.equal(v(a, 'status_tygodnia'), '🟠 uwaga (tydz. od 05.10)');
+  assert.equal(v(a, 'uwagi_klienta'), '06.10: Kolano boli po schodach.');
+  assert.equal(v(rows[1], 'do_reakcji'), '2× spalone < 85%: Rwanie; dyspozycja: Uwaga (12.10); zaległe: T1 10.10');   // serie bez zamkniętej sesji: dzień z „zapisano”
+  assert.equal(v(rows[1], 'ostatni_trening'), '2026-10-10');
+  assert.equal(v(rows[2], 'do_reakcji'), 'plan skończony; brak treningu od 41 dni');
+  assert.equal(v(rows[3], 'do_reakcji'), 'brak planu');
+});

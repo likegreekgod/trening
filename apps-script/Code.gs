@@ -552,6 +552,7 @@ function onOpen() {
     .addItem('Wczytaj plany z Drive', 'wczytajPlany')
     .addItem('Dodaj klienta', 'dodajKlienta')
     .addItem('Odśwież podsumowanie', 'podsumowanie')
+    .addItem('Przegląd klientów', 'przeglad')
     .addToUi();
 }
 
@@ -569,8 +570,16 @@ function instalujWyzwalacze() {
 function podsumowanie() {
   const localDay = t => Utilities.formatDate(new Date(t), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const plan = tableOf_('Plan'), log = tableOf_('Log'), ses = tableOf_('Sesje');
-  const res = computeSummary_(plan, log, ses, tableOf_('Klienci'), { localDay });
-  const bl = computeBlocks_(plan, log, ses, tableOf_('Dyspozycja'), res.rows, { localDay });
+  const klienci = tableOf_('Klienci'), dys = tableOf_('Dyspozycja');
+  const res = computeSummary_(plan, log, ses, klienci, { localDay });
+  const bl = computeBlocks_(plan, log, ses, dys, res.rows, { localDay });
+  const ov = computeOverview_(plan, log, ses, klienci, dys, res.rows, { today: today_(), localDay });
+  writeTable_('Przegląd', PRZ_HEADERS, ov, (sh, n) => {
+    if (!n) return;
+    const c = PRZ_HEADERS.indexOf('pilnosc') + 1;
+    sh.getRange(2, c, n, 1).setBackgrounds(ov.map(r => [r[c - 1] >= 3 ? '#f8c9c4' : r[c - 1] >= 1 ? '#fde2b8' : '#cdebd3']));
+    ['do_reakcji', 'uwagi_klienta'].forEach(k => sh.getRange(2, PRZ_HEADERS.indexOf(k) + 1, n, 1).setWrap(true));
+  });
   writeTable_('Bloki', BLOK_HEADERS, keepNotes_(bl, tableOf_('Bloki')));
   writeTable_('Podsumowanie', SUM_HEADERS, res.rows, (sh, n) => {
     const col = SUM_HEADERS.indexOf('status') + 1;
@@ -917,6 +926,97 @@ function keepNotes_(rows, old) {
   const out = rows.map(r => { const k = r[0] + '|' + r[1]; seen[k] = 1; const c = r.slice(); if (prev[k]) c[W] = prev[k].wnioski; return c; });
   Object.keys(prev).filter(k => !seen[k]).forEach(k => out.push(BLOK_HEADERS.map(h => prev[k][h] === undefined ? '' : prev[k][h])));
   return out;
+}
+
+/* ================== PRZEGLĄD (klient × dziś: komu trzeba się przyjrzeć) ==================
+ * Liczony razem z podsumowaniem (codziennie ok. 5:00, menu Trening → Przegląd klientów). Jeden wiersz na aktywnego klienta,
+ * najpilniejsi na górze. pilnosc = 3 × sygnały czerwone + sygnały pomarańczowe (flagi do decyzji trenera, nie diagnoza).
+ * Czerwone (ostatnie 7 dni): ból > 3/10, ≥ 2 FAIL w ćwiczeniu poza bojami w jednej jednostce, dyspozycja „Zmęczenie” (3 dni).
+ * Pomarańczowe: samopoczucie ≤ 2, ≥ 2 spalone boje < 85% w jednostce, zamiana z powodu bólu, dyspozycja „Uwaga”,
+ * jednostka zaległa (≥ 2 dni po dacie z planu, do 28 dni wstecz), brak treningu ≥ 7 dni, plan kończy się za ≤ 7 dni albo brak planu.
+ */
+const PRZ_HEADERS = ['klient', 'imie', 'pilnosc', 'do_reakcji', 'ostatni_trening', 'dni_temu', 'ten_tydzien', 'zalegle', 'status_tygodnia',
+  'uwagi_klienta', 'filmy_7dni', 'koniec_planu_dni'];
+const PRZ = { late: 2, lateMax: 28, window: 7, readyDays: 3, idle: 7, planEnd: 7 };
+
+function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
+  const today = opts.today, localDay = (opts && opts.localDay) || localDayDefault_;
+  const key = (...a) => a.map(String).join('|'), lc = v => String(v === undefined || v === null ? '' : v).toLowerCase();
+  const dayOf = v => blank_(v) ? '' : v instanceof Date ? localDay(v.toISOString()) : /T/.test(String(v)) ? localDay(String(v)) : String(v).slice(0, 10);
+  const planDay = v => { if (blank_(v)) return ''; const d = day_(v); return isNaN(d) ? '' : iso_(d); };
+  const diff = (a, b) => Math.round((day_(a) - day_(b)) / 864e5);          // a − b w dniach
+  const dm = d => d ? d.slice(8, 10) + '.' + d.slice(5, 7) : '';
+  const AD = unitDates_(ses, localDay), ws = weekOf_(today), SI = SUM_HEADERS.indexOf('status');
+  const P = {}; plan.forEach(r => { P[key(lc(r.klient), r.tydzien, r.jednostka, r.nr)] = r; });
+
+  return (klienci || []).filter(k => !blank_(k.klient_id) && String(k.aktywny).toUpperCase() !== 'NIE').map(k => {
+    const c = lc(k.klient_id), red = [], amb = [];
+    // jednostki z planu: data z planu, czy zrobiona, faktyczny dzień
+    const U = {};
+    plan.forEach(r => { if (lc(r.klient) !== c) return; const u = key(c, r.tydzien, r.jednostka); if (!U[u]) U[u] = { name: String(r.jednostka), date: planDay(r.data), done: false, act: '' }; });
+    const mine = ses.filter(s => lc(s.klient) === c).map(s => { const u = key(c, s.tydzien, s.jednostka); return { s, u, act: AD[u] || planDay(s.data) }; });
+    mine.forEach(m => { if (U[m.u]) { U[m.u].done = true; U[m.u].act = m.act; } });
+    const units = Object.values(U);
+    const logs = log.filter(l => lc(l.klient) === c && String(l.wykonane).toUpperCase() === 'TAK').map(l => {
+      const u = key(c, l.tydzien, l.jednostka); return { l, u, day: AD[u] || dayOf(l.zapisano) || planDay(l.data) }; });
+    const recent = d => d && diff(today, d) >= 0 && diff(today, d) < PRZ.window;
+
+    // ostatni trening
+    const last = mine.map(m => m.act).concat(logs.map(x => x.day)).filter(d => d && d <= today).sort().pop() || '';
+    const ago = last ? diff(today, last) : '';
+
+    // sesje z ostatnich 7 dni: ból, samopoczucie
+    mine.filter(m => recent(m.act)).forEach(m => {
+      let top = ['', -1];
+      String(m.s.bol || '').split(';').forEach(x => { const q = x.split(':'), v = n_((q[1] || '').trim()); if (v > top[1]) top = [(q[0] || '').trim(), v]; });
+      if (top[1] < 0) [['kolano', n_(m.s.bol_kolano)], ['bark', n_(m.s.bol_bark)], ['', n_(m.s.bol_max)]].forEach(q => { if (q[1] > top[1]) top = q; });
+      if (top[1] > 3) red.push('ból' + (top[0] ? ' ' + top[0] : '') + ' ' + top[1] + '/10 (' + dm(m.act) + ')');
+      const feel = n_(m.s.samopoczucie); if (feel > 0 && feel <= 2) amb.push('samopoczucie ' + feel + '/5 (' + dm(m.act) + ')');
+    });
+    // serie z ostatnich 7 dni: FAIL poza bojami, spalone boje < 85%, zamiany z powodu bólu
+    const fails = {}, burns = {}, swaps = {};
+    logs.filter(x => recent(x.day)).forEach(x => {
+      const l = x.l, pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {}, name = String(l.cwiczenie), g = groupOf_(pr.grupa, name);
+      if (/FAIL/.test(String(l.typ || ''))) {
+        const id = x.u + '|' + name, pct = n_(pr.procent), pkg = n_(pr.kg), kg = n_(l.kg), rel = pct > 0 && pkg > 0 && kg > 0 ? kg / (pkg / pct) : NaN;
+        if (g === 'R' || g === 'P') { if (rel < 0.85) burns[id] = (burns[id] || 0) + 1; } else fails[id] = (fails[id] || 0) + 1;
+      }
+      const z = String(l.zamiana || ''); if (/\|\s*ból/i.test(z)) swaps[z.replace(/\s*\|.*$/, '')] = 1;
+    });
+    Object.keys(fails).forEach(id => { if (fails[id] >= 2) red.push(fails[id] + '× FAIL: ' + id.split('|').pop()); });
+    Object.keys(burns).forEach(id => { if (burns[id] >= 2) amb.push(burns[id] + '× spalone < 85%: ' + id.split('|').pop()); });
+    Object.keys(swaps).forEach(z => amb.push('zamiana (ból): ' + z));
+    // dyspozycja z ostatnich 3 dni (najnowszy wpis)
+    const rd = (dys || []).filter(r => lc(r.klient) === c).map(r => ({ d: dayOf(r.data), w: String(r.werdykt || '') }))
+      .filter(r => r.d && diff(today, r.d) >= 0 && diff(today, r.d) < PRZ.readyDays).sort((a, b) => a.d.localeCompare(b.d)).pop();
+    if (rd && /zmęcz/i.test(rd.w)) red.push('dyspozycja: Zmęczenie (' + dm(rd.d) + ')'); else if (rd && /uwaga/i.test(rd.w)) amb.push('dyspozycja: Uwaga (' + dm(rd.d) + ')');
+
+    // ten tydzień, zaległe, koniec planu
+    const inWeek = d => d && d >= ws && diff(d, ws) < 7;
+    const wk = units.filter(u => inWeek(u.done ? u.act : u.date));
+    const late = units.filter(u => !u.done && u.date && diff(today, u.date) >= PRZ.late && diff(today, u.date) <= PRZ.lateMax).sort((a, b) => a.date.localeCompare(b.date));
+    if (late.length) amb.push('zaległe: ' + late.map(u => u.name + ' ' + dm(u.date)).join(', '));
+    const end = units.map(u => u.date).filter(Boolean).sort().pop() || '', left = end ? diff(end, today) : '';
+    if (!units.length) amb.push('brak planu');
+    else if (left !== '' && left < 0 && !units.some(u => !u.done)) amb.push('plan skończony');
+    else if (left !== '' && left >= 0 && left <= PRZ.planEnd) amb.push('plan kończy się za ' + left + ' dni');
+    if (units.length && ago !== '' && ago >= PRZ.idle) amb.push('brak treningu od ' + ago + ' dni');
+
+    const sr = (sumRows || []).filter(r => r[0] === c).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    const st = sr.filter(r => r[1] === ws).pop() || sr.pop();
+    const note = mine.filter(m => !blank_(m.s.uwagi) && m.act).sort((a, b) => a.act.localeCompare(b.act)).pop();
+    return [c, String(k.imie || ''), 3 * red.length + amb.length, red.concat(amb).join('; '), last, ago,
+      wk.filter(u => u.done).length + '/' + wk.length, late.length || '', st ? st[SI] + (st[1] === ws ? '' : ' (tydz. od ' + dm(st[1]) + ')') : '',
+      note ? dm(note.act) + ': ' + String(note.s.uwagi).replace(/\s+/g, ' ').slice(0, 300) : '',
+      logs.filter(x => !blank_(x.l.film_link) && recent(x.day)).length || '', left];
+  }).sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0]));
+}
+
+/** Menu Trening → Przegląd klientów: przelicza wszystko i otwiera zakładkę. */
+function przeglad() {
+  podsumowanie();
+  const sh = SpreadsheetApp.getActive().getSheetByName('Przegląd');
+  if (sh) sh.activate();
 }
 
 /* ================== WCZYTYWANIE PLANÓW Z DRIVE ==================
