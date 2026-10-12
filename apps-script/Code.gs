@@ -1316,13 +1316,18 @@ const fileIdOf_ = link => { const m = /\/d\/([\w-]{20,})|[?&]id=([\w-]{20,})/.ex
 const mmss_ = s => Math.floor(s / 60) + ':' + ('0' + Math.floor(s % 60)).slice(-2);
 
 /**
- * Czysta funkcja: kotwica komentarza Dysku → sekunda filmu albo null. Format kotwicy dla filmów nie jest udokumentowany,
- * więc szukamy pierwszej wartości pod kluczem z „time / start / offset / sec / ms”: liczba (ms, gdy klucz mówi o ms albo
+ * Czysta funkcja: kotwica komentarza Dysku → sekunda filmu albo null. Dysk zapisuje czas filmu jako tablicę
+ * [null, null, null, id, null, [[sekundy, nanosekundy]]] (ustalone na prawdziwym komentarzu, 13.10.2026). Dla innych zapisów szukamy pierwszej wartości pod kluczem z „time / start / offset / sec / ms”: liczba (ms, gdy klucz mówi o ms albo
  * wartość > 36000), „15s”, „15.2s”, „0:15”, „PT15S”.
  */
 function anchorSec_(anchor) {
   let o = anchor;
   if (typeof anchor === 'string') { try { o = JSON.parse(anchor); } catch (e) { return null; } }
+  if (Array.isArray(o)) {                                                      // Dysk, film: [null, null, null, id, null, [[sekundy, nanosekundy]]]
+    const t = o.filter(x => Array.isArray(x) && Array.isArray(x[0])).map(x => x[0]).pop();
+    const s = t ? Number(t[0]) || 0 : NaN, n = t ? Number(t[1]) || 0 : NaN;
+    return t && (typeof t[0] === 'number' || typeof t[1] === 'number') && s >= 0 && n >= 0 && n < 1e9 ? s + n / 1e9 : null;
+  }
   let best = null;
   const val = (v, key) => {
     if (typeof v === 'number' && isFinite(v) && v >= 0) return /ms|milli/i.test(key) || v > 36000 ? v / 1000 : v;

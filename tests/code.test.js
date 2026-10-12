@@ -392,6 +392,10 @@ test('anchorSec_, commentLines_, fileIdOf_: komentarze Dysku z czasem w filmie',
   const sec = a => C.anchorSec_(a);
   assert.deepEqual([sec('{"timestamp":15}'), sec('{"r":"head","a":[{"vid":{"timeMs":15400}}]}'), sec({ region: { startTime: '0:15' } }), sec('{"startOffset":"15.5s"}'),
     sec('{"time":"PT75S"}'), sec('{"videoTime":"1:02:03"}'), sec('{"startTime":95000}')], [15, 15.4, 15, 15.5, 75, 3723, 95]);
+  const real = '[null,null,null,"0B9xsrVcsVgjpZWp3N015RmlzOEZLVG1qNUU5TFhMVDk1bG13PQ",null,[[5,70999999]]]';   // kotwica z prawdziwego komentarza do filmu
+  assert.deepEqual([sec(real), sec('[null,null,null,"x",null,[[75]]]'), sec('[null,null,null,"x",null,[[null,500000000]]]'), sec('[null,null,null,"x",null,[[0,0]]]')], [5.070999999, 75, 0.5, 0]);
+  assert.deepEqual([sec('[null,null,null,"x"]'), sec('[]'), sec('[[["a"]]]')], [null, null, null]);
+  assert.equal(C.commentLines_([{ content: 'Biodra', anchor: real }]).text, '0:05 Biodra');
   assert.deepEqual([sec('to nie json'), sec('{"page":3}'), sec(''), sec(null), sec('{"time":"jutro"}')], [null, null, null, null, null]);
   const c = C.commentLines_([{ content: ' Łokcie wyżej\nprzy 2. powtórzeniu ', anchor: '{"timestamp":75}', createdTime: '2026-10-12T10:00:00Z' },
     { content: 'Dobre zejście', anchor: '{"timestamp":15}', createdTime: '2026-10-12T10:05:00Z' }, { content: 'Ogólnie lepiej niż tydzień temu', createdTime: '2026-10-12T09:00:00Z' },
