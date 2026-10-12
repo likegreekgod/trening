@@ -567,6 +567,7 @@ function onOpen() {
     .addItem('Uzupełnij listę ćwiczeń', 'uzupelnijCwiczenia')
     .addItem('Sprawdź arkusz', 'sprawdzArkusz')
     .addItem('Usuń plany bez klienta', 'usunPlanyBezKlienta')
+    .addItem('Uzupełnij puste bloki', 'uzupelnijBloki')
     .addItem('Zainstaluj wyzwalacze', 'menuWyzwalacze')
     .addItem('Ustaw adres alertu', 'ustawAlert')
     .addToUi();
@@ -1396,6 +1397,35 @@ function komentarzeAuto_() {
     p.setProperty('KOM_TS', String(Date.now()));
     syncComments_();
   } catch (err) { Logger.log('komentarze: ' + err); }
+}
+
+/**
+ * Czysta funkcja: wiersze Planu z pustą kolumną blok → {rows: [[indeks, blok]], ids: {klient: liczba wierszy}}.
+ * Pusty blok dostaje ostatni blok wpisany wcześniej u tego klienta, a gdy klient nie ma żadnego – „B1”.
+ */
+function fillBlocks_(plan) {
+  const last = {}, rows = [], ids = {};
+  (plan || []).forEach((r, i) => {
+    const c = String(r.klient === undefined || r.klient === null ? '' : r.klient).trim().toLowerCase(); if (!c) return;
+    const b = String(r.blok === undefined || r.blok === null ? '' : r.blok).trim();
+    if (b) { last[c] = b; return; }
+    rows.push([i, last[c] || 'B1']); ids[c] = (ids[c] || 0) + 1;
+  });
+  return { rows: rows, ids: ids };
+}
+
+/** Menu Trening → Uzupełnij puste bloki: po potwierdzeniu wpisuje blok tam, gdzie go brakuje (pierwszy plan klienta = B1). */
+function uzupelnijBloki() {
+  const ui = SpreadsheetApp.getUi(), o = fillBlocks_(tableOf_('Plan'));
+  if (!o.rows.length) { alert_('Bloki', 'Każdy wiersz Planu ma wpisany blok.'); return; }
+  const sh = SpreadsheetApp.getActive().getSheetByName('Plan'), col = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].indexOf('blok') + 1;
+  if (!col) { alert_('Bloki', 'W zakładce Plan nie ma kolumny blok.'); return; }
+  const list = Object.keys(o.ids).map(id => '• ' + id + ': ' + o.ids[id] + ' wierszy').join('\n');
+  if (ui.alert('Bloki', 'Wiersze Planu bez bloku:\n' + list + '\n\nWpisać blok? Klient bez żadnego bloku dostanie B1, pozostali swój ostatni wpisany blok.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  const rng = sh.getRange(2, col, sh.getLastRow() - 1, 1), v = rng.getValues();
+  o.rows.forEach(([i, b]) => { v[i][0] = b; });
+  rng.setValues(v);
+  alert_('Bloki', 'Uzupełniono wierszy: ' + o.rows.length + '. Zakładka Bloki odświeży się przy najbliższym podsumowaniu (albo teraz: Trening → Odśwież podsumowanie).');
 }
 
 /** Czysta funkcja: wiersze Planu, których klienta nie ma w zakładce Klienci → {ids: {klient: liczba wierszy}, n}. */

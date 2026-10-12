@@ -86,6 +86,7 @@ Zasady dla kolejnych bloków:
 | Nowy klient, linki | menu **Trening → Dodaj klienta**, **Odśwież linki klientów** |
 | Instruktaż i partie mięśniowe | zakładka **Ćwiczenia** (nazwa, aliasy, link, partie, zamienniki); menu **Trening → Wczytaj bazę ćwiczeń** wypełnia ją bazą (624 ćwiczenia z filmami + ok. 780 bez filmu, z partiami), **Uzupełnij listę ćwiczeń** dopisuje nazwy z planów bez dopasowania |
 | Coś nie działa | menu **Trening → Sprawdź arkusz** (klucze, linki, wyzwalacze, plany, pliki z błędami) |
+| Plan wczytany bez kolumny blok | menu **Trening → Uzupełnij puste bloki** (pyta o potwierdzenie) |
 | Plan wczytany pod złym identyfikatorem klienta | menu **Trening → Usuń plany bez klienta** (pyta o potwierdzenie) |
 | Komentarz do filmu klienta | skomentuj film na Dysku (z czasem); klient zobaczy to w aplikacji w ciągu ok. 30 min albo od razu po **Trening → Pobierz komentarze do filmów**. Uwaga bez filmu: kolumna `komentarz_trenera` w Logu lub Sesjach |
 | Wyzwalacze (5:00 i co 15 min) | menu **Trening → Zainstaluj wyzwalacze** |
