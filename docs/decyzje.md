@@ -66,7 +66,8 @@ Plan i stan: `docs/plan-v3.md`.
   - koniec przerwy nie wibruje pewnie przy zablokowanym telefonie (dopiero wersja ze sklepu da powiadomienie);
   - film wymaga sieci (nie trafia do kolejki); analiza z filmu działa bez sieci;
   - pierwsze dni dyspozycji bez sygnałów, dopóki nie ma średnich (Hooper 7, CMJ i prędkość 5 wpisów).
-- Do zrobienia: skill trenerski w claude.ai (kolumna `blok`, ciągła numeracja tygodni, `zamienniki`, czytanie zakładki `Bloki`); test na telefonie prawdziwego wgrania filmu i analizy; decyzja, czy dyspozycję pokazywać wszystkim klientom, czy dodać flagę.
+- Skill trenerski w claude.ai przepisany pod v2 (11.10.2026): plan jako JSON w `_plany/`, kolumna `blok`, ciągła numeracja tygodni, `zamienniki`, czytanie zakładki `Bloki` przed nowym planem, wnioski po bloku; bez `Plan.gs` i bez zmian kodu w projekcie claude.ai. Plik skilla jest poza repozytorium (zawiera identyfikatory arkusza i folderu).
+- Do zrobienia: wgrać nowy skill w claude.ai; test na telefonie prawdziwego wgrania filmu i analizy; decyzja, czy dyspozycję pokazywać wszystkim klientom, czy dodać flagę.
 
 ## 2026-10-09 · Plan wdrożenia v2, wdrażanie, historia klienta
 
