@@ -1212,7 +1212,7 @@ function card(ex){
     <div class="ch"><div class="cn">${esc(ex.name)}</div><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span></div>
     ${ex.swap ? `<div class="swapped"><span>Zamiast: ${esc(ex.swap.from)} · ${esc(ex.swap.why)}</span><button type="button" class="btn sm" data-unswap="${ex.order}">Cofnij zamianę</button></div>`
       : SWAP ? `<button type="button" class="btn sm swb" data-swap="${ex.order}">⇄ Zamień ćwiczenie</button>` : ''}
-    ${ex.info && !ex.swap ? `<a class="btn sm inf" href="${esc(ex.info)}" target="_blank" rel="noopener">▶ Jak wykonać</a>` : ''}
+    ${!ex.swap ? (ex.infos || []).map((i, n, a) => `<a class="btn sm inf" href="${esc(i.u)}" target="_blank" rel="noopener">▶ ${a.length > 1 ? esc(i.n) : 'Jak wykonać'}</a>`).join('') : ''}
     <div class="rx">${SIMPLE ? rxSimple(ex) : rxPro(ex)}</div>
     ${lastLine(ex)}
     ${SIMPLE ? hintSimple(ex) : ''}

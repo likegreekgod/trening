@@ -430,17 +430,18 @@
   };
   /**
    * serie twarde (RPE ≥ 7, FAIL albo drop) na partię mięśniową: bieżący tydzień i średnia z 4 poprzednich.
-   * parts: {nazwa ćwiczenia małymi literami → partia} z zakładki Ćwiczenia; po zamianie liczy się wykonane ćwiczenie.
+   * parts: {nazwa ćwiczenia małymi literami → [partie]} z zakładki Ćwiczenia (ćwiczenie liczy się do każdej swojej partii);
+   * po zamianie liczy się wykonane ćwiczenie.
    * → [{part, now, all, avg}] od największej liczby serii twardych
    */
   L.hardSetsByPart = (sets, parts, today) => {
     const k = v => String(v || '').trim().replace(/\s+/g, ' ').toLowerCase(), ws = mondayOf(today), by = {};
     sets.forEach(x => {
-      const part = (parts || {})[k(x.name)] || (parts || {})[k(x.plan)]; if (!part) return;
+      const ps = [].concat((parts || {})[k(x.name)] || (parts || {})[k(x.plan)] || []); if (!ps.length) return;
       const back = Math.round(L.dayDiff(mondayOf(x.date), ws) / 7);              // 0 = ten tydzień, 1…4 = poprzednie
       if (back < 0 || back > 4) return;
-      const b = by[part] || (by[part] = { part, now: 0, all: 0, prev: 0 }), hard = x.fail || x.drop || x.rpe >= 7;
-      if (back === 0) { b.all++; if (hard) b.now++; } else if (hard) b.prev++;
+      const hard = x.fail || x.drop || x.rpe >= 7;
+      ps.forEach(part => { const b = by[part] || (by[part] = { part, now: 0, all: 0, prev: 0 }); if (back === 0) { b.all++; if (hard) b.now++; } else if (hard) b.prev++; });
     });
     return Object.values(by).map(b => ({ part: b.part, now: b.now, all: b.all, avg: Math.round(b.prev / 4 * 10) / 10 }))
       .sort((a, b) => b.now - a.now || b.avg - a.avg || a.part.localeCompare(b.part, 'pl'));

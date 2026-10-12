@@ -257,31 +257,66 @@ test('diagnose_: sprawdzenie arkusza z menu Trening', () => {
   assert.ok(!/Brak wyzwalacza „podsumowanie”/.test(txt));
 });
 
-// --- zakładka Ćwiczenia: słownik, brakujące nazwy, serie na partię ---
-const CW = [{ cwiczenie: ' Przysiad  tylny ', instruktaz: 'https://example.test/przysiad', partia: 'Nogi', zamienniki: 'Leg press; Hack', grupa: 'ps' },
-  { cwiczenie: 'Leg press', instruktaz: 'javascript:alert(1)', partia: 'nogi', grupa: 'Q' }, { cwiczenie: 'Wiosłowanie hantlem', partia: 'plecy' }, { cwiczenie: '' }];
+// --- zakładka Ćwiczenia: baza, dopasowanie nazw, kompleksy, serie na partię ---
+const CW = [{ cwiczenie: ' Przysiad  tylny ', aliasy: 'Back Squat; Siad', instruktaz: 'https://example.test/przysiad', partia: 'Czworogłowe; pośladki', zamienniki: 'Leg press; Hack', grupa: 'ps' },
+  { cwiczenie: 'Leg press', instruktaz: 'javascript:alert(1)', partia: 'czworogłowe', grupa: 'Q' }, { cwiczenie: 'Wiosłowanie hantlem', partia: 'plecy' }, { cwiczenie: '' },
+  { cwiczenie: 'Hang Clean', instruktaz: 'https://example.test/hc' }, { cwiczenie: 'Jerk', instruktaz: 'https://example.test/jerk' },
+  { cwiczenie: 'Dumbbell Incline Bench Press', instruktaz: 'https://example.test/dibp', partia: 'klatka' }, { cwiczenie: 'Romanian Deadlift (RDL)', partia: 'dwugłowe uda' },
+  { cwiczenie: 'Single-Leg RDL', partia: 'dwugłowe uda; pośladki' }, { cwiczenie: '1-1/4 Front Squat', instruktaz: 'https://example.test/fs114' },
+  { cwiczenie: 'Front Squat', instruktaz: 'https://example.test/fs' }];
+const plain = v => JSON.parse(JSON.stringify(v));
 
-test('exDict_ i missingExercises_: słownik ćwiczeń', () => {
-  const d = C.exDict_(CW);
-  assert.deepEqual(JSON.parse(JSON.stringify(d['przysiad tylny'])), { info: 'https://example.test/przysiad', part: 'nogi', swaps: ['Leg press', 'Hack'], group: 'PS' });
-  assert.deepEqual([d['leg press'].info, d['leg press'].group], ['', '']);      // link tylko http(s), grupa tylko z listy
-  assert.equal(Object.keys(d).length, 3);
+test('exFind_: dokładna nazwa, alias, nazwa podstawowa, te same słowa', () => {
+  const ix = C.exIndex_(CW), f = n => (C.exFind_(ix, n) || {}).name || null;
   assert.equal(C.exKey_('  PRZYSIAD   Tylny '), 'przysiad tylny');
-  const plan = [{ cwiczenie: 'Przysiad tylny' }, { cwiczenie: 'Żuraw' }, { cwiczenie: 'martwy ciąg' }, { cwiczenie: 'Martwy  ciąg' }, { cwiczenie: '' }];
+  assert.deepEqual(plain(C.exFind_(ix, 'PRZYSIAD tylny')), { name: 'Przysiad tylny', info: 'https://example.test/przysiad', parts: ['czworogłowe', 'pośladki'], swaps: ['Leg press', 'Hack'], group: 'PS' });
+  assert.deepEqual([C.exFind_(ix, 'Leg press').info, C.exFind_(ix, 'Leg press').group], ['', '']);   // link tylko http(s), grupa tylko z listy
+  assert.deepEqual(['siad', 'Back Squat (pauza 2 s)', 'Przysiad tylny – TEST', 'Back Squat 1¼'].map(f), Array(4).fill('Przysiad tylny'));
+  assert.equal(f('Hang Clean z pauzą 2 s nad kolanem'), 'Hang Clean');
+  assert.equal(f('Romanian Deadlift (chwyt do zarzutu)'), 'Romanian Deadlift (RDL)');
+  assert.deepEqual(['Incline DB Bench Press', 'SL RDL', 'Front Squat 1¼', 'Front Squats'].map(f), ['Dumbbell Incline Bench Press', 'Single-Leg RDL', '1-1/4 Front Squat', 'Front Squat']);
+  assert.deepEqual(['Clean', 'Jerk Dip', 'Power Jerk', 'Incline DB Press', '', null].map(f), Array(6).fill(null));   // podobne słowa to za mało
+});
+
+test('exInfo_ i missingExercises_: kompleksy składają się z części', () => {
+  const ix = C.exIndex_(CW);
+  assert.deepEqual(plain(C.exInfo_(ix, 'Hang Clean (nad kolanem) + Jerk')), { found: true, infos: [{ n: 'Hang Clean', u: 'https://example.test/hc' }, { n: 'Jerk', u: 'https://example.test/jerk' }], parts: [], swaps: [], group: '' });
+  assert.deepEqual(plain(C.exInfo_(ix, 'Hang Clean + Hang Clean + Nieznane').infos), [{ n: 'Hang Clean', u: 'https://example.test/hc' }]);
+  assert.deepEqual(plain(C.exInfo_(ix, 'Przysiad tylny + SL RDL').parts), ['czworogłowe', 'pośladki', 'dwugłowe uda']);
+  assert.deepEqual(plain(C.exInfo_(ix, 'Back Squat')), { found: true, infos: [{ n: 'Przysiad tylny', u: 'https://example.test/przysiad' }], parts: ['czworogłowe', 'pośladki'], swaps: ['Leg press', 'Hack'], group: 'PS' });
+  assert.deepEqual(plain(C.exInfo_(ix, 'Nieznane + Inne')), { found: false, infos: [], parts: [], swaps: [], group: '' });
+  const plan = [{ cwiczenie: 'Przysiad tylny' }, { cwiczenie: 'Żuraw' }, { cwiczenie: 'martwy ciąg' }, { cwiczenie: 'Martwy  ciąg' }, { cwiczenie: 'Back Squat (wysoko)' }, { cwiczenie: 'Jerk + Żuraw' }, { cwiczenie: '' }];
   assert.deepEqual(Array.from(C.missingExercises_(plan, CW)), ['martwy ciąg', 'Żuraw']);
-  assert.deepEqual(Array.from(C.missingExercises_(plan, [])), ['martwy ciąg', 'Przysiad tylny', 'Żuraw']);
+  assert.deepEqual(Array.from(C.missingExercises_(plan, [])), ['Back Squat (wysoko)', 'Jerk + Żuraw', 'martwy ciąg', 'Przysiad tylny', 'Żuraw']);
+});
+
+test('seedRows_ i CW_BAZA: baza ćwiczeń do wczytania', () => {
+  assert.deepEqual(plain(C.seedRows_([['Front Squat', 'abcdefghijk', 'czworogłowe'], ['Nowe', 'IDID_123-xy', 'barki; triceps', 'Nowe 2'], ['', 'x', '']], CW)),
+    [['Nowe', 'Nowe 2', 'https://www.youtube.com/watch?v=IDID_123-xy', 'barki; triceps', '', '']]);
+  const B = Array.from(C.CW_BAZA), PARTS = ['pośladki', 'dwugłowe uda', 'czworogłowe', 'barki', 'prostowniki grzbietu', 'brzuch', 'plecy', 'triceps', 'skośne brzucha', 'kapturowe', 'biceps', 'klatka', 'przywodziciele', 'przedramiona'];
+  assert.equal(B.length, 624);
+  assert.equal(new Set(B.map(b => C.exKey_(b[0]))).size, B.length);
+  B.forEach(b => { assert.ok(b.length === 3 || b.length === 4); assert.match(b[1], /^[\w-]{6,20}$/); b[2].split('; ').filter(Boolean).forEach(p => assert.ok(PARTS.includes(p), b[0] + ': ' + p)); });
+  const rows = plain(C.seedRows_(B, [])), ix = C.exIndex_(rows.map(r => Object.fromEntries(C.CW_HEADERS.map((h, i) => [h, r[i]])))), f = n => (C.exFind_(ix, n) || {}).name || null;
+  assert.equal(rows.length, 624);
+  assert.deepEqual(['Snatch Pull', 'Power Clean from Block', 'Chin Up', 'DB Lateral Raise', 'SL RDL', 'Block Power Snatch (nad kolanem)', 'Jerk Dip z pauzą 3 s', 'Back Squat 1¼'].map(f),
+    ['Snatch Pull', 'Block Power Clean', 'Chin-up', 'Dumbbell Lateral Raise', 'Single-Leg RDL', 'Block Power Snatch', 'Jerk Dip', '1-1/4 Back Squat']);
+  assert.deepEqual(['Slow Snatch', 'Ring Dips', 'Sotts Press', 'Weighted Pull-up'].map(f), Array(4).fill(null));   // bez zgadywania: alias albo własny wiersz
+  assert.deepEqual(C.exInfo_(ix, 'Hang Clean (nad kolanem) + Jerk').infos.map(i => i.n), ['Hang Clean', 'Split Jerk']);   // „Jerk” to alias Split Jerk
+  assert.deepEqual([C.exInfo_(ix, 'Snatch').parts.length, C.exInfo_(ix, 'Back Squat').parts.length > 0], [0, true]);   // boje bez partii
 });
 
 test('computeParts_: serie i serie twarde na partię, zamiana liczy zamiennik', () => {
   const plan = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', nr: 1, cwiczenie: 'Przysiad tylny' }, { klient: 'robert', tydzien: 1, jednostka: 'T1', nr: 2, cwiczenie: 'Wiosłowanie hantlem' },
     { klient: 'robert', tydzien: 1, jednostka: 'T1', nr: 3, cwiczenie: 'Plank' }];
   const L = (nr, cw, s, x) => Object.assign({ klient: 'robert', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr_cw: nr, cwiczenie: cw, seria: s, kg: 100, powt: 5, rpe: 6, wykonane: 'TAK', typ: '' }, x || {});
-  const log = [L(1, 'Przysiad tylny', 'R1'), L(1, 'Przysiad tylny', 1), L(1, 'Przysiad tylny', 2, { rpe: 8 }), L(1, 'Przysiad tylny', 3, { typ: 'FAIL', rpe: '' }),
+  const log = [L(1, 'Przysiad tylny', 'R1'), L(1, 'Przysiad tylny', 1), L(1, 'Back Squat (pauza)', 2, { rpe: 8 }), L(1, 'Przysiad tylny', 3, { typ: 'FAIL', rpe: '' }),
     L(1, 'Leg press', 4, { rpe: 9, kg: 200 }), L(1, 'Przysiad tylny', 'D1', { kg: 80 }), L(1, 'Przysiad tylny', 5, { wykonane: '' }),
     L(2, 'Wiosłowanie hantlem', 1, { kg: 30, rpe: 7 }), L(2, 'Nieznane', 2, { kg: 30 }), L(3, 'Plank', 1, { kg: 'BW' })];
   const rows = C.computeParts_(plan, log, [], CW);
-  assert.deepEqual(JSON.parse(JSON.stringify(rows)), [
-    ['robert', d(1, 0), 'nogi', 5, 4, 500 + 500 + 500 + 1000 + 400],             // 5 serii (bez R1 i niewykonanej), twarde: RPE 8, FAIL, RPE 9, drop
-    ['robert', d(1, 0), 'plecy', 2, 1, 300]]);                                  // „Nieznane” liczone wg nazwy z planu (nr 2)
-  assert.deepEqual(Array.from(C.computeParts_(plan, log, [], [])), []);          // pusty słownik = brak wierszy
+  assert.deepEqual(plain(rows), [
+    ['robert', d(1, 0), 'czworogłowe', 5, 4, 500 + 500 + 500 + 1000 + 400],      // 5 serii (bez R1 i niewykonanej), twarde: RPE 8, FAIL, RPE 9, drop
+    ['robert', d(1, 0), 'plecy', 2, 1, 300],                                    // „Nieznane” liczone wg nazwy z planu (nr 2)
+    ['robert', d(1, 0), 'pośladki', 4, 3, 500 + 500 + 500 + 400]]);             // przysiad liczy się do obu partii, leg press tylko do czworogłowych
+  assert.deepEqual(Array.from(C.computeParts_(plan, log, [], [])), []);          // pusta baza = brak wierszy
 });

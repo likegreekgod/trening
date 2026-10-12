@@ -86,9 +86,10 @@ function getData(key) {
   const idx = name => h.indexOf(name);
   const ix = idx('dod_serie'), idr = idx('drop');
   const opt = (r, name) => idx(name) < 0 || r[idx(name)] === null || r[idx(name)] === undefined ? '' : String(r[idx(name)]).trim();
-  const dict = exDict_(tableOf_('Ćwiczenia'));
+  const cwIx = exIndex_(tableOf_('Ćwiczenia')), memo = {}, pm = {};
+  const dxOf = n => { const k = exKey_(n); if (!k) return exInfo_(cwIx, ''); if (!memo[k]) { memo[k] = exInfo_(cwIx, n); if (memo[k].parts.length) pm[k] = memo[k].parts; } return memo[k]; };
   const rows = plan.filter(r => String(r[idx('klient')]).toLowerCase() === client.id)
-    .map(r => { const dx = dict[exKey_(r[idx('cwiczenie')])] || {}, own = opt(r, 'zamienniki').split(';').map(s => s.trim()).filter(Boolean); return {
+    .map(r => { const dx = dxOf(r[idx('cwiczenie')]), own = opt(r, 'zamienniki').split(';').map(s => s.trim()).filter(Boolean); return {
       week: Number(r[idx('tydzien')]), day: String(r[idx('jednostka')]), title: String(r[idx('tytul')]),
       date: fmtDate_(r[idx('data')]), order: Number(r[idx('nr')]), name: String(r[idx('cwiczenie')]),
       prio: String(r[idx('prio')]), sets: Number(r[idx('serie')]) || 1, reps: txt_(r[idx('powt')]),
@@ -97,15 +98,17 @@ function getData(key) {
       extra: ix < 0 || r[ix] === '' || r[ix] === null ? null : (Number(r[ix]) || 0),
       drop: idr < 0 ? 0 : (Number(r[idr]) || 0),
       group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
-      swaps: own.length ? own : (dx.swaps || []), info: dx.info || '', part: dx.part || ''
+      swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts
     }; });
-  const sessions = readRows_('Sesje', SES_HEADERS, client.id);
+  const sessions = readRows_('Sesje', SES_HEADERS, client.id), logs = readRows_('Log', LOG_HEADERS, client.id);
+  logs.forEach(l => dxOf(l.cwiczenie));
+  rows.forEach(r => r.swaps.forEach(dxOf));
   fillDates_(rows, sessions, today_());
   return { cfg: { name: client.name, pain: client.pain, simple: client.simple, extra: client.extra,
       swap: client.swap, scale: client.scale, olyCeil: client.olyCeil },
-    plan: rows, logs: readRows_('Log', LOG_HEADERS, client.id), sessions: sessions,
+    plan: rows, logs: logs, sessions: sessions,
     readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id),
-    parts: Object.keys(dict).reduce((o, k) => { if (dict[k].part) o[k] = dict[k].part; return o; }, {}) };
+    parts: pm };
 }
 
 /** Zapis jednej serii. Idempotentny po id (klient|tydz|jedn|nr|seria). */
@@ -559,6 +562,7 @@ function onOpen() {
     .addItem('Dodaj klienta', 'dodajKlienta')
     .addItem('Odśwież linki klientów', 'menuLinki')
     .addSeparator()
+    .addItem('Wczytaj bazę ćwiczeń', 'wczytajBazeCwiczen')
     .addItem('Uzupełnij listę ćwiczeń', 'uzupelnijCwiczenia')
     .addItem('Sprawdź arkusz', 'sprawdzArkusz')
     .addItem('Zainstaluj wyzwalacze', 'menuWyzwalacze')
@@ -1009,62 +1013,121 @@ function keepNotes_(rows, old) {
   return out;
 }
 
-/* ================== ĆWICZENIA (słownik: instruktaż, partia, zamienniki, grupa) ==================
- * Zakładka „Ćwiczenia”: jeden wiersz na ćwiczenie, dopasowanie po nazwie (bez wielkości liter i zbędnych spacji).
- * instruktaz = link (film / opis) pod przyciskiem „Jak wykonać”; partia = partia mięśniowa do liczenia serii twardych;
- * zamienniki („;”) i grupa (R/P/CR/CP/PS/I) działają, gdy plan ich nie podaje. Plan ma zawsze pierwszeństwo.
+/* ================== ĆWICZENIA (baza: instruktaż, partie, zamienniki, grupa) ==================
+ * Zakładka „Ćwiczenia”: jeden wiersz na ćwiczenie. Start: menu Trening → Wczytaj bazę ćwiczeń (CW_BAZA w Cwiczenia.gs).
+ * instruktaz = link (film / opis) pod przyciskiem „Jak wykonać”; partia = partie mięśniowe („;”) do liczenia serii twardych;
+ * aliasy („;”) = inne nazwy tego samego ćwiczenia używane w planach; zamienniki („;”) i grupa (R/P/CR/CP/PS/I) działają,
+ * gdy plan ich nie podaje. Plan ma zawsze pierwszeństwo.
+ * Dopasowanie nazwy z planu (exFind_): 1) dokładna nazwa lub alias, 2) nazwa podstawowa (bez nawiasów, „– TEST”,
+ * „z pauzą…”), 3) te same słowa w innej kolejności i skróty (DB, SL, RDL…). Kompleks „A + B” bez własnego wiersza
+ * dostaje instruktaż każdej rozpoznanej części. „… 1¼” szuka najpierw wariantu „1-1/4 …”, potem ćwiczenia bez dopisku.
  */
-const CW_HEADERS = ['cwiczenie', 'instruktaz', 'partia', 'zamienniki', 'grupa'];
+const CW_HEADERS = ['cwiczenie', 'aliasy', 'instruktaz', 'partia', 'zamienniki', 'grupa'];
 const PART_HEADERS = ['klient', 'tydzien_od', 'partia', 'serie', 'serie_twarde', 'tonaz_kg'];
-const exKey_ = v => String(v === undefined || v === null ? '' : v).trim().replace(/\s+/g, ' ').toLowerCase();
-
-/** Czysta funkcja: wiersze zakładki Ćwiczenia → {nazwa: {info, part, swaps, group}}. Link tylko http(s). */
-function exDict_(rows) {
-  const d = {};
-  (rows || []).forEach(r => {
-    const k = exKey_(r.cwiczenie); if (!k) return;
-    const url = String(r.instruktaz || '').trim(), g = String(r.grupa || '').trim().toUpperCase();
-    d[k] = { info: /^https?:\/\/\S+$/i.test(url) ? url : '', part: String(r.partia || '').trim().toLowerCase(),
-      swaps: String(r.zamienniki || '').split(';').map(s => s.trim()).filter(Boolean), group: GROUPS.indexOf(g) >= 0 ? g : '' };
-  });
-  return d;
+const EX_ABBR = { db: 'dumbbell', kb: 'kettlebell', bb: 'barbell', sl: 'single leg', rdl: 'romanian deadlift', ohs: 'overhead squat' };
+const EX_STOP = ['and', 'from', 'the', 'a', 'on', 'with', 'to'];
+const exStr_ = v => String(v === undefined || v === null ? '' : v);
+const exKey_ = v => exStr_(v).trim().replace(/\s+/g, ' ').toLowerCase();
+/** nazwa podstawowa: bez nawiasów i dopisków z planu */
+const exBase_ = v => exKey_(exStr_(v).replace(/\(.*?\)/g, ' ').replace(/\s[–-]\s*test\b.*$/i, '').replace(/\sz pauzą.*$/i, '').replace(/1\s?¼/g, ' 1-1/4 '));
+/** słowa nazwy podstawowej: skróty rozwinięte, liczba pojedyncza, kolejność bez znaczenia */
+function exTok_(v) {
+  return exBase_(v).replace(/(push|pull|chin|sit|step)-?up/g, '$1 up').replace(/[^a-z0-9ąćęłńóśźż ]/g, ' ').split(' ')
+    .map(w => EX_ABBR[w] || w).join(' ').split(' ').filter(w => w && EX_STOP.indexOf(w) < 0)
+    .map(w => w.replace(/ies$/, 'y').replace(/s$/, '')).sort().join(' ');
 }
 
-/** Czysta funkcja: nazwy ćwiczeń z Planu, których nie ma w słowniku (do dopisania), alfabetycznie. */
+/** Czysta funkcja: wiersze zakładki Ćwiczenia → indeks {k: dokładne nazwy i aliasy, b: nazwy podstawowe, t: słowa}. Link tylko http(s). */
+function exIndex_(rows) {
+  const ix = { k: {}, b: {}, t: {} };
+  (rows || []).forEach(r => {
+    const name = exStr_(r.cwiczenie).trim().replace(/\s+/g, ' '); if (!name) return;
+    const url = exStr_(r.instruktaz).trim(), g = exStr_(r.grupa).trim().toUpperCase();
+    const e = { name: name, info: /^https?:\/\/\S+$/i.test(url) ? url : '',
+      parts: exStr_(r.partia).split(/[;,]/).map(s => s.trim().toLowerCase()).filter(Boolean),
+      swaps: exStr_(r.zamienniki).split(';').map(s => s.trim()).filter(Boolean), group: GROUPS.indexOf(g) >= 0 ? g : '' };
+    [name].concat(exStr_(r.aliasy).split(';')).forEach(n => {
+      const k = exKey_(n), b = exBase_(n), t = exTok_(n); if (!k) return;
+      ix.k[k] = e; if (b && !ix.b[b]) ix.b[b] = e; if (t && !ix.t[t]) ix.t[t] = e;
+    });
+  });
+  return ix;
+}
+
+/** Czysta funkcja: wiersz bazy dla nazwy z planu albo null. */
+function exFind_(ix, name) {
+  const k = exKey_(name); if (!k) return null;
+  const b = exBase_(name);
+  return ix.k[k] || ix.k[b] || ix.b[b] || ix.t[exTok_(name)] || (/1-1\/4/.test(b) ? exFind_(ix, b.replace(/1-1\/4/g, ' ')) : null);
+}
+
+/** Czysta funkcja: {found, infos: [{n, u}], parts, swaps, group} dla nazwy z planu; kompleks „A + B” składa się z części. */
+function exInfo_(ix, name) {
+  const whole = exFind_(ix, name), infos = [], parts = [];
+  const comps = whole ? [whole] : exStr_(name).split(/\s\+\s/).map(p => exFind_(ix, p)).filter(Boolean);
+  comps.forEach(e => {
+    if (e.info && !infos.some(i => i.u === e.info)) infos.push({ n: e.name, u: e.info });
+    e.parts.forEach(p => { if (parts.indexOf(p) < 0) parts.push(p); });
+  });
+  return { found: comps.length > 0, infos: infos.slice(0, 4), parts: parts, swaps: whole ? whole.swaps : [], group: whole ? whole.group : '' };
+}
+
+/** Czysta funkcja: nazwy ćwiczeń z Planu, których nie da się dopasować do bazy (do dopisania albo aliasu), alfabetycznie. */
 function missingExercises_(plan, dictRows) {
-  const have = exDict_(dictRows), seen = {}, out = [];
-  (plan || []).forEach(r => { const k = exKey_(r.cwiczenie); if (k && !have[k] && !seen[k]) { seen[k] = 1; out.push(String(r.cwiczenie).trim().replace(/\s+/g, ' ')); } });
+  const ix = exIndex_(dictRows), seen = {}, out = [];
+  (plan || []).forEach(r => { const k = exKey_(r.cwiczenie); if (k && !seen[k]) { seen[k] = 1; if (!exInfo_(ix, r.cwiczenie).found) out.push(exStr_(r.cwiczenie).trim().replace(/\s+/g, ' ')); } });
   return out.sort((a, b) => a.localeCompare(b, 'pl'));
 }
 
-/** Menu Trening → Uzupełnij listę ćwiczeń: dopisuje do zakładki Ćwiczenia nazwy z Planu, których tam nie ma. */
-function uzupelnijCwiczenia() {
-  const sh = sheet_('Ćwiczenia', CW_HEADERS), miss = missingExercises_(tableOf_('Plan'), tableOf_('Ćwiczenia'));
-  if (miss.length) sh.getRange(sh.getLastRow() + 1, 1, miss.length, 1).setValues(miss.map(n => [n]));
+/** Czysta funkcja: wiersze bazy [nazwa, id filmu YouTube, partie, aliasy], których nazwy nie ma jeszcze w zakładce → wiersze do dopisania. */
+function seedRows_(baza, dictRows) {
+  const ix = exIndex_(dictRows);
+  return (baza || []).filter(b => b[0] && !ix.k[exKey_(b[0])])
+    .map(b => [b[0], b[3] || '', b[1] ? 'https://www.youtube.com/watch?v=' + b[1] : '', b[2] || '', '', '']);
+}
+
+function appendCw_(rows) {
+  const sh = sheet_('Ćwiczenia', CW_HEADERS);
+  if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, CW_HEADERS.length).setValues(rows);
   sh.activate();
-  alert_('Ćwiczenia', miss.length ? 'Dopisano ćwiczenia z planów: ' + miss.length + '. Uzupełnij przy nich link do instruktażu i partię.' : 'Wszystkie ćwiczenia z planów są już na liście.');
+}
+
+/** Menu Trening → Wczytaj bazę ćwiczeń: dopisuje ćwiczenia z CW_BAZA, których jeszcze nie ma; istniejących wierszy nie zmienia. */
+function wczytajBazeCwiczen() {
+  const rows = seedRows_(CW_BAZA, tableOf_('Ćwiczenia'));
+  appendCw_(rows);
+  alert_('Ćwiczenia', rows.length ? 'Dopisano ćwiczenia z bazy: ' + rows.length + '. Twoje wiersze zostały bez zmian.' : 'Baza jest już wczytana, nic nie dopisano.');
+}
+
+/** Menu Trening → Uzupełnij listę ćwiczeń: dopisuje nazwy z Planu, których nie udało się dopasować do bazy. */
+function uzupelnijCwiczenia() {
+  const miss = missingExercises_(tableOf_('Plan'), tableOf_('Ćwiczenia'));
+  appendCw_(miss.map(n => [n, '', '', '', '', '']));
+  alert_('Ćwiczenia', miss.length ? 'Dopisano ćwiczenia z planów bez dopasowania: ' + miss.length + '. Uzupełnij przy nich link i partię albo usuń wiersz i dopisz nazwę jako alias przy właściwym ćwiczeniu.' : 'Wszystkie ćwiczenia z planów mają dopasowanie w bazie.');
 }
 
 /**
- * Czysta funkcja: serie na partię mięśniową (klient × tydzień × partia). Partia z nazwy wykonanego ćwiczenia
- * (po zamianie liczy się zamiennik), a gdy jej nie ma w słowniku – z nazwy z planu. Serie twarde jak w podsumowaniu:
- * RPE ≥ 7, FAIL albo DROP. Bez rozgrzewki; tydzień wg faktycznej daty treningu.
+ * Czysta funkcja: serie na partię mięśniową (klient × tydzień × partia). Partie z nazwy wykonanego ćwiczenia
+ * (po zamianie liczy się zamiennik), a gdy nie ma go w bazie – z nazwy z planu. Ćwiczenie z kilkoma partiami liczy się
+ * do każdej. Serie twarde jak w podsumowaniu: RPE ≥ 7, FAIL albo DROP. Bez rozgrzewki; tydzień wg faktycznej daty treningu.
  */
 function computeParts_(plan, log, ses, dictRows, opts) {
-  const dict = exDict_(dictRows), key = (...a) => a.map(String).join('|'), AD = unitDates_(ses, opts && opts.localDay), P = {}, B = {};
+  const ix = exIndex_(dictRows), key = (...a) => a.map(String).join('|'), AD = unitDates_(ses, opts && opts.localDay), P = {}, B = {}, memo = {};
+  const partsOf = n => { const k = exKey_(n); return !k ? [] : memo[k] || (memo[k] = exInfo_(ix, n).parts); };
   plan.forEach(r => { P[key(String(r.klient).toLowerCase(), r.tydzien, r.jednostka, r.nr)] = r; });
   log.forEach(l => {
     if (String(l.wykonane).toUpperCase() !== 'TAK') return;
     const c = String(l.klient).toLowerCase(), s = String(l.seria), w = weekOf_(AD[key(c, l.tydzien, l.jednostka)] || l.data);
     if (!c || !w || /^R/i.test(s)) return;
     const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
-    const part = (dict[exKey_(l.cwiczenie)] || {}).part || (dict[exKey_(pr.cwiczenie)] || {}).part;
-    if (!part) return;
+    let parts = partsOf(l.cwiczenie); if (!parts.length) parts = partsOf(pr.cwiczenie);
     const typ = String(l.typ || ''), kg = n_(l.kg), reps = n_(l.powt), rpe = n_(l.rpe);
-    const b = B[key(c, w, part)] || (B[key(c, w, part)] = [c, w, part, 0, 0, 0]);
-    b[3]++;
-    if (/FAIL/.test(typ) || /DROP/.test(typ) || /^D/i.test(s) || rpe >= 7) b[4]++;
-    if (kg > 0 && reps > 0) b[5] += kg * reps;
+    parts.forEach(part => {
+      const b = B[key(c, w, part)] || (B[key(c, w, part)] = [c, w, part, 0, 0, 0]);
+      b[3]++;
+      if (/FAIL/.test(typ) || /DROP/.test(typ) || /^D/i.test(s) || rpe >= 7) b[4]++;
+      if (kg > 0 && reps > 0) b[5] += kg * reps;
+    });
   });
   return Object.values(B).map(b => { b[5] = Math.round(b[5]); return b; })
     .sort((a, b) => a[0].localeCompare(b[0]) || String(a[1]).localeCompare(String(b[1])) || a[2].localeCompare(b[2], 'pl'));
