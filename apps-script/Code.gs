@@ -86,8 +86,9 @@ function getData(key) {
   const idx = name => h.indexOf(name);
   const ix = idx('dod_serie'), idr = idx('drop');
   const opt = (r, name) => idx(name) < 0 || r[idx(name)] === null || r[idx(name)] === undefined ? '' : String(r[idx(name)]).trim();
+  const dict = exDict_(tableOf_('Ćwiczenia'));
   const rows = plan.filter(r => String(r[idx('klient')]).toLowerCase() === client.id)
-    .map(r => ({
+    .map(r => { const dx = dict[exKey_(r[idx('cwiczenie')])] || {}, own = opt(r, 'zamienniki').split(';').map(s => s.trim()).filter(Boolean); return {
       week: Number(r[idx('tydzien')]), day: String(r[idx('jednostka')]), title: String(r[idx('tytul')]),
       date: fmtDate_(r[idx('data')]), order: Number(r[idx('nr')]), name: String(r[idx('cwiczenie')]),
       prio: String(r[idx('prio')]), sets: Number(r[idx('serie')]) || 1, reps: txt_(r[idx('powt')]),
@@ -95,15 +96,16 @@ function getData(key) {
       kg: numOr_(txt_(r[idx('kg')])), rpe: numOr_(r[idx('rpe_max')]), note: String(r[idx('uwagi')]),
       extra: ix < 0 || r[ix] === '' || r[ix] === null ? null : (Number(r[ix]) || 0),
       drop: idr < 0 ? 0 : (Number(r[idr]) || 0),
-      group: opt(r, 'grupa').toUpperCase(), block: opt(r, 'blok'),
-      swaps: opt(r, 'zamienniki').split(';').map(s => s.trim()).filter(Boolean)
-    }));
+      group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
+      swaps: own.length ? own : (dx.swaps || []), info: dx.info || '', part: dx.part || ''
+    }; });
   const sessions = readRows_('Sesje', SES_HEADERS, client.id);
   fillDates_(rows, sessions, today_());
   return { cfg: { name: client.name, pain: client.pain, simple: client.simple, extra: client.extra,
       swap: client.swap, scale: client.scale, olyCeil: client.olyCeil },
     plan: rows, logs: readRows_('Log', LOG_HEADERS, client.id), sessions: sessions,
-    readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id) };
+    readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id),
+    parts: Object.keys(dict).reduce((o, k) => { if (dict[k].part) o[k] = dict[k].part; return o; }, {}) };
 }
 
 /** Zapis jednej serii. Idempotentny po id (klient|tydz|jedn|nr|seria). */
@@ -409,6 +411,7 @@ function setup() {
   sheet_('Log', LOG_HEADERS);
   sheet_('Sesje', SES_HEADERS);
   sheet_('Dyspozycja', DYS_HEADERS);
+  sheet_('Ćwiczenia', CW_HEADERS);
   const f = rootFolder_();
   UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }
@@ -556,6 +559,7 @@ function onOpen() {
     .addItem('Dodaj klienta', 'dodajKlienta')
     .addItem('Odśwież linki klientów', 'menuLinki')
     .addSeparator()
+    .addItem('Uzupełnij listę ćwiczeń', 'uzupelnijCwiczenia')
     .addItem('Sprawdź arkusz', 'sprawdzArkusz')
     .addItem('Zainstaluj wyzwalacze', 'menuWyzwalacze')
     .addToUi();
@@ -663,6 +667,7 @@ function podsumowanie() {
   });
   writeTable_('Podsumowanie_cw', SUMX_HEADERS, res.exRows);
   writeTable_('Podsumowanie_OLY', OLY_HEADERS, res.olyRows);
+  writeTable_('Podsumowanie_partie', PART_HEADERS, computeParts_(plan, log, ses, tableOf_('Ćwiczenia'), { localDay }));
   Logger.log('Podsumowanie: ' + res.rows.length + ' tygodni, ' + res.exRows.length + ' wierszy ćwiczeń.');
 }
 
@@ -1002,6 +1007,67 @@ function keepNotes_(rows, old) {
   const out = rows.map(r => { const k = r[0] + '|' + r[1]; seen[k] = 1; const c = r.slice(); if (prev[k]) c[W] = prev[k].wnioski; return c; });
   Object.keys(prev).filter(k => !seen[k]).forEach(k => out.push(BLOK_HEADERS.map(h => prev[k][h] === undefined ? '' : prev[k][h])));
   return out;
+}
+
+/* ================== ĆWICZENIA (słownik: instruktaż, partia, zamienniki, grupa) ==================
+ * Zakładka „Ćwiczenia”: jeden wiersz na ćwiczenie, dopasowanie po nazwie (bez wielkości liter i zbędnych spacji).
+ * instruktaz = link (film / opis) pod przyciskiem „Jak wykonać”; partia = partia mięśniowa do liczenia serii twardych;
+ * zamienniki („;”) i grupa (R/P/CR/CP/PS/I) działają, gdy plan ich nie podaje. Plan ma zawsze pierwszeństwo.
+ */
+const CW_HEADERS = ['cwiczenie', 'instruktaz', 'partia', 'zamienniki', 'grupa'];
+const PART_HEADERS = ['klient', 'tydzien_od', 'partia', 'serie', 'serie_twarde', 'tonaz_kg'];
+const exKey_ = v => String(v === undefined || v === null ? '' : v).trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** Czysta funkcja: wiersze zakładki Ćwiczenia → {nazwa: {info, part, swaps, group}}. Link tylko http(s). */
+function exDict_(rows) {
+  const d = {};
+  (rows || []).forEach(r => {
+    const k = exKey_(r.cwiczenie); if (!k) return;
+    const url = String(r.instruktaz || '').trim(), g = String(r.grupa || '').trim().toUpperCase();
+    d[k] = { info: /^https?:\/\/\S+$/i.test(url) ? url : '', part: String(r.partia || '').trim().toLowerCase(),
+      swaps: String(r.zamienniki || '').split(';').map(s => s.trim()).filter(Boolean), group: GROUPS.indexOf(g) >= 0 ? g : '' };
+  });
+  return d;
+}
+
+/** Czysta funkcja: nazwy ćwiczeń z Planu, których nie ma w słowniku (do dopisania), alfabetycznie. */
+function missingExercises_(plan, dictRows) {
+  const have = exDict_(dictRows), seen = {}, out = [];
+  (plan || []).forEach(r => { const k = exKey_(r.cwiczenie); if (k && !have[k] && !seen[k]) { seen[k] = 1; out.push(String(r.cwiczenie).trim().replace(/\s+/g, ' ')); } });
+  return out.sort((a, b) => a.localeCompare(b, 'pl'));
+}
+
+/** Menu Trening → Uzupełnij listę ćwiczeń: dopisuje do zakładki Ćwiczenia nazwy z Planu, których tam nie ma. */
+function uzupelnijCwiczenia() {
+  const sh = sheet_('Ćwiczenia', CW_HEADERS), miss = missingExercises_(tableOf_('Plan'), tableOf_('Ćwiczenia'));
+  if (miss.length) sh.getRange(sh.getLastRow() + 1, 1, miss.length, 1).setValues(miss.map(n => [n]));
+  sh.activate();
+  alert_('Ćwiczenia', miss.length ? 'Dopisano ćwiczenia z planów: ' + miss.length + '. Uzupełnij przy nich link do instruktażu i partię.' : 'Wszystkie ćwiczenia z planów są już na liście.');
+}
+
+/**
+ * Czysta funkcja: serie na partię mięśniową (klient × tydzień × partia). Partia z nazwy wykonanego ćwiczenia
+ * (po zamianie liczy się zamiennik), a gdy jej nie ma w słowniku – z nazwy z planu. Serie twarde jak w podsumowaniu:
+ * RPE ≥ 7, FAIL albo DROP. Bez rozgrzewki; tydzień wg faktycznej daty treningu.
+ */
+function computeParts_(plan, log, ses, dictRows, opts) {
+  const dict = exDict_(dictRows), key = (...a) => a.map(String).join('|'), AD = unitDates_(ses, opts && opts.localDay), P = {}, B = {};
+  plan.forEach(r => { P[key(String(r.klient).toLowerCase(), r.tydzien, r.jednostka, r.nr)] = r; });
+  log.forEach(l => {
+    if (String(l.wykonane).toUpperCase() !== 'TAK') return;
+    const c = String(l.klient).toLowerCase(), s = String(l.seria), w = weekOf_(AD[key(c, l.tydzien, l.jednostka)] || l.data);
+    if (!c || !w || /^R/i.test(s)) return;
+    const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
+    const part = (dict[exKey_(l.cwiczenie)] || {}).part || (dict[exKey_(pr.cwiczenie)] || {}).part;
+    if (!part) return;
+    const typ = String(l.typ || ''), kg = n_(l.kg), reps = n_(l.powt), rpe = n_(l.rpe);
+    const b = B[key(c, w, part)] || (B[key(c, w, part)] = [c, w, part, 0, 0, 0]);
+    b[3]++;
+    if (/FAIL/.test(typ) || /DROP/.test(typ) || /^D/i.test(s) || rpe >= 7) b[4]++;
+    if (kg > 0 && reps > 0) b[5] += kg * reps;
+  });
+  return Object.values(B).map(b => { b[5] = Math.round(b[5]); return b; })
+    .sort((a, b) => a[0].localeCompare(b[0]) || String(a[1]).localeCompare(String(b[1])) || a[2].localeCompare(b[2], 'pl'));
 }
 
 /* ================== PRZEGLĄD (klient × dziś: komu trzeba się przyjrzeć) ==================

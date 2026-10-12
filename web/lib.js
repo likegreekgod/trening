@@ -376,7 +376,8 @@
       const name = String(l.cwiczenie || p.name || ''), date = dates[l.tydzien + '|' + l.jednostka] || String(l.data || '').slice(0, 10);
       const one = p.pct > 0 && typeof p.kg === 'number' && p.kg > 0 ? p.kg / p.pct : NaN;
       return { name, date, week: +l.tydzien, block: p.block || '', prio: p.prio || '', grp: L.groupOf(p.group, name), kg, reps, rpe,
-        fail: /FAIL/.test(l.typ || ''), rel: kg > 0 && one > 0 ? kg / one : NaN };
+        fail: /FAIL/.test(l.typ || ''), drop: /DROP/.test(l.typ || '') || /^D/i.test(String(l.seria)), plan: String(p.name || ''),
+        rel: kg > 0 && one > 0 ? kg / one : NaN };
     }).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s.date));
   };
   /** siła w czasie dla ćwiczenia: boje (R/P) = najlepsze zaliczone kg dnia, pozostałe = najlepsze e1RM dnia; pr = rekord do tego dnia */
@@ -426,6 +427,23 @@
     const max = Math.max(0, ...days.map(d => d.load));
     days.forEach(d => { d.level = d.load > 0 ? Math.max(1, Math.ceil(4 * d.load / max)) : 0; });
     return days;
+  };
+  /**
+   * serie twarde (RPE ≥ 7, FAIL albo drop) na partię mięśniową: bieżący tydzień i średnia z 4 poprzednich.
+   * parts: {nazwa ćwiczenia małymi literami → partia} z zakładki Ćwiczenia; po zamianie liczy się wykonane ćwiczenie.
+   * → [{part, now, all, avg}] od największej liczby serii twardych
+   */
+  L.hardSetsByPart = (sets, parts, today) => {
+    const k = v => String(v || '').trim().replace(/\s+/g, ' ').toLowerCase(), ws = mondayOf(today), by = {};
+    sets.forEach(x => {
+      const part = (parts || {})[k(x.name)] || (parts || {})[k(x.plan)]; if (!part) return;
+      const back = Math.round(L.dayDiff(mondayOf(x.date), ws) / 7);              // 0 = ten tydzień, 1…4 = poprzednie
+      if (back < 0 || back > 4) return;
+      const b = by[part] || (by[part] = { part, now: 0, all: 0, prev: 0 }), hard = x.fail || x.drop || x.rpe >= 7;
+      if (back === 0) { b.all++; if (hard) b.now++; } else if (hard) b.prev++;
+    });
+    return Object.values(by).map(b => ({ part: b.part, now: b.now, all: b.all, avg: Math.round(b.prev / 4 * 10) / 10 }))
+      .sort((a, b) => b.now - a.now || b.avg - a.avg || a.part.localeCompare(b.part, 'pl'));
   };
   /** pomiary dyspozycji w czasie: [{date, v}] dla klucza (cmj_sr, vbt_test) */
   L.readySeries = (rows, key) => (rows || []).map(r => ({ date: String(r.data || '').slice(0, 10), v: nf(r[key]) }))

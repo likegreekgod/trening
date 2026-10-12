@@ -256,3 +256,32 @@ test('diagnose_: sprawdzenie arkusza z menu Trening', () => {
   assert.ok(!/stary/.test(txt));                                                 // nieaktywny klient bez uwag
   assert.ok(!/Brak wyzwalacza „podsumowanie”/.test(txt));
 });
+
+// --- zakładka Ćwiczenia: słownik, brakujące nazwy, serie na partię ---
+const CW = [{ cwiczenie: ' Przysiad  tylny ', instruktaz: 'https://example.test/przysiad', partia: 'Nogi', zamienniki: 'Leg press; Hack', grupa: 'ps' },
+  { cwiczenie: 'Leg press', instruktaz: 'javascript:alert(1)', partia: 'nogi', grupa: 'Q' }, { cwiczenie: 'Wiosłowanie hantlem', partia: 'plecy' }, { cwiczenie: '' }];
+
+test('exDict_ i missingExercises_: słownik ćwiczeń', () => {
+  const d = C.exDict_(CW);
+  assert.deepEqual(JSON.parse(JSON.stringify(d['przysiad tylny'])), { info: 'https://example.test/przysiad', part: 'nogi', swaps: ['Leg press', 'Hack'], group: 'PS' });
+  assert.deepEqual([d['leg press'].info, d['leg press'].group], ['', '']);      // link tylko http(s), grupa tylko z listy
+  assert.equal(Object.keys(d).length, 3);
+  assert.equal(C.exKey_('  PRZYSIAD   Tylny '), 'przysiad tylny');
+  const plan = [{ cwiczenie: 'Przysiad tylny' }, { cwiczenie: 'Żuraw' }, { cwiczenie: 'martwy ciąg' }, { cwiczenie: 'Martwy  ciąg' }, { cwiczenie: '' }];
+  assert.deepEqual(Array.from(C.missingExercises_(plan, CW)), ['martwy ciąg', 'Żuraw']);
+  assert.deepEqual(Array.from(C.missingExercises_(plan, [])), ['martwy ciąg', 'Przysiad tylny', 'Żuraw']);
+});
+
+test('computeParts_: serie i serie twarde na partię, zamiana liczy zamiennik', () => {
+  const plan = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', nr: 1, cwiczenie: 'Przysiad tylny' }, { klient: 'robert', tydzien: 1, jednostka: 'T1', nr: 2, cwiczenie: 'Wiosłowanie hantlem' },
+    { klient: 'robert', tydzien: 1, jednostka: 'T1', nr: 3, cwiczenie: 'Plank' }];
+  const L = (nr, cw, s, x) => Object.assign({ klient: 'robert', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr_cw: nr, cwiczenie: cw, seria: s, kg: 100, powt: 5, rpe: 6, wykonane: 'TAK', typ: '' }, x || {});
+  const log = [L(1, 'Przysiad tylny', 'R1'), L(1, 'Przysiad tylny', 1), L(1, 'Przysiad tylny', 2, { rpe: 8 }), L(1, 'Przysiad tylny', 3, { typ: 'FAIL', rpe: '' }),
+    L(1, 'Leg press', 4, { rpe: 9, kg: 200 }), L(1, 'Przysiad tylny', 'D1', { kg: 80 }), L(1, 'Przysiad tylny', 5, { wykonane: '' }),
+    L(2, 'Wiosłowanie hantlem', 1, { kg: 30, rpe: 7 }), L(2, 'Nieznane', 2, { kg: 30 }), L(3, 'Plank', 1, { kg: 'BW' })];
+  const rows = C.computeParts_(plan, log, [], CW);
+  assert.deepEqual(JSON.parse(JSON.stringify(rows)), [
+    ['robert', d(1, 0), 'nogi', 5, 4, 500 + 500 + 500 + 1000 + 400],             // 5 serii (bez R1 i niewykonanej), twarde: RPE 8, FAIL, RPE 9, drop
+    ['robert', d(1, 0), 'plecy', 2, 1, 300]]);                                  // „Nieznane” liczone wg nazwy z planu (nr 2)
+  assert.deepEqual(Array.from(C.computeParts_(plan, log, [], [])), []);          // pusty słownik = brak wierszy
+});

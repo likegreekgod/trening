@@ -318,7 +318,16 @@
   .fl select{min-height:48px;font:400 16px var(--f-body);text-transform:none;letter-spacing:0}
 
   /* zamiana ćwiczenia */
-  .swb{margin-top:6px}
+  .swb,.inf{margin:6px 6px 0 0}
+  a.btn{text-decoration:none}
+  /* serie twarde na partię: jedna seria danych, kreska = średnia z 4 tygodni */
+  .hp{display:grid;grid-template-columns:92px 1fr 28px 58px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink-2)}
+  .hp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:capitalize}
+  .hpb{position:relative;height:12px;background:var(--surface-2)}
+  .hpb i{display:block;height:100%;background:var(--olive)}
+  .hpb u{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+  .hp b{font:500 15px var(--f-mono);color:var(--ink);text-align:right}
+  .hp small{font-size:12px;color:var(--muted)}
   .swapped{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;font-size:14px;color:var(--ink-2);border-left:4px solid var(--accent);padding:2px 0 2px 10px}
   .opts{display:grid;gap:4px}
   .opts.why{grid-template-columns:1fr 1fr}
@@ -454,7 +463,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean } = window.TL;
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -867,6 +876,7 @@ function renderPostep(){
         ${tableOf(['Data', r.oly ? 'kg' : 'e1RM kg'], ser.map(p => [ddmm(p.date) + '.' + p.date.slice(0, 4), kgTxt(p.v) + (p.pr ? ' ★' : '')]))}
         <section class="card"><div class="cn">Rekordy</div>${recs.map(x => `<div class="kv"><span>${esc(x.name)}<small> · ${x.oly ? 'zaliczone' : 'e1RM'}</small></span><b>${kgTxt(x.best)} kg · ${ddmm(x.date)}</b></div>`).join('')}</section>`;
   } else if (PT === 'obj') {
+    const hp = hardSetsByPart(sets, (DATA && DATA.parts) || {}, today), hpMax = Math.max(1, ...hp.map(x => Math.max(x.now, x.avg)));
     const ws = weeklyTonnage(sets, today, 12), z = zoneReps(sets), zt = ZONES.reduce((s, q) => s + z[q[0]], 0), cal = loadCalendar(
       ((DATA && DATA.sessions) || []).map(s => ({ date: dates[s.tydzien + '|' + s.jednostka] || dayOf(s.data), rpe: s.rpe_sesji, min: s.czas_min })), sets, today, 12);
     body = !sets.length ? '<p class="empty">Objętość pojawi się po pierwszych zapisanych seriach.</p>'
@@ -876,6 +886,8 @@ function renderPostep(){
         ${zt ? `<section class="card"><div class="cn">Strefy intensywności</div><div class="sub">Zaliczone powtórzenia w bojach, ciągach i przysiadach wg % 1RM z planu. Kolory jak talerze.</div>
           <div class="zbar" role="img" aria-label="Udział powtórzeń w strefach">${ZONES.filter(q => z[q[0]]).map(q => `<i class="${q[0]}" style="flex:${z[q[0]]}"></i>`).join('')}</div>
           ${ZONES.map(q => `<div class="kv"><span><i class="zone ${q[0]}"></i> ${q[1]}</span><b>${z[q[0]]} powt. · ${Math.round(100 * z[q[0]] / zt)}%</b></div>`).join('')}</section>` : ''}
+        ${hp.length ? `<section class="card"><div class="cn">Serie twarde na partię</div><div class="sub">Ten tydzień: serie z RPE ≥ 7, nieudane i dropy. Kreska = średnia z 4 poprzednich tygodni.</div>
+          ${hp.map(x => `<div class="hp"><span>${esc(x.part)}</span><div class="hpb" role="img" aria-label="${esc(x.part)}: ${x.now} serii twardych, średnio ${fmtKg(x.avg)}"><i style="width:${Math.round(100 * x.now / hpMax)}%"></i>${x.avg ? `<u style="left:${Math.round(100 * x.avg / hpMax)}%"></u>` : ''}</div><b>${x.now}</b><small>śr. ${fmtKg(x.avg)}</small></div>`).join('')}</section>` : ''}
         <section class="card"><div class="cn">Kalendarz obciążenia</div><div class="sub">12 tygodni. Obciążenie dnia = RPE sesji × minuty (bez nich: tonaż).</div>
           <div class="cal" role="img" aria-label="Kalendarz obciążenia, 12 tygodni"><div class="cald">${['pn', 'wt', 'śr', 'cz', 'pt', 'sb', 'nd'].map(x => `<span>${x}</span>`).join('')}</div>
             <div class="calg">${cal.map(c => `<i class="h${c.level} ${c.future ? 'fut' : ''} ${c.date === today ? 'now' : ''}" data-tip="${weekday(c.date)} ${ddmm(c.date)} · ${c.load ? 'obciążenie ' + c.load : 'bez treningu'}"></i>`).join('')}</div></div>
@@ -1200,6 +1212,7 @@ function card(ex){
     <div class="ch"><div class="cn">${esc(ex.name)}</div><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span></div>
     ${ex.swap ? `<div class="swapped"><span>Zamiast: ${esc(ex.swap.from)} · ${esc(ex.swap.why)}</span><button type="button" class="btn sm" data-unswap="${ex.order}">Cofnij zamianę</button></div>`
       : SWAP ? `<button type="button" class="btn sm swb" data-swap="${ex.order}">⇄ Zamień ćwiczenie</button>` : ''}
+    ${ex.info && !ex.swap ? `<a class="btn sm inf" href="${esc(ex.info)}" target="_blank" rel="noopener">▶ Jak wykonać</a>` : ''}
     <div class="rx">${SIMPLE ? rxSimple(ex) : rxPro(ex)}</div>
     ${lastLine(ex)}
     ${SIMPLE ? hintSimple(ex) : ''}
