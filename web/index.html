@@ -319,6 +319,15 @@
 
   /* zamiana ćwiczenia */
   .swb,.inf{margin:6px 6px 0 0}
+  .cnote{border-left:4px solid var(--accent);padding:4px 0 4px 12px;margin:14px 0 6px}
+  .cnote h3{margin:0 0 6px;font:800 22px/1.1 var(--f-display);text-transform:uppercase;color:var(--ink-2)}
+  .cn-l{list-style:none;margin:0 0 10px;padding:0}
+  .cn-l li{margin:0 0 10px}
+  .cn-h{display:block;font-size:14px;font-weight:600;color:var(--ink-2)}
+  .cn-l p{margin:2px 0 0;font-size:16px;line-height:1.4}
+  .cn-t{font-family:var(--f-mono);font-weight:600}
+  .cn-s{font-size:14px;color:var(--ink-2);margin:0 0 10px}
+  #cn-all{margin:12px 0 0}
   a.btn{text-decoration:none}
   /* serie twarde na partię: jedna seria danych, kreska = średnia z 4 tygodni */
   .hp{display:grid;grid-template-columns:92px 1fr 28px 58px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink-2)}
@@ -463,7 +472,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart } = window.TL;
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -1018,6 +1027,27 @@ function openSwap(ex){
 }
 
 /* ---------- ekran Trening ---------- */
+/* ---------- komentarze trenera (do serii, filmu albo całego treningu) ---------- */
+const CNK = 'cn_' + KEY;
+function cnSeen(){ try { return JSON.parse(localStorage.getItem(CNK) || '[]'); } catch (e) { return []; } }
+function cnMark(keys){ try { localStorage.setItem(CNK, JSON.stringify(cnSeen().concat(keys).slice(-400))); } catch (e) {} }
+const cnAll = () => coachNotes((DATA && DATA.logs) || [], (DATA && DATA.sessions) || []);
+const cnList = notes => '<ul class="cn-l">' + notes.map(n => `<li><span class="cn-h">${esc(n.title)}${n.date ? ' · ' + ddmm(n.date) : ''}</span>` +
+  n.lines.map(l => `<p>${l.t ? `<b class="cn-t">${esc(l.t)}</b> ` : ''}${esc(l.txt)}</p>`).join('') + '</li>').join('') + '</ul>';
+/** nowe komentarze = karta na górze Treningu; przeczytane zostają pod przyciskiem */
+function notesCard(){
+  const all = cnAll(); if (!all.length) return '';
+  const seen = cnSeen(), fresh = all.filter(n => seen.indexOf(n.key) < 0);
+  if (!fresh.length) return `<button type="button" class="btn sm" id="cn-all">Komentarze trenera (${all.length})</button>`;
+  return `<section class="cnote" aria-label="Nowe komentarze trenera"><h3>Trener skomentował</h3>${cnList(fresh)}
+    <p class="cn-s">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>
+    <button type="button" class="btn" id="cn-ok">Przeczytane</button></section>`;
+}
+function bindNotes(){
+  const ok = $('#cn-ok'), all = $('#cn-all');
+  if (ok) ok.onclick = () => { cnMark(cnAll().map(n => n.key)); renderTrening(); };
+  if (all) all.onclick = () => openSheet(`<h2 id="sheet-t">Komentarze trenera</h2><p class="sub">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>${cnList(cnAll().slice(0, 40))}<button type="button" class="btn" data-close="1">Zamknij</button>`);
+}
 function renderTrening(){
   let exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order);
   if (!exs.length) { pickDefault(); exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order); }
@@ -1032,11 +1062,12 @@ function renderTrening(){
     SCALE = b.dataset.sc; try { localStorage.setItem('sc_' + KEY, SCALE); } catch (e) {}
     renderTrening();
   });
-  let h = readyBanner() + helpCard();
+  let h = notesCard() + readyBanner() + helpCard();
   exs.forEach(ex => h += card(ex));
   h += sessCard(s0);
   $('#main').innerHTML = h;
   bind(exs, s0);
+  bindNotes();
   refreshStats();
   $('#go-dysp').onclick = () => { TAB = 'dysp'; render(); window.scrollTo(0, 0); };
 }

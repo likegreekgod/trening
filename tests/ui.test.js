@@ -803,3 +803,34 @@ test('PWA: manifest i service worker', async () => {
   assert.ok(await p.evaluate(async () => !!(await navigator.serviceWorker.ready)));   // czeka na rejestrację zamiast zgadywać czas
   await ctx.close();
 });
+
+// --- v4: komentarze trenera ---
+test('Komentarze trenera: karta z nowymi, „Przeczytane”, lista pod przyciskiem, zmieniony komentarz wraca', async () => {
+  const mk = txt => Object.assign({}, PROG, { logs: PROG.logs.map((l, i) => i === 0 ? Object.assign({}, l, { komentarz_dysk: txt }) : l),
+    sessions: PROG.sessions.map((s, i) => i === 0 ? Object.assign({}, s, { komentarz_trenera: 'Dobry trening <b>!</b>' }) : s) });
+  const { ctx, p } = await page([], false, { data: mk('0:15 Łokcie wyżej\nOgólnie dobrze') });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.cnote');
+  assert.equal(await p.$eval('.cnote h3', e => e.textContent), 'Trener skomentował');
+  const items = await p.$$eval('.cnote .cn-l li', li => li.map(x => [x.querySelector('.cn-h').textContent.replace(/ · \d\d\.\d\d$/, ''), [...x.querySelectorAll('p')].map(q => q.textContent)]));
+  assert.deepEqual(items.sort(), [['Przysiad tylny · seria 1', ['0:15 Łokcie wyżej', 'Ogólnie dobrze']], ['Trening T1', ['Dobry trening <b>!</b>']]]);   // treść jako tekst, nie HTML
+  assert.equal(await p.$eval('.cnote .cn-t', e => e.textContent), '0:15');
+  assert.equal(await p.$('#cn-all'), null);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'komentarze.png') }); }
+  await p.click('#cn-ok');
+  assert.equal(await p.$('.cnote'), null);
+  assert.equal((await p.$eval('#cn-all', e => e.textContent)).trim(), 'Komentarze trenera (2)');
+  await p.click('#cn-all');
+  assert.equal(await p.$eval('#sheet-t', e => e.textContent), 'Komentarze trenera');
+  assert.equal((await p.$$('#sheet .cn-l li')).length, 2);
+  assert.deepEqual(await a11y(p), []);
+  await p.click('#sheet [data-close]');
+  await p.reload(); await p.waitForSelector('#cn-all');                          // przeczytane zostają przeczytane
+  assert.equal(await p.$('.cnote'), null);
+  assert.deepEqual(p.external, []); assert.deepEqual(p.errors, []);
+  await ctx.close();
+  const t2 = await page([], false, { data: PROG });                             // bez komentarzy: nic się nie pojawia
+  await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.set');
+  assert.deepEqual([await t2.p.$('.cnote'), await t2.p.$('#cn-all')], [null, null]);
+  await t2.ctx.close();
+});

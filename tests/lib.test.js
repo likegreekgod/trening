@@ -298,3 +298,19 @@ test('localDate: data w strefie telefonu', () => {
   assert.equal(L.localDate(new Date(2026, 9, 10, 0, 30)), '2026-10-10');
   assert.match(L.localDate(), /^\d{4}-\d{2}-\d{2}$/);
 });
+
+test('coachNotes: komentarze trenera do serii, filmu i treningu', () => {
+  const logs = [{ id: 'a|1|T1|1|2', data: '2026-10-10', cwiczenie: 'Przysiad tylny', seria: 2, komentarz_dysk: '0:15 Dobre zejście\n1:15 Łokcie wyżej', komentarz_trenera: ' Pas od tej serii ' },
+    { id: 'a|1|T1|1|3', data: '2026-10-10', cwiczenie: 'Przysiad tylny', seria: 3 }, { id: 'a|1|T1|2|1', data: '2026-10-12T00:00:00.000Z', cwiczenie: 'Rwanie', seria: 1, komentarz_dysk: '12:05 biodra' }];
+  const ses = [{ id: 'a|1|T1', data: '2026-10-10', jednostka: 'T1', komentarz_trenera: 'Dobra robota' }, { id: 'a|1|T2', data: '2026-10-11', jednostka: 'T2', komentarz_trenera: '' }];
+  const n = L.coachNotes(logs, ses);
+  assert.deepEqual(n.map(x => [x.date, x.title, x.lines]), [
+    ['2026-10-12', 'Rwanie · seria 1', [{ t: '12:05', txt: 'biodra' }]],
+    ['2026-10-10', 'Przysiad tylny · seria 2', [{ t: '', txt: 'Pas od tej serii' }, { t: '0:15', txt: 'Dobre zejście' }, { t: '1:15', txt: 'Łokcie wyżej' }]],
+    ['2026-10-10', 'Trening T1', [{ t: '', txt: 'Dobra robota' }]]]);
+  assert.equal(new Set(n.map(x => x.key)).size, 3);
+  const n2 = L.coachNotes([Object.assign({}, logs[2], { komentarz_dysk: '12:05 biodra wyżej' })], []);
+  assert.notEqual(n2[0].key, n[0].key);                                          // zmieniona treść = nowy komentarz
+  assert.equal(L.coachNotes([Object.assign({}, logs[2])], [])[0].key, n[0].key);
+  assert.deepEqual(L.coachNotes([], []), []); assert.deepEqual(L.coachNotes(undefined, undefined), []);
+});

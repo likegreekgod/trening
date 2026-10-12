@@ -383,3 +383,21 @@ test('orphanPlans_: wiersze Planu bez klienta w zakładce Klienci', () => {
   assert.deepEqual(plain(C.orphanPlans_(plan, klienci)), { ids: { 'jan nowak': 1, jan: 2 }, n: 3 });   // nieaktywny klient zachowuje plan
   assert.deepEqual(plain(C.orphanPlans_(plan.slice(0, 2), klienci)), { ids: {}, n: 0 });
 });
+
+// --- komentarze trenera do filmów na Dysku ---
+test('anchorSec_, commentLines_, fileIdOf_: komentarze Dysku z czasem w filmie', () => {
+  assert.equal(C.fileIdOf_('https://drive.google.com/file/d/1AbC_def-GHIjklMNOpqrSTUvwxYZ012345/view?usp=drivesdk'), '1AbC_def-GHIjklMNOpqrSTUvwxYZ012345');
+  assert.equal(C.fileIdOf_('https://drive.google.com/open?id=1AbC_def-GHIjklMNOpqrSTUvwxYZ012345'), '1AbC_def-GHIjklMNOpqrSTUvwxYZ012345');
+  assert.deepEqual(['', 'tekst', 'https://example.test/film.mp4'].map(C.fileIdOf_), ['', '', '']);
+  const sec = a => C.anchorSec_(a);
+  assert.deepEqual([sec('{"timestamp":15}'), sec('{"r":"head","a":[{"vid":{"timeMs":15400}}]}'), sec({ region: { startTime: '0:15' } }), sec('{"startOffset":"15.5s"}'),
+    sec('{"time":"PT75S"}'), sec('{"videoTime":"1:02:03"}'), sec('{"startTime":95000}')], [15, 15.4, 15, 15.5, 75, 3723, 95]);
+  assert.deepEqual([sec('to nie json'), sec('{"page":3}'), sec(''), sec(null), sec('{"time":"jutro"}')], [null, null, null, null, null]);
+  const c = C.commentLines_([{ content: ' Łokcie wyżej\nprzy 2. powtórzeniu ', anchor: '{"timestamp":75}', createdTime: '2026-10-12T10:00:00Z' },
+    { content: 'Dobre zejście', anchor: '{"timestamp":15}', createdTime: '2026-10-12T10:05:00Z' }, { content: 'Ogólnie lepiej niż tydzień temu', createdTime: '2026-10-12T09:00:00Z' },
+    { content: 'usunięty', deleted: true, anchor: '{"timestamp":1}' }, { content: 'załatwione', resolved: true }, { content: '   ' }, { content: 'bez czasu', anchor: '{"strona":2}', createdTime: '2026-10-12T11:00:00Z' }]);
+  assert.equal(c.text, '0:15 Dobre zejście\n1:15 Łokcie wyżej przy 2. powtórzeniu\nOgólnie lepiej niż tydzień temu\nbez czasu');
+  assert.equal(c.raw, '{"strona":2}');                                           // nierozpoznana kotwica wraca do pokazania w menu
+  assert.deepEqual(plain(C.commentLines_([])), { text: '', raw: '' });
+  assert.deepEqual([C.LOG_HEADERS.slice(-2), C.SES_HEADERS.slice(-1), C.LOG_HEADERS.length, C.SES_HEADERS.length].map(x => plain(x)), [['komentarz_trenera', 'komentarz_dysk'], ['komentarz_trenera'], 24, 17]);
+});
