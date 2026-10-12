@@ -2,6 +2,13 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-12 · Aliasy i ćwiczenia spoza Catalyst
+
+- Po wczytaniu bazy 98 nazw z planów klientów nie miało dopasowania (głównie polskie nazwy i akcesoria). Dopasowane ręcznie: 53 ćwiczenia z bazy dostały aliasy (`CW_ALIASY`), 15 ćwiczeń spoza Catalyst doszło jako wiersze bez filmu, z partiami (`CW_DODATKI`; nazwy jak w otwartej bazie free-exercise-db, domena publiczna). Z 98 nazw film ma teraz 69, same partie 17, bez dopasowania zostaje 12 (rotacje barku i biodra, kilka nietypowych).
+- free-exercise-db nie ma filmów, tylko zdjęcia i opis po angielsku, więc bierzemy z niej nazwy i partie; link do filmu trener dopisuje w arkuszu.
+- Kilka aliasów to przybliżenia do sprawdzenia przez trenera: hip thrust → Bench-Supported Glute Bridge, uginanie nóg leżąc → Hamstring Curl, Copenhagen adduction → Copenhagen Plank Lift, Hanging Knee Raise → Hanging Leg Raise, Pin OHS → Overhead Squat.
+- „Wczytaj bazę ćwiczeń” można klikać wielokrotnie: dopisuje nowe ćwiczenia i aliasy, usuwa puste wiersze z samą nazwą, które mają już dopasowanie; ręcznych wpisów nie zmienia. Wiersz z samą nazwą nie zasłania aliasu.
+
 ## 2026-10-12 · Alert mailowy
 
 - Mail tylko przy nowym czerwonym sygnale (ból > 3/10, ≥ 2 FAIL w ćwiczeniu, dyspozycja „Zmęczenie”). Pomarańczowe (zaległa jednostka, koniec planu, brak treningu) zostają w zakładce Przegląd: codzienny mail o nich szybko przestałby być czytany.

@@ -1022,8 +1022,8 @@ function keepNotes_(rows, old) {
  * aliasy („;”) = inne nazwy tego samego ćwiczenia używane w planach; zamienniki („;”) i grupa (R/P/CR/CP/PS/I) działają,
  * gdy plan ich nie podaje. Plan ma zawsze pierwszeństwo.
  * Dopasowanie nazwy z planu (exFind_): 1) dokładna nazwa lub alias, 2) nazwa podstawowa (bez nawiasów, „– TEST”,
- * „z pauzą…”), 3) te same słowa w innej kolejności i skróty (DB, SL, RDL…). Kompleks „A + B” bez własnego wiersza
- * dostaje instruktaż każdej rozpoznanej części. „… 1¼” szuka najpierw wariantu „1-1/4 …”, potem ćwiczenia bez dopisku.
+ * „z pauzą…”, „, tempo …”), 3) te same słowa w innej kolejności i skróty (DB, SL, RDL…). Kompleks „A + B” bez własnego wiersza
+ * dostaje instruktaż każdej rozpoznanej części. Wiersz z samą nazwą (bez danych) nie bierze udziału w dopasowaniu. „… 1¼” szuka najpierw wariantu „1-1/4 …”, potem ćwiczenia bez dopisku.
  */
 const CW_HEADERS = ['cwiczenie', 'aliasy', 'instruktaz', 'partia', 'zamienniki', 'grupa'];
 const PART_HEADERS = ['klient', 'tydzien_od', 'partia', 'serie', 'serie_twarde', 'tonaz_kg'];
@@ -1032,7 +1032,7 @@ const EX_STOP = ['and', 'from', 'the', 'a', 'on', 'with', 'to'];
 const exStr_ = v => String(v === undefined || v === null ? '' : v);
 const exKey_ = v => exStr_(v).trim().replace(/\s+/g, ' ').toLowerCase();
 /** nazwa podstawowa: bez nawiasów i dopisków z planu */
-const exBase_ = v => exKey_(exStr_(v).replace(/\(.*?\)/g, ' ').replace(/\s[–-]\s*test\b.*$/i, '').replace(/\sz pauzą.*$/i, '').replace(/1\s?¼/g, ' 1-1/4 '));
+const exBase_ = v => exKey_(exStr_(v).replace(/\(.*?\)/g, ' ').replace(/\s[–-]\s*test\b.*$/i, '').replace(/\sz pauzą.*$/i, '').replace(/\s*,?\s*tempo\s.*$/i, '').replace(/1\s?¼/g, ' 1-1/4 '));
 /** słowa nazwy podstawowej: skróty rozwinięte, liczba pojedyncza, kolejność bez znaczenia */
 function exTok_(v) {
   return exBase_(v).replace(/(push|pull|chin|sit|step)-?up/g, '$1 up').replace(/[^a-z0-9ąćęłńóśźż ]/g, ' ').split(' ')
@@ -1044,7 +1044,7 @@ function exTok_(v) {
 function exIndex_(rows) {
   const ix = { k: {}, b: {}, t: {} };
   (rows || []).forEach(r => {
-    const name = exStr_(r.cwiczenie).trim().replace(/\s+/g, ' '); if (!name) return;
+    const name = exStr_(r.cwiczenie).trim().replace(/\s+/g, ' '); if (!name || cwEmpty_(r)) return;
     const url = exStr_(r.instruktaz).trim(), g = exStr_(r.grupa).trim().toUpperCase();
     const e = { name: name, info: /^https?:\/\/\S+$/i.test(url) ? url : '',
       parts: exStr_(r.partia).split(/[;,]/).map(s => s.trim().toLowerCase()).filter(Boolean),
@@ -1082,11 +1082,37 @@ function missingExercises_(plan, dictRows) {
   return out.sort((a, b) => a.localeCompare(b, 'pl'));
 }
 
-/** Czysta funkcja: wiersze bazy [nazwa, id filmu YouTube, partie, aliasy], których nazwy nie ma jeszcze w zakładce → wiersze do dopisania. */
-function seedRows_(baza, dictRows) {
-  const ix = exIndex_(dictRows);
-  return (baza || []).filter(b => b[0] && !ix.k[exKey_(b[0])])
-    .map(b => [b[0], b[3] || '', b[1] ? 'https://www.youtube.com/watch?v=' + b[1] : '', b[2] || '', '', '']);
+/** Czysta funkcja: baza do wczytania = CW_BAZA z aliasami z CW_ALIASY + CW_DODATKI → [nazwa, id filmu, partie, aliasy]. */
+function cwBaza_(baza, aliasy, dodatki) {
+  const al = aliasy || {};
+  return (baza || []).map(b => [b[0], b[1], b[2], [b[3], al[b[0]]].filter(Boolean).join('; ')])
+    .concat((dodatki || []).map(d => [d[0], '', d[2], d[1]]));
+}
+
+/** wiersz-zaślepka: sama nazwa dopisana przez „Uzupełnij listę ćwiczeń”, bez żadnych danych */
+const cwEmpty_ = r => ['aliasy', 'instruktaz', 'partia', 'zamienniki', 'grupa'].every(h => !exStr_(r[h]).trim());
+const cwList_ = v => exStr_(v).split(';').map(s => s.trim()).filter(Boolean);
+
+/**
+ * Czysta funkcja: co zrobić w zakładce Ćwiczenia, żeby miała całą bazę → {add, aliases, drop}.
+ * add: nowe wiersze; aliases: [{i, value}] – dopisane aliasy przy istniejących wierszach (ręcznych nie usuwa);
+ * drop: indeksy wierszy-zaślepek, których nazwa ma już dopasowanie gdzie indziej. Indeksy liczone od pierwszego wiersza danych.
+ */
+function cwSync_(baza, dictRows) {
+  const rows = dictRows || [], byKey = {}, add = [], aliases = [], drop = [];
+  rows.forEach((r, i) => { const k = exKey_(r.cwiczenie); if (k && !cwEmpty_(r)) byKey[k] = i; });
+  (baza || []).forEach(b => {
+    if (!b[0]) return;
+    const i = byKey[exKey_(b[0])], want = cwList_(b[3]);
+    if (i === undefined) { add.push([b[0], want.join('; '), b[1] ? 'https://www.youtube.com/watch?v=' + b[1] : '', b[2] || '', '', '']); return; }
+    const have = cwList_(rows[i].aliasy), hk = have.map(exKey_), extra = want.filter(a => hk.indexOf(exKey_(a)) < 0);
+    if (extra.length) aliases.push({ i: i, value: have.concat(extra).join('; ') });
+  });
+  const after = rows.map((r, i) => { const a = aliases.filter(x => x.i === i)[0]; return a ? Object.assign({}, r, { aliasy: a.value }) : r; })
+    .concat(add.map(a => ({ cwiczenie: a[0], aliasy: a[1], instruktaz: a[2], partia: a[3] })));
+  const ix = exIndex_(after);
+  rows.forEach((r, i) => { if (exKey_(r.cwiczenie) && cwEmpty_(r) && exInfo_(ix, r.cwiczenie).found) drop.push(i); });
+  return { add: add, aliases: aliases, drop: drop };
 }
 
 function appendCw_(rows) {
@@ -1095,18 +1121,28 @@ function appendCw_(rows) {
   sh.activate();
 }
 
-/** Menu Trening → Wczytaj bazę ćwiczeń: dopisuje ćwiczenia z CW_BAZA, których jeszcze nie ma; istniejących wierszy nie zmienia. */
+/**
+ * Menu Trening → Wczytaj bazę ćwiczeń: dopisuje brakujące ćwiczenia z bazy i aliasy, usuwa puste wiersze-zaślepki,
+ * które mają już dopasowanie. Linków, partii, zamienników ani ręcznie wpisanych aliasów nie zmienia.
+ */
 function wczytajBazeCwiczen() {
-  const rows = seedRows_(CW_BAZA, tableOf_('Ćwiczenia'));
-  appendCw_(rows);
-  alert_('Ćwiczenia', rows.length ? 'Dopisano ćwiczenia z bazy: ' + rows.length + '. Twoje wiersze zostały bez zmian.' : 'Baza jest już wczytana, nic nie dopisano.');
+  const sh = sheet_('Ćwiczenia', CW_HEADERS), s = cwSync_(cwBaza_(CW_BAZA, CW_ALIASY, CW_DODATKI), tableOf_('Ćwiczenia'));
+  const col = CW_HEADERS.indexOf('aliasy') + 1;
+  s.aliases.forEach(a => sh.getRange(a.i + 2, col).setValue(a.value));
+  s.drop.slice().sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
+  appendCw_(s.add);
+  const left = missingExercises_(tableOf_('Plan'), tableOf_('Ćwiczenia')).length;
+  alert_('Ćwiczenia', 'Nowe ćwiczenia: ' + s.add.length + ', wiersze z dopisanymi aliasami: ' + s.aliases.length + ', usunięte puste wiersze: ' + s.drop.length +
+    '.\nĆwiczenia z planów nadal bez dopasowania: ' + left + (left ? ' (menu „Uzupełnij listę ćwiczeń” pokaże je na dole zakładki).' : '.'));
 }
 
 /** Menu Trening → Uzupełnij listę ćwiczeń: dopisuje nazwy z Planu, których nie udało się dopasować do bazy. */
 function uzupelnijCwiczenia() {
-  const miss = missingExercises_(tableOf_('Plan'), tableOf_('Ćwiczenia'));
-  appendCw_(miss.map(n => [n, '', '', '', '', '']));
-  alert_('Ćwiczenia', miss.length ? 'Dopisano ćwiczenia z planów bez dopasowania: ' + miss.length + '. Uzupełnij przy nich link i partię albo usuń wiersz i dopisz nazwę jako alias przy właściwym ćwiczeniu.' : 'Wszystkie ćwiczenia z planów mają dopasowanie w bazie.');
+  const dict = tableOf_('Ćwiczenia'), have = {};
+  dict.forEach(r => { have[exKey_(r.cwiczenie)] = 1; });
+  const miss = missingExercises_(tableOf_('Plan'), dict), fresh = miss.filter(n => !have[exKey_(n)]);
+  appendCw_(fresh.map(n => [n, '', '', '', '', '']));
+  alert_('Ćwiczenia', miss.length ? 'Ćwiczenia z planów bez dopasowania: ' + miss.length + ' (nowo dopisane na dole: ' + fresh.length + '). Uzupełnij przy nich link i partię albo usuń wiersz i dopisz nazwę jako alias przy właściwym ćwiczeniu.' : 'Wszystkie ćwiczenia z planów mają dopasowanie w bazie.');
 }
 
 /**

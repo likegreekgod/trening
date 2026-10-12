@@ -630,3 +630,84 @@ const CW_BAZA = [
   ["Z-Press","-ym8dYDPx68","klatka; barki"],
   ["Zottman Curl","kc-LGcbozhI","biceps"]
 ];
+
+/**
+ * Inne nazwy ćwiczeń z bazy spotykane w planach (polskie i potoczne): nazwa z bazy → aliasy („;”).
+ * „Wczytaj bazę ćwiczeń” dopisuje je do kolumny aliasy; aliasów wpisanych ręcznie w arkuszu nie usuwa.
+ */
+const CW_ALIASY = {
+  'Ab Rollout': 'Ab Wheel',
+  'Back Extension (Hyperextension)': 'Wyprost na ławce 45°; Wyprosty na ławce 45° z obciążeniem',
+  'Back Squat': 'Przysiad tylny; Przysiad ze sztangą',
+  'Banded Wall Slide': 'Serratus wall slide z gumą',
+  'Bench Press': 'Wyciskanie sztangi na ławce płaskiej',
+  'Bench-Supported Glute Bridge': 'Hip Thrust; Barbell Hip Thrust',
+  'Bent Row': 'Wiosłowanie sztangą w opadzie',
+  'Box Jump': 'Skok na skrzynię; Skok na skrzynię (wysoka), zejście krokiem',
+  'Bulgarian Split Squat': 'Wykroki bułgarskie',
+  'Cable Overhead Tricep Extension': 'Prostowanie ramion linką nad głową',
+  'Clean Pull': 'Ciąg zarzutowy',
+  'Copenhagen Plank Lift': 'Copenhagen adduction',
+  'Dip': 'Ring Dips',
+  'Dumbbell Incline Bench Press': 'Incline DB Press; Wyciskanie hantli na ławce skośnej; Wyciskanie hantli na ławce skośnej 30°',
+  'Dumbbell Incline Bench Row': 'Chest-supported DB Row',
+  'Dumbbell Lateral Raise': 'Lateral Raise; Wznosy hantli bokiem',
+  'Dumbbell Press': 'Seated DB Shoulder Press; Wyciskanie hantli nad głowę siedząc',
+  'EZ-Curl': 'Uginanie ramion sztangą łamaną',
+  'Face Pull': 'Face pull na wyciągu; Face pull z rotacją zewn.',
+  'Front Squat': 'Przysiad przedni',
+  'Hammer Curl': 'DB Hammer Curl; Uginanie młotkowe z hantlami',
+  'Hamstring Curl': 'Uginanie nóg leżąc; Uginanie nóg leżąc na maszynie',
+  'Hanging Leg Raise': 'Hanging Knee Raise; Unoszenie nóg w zwisie',
+  'Hip Extension': 'GHD Hip Extension',
+  'Jerk Support': 'Fiksacja nad głową z rack',
+  'Lat Pulldown': 'Ściąganie drążka wyciągu; Ściąganie drążka wyciągu — 50 powt. łącznie',
+  'Lat Pulldown To Chest': 'Ściąganie drążka wyciągu do klatki',
+  'Leg Extension': 'Prostowanie nóg na maszynie',
+  'Low Cable Row': 'Wiosłowanie siedząc na wyciągu',
+  'Lunge': 'Wykroki chodzone; Wykroki chodzone z hantlami',
+  'Neutral-Grip Lat Pulldown': 'Ściąganie drążka wąsko',
+  'Nordic Curl': 'Nordic hamstring curl',
+  'Overhead Squat': 'Pin OHS',
+  'Pause Power Jerk': 'Power jerk z rack — 2 s pauza w dipie + 3 s fiksacja',
+  'Pendlay Row': 'Wiosłowanie Pendlaya',
+  'Press': 'Wyciskanie żołnierskie',
+  'Press In Snatch (Sots Press)': 'Sots Press; Sotts Press',
+  'Pull-up': 'Podciąganie nachwytem; Podciąganie nachwytem z obciążeniem; Weighted Pull-up',
+  'Push Press Behind The Neck': 'Push press zza karku',
+  'Push-Up': 'Pompki do upadku; Pushup Hold',
+  'Romanian Deadlift (RDL)': 'Martwy ciąg rumuński; RDL z hantlami',
+  'Segment Clean': 'Pause Clean',
+  'Side Plank': 'Deska bokiem',
+  'Single-Arm Dumbbell Row': 'Wiosłowanie hantlem jednorącz',
+  'Single-Leg Dumbbell RDL': 'RDL jednonóż; RDL jednonóż (hantla w ręce przeciwnej) — wersja ciężka',
+  'Single-Leg Glute Bridge': 'Mostek biodrowy jednonóż; TEST: mostek biodrowy jednonóż do upadku',
+  'Snatch': 'Rwanie',
+  'Snatch Pull': 'Ciąg rwaniowy',
+  'Split Squat': 'Split Stance Squat',
+  'Squat Jerk Behind The Neck': 'Squat jerk zza karku',
+  'Step-up': 'Wejście na skrzynię; Wejście na skrzynię z pochyleniem tułowia',
+  'Tricep Pushdown': 'Prostowanie ramion na wyciągu'
+};
+
+/**
+ * Ćwiczenia spoza biblioteki Catalyst, bez filmu: [nazwa, aliasy, partie]. Nazwy angielskie jak w otwartej bazie
+ * free-exercise-db (domena publiczna); dwa ostatnie wiersze własne. Link do instruktażu trener dopisuje w arkuszu.
+ */
+const CW_DODATKI = [
+  ['Barbell Curl', 'Straight Bar Biceps Curl', 'biceps'],
+  ['Cable Crossover', 'Rozpiętki na bramie', 'klatka'],
+  ['Dumbbell Shrug', 'Szrugsy z hantlami', 'kapturowe'],
+  ['Goblet Squat', 'Przysiad goblet; Przysiad goblet do skrzyni', 'czworogłowe; pośladki'],
+  ['Incline Dumbbell Flyes', 'Incline DB Flies', 'klatka'],
+  ['Leg Press', 'Suwnica; Suwnica — 1 seria 20 powt.; Wypychanie na suwnicy', 'czworogłowe; pośladki'],
+  ['One-Legged Cable Kickback', 'Wykop nogi w tył na wyciągu', 'pośladki'],
+  ['Pull Through', 'Przeciąganie liny między nogami', 'pośladki; dwugłowe uda'],
+  ['Side Leg Raises', 'Odwodzenie w leżeniu bokiem z gumą', 'odwodziciele'],
+  ['Sled Push', 'Pchanie sanek; Pchanie sanek — akceleracja', 'czworogłowe; pośladki'],
+  ['Standing Calf Raises', 'Wspięcia na palce stojąc; Single-leg DB Calf Raise', 'łydki'],
+  ['Thigh Abductor', 'Odwodzenie nóg na maszynie', 'odwodziciele'],
+  ['Zercher Squats', 'Przysiad Zerchera', 'czworogłowe; pośladki'],
+  ['B-Stance Hip Thrust', '', 'pośladki'],
+  ['Slider Leg Curl', '', 'dwugłowe uda']
+];
