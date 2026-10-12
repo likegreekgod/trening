@@ -193,3 +193,15 @@ test('computeBlocks_ i keepNotes_: historia bloków z wnioskami trenera', () => 
   assert.equal(out.find(r => r[1] === 'B2')[W], '');
   assert.equal(out.find(r => r[1] === 'B0')[W], 'stary blok');
 });
+
+test('slugId_ i buildClientRow_: nowy klient z menu', () => {
+  assert.equal(C.slugId_('Mikołaj Góral'), 'mikolaj-goral');
+  assert.equal(C.slugId_('  Żaneta  '), 'zaneta');
+  const ok = C.buildClientRow_({ imie: 'Mikołaj', prosty: true, masters: true, dod_serie: '1' }, ['damian'], 'kabc123def45');
+  assert.equal(ok.id, 'mikolaj');
+  assert.deepEqual(Array.from(ok.row), ['kabc123def45', 'mikolaj', 'Mikołaj', 'TAK', '', '', 'PROSTY', 1, 'TAK']);
+  assert.match(C.buildClientRow_({ imie: 'Robert' }, ['Robert'], 'k').error, /już istnieje/);
+  assert.match(C.buildClientRow_({ imie: '' }, [], 'k').error, /imię/);
+  assert.match(C.buildClientRow_({ imie: 'A', dod_serie: '9' }, [], 'k').error, /0–5/);
+  assert.equal(C.buildClientRow_({ imie: 'Ewa', id: 'Ewa K' }, [], 'k').id, 'ewa-k');
+});

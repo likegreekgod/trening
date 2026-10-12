@@ -420,26 +420,108 @@ function newKey_() {
   return 'k' + Utilities.getUuid().replace(/-/g, '').slice(0, 11);
 }
 
-/** Po wdrożeniu: uruchom, aby wypisać linki dla klientów (Dziennik wykonania). */
-function linki() {
+/** Adres, pod który prowadzą linki klientów (PWA albo /exec). Pusty = brak wdrożenia. */
+function linkBase_() {
   // Adres z Zarządzaj wdrożeniami → „URL aplikacji internetowej”, zapisany we Właściwościach skryptu jako WEBAPP_URL.
   // getService().getUrl() potrafi zwrócić adres wersji testowej (head), który po zamianie /dev→/exec wymaga logowania.
   const props = PropertiesService.getScriptProperties();
   const pwa = String(props.getProperty('PWA_URL') || '').trim();   // np. https://login.github.io/trening/
   const saved = props.getProperty('WEBAPP_URL');
   const url = String(saved || ScriptApp.getService().getUrl() || '').trim().replace(/\?.*$/, '').replace(/\/dev$/, '/exec');
-  if (!url && !pwa) { Logger.log('Brak wdrożenia — najpierw Wdróż → Nowe wdrożenie.'); return; }
-  if (!saved) Logger.log('UWAGA: brak WEBAPP_URL we Właściwościach skryptu — link może nie działać dla klientów.');
+  if (!pwa && url && !saved) Logger.log('UWAGA: brak WEBAPP_URL we Właściwościach skryptu — link może nie działać dla klientów.');
+  return pwa || url;
+}
+
+/** Po wdrożeniu: uruchom, aby wypisać linki dla klientów (Dziennik wykonania). */
+function linki() {
+  const base = linkBase_();
+  if (!base) { Logger.log('Brak wdrożenia — najpierw Wdróż → Nowe wdrożenie.'); return; }
   const sh = SpreadsheetApp.getActive().getSheetByName('Klienci');
   if (!sh) { Logger.log('Brak zakładki Klienci — uruchom najpierw setup.'); return; }
   sh.getRange(1, 5).setValue('link');
   const v = sh.getDataRange().getValues();
   for (let i = 1; i < v.length; i++) {
-    const link = (pwa || url) + '?k=' + v[i][0];
+    const link = base + '?k=' + v[i][0];
     sh.getRange(i + 1, 5).setValue(link);
     Logger.log(v[i][2] + ': ' + link);
   }
 }
+
+/* ================== NOWY KLIENT (menu Trening → Dodaj klienta) ================== */
+
+/** „Mikołaj Góral” → „mikolaj-goral”: małe litery, bez polskich znaków, tylko a–z 0–9 i „-”. */
+function slugId_(name) {
+  const map = { 'ł': 'l', 'Ł': 'l' };
+  return String(name || '').replace(/[łŁ]/g, c => map[c]).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/** Sprawdza formularz i buduje wiersz Klienci (A–I). Czysta funkcja: {row, id} albo {error}. */
+function buildClientRow_(f, existingIds, key) {
+  f = f || {};
+  const name = String(f.imie || '').trim();
+  if (!name) return { error: 'Podaj imię.' };
+  const id = slugId_(String(f.id || '').trim() || name);
+  if (!id) return { error: 'ID klienta może zawierać tylko litery i cyfry.' };
+  if ((existingIds || []).map(x => String(x).toLowerCase()).indexOf(id) >= 0)
+    return { error: 'Klient „' + id + '” już istnieje — wybierz inne ID (np. ' + id + '-2).' };
+  const extra = String(f.dod_serie === undefined ? '' : f.dod_serie).trim();
+  if (extra !== '' && !(Number(extra) >= 0 && Number(extra) <= 5)) return { error: 'Dodatkowe serie: liczba 0–5.' };
+  return { id: id, row: [key, id, name, 'TAK', '', f.bol ? 'TAK' : '', f.prosty ? 'PROSTY' : '',
+    extra === '' ? '' : Number(extra), f.masters ? 'TAK' : ''] };
+}
+
+function dodajKlienta() {
+  const html = HtmlService.createHtmlOutput(DODAJ_KLIENTA_HTML_).setWidth(380).setHeight(470);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Nowy klient');
+}
+
+/** Wywoływane z okna „Nowy klient”. Zwraca {ok, id, link} albo {error}. */
+function dodajKlientaZapisz(f) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Klienci', ['klucz', 'klient_id', 'imie', 'aktywny', 'link', 'bol', 'tryb', 'dod_serie', 'masters']);
+    const ids = sh.getLastRow() > 1 ? sh.getRange(2, 2, sh.getLastRow() - 1, 1).getValues().map(r => r[0]) : [];
+    const res = buildClientRow_(f, ids, newKey_());
+    if (res.error) return res;
+    const base = linkBase_();
+    if (base) res.row[4] = base + '?k=' + res.row[0];
+    const r = sh.getLastRow() + 1;
+    sh.getRange(r, 1).setNumberFormat('@');                       // klucz zawsze jako tekst
+    sh.getRange(r, 1, 1, res.row.length).setValues([res.row]);
+    rootFolder_();                                                // folder na filmy (Trening – Klienci) istnieje
+    return { ok: true, id: res.id, link: res.row[4] || '' };
+  } finally { lock.releaseLock(); }
+}
+
+const DODAJ_KLIENTA_HTML_ = `<!doctype html><html><head><base target="_top"><style>
+body{font:14px/1.4 Arial,sans-serif;margin:0;padding:4px 2px}label{display:block;margin:10px 0 4px;font-weight:bold}
+input[type=text],input[type=number]{width:100%;box-sizing:border-box;padding:7px;font-size:14px}
+.chk{display:flex;gap:8px;align-items:center;margin:8px 0;font-weight:normal}small{color:#666;font-weight:normal}
+button{margin-top:14px;padding:8px 16px;font-size:14px;cursor:pointer}#msg{margin-top:12px}.err{color:#b00020}
+.ok{background:#e6f4ea;padding:10px;border-radius:4px;word-break:break-all}</style></head><body>
+<form id="f" onsubmit="go(event)">
+<label>Imię <small>(widoczne w aplikacji)</small></label><input type="text" name="imie" id="imie" required oninput="sug()">
+<label>ID klienta <small>(w planach JSON: „klient”)</small></label><input type="text" name="id" id="id" placeholder="np. mikolaj">
+<label class="chk"><input type="checkbox" name="prosty"> Tryb prosty <small>(słowa zamiast RPE)</small></label>
+<label class="chk"><input type="checkbox" name="bol"> Ból kolana/barku zawsze widoczny</label>
+<label class="chk"><input type="checkbox" name="masters"> Masters <small>(ostrzejsze progi)</small></label>
+<label>Dodatkowe serie <small>(domyślny limit, puste = brak)</small></label><input type="number" name="dod_serie" min="0" max="5">
+<button type="submit" id="b">Dodaj klienta</button></form><div id="msg"></div>
+<script>
+var touched=false;document.getElementById('id').addEventListener('input',function(){touched=true});
+function slug(s){return s.replace(/[łŁ]/g,'l').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')}
+function sug(){if(!touched)document.getElementById('id').value=slug(document.getElementById('imie').value)}
+function go(e){e.preventDefault();var f=e.target,b=document.getElementById('b'),m=document.getElementById('msg');
+ var d={imie:f.imie.value,id:f.id.value,prosty:f.prosty.checked,bol:f.bol.checked,masters:f.masters.checked,dod_serie:f.dod_serie.value};
+ b.disabled=true;m.textContent='Zapisuję…';m.className='';
+ google.script.run.withSuccessHandler(function(r){b.disabled=false;
+  if(r.error){m.textContent=r.error;m.className='err';return}
+  f.style.display='none';m.className='ok';
+  m.innerHTML='Dodano: <b>'+r.id+'</b><br><br>'+(r.link?'Link dla klienta:<br><input type="text" readonly value="'+r.link+'" onclick="this.select()" style="width:100%;margin-top:4px">':'Brak wdrożenia — uruchom <b>linki</b> po wdrożeniu.')+'<br><br>W planach JSON użyj: "klient": "'+r.id+'"';
+ }).withFailureHandler(function(err){b.disabled=false;m.textContent=String(err.message||err);m.className='err'}).dodajKlientaZapisz(d);}
+</script></body></html>`;
 
 /* ================== PODSUMOWANIE (dla trenera) ==================
  * Uruchom `podsumowanie` (albo menu Trening → Odśwież podsumowanie). `instalujPodsumowanie` = codziennie ok. 5:00.
@@ -468,6 +550,7 @@ const STATUS_BG = { '🔴 za dużo': '#f8c9c4', '🟠 uwaga': '#fde2b8', '🟢 O
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Trening')
     .addItem('Wczytaj plany z Drive', 'wczytajPlany')
+    .addItem('Dodaj klienta', 'dodajKlienta')
     .addItem('Odśwież podsumowanie', 'podsumowanie')
     .addToUi();
 }
