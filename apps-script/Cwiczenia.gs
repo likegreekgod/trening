@@ -648,7 +648,6 @@ const CW_ALIASY = {
   'Cable Overhead Tricep Extension': 'Prostowanie ramion linką nad głową',
   'Clean Pull': 'Ciąg zarzutowy',
   'Copenhagen Plank Lift': 'Copenhagen adduction',
-  'Dip': 'Ring Dips',
   'Dumbbell Incline Bench Press': 'Incline DB Press; Wyciskanie hantli na ławce skośnej; Wyciskanie hantli na ławce skośnej 30°',
   'Dumbbell Incline Bench Row': 'Chest-supported DB Row',
   'Dumbbell Lateral Raise': 'Lateral Raise; Wznosy hantli bokiem',
@@ -658,7 +657,7 @@ const CW_ALIASY = {
   'Front Squat': 'Przysiad przedni',
   'Hammer Curl': 'DB Hammer Curl; Uginanie młotkowe z hantlami',
   'Hamstring Curl': 'Uginanie nóg leżąc; Uginanie nóg leżąc na maszynie',
-  'Hanging Leg Raise': 'Hanging Knee Raise; Unoszenie nóg w zwisie',
+  'Hanging Leg Raise': 'Unoszenie nóg w zwisie',
   'Hip Extension': 'GHD Hip Extension',
   'Jerk Support': 'Fiksacja nad głową z rack',
   'Lat Pulldown': 'Ściąganie drążka wyciągu; Ściąganie drążka wyciągu — 50 powt. łącznie',
@@ -668,7 +667,6 @@ const CW_ALIASY = {
   'Lunge': 'Wykroki chodzone; Wykroki chodzone z hantlami',
   'Neutral-Grip Lat Pulldown': 'Ściąganie drążka wąsko',
   'Nordic Curl': 'Nordic hamstring curl',
-  'Overhead Squat': 'Pin OHS',
   'Pause Power Jerk': 'Power jerk z rack — 2 s pauza w dipie + 3 s fiksacja',
   'Pendlay Row': 'Wiosłowanie Pendlaya',
   'Press': 'Wyciskanie żołnierskie',
@@ -692,8 +690,18 @@ const CW_ALIASY = {
 
 /**
  * Ćwiczenia spoza biblioteki Catalyst, bez filmu: [nazwa, aliasy, partie]. Nazwy angielskie jak w otwartej bazie
- * free-exercise-db (domena publiczna); dwa ostatnie wiersze własne. Link do instruktażu trener dopisuje w arkuszu.
+ * free-exercise-db (domena publiczna); wiersze od „B-Stance Hip Thrust” w dół są własne. Link do instruktażu trener dopisuje w arkuszu.
  */
+/**
+ * Aliasy wycofane, bo wskazywały inne ćwiczenie (regresję albo wariant z innym sprzętem): nazwa z bazy → aliasy („;”).
+ * „Wczytaj bazę ćwiczeń” usuwa je z arkusza, jeśli zostały tam dopisane wcześniej.
+ */
+const CW_WYCOFANE = {
+  'Dip': 'Ring Dips',
+  'Hanging Leg Raise': 'Hanging Knee Raise',
+  'Overhead Squat': 'Pin OHS'
+};
+
 const CW_DODATKI = [
   ['Barbell Curl', 'Straight Bar Biceps Curl', 'biceps'],
   ['Cable Crossover', 'Rozpiętki na bramie', 'klatka'],
@@ -709,5 +717,8 @@ const CW_DODATKI = [
   ['Thigh Abductor', 'Odwodzenie nóg na maszynie', 'odwodziciele'],
   ['Zercher Squats', 'Przysiad Zerchera', 'czworogłowe; pośladki'],
   ['B-Stance Hip Thrust', '', 'pośladki'],
+  ['Hanging Knee Raise', '', 'brzuch'],
+  ['Pin Overhead Squat', 'Pin OHS', 'czworogłowe; pośladki'],
+  ['Ring Dip', '', 'klatka; triceps'],
   ['Slider Leg Curl', '', 'dwugłowe uda']
 ];

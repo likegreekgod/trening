@@ -6,7 +6,8 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 
 - Po wczytaniu bazy 98 nazw z planów klientów nie miało dopasowania (głównie polskie nazwy i akcesoria). Dopasowane ręcznie: 53 ćwiczenia z bazy dostały aliasy (`CW_ALIASY`), 15 ćwiczeń spoza Catalyst doszło jako wiersze bez filmu, z partiami (`CW_DODATKI`; nazwy jak w otwartej bazie free-exercise-db, domena publiczna). Z 98 nazw film ma teraz 69, same partie 17, bez dopasowania zostaje 12 (rotacje barku i biodra, kilka nietypowych).
 - free-exercise-db nie ma filmów, tylko zdjęcia i opis po angielsku, więc bierzemy z niej nazwy i partie; link do filmu trener dopisuje w arkuszu.
-- Kilka aliasów to przybliżenia do sprawdzenia przez trenera: hip thrust → Bench-Supported Glute Bridge, uginanie nóg leżąc → Hamstring Curl, Copenhagen adduction → Copenhagen Plank Lift, Hanging Knee Raise → Hanging Leg Raise, Pin OHS → Overhead Squat.
+- Kilka aliasów to przybliżenia do sprawdzenia przez trenera: hip thrust → Bench-Supported Glute Bridge, uginanie nóg leżąc → Hamstring Curl, Copenhagen adduction → Copenhagen Plank Lift.
+- Poprawka trenera: alias wolno dać tylko temu samemu ćwiczeniu pod inną nazwą. Regresja albo wariant z innym sprzętem to osobne ćwiczenie: Hanging Knee Raise (regresja Hanging Leg Raise), Pin Overhead Squat (przysiad OHS z martwego punktu na dole), Ring Dip (dipy na kółkach) mają własne wiersze bez filmu, a błędne aliasy są wycofane (`CW_WYCOFANE`, „Wczytaj bazę ćwiczeń” usuwa je z arkusza).
 - „Wczytaj bazę ćwiczeń” można klikać wielokrotnie: dopisuje nowe ćwiczenia i aliasy, usuwa puste wiersze z samą nazwą, które mają już dopasowanie; ręcznych wpisów nie zmienia. Wiersz z samą nazwą nie zasłania aliasu.
 
 ## 2026-10-12 · Alert mailowy

@@ -1095,18 +1095,20 @@ const cwList_ = v => exStr_(v).split(';').map(s => s.trim()).filter(Boolean);
 
 /**
  * Czysta funkcja: co zrobić w zakładce Ćwiczenia, żeby miała całą bazę → {add, aliases, drop}.
- * add: nowe wiersze; aliases: [{i, value}] – dopisane aliasy przy istniejących wierszach (ręcznych nie usuwa);
+ * add: nowe wiersze; aliases: [{i, value}] – nowa wartość kolumny aliasy (dopisane brakujące, usunięte wycofane;
+ * pozostałych ręcznych nie rusza);
  * drop: indeksy wierszy-zaślepek, których nazwa ma już dopasowanie gdzie indziej. Indeksy liczone od pierwszego wiersza danych.
  */
-function cwSync_(baza, dictRows) {
+function cwSync_(baza, dictRows, wycofane) {
   const rows = dictRows || [], byKey = {}, add = [], aliases = [], drop = [];
   rows.forEach((r, i) => { const k = exKey_(r.cwiczenie); if (k && !cwEmpty_(r)) byKey[k] = i; });
   (baza || []).forEach(b => {
     if (!b[0]) return;
     const i = byKey[exKey_(b[0])], want = cwList_(b[3]);
     if (i === undefined) { add.push([b[0], want.join('; '), b[1] ? 'https://www.youtube.com/watch?v=' + b[1] : '', b[2] || '', '', '']); return; }
-    const have = cwList_(rows[i].aliasy), hk = have.map(exKey_), extra = want.filter(a => hk.indexOf(exKey_(a)) < 0);
-    if (extra.length) aliases.push({ i: i, value: have.concat(extra).join('; ') });
+    const out = cwList_((wycofane || {})[b[0]]).map(exKey_), old = cwList_(rows[i].aliasy), have = old.filter(a => out.indexOf(exKey_(a)) < 0);
+    const hk = have.map(exKey_), extra = want.filter(a => hk.indexOf(exKey_(a)) < 0);
+    if (extra.length || have.length < old.length) aliases.push({ i: i, value: have.concat(extra).join('; ') });
   });
   const after = rows.map((r, i) => { const a = aliases.filter(x => x.i === i)[0]; return a ? Object.assign({}, r, { aliasy: a.value }) : r; })
     .concat(add.map(a => ({ cwiczenie: a[0], aliasy: a[1], instruktaz: a[2], partia: a[3] })));
@@ -1126,13 +1128,13 @@ function appendCw_(rows) {
  * które mają już dopasowanie. Linków, partii, zamienników ani ręcznie wpisanych aliasów nie zmienia.
  */
 function wczytajBazeCwiczen() {
-  const sh = sheet_('Ćwiczenia', CW_HEADERS), s = cwSync_(cwBaza_(CW_BAZA, CW_ALIASY, CW_DODATKI), tableOf_('Ćwiczenia'));
+  const sh = sheet_('Ćwiczenia', CW_HEADERS), s = cwSync_(cwBaza_(CW_BAZA, CW_ALIASY, CW_DODATKI), tableOf_('Ćwiczenia'), CW_WYCOFANE);
   const col = CW_HEADERS.indexOf('aliasy') + 1;
   s.aliases.forEach(a => sh.getRange(a.i + 2, col).setValue(a.value));
   s.drop.slice().sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
   appendCw_(s.add);
   const left = missingExercises_(tableOf_('Plan'), tableOf_('Ćwiczenia')).length;
-  alert_('Ćwiczenia', 'Nowe ćwiczenia: ' + s.add.length + ', wiersze z dopisanymi aliasami: ' + s.aliases.length + ', usunięte puste wiersze: ' + s.drop.length +
+  alert_('Ćwiczenia', 'Nowe ćwiczenia: ' + s.add.length + ', wiersze ze zmienionymi aliasami: ' + s.aliases.length + ', usunięte puste wiersze: ' + s.drop.length +
     '.\nĆwiczenia z planów nadal bez dopasowania: ' + left + (left ? ' (menu „Uzupełnij listę ćwiczeń” pokaże je na dole zakładki).' : '.'));
 }
 
