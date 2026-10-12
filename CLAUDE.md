@@ -10,6 +10,7 @@ Rozmawiaj z Damianem po polsku, zwięźle. Interfejs aplikacji jest po polsku.
 - `docs/ui-v2-spec.md`: specyfikacja interfejsu v2 (obowiązująca przy pracy nad v2).
 - `docs/ui-v2-prototyp.html`: prototyp v2 na danych przykładowych, wzorzec wyglądu i kod komponentów (`track()`, `analyse()`, `sugOly`, `verdict`). Docelowy styl: **Pomost**; wariant „Obecny” służy tylko do porównania.
 - `docs/ui-v2-plan.md`: kolizje `web/` ze specyfikacją i podział v2 na PR-y. Pracuj w tej kolejności; po każdym PR zaktualizuj plik.
+- `docs/plan-v3.md`: plan v3 (przegląd dla trenera, menu Trening, zakładka Ćwiczenia, alert mailowy) ze stanem PR-ów.
 
 ## Architektura
 
@@ -61,6 +62,8 @@ Wartości `seria`: 1…n robocze, n+1… dodatkowe, R1… rozgrzewka, D1… drop
 Kolumna `data` w Sesjach to data z planu; faktyczny dzień treningu to `start` (`unitDates_`) i według niego podsumowanie grupuje tygodnie.
 
 **Dyspozycja**: id = klient|data (jeden wpis dziennie), zapisano, klient, data, cmj1–3, cmj_sr, sen, stres, zmeczenie, bolesnosc, hooper_suma, vbt_test, werdykt, powody. Zapis: `saveDyspozycja`; `getData` zwraca `readiness`.
+
+**Przegląd** (liczony w `podsumowanie`, `computeOverview_`): jeden wiersz na aktywnego klienta, najpilniejsi na górze; `pilnosc` = 3 × sygnały czerwone + pomarańczowe (ból > 3/10, FAIL, dyspozycja, zaległe jednostki, brak treningu, koniec planu), ostatni trening, ten tydzień zrobione/plan, uwagi klienta, filmy z 7 dni. Progi i okna: stała `PRZ` i `docs/plan-v3.md`.
 
 **Bloki** (liczone w `podsumowanie`, `computeBlocks_`): klient × blok, daty, tygodnie, jednostki, wykonanie, tonaż, zmiana e1RM, najlepsze boje, sRPE, samopoczucie, dyspozycja, ból, statusy, **wnioski** (wpisuje trener; `keepNotes_` zachowuje je przy przeliczaniu).
 
