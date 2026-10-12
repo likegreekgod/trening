@@ -239,3 +239,20 @@ test('computeOverview_: przegląd klientów – sygnały, zaległe, koniec planu
   assert.equal(v(rows[2], 'do_reakcji'), 'plan skończony; brak treningu od 41 dni');
   assert.equal(v(rows[3], 'do_reakcji'), 'brak planu');
 });
+
+test('diagnose_: sprawdzenie arkusza z menu Trening', () => {
+  const K = (id, klucz, x) => Object.assign({ klient_id: id, imie: id, aktywny: 'TAK', klucz, link: klucz ? 'https://example.test/?k=' + klucz : '' }, x || {});
+  const R = (k, data, x) => Object.assign({ klient: k, tydzien: 1, jednostka: 'T1', data, nr: 1, powt: '5', blok: 'B1' }, x || {});
+  const ok = { klienci: [K('anna', 'k0123456789a')], plan: [R('anna', '2026-11-30')], pwaUrl: 'https://example.test/', triggers: ['podsumowanie', 'wczytajPlany'], bledy: 0, czeka: 0, today: '2026-10-12' };
+  assert.deepEqual(Array.from(C.diagnose_(ok)), []);
+  const bad = C.diagnose_({ today: '2026-10-12', pwaUrl: '', triggers: ['podsumowanie'], bledy: 2, czeka: 1,
+    klienci: [K('anna', 'k0123456789a', { link: '' }), K('bob', 12345), K('bob', 'k0123456789b'), K('cel', 'k0123456789c'), K('stary', '', { aktywny: 'NIE' })],
+    plan: [R('anna', '2026-10-15', { blok: '' }), R('anna', '2026-10-10', { blok: '', powt: new Date(2026, 5, 8) }), R('duch', '2026-10-20'), R('bob', '2026-09-01')] });
+  const txt = bad.map(r => r[0] + ': ' + r[1]).join('\n');
+  for (const frag of ['błąd: Brak właściwości skryptu PWA_URL', 'błąd: Brak wyzwalacza „wczytajPlany”', 'błąd: Powtórzone klient_id „bob”', 'błąd: bob: brak poprawnego klucza',
+    'uwaga: anna: brak aktualnego linku', 'uwaga: cel: aktywny klient bez planu', 'uwaga: Plan dla „duch”', 'błąd: anna: kolumna powt zamieniona na datę w wierszach Planu 3',
+    'uwaga: anna: plan kończy się za 3 dni', 'uwaga: bob: plan skończył się 2026-09-01', 'info: anna: plan bez kolumny blok', 'uwaga: Pliki w _plany/bledy: 2', 'info: Pliki czekające w _plany: 1'])
+    assert.ok(txt.includes(frag), 'brak: ' + frag + '\n' + txt);
+  assert.ok(!/stary/.test(txt));                                                 // nieaktywny klient bez uwag
+  assert.ok(!/Brak wyzwalacza „podsumowanie”/.test(txt));
+});

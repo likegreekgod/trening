@@ -549,11 +549,87 @@ const STATUS_BG = { '🔴 za dużo': '#f8c9c4', '🟠 uwaga': '#fde2b8', '🟢 O
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Trening')
-    .addItem('Wczytaj plany z Drive', 'wczytajPlany')
-    .addItem('Dodaj klienta', 'dodajKlienta')
-    .addItem('Odśwież podsumowanie', 'podsumowanie')
     .addItem('Przegląd klientów', 'przeglad')
+    .addItem('Wczytaj plany z Drive', 'wczytajPlany')
+    .addItem('Odśwież podsumowanie', 'podsumowanie')
+    .addSeparator()
+    .addItem('Dodaj klienta', 'dodajKlienta')
+    .addItem('Odśwież linki klientów', 'menuLinki')
+    .addSeparator()
+    .addItem('Sprawdź arkusz', 'sprawdzArkusz')
+    .addItem('Zainstaluj wyzwalacze', 'menuWyzwalacze')
     .addToUi();
+}
+
+/* ---------- menu Trening: to, co dotąd wymagało edytora Apps Script ---------- */
+function alert_(title, text) { SpreadsheetApp.getUi().alert(title, text, SpreadsheetApp.getUi().ButtonSet.OK); }
+
+function menuLinki() {
+  if (!linkBase_()) { alert_('Linki klientów', 'Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL.'); return; }
+  linki();
+  const n = Math.max(0, SpreadsheetApp.getActive().getSheetByName('Klienci').getLastRow() - 1);
+  alert_('Linki klientów', 'Odświeżono linki w kolumnie E: ' + n + '.');
+}
+
+function menuWyzwalacze() {
+  instalujWyzwalacze();
+  alert_('Wyzwalacze', 'Zainstalowano: podsumowanie i przegląd codziennie ok. 5:00, plany z Drive co 15 min.');
+}
+
+/**
+ * Czysta funkcja: lista uwag do arkusza, [['błąd' | 'uwaga' | 'info', tekst], …]; pusta = wszystko w porządku.
+ * d: {klienci, plan (tableOf_), pwaUrl, triggers (nazwy funkcji), bledy, czeka (liczba plików w _plany/bledy i _plany), today}
+ */
+function diagnose_(d) {
+  const out = [], lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  const add = (lvl, txt) => out.push([lvl, txt]);
+  if (!String(d.pwaUrl || '').trim()) add('błąd', 'Brak właściwości skryptu PWA_URL: linki klientów nie prowadzą do aplikacji.');
+  ['podsumowanie', 'wczytajPlany'].forEach(fn => { if ((d.triggers || []).indexOf(fn) < 0) add('błąd', 'Brak wyzwalacza „' + fn + '”: menu Trening → Zainstaluj wyzwalacze.'); });
+  const active = (d.klienci || []).filter(k => !blank_(k.klient_id) && String(k.aktywny).toUpperCase() !== 'NIE');
+  const ids = {};
+  (d.klienci || []).forEach(k => { if (!blank_(k.klient_id)) ids[lc(k.klient_id)] = (ids[lc(k.klient_id)] || 0) + 1; });
+  Object.keys(ids).forEach(id => { if (ids[id] > 1) add('błąd', 'Powtórzone klient_id „' + id + '” w zakładce Klienci (' + ids[id] + ' wiersze).'); });
+  active.forEach(k => {
+    const id = lc(k.klient_id);
+    if (!/^k[0-9a-f]{11}$/.test(String(k.klucz))) add('błąd', id + ': brak poprawnego klucza (uruchom setup w edytorze albo dodaj klienta z menu).');
+    else if (blank_(k.link) || String(k.link).indexOf(String(k.klucz)) < 0) add('uwaga', id + ': brak aktualnego linku w kolumnie E (menu Trening → Odśwież linki klientów).');
+  });
+  // plan: klienci bez planu, plan bez klienta, zepsute komórki, koniec planu, brak bloku
+  const P = {};
+  (d.plan || []).forEach((r, i) => {
+    const c = lc(r.klient); if (!c) return;
+    const p = P[c] || (P[c] = { n: 0, end: '', noBlock: 0, badReps: [] });
+    p.n++;
+    if (Object.prototype.toString.call(r.powt) === '[object Date]') p.badReps.push(i + 2);   // Arkusze zamieniły „6-8” w datę
+    if (blank_(r.blok)) p.noBlock++;
+    const dt = blank_(r.data) ? NaN : day_(r.data); if (!isNaN(dt) && iso_(dt) > p.end) p.end = iso_(dt);
+  });
+  active.forEach(k => { if (!P[lc(k.klient_id)]) add('uwaga', lc(k.klient_id) + ': aktywny klient bez planu.'); });
+  Object.keys(P).forEach(c => {
+    const p = P[c];
+    if (!ids[c]) add('uwaga', 'Plan dla „' + c + '”, którego nie ma w zakładce Klienci (' + p.n + ' wierszy).');
+    if (p.badReps.length) add('błąd', c + ': kolumna powt zamieniona na datę w wierszach Planu ' + p.badReps.slice(0, 5).join(', ') + (p.badReps.length > 5 ? '…' : '') + ' (wczytaj plan ponownie z pliku).');
+    if (ids[c] && p.end && d.today) {
+      const left = Math.round((day_(p.end) - day_(d.today)) / 864e5);
+      if (left < 0) add('uwaga', c + ': plan skończył się ' + p.end + '.'); else if (left <= 7) add('uwaga', c + ': plan kończy się za ' + left + ' dni (' + p.end + ').');
+    }
+    if (ids[c] && p.noBlock === p.n) add('info', c + ': plan bez kolumny blok; kolejny blok nazwij np. B2 i numeruj tygodnie dalej.');
+  });
+  if (d.bledy > 0) add('uwaga', 'Pliki w _plany/bledy: ' + d.bledy + ' (opis błędu w zakładce Import).');
+  if (d.czeka > 0) add('info', 'Pliki czekające w _plany: ' + d.czeka + ' (menu Trening → Wczytaj plany z Drive).');
+  return out;
+}
+
+function sprawdzArkusz() {
+  let bledy = 0, czeka = 0;
+  try {
+    const dir = child_(rootFolder_(), '_plany'), count = it => { let n = 0; while (it.hasNext()) { if (/\.json$/i.test(it.next().getName())) n++; } return n; };
+    czeka = count(dir.getFiles()); bledy = count(child_(dir, 'bledy').getFiles());
+  } catch (e) { /* brak dostępu do Drive: pomijamy tę część */ }
+  const res = diagnose_({ klienci: tableOf_('Klienci'), plan: tableOf_('Plan'), today: today_(), bledy: bledy, czeka: czeka,
+    pwaUrl: PropertiesService.getScriptProperties().getProperty('PWA_URL'), triggers: ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()) });
+  const mark = { 'błąd': '✗', 'uwaga': '!', 'info': '·' };
+  alert_('Sprawdzenie arkusza', res.length ? res.map(r => mark[r[0]] + ' ' + r[1]).join('\n') : '✓ Wszystko w porządku.');
 }
 
 function instalujPodsumowanie() { instalujWyzwalacze(); }

@@ -75,7 +75,11 @@ Wyślij klientom nowe linki z kolumny E. Stare linki (`…/exec?k=…`) działaj
 
 | Co | Gdzie |
 |---|---|
+| Komu trzeba się przyjrzeć | Arkusz → menu **Trening → Przegląd klientów** (zakładka Przegląd) |
 | Podsumowanie tygodnia | Arkusz → menu **Trening → Odśwież podsumowanie** |
+| Nowy klient, linki | menu **Trening → Dodaj klienta**, **Odśwież linki klientów** |
+| Coś nie działa | menu **Trening → Sprawdź arkusz** (klucze, linki, wyzwalacze, plany, pliki z błędami) |
+| Wyzwalacze (5:00 i co 15 min) | menu **Trening → Zainstaluj wyzwalacze** |
 | Ustawienia klienta | Klienci: F ból, G tryb (PROSTY/PRO), H dod_serie, I masters |
 | Wymuszenie nowej wersji na telefonach | podbij `VERSION` w `web/sw.js` |
 | Analiza wyników | projekt claude.ai: „przeanalizuj ostatni tydzień …” |
