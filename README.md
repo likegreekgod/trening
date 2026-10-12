@@ -81,6 +81,7 @@ Wyślij klientom nowe linki z kolumny E. Stare linki (`…/exec?k=…`) działaj
 | Instruktaż i partie mięśniowe | zakładka **Ćwiczenia** (nazwa, aliasy, link, partie, zamienniki); menu **Trening → Wczytaj bazę ćwiczeń** wypełnia ją 624 ćwiczeniami z filmami, **Uzupełnij listę ćwiczeń** dopisuje nazwy z planów bez dopasowania |
 | Coś nie działa | menu **Trening → Sprawdź arkusz** (klucze, linki, wyzwalacze, plany, pliki z błędami) |
 | Wyzwalacze (5:00 i co 15 min) | menu **Trening → Zainstaluj wyzwalacze** |
+| Alert mailowy o nowym czerwonym sygnale | menu **Trening → Ustaw adres alertu** (adres zostaje we właściwościach skryptu; puste = wyłączony) |
 | Ustawienia klienta | Klienci: F ból, G tryb (PROSTY/PRO), H dod_serie, I masters |
 | Wymuszenie nowej wersji na telefonach | podbij `VERSION` w `web/sw.js` |
 | Analiza wyników | projekt claude.ai: „przeanalizuj ostatni tydzień …” |

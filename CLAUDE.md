@@ -69,6 +69,8 @@ Kolumna `data` w Sesjach to data z planu; faktyczny dzień treningu to `start` (
 
 **Przegląd** (liczony w `podsumowanie`, `computeOverview_`): jeden wiersz na aktywnego klienta, najpilniejsi na górze; `pilnosc` = 3 × sygnały czerwone + pomarańczowe (ból > 3/10, FAIL, dyspozycja, zaległe jednostki, brak treningu, koniec planu), ostatni trening, ten tydzień zrobione/plan, uwagi klienta, filmy z 7 dni. Progi i okna: stała `PRZ` i `docs/plan-v3.md`.
 
+**Alert mailowy** (`alertMail_`, czysta funkcja z testem; `alertRano_`): wysyłany tylko z porannego wyzwalacza `podsumowanie(e)` (z menu nie), na adres z właściwości skryptu `ALERT_EMAIL` (menu „Ustaw adres alertu”; adresu nie wpisuj do repo ani arkusza). Mail idzie tylko, gdy pojawił się czerwony sygnał, którego nie było w poprzednim alercie (podpis w `ALERT_SIG`); liczba czerwonych sygnałów klienta jest w kolumnie `czerwone` Przeglądu. `MailApp` wymaga zgody właściciela arkusza: po wdrożeniu zmiany dodającej nowy zakres uprawnień trzeba od razu uruchomić dowolną pozycję menu i zaakceptować zgodę, inaczej aplikacja klientów przestaje zapisywać.
+
 **Bloki** (liczone w `podsumowanie`, `computeBlocks_`): klient × blok, daty, tygodnie, jednostki, wykonanie, tonaż, zmiana e1RM, najlepsze boje, sRPE, samopoczucie, dyspozycja, ból, statusy, **wnioski** (wpisuje trener; `keepNotes_` zachowuje je przy przeliczaniu).
 
 Zasady zgodności:

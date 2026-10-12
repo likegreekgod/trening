@@ -320,3 +320,23 @@ test('computeParts_: serie i serie twarde na partię, zamiana liczy zamiennik', 
     ['robert', d(1, 0), 'pośladki', 4, 3, 500 + 500 + 500 + 400]]);             // przysiad liczy się do obu partii, leg press tylko do czworogłowych
   assert.deepEqual(Array.from(C.computeParts_(plan, log, [], [])), []);          // pusta baza = brak wierszy
 });
+
+// --- alert mailowy: tylko nowe czerwone sygnały ---
+test('alertMail_: mail tylko przy nowym czerwonym sygnale, bez powtórek', () => {
+  const H = C.PRZ_HEADERS, row = o => H.map(h => o[h] === undefined ? '' : o[h]);
+  const ov = [row({ klient: 'anna', imie: 'Anna', pilnosc: 7, czerwone: 2, do_reakcji: 'ból kolano 5/10 (06.10); 2× FAIL: Przysiad; zaległe: T1 10.10' }),
+    row({ klient: 'ewa', imie: '', pilnosc: 3, czerwone: 1, do_reakcji: 'dyspozycja: Zmęczenie (11.10)' }),
+    row({ klient: 'dan', imie: 'Dan', pilnosc: 4, czerwone: 0, do_reakcji: 'plan skończony; brak treningu od 41 dni; brak planu; zaległe: T2 01.10' })];
+  const m = C.alertMail_(ov, '', 'https://example.test/arkusz');
+  assert.equal(m.send, true);
+  assert.equal(m.subject, 'Trening: 2 klientów do reakcji');
+  assert.equal(m.sig, 'anna|ból kolano 5/10 (06.10)\nanna|2× FAIL: Przysiad\newa|dyspozycja: Zmęczenie (11.10)');
+  assert.match(m.body, /^Nowe sygnały do reakcji:\n• Anna: ból kolano 5\/10 \(06\.10\); 2× FAIL: Przysiad\n   poza tym: zaległe: T1 10\.10\n• ewa: dyspozycja: Zmęczenie \(11\.10\)\n\nSzczegóły w zakładce Przegląd:\nhttps:\/\/example\.test\/arkusz\n/);
+  assert.ok(!/Dan|plan skończony/.test(m.body));                                 // same pomarańczowe sygnały nie trafiają do maila
+  assert.deepEqual([C.alertMail_(ov, m.sig).send, C.alertMail_(ov, m.sig).sig], [false, m.sig]);   // następnego dnia to samo → bez maila
+  const m2 = C.alertMail_(ov, 'anna|ból kolano 5/10 (06.10)\newa|dyspozycja: Zmęczenie (11.10)');   // doszedł FAIL u Anny
+  assert.equal(m2.subject, 'Trening: 1 klient do reakcji');
+  assert.match(m2.body, /^Nowe sygnały do reakcji:\n• Anna: [^\n]+\n[^\n]+\n\nBez zmian od poprzedniego alertu:\n• ewa: [^\n]+\n\nSzczegóły w zakładce Przegląd\.\n/);
+  assert.deepEqual(plain(C.alertMail_([ov[2]], 'stary|sygnał')), { send: false, subject: '', body: '', sig: '' });
+  assert.equal(C.alertMail_([], '').send, false);
+});

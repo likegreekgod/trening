@@ -566,6 +566,7 @@ function onOpen() {
     .addItem('Uzupełnij listę ćwiczeń', 'uzupelnijCwiczenia')
     .addItem('Sprawdź arkusz', 'sprawdzArkusz')
     .addItem('Zainstaluj wyzwalacze', 'menuWyzwalacze')
+    .addItem('Ustaw adres alertu', 'ustawAlert')
     .addToUi();
 }
 
@@ -651,7 +652,8 @@ function instalujWyzwalacze() {
   Logger.log('OK: podsumowanie codziennie ~5:00, plany z „' + ROOT_FOLDER_NAME + '/_plany” co 15 min.');
 }
 
-function podsumowanie() {
+/** e: zdarzenie wyzwalacza czasowego (wtedy idzie też alert mailowy); z menu bez argumentu. */
+function podsumowanie(e) {
   const localDay = t => Utilities.formatDate(new Date(t), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const plan = tableOf_('Plan'), log = tableOf_('Log'), ses = tableOf_('Sesje');
   const klienci = tableOf_('Klienci'), dys = tableOf_('Dyspozycja');
@@ -664,6 +666,7 @@ function podsumowanie() {
     sh.getRange(2, c, n, 1).setBackgrounds(ov.map(r => [r[c - 1] >= 3 ? '#f8c9c4' : r[c - 1] >= 1 ? '#fde2b8' : '#cdebd3']));
     ['do_reakcji', 'uwagi_klienta'].forEach(k => sh.getRange(2, PRZ_HEADERS.indexOf(k) + 1, n, 1).setWrap(true));
   });
+  if (e && e.triggerUid) { try { alertRano_(ov); } catch (err) { Logger.log('alert: ' + err); } }
   writeTable_('Bloki', BLOK_HEADERS, keepNotes_(bl, tableOf_('Bloki')));
   writeTable_('Podsumowanie', SUM_HEADERS, res.rows, (sh, n) => {
     const col = SUM_HEADERS.indexOf('status') + 1;
@@ -1141,7 +1144,7 @@ function computeParts_(plan, log, ses, dictRows, opts) {
  * jednostka zaległa (≥ 2 dni po dacie z planu, do 28 dni wstecz), brak treningu ≥ 7 dni, plan kończy się za ≤ 7 dni albo brak planu.
  */
 const PRZ_HEADERS = ['klient', 'imie', 'pilnosc', 'do_reakcji', 'ostatni_trening', 'dni_temu', 'ten_tydzien', 'zalegle', 'status_tygodnia',
-  'uwagi_klienta', 'filmy_7dni', 'koniec_planu_dni'];
+  'uwagi_klienta', 'filmy_7dni', 'koniec_planu_dni', 'czerwone'];
 const PRZ = { late: 2, lateMax: 28, window: 7, readyDays: 3, idle: 7, planEnd: 7 };
 
 function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
@@ -1213,8 +1216,54 @@ function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
     return [c, String(k.imie || ''), 3 * red.length + amb.length, red.concat(amb).join('; '), last, ago,
       wk.filter(u => u.done).length + '/' + wk.length, late.length || '', st ? st[SI] + (st[1] === ws ? '' : ' (tydz. od ' + dm(st[1]) + ')') : '',
       note ? dm(note.act) + ': ' + String(note.s.uwagi).replace(/\s+/g, ' ').slice(0, 300) : '',
-      logs.filter(x => !blank_(x.l.film_link) && recent(x.day)).length || '', left];
+      logs.filter(x => !blank_(x.l.film_link) && recent(x.day)).length || '', left, red.length || ''];
   }).sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0]));
+}
+
+/* ---------- alert mailowy: raz dziennie rano, tylko gdy pojawił się nowy czerwony sygnał ---------- */
+/**
+ * Czysta funkcja: wiersze Przeglądu + podpis poprzedniego alertu → {send, subject, body, sig}.
+ * Mail idzie tylko, gdy któryś klient ma czerwony sygnał, którego nie było w poprzednim alercie (ten sam ból nie wraca co rano).
+ * sig = aktualne czerwone sygnały („klient|sygnał”, po jednym w wierszu) do zapamiętania we właściwości skryptu ALERT_SIG.
+ */
+function alertMail_(ov, prev, url) {
+  const ix = k => PRZ_HEADERS.indexOf(k), old = String(prev || '').split('\n'), sig = [], fresh = [], rest = [];
+  (ov || []).forEach(r => {
+    const n = Number(r[ix('czerwone')]) || 0; if (!n) return;
+    const all = String(r[ix('do_reakcji')]).split('; '), red = all.slice(0, n), keys = red.map(s => r[ix('klient')] + '|' + s);
+    keys.forEach(k => sig.push(k));
+    const line = '• ' + (r[ix('imie')] || r[ix('klient')]) + ': ' + red.join('; ') + (all.length > n ? '\n   poza tym: ' + all.slice(n).join('; ') : '');
+    (keys.some(k => old.indexOf(k) < 0) ? fresh : rest).push(line);
+  });
+  if (!fresh.length) return { send: false, subject: '', body: '', sig: sig.join('\n') };
+  const n = fresh.length, word = n === 1 ? 'klient' : 'klientów';
+  return { send: true, sig: sig.join('\n'), subject: 'Trening: ' + n + ' ' + word + ' do reakcji',
+    body: 'Nowe sygnały do reakcji:\n' + fresh.join('\n') + (rest.length ? '\n\nBez zmian od poprzedniego alertu:\n' + rest.join('\n') : '') +
+      '\n\nSzczegóły w zakładce Przegląd' + (url ? ':\n' + url : '.') +
+      '\n\nTo flagi do Twojej decyzji, nie diagnoza. Adres zmienisz albo wyłączysz w menu Trening → Ustaw adres alertu.' };
+}
+
+/** Wołane tylko z porannego wyzwalacza. Adres: właściwość skryptu ALERT_EMAIL (pusta = alert wyłączony). */
+function alertRano_(ov) {
+  const props = PropertiesService.getScriptProperties(), to = String(props.getProperty('ALERT_EMAIL') || '').trim();
+  if (!to) return;
+  const m = alertMail_(ov, props.getProperty('ALERT_SIG'), SpreadsheetApp.getActive().getUrl());
+  if (m.send) MailApp.sendEmail(to, m.subject, m.body);
+  props.setProperty('ALERT_SIG', m.sig.slice(0, 8000));
+}
+
+/** Menu Trening → Ustaw adres alertu: zapisuje adres we właściwościach skryptu (nie w arkuszu ani w repozytorium). */
+function ustawAlert() {
+  const ui = SpreadsheetApp.getUi(), props = PropertiesService.getScriptProperties(), cur = String(props.getProperty('ALERT_EMAIL') || '').trim();
+  const r = ui.prompt('Alert mailowy', 'Adres, na który ok. 5:00 przyjdzie mail, gdy klient ma nowy czerwony sygnał (ból > 3/10, ≥ 2 FAIL w ćwiczeniu, dyspozycja „Zmęczenie”). ' +
+    'Puste pole = alert wyłączony.\n\nTeraz: ' + (cur || 'wyłączony'), ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const v = r.getResponseText().trim();
+  if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { alert_('Alert mailowy', 'To nie wygląda na adres e-mail. Nic nie zmieniono.'); return; }
+  if (v) props.setProperty('ALERT_EMAIL', v); else props.deleteProperty('ALERT_EMAIL');
+  props.deleteProperty('ALERT_SIG');
+  const left = MailApp.getRemainingDailyQuota();
+  alert_('Alert mailowy', v ? 'Zapisano. Mail przyjdzie rano tylko wtedy, gdy pojawi się nowy czerwony sygnał (dzienny limit wysyłki: ' + left + ').' : 'Alert wyłączony.');
 }
 
 /** Menu Trening → Przegląd klientów: przelicza wszystko i otwiera zakładkę. */
