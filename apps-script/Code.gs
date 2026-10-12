@@ -29,9 +29,9 @@ const CHUNK = 4 * 1024 * 1024; // musi być wielokrotnością 256 KB
 
 const LOG_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data', 'nr_cw', 'cwiczenie',
   'seria', 'kg', 'powt', 'rpe', 'vbt_ms', 'wykonane', 'film_link', 'uwagi', 'typ',
-  'ocena', 'vbt_peak', 'wysokosc_cm', 'sciezka', 'zamiana'];
+  'ocena', 'vbt_peak', 'wysokosc_cm', 'sciezka', 'zamiana', 'komentarz_trenera', 'komentarz_dysk'];
 const SES_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data',
-  'bol_kolano', 'bol_bark', 'samopoczucie', 'czas_min', 'uwagi', 'start', 'koniec', 'bol', 'bol_max', 'rpe_sesji'];
+  'bol_kolano', 'bol_bark', 'samopoczucie', 'czas_min', 'uwagi', 'start', 'koniec', 'bol', 'bol_max', 'rpe_sesji', 'komentarz_trenera'];
 const DYS_HEADERS = ['id', 'zapisano', 'klient', 'data', 'cmj1', 'cmj2', 'cmj3', 'cmj_sr',
   'sen', 'stres', 'zmeczenie', 'bolesnosc', 'hooper_suma', 'vbt_test', 'werdykt', 'powody'];
 const OCENY = ['L', 'S', 'W', 'X'];   // boje: Łatwo / Średnio / Walka / Spalone
@@ -558,6 +558,7 @@ function onOpen() {
     .addItem('Przegląd klientów', 'przeglad')
     .addItem('Wczytaj plany z Drive', 'wczytajPlany')
     .addItem('Odśwież podsumowanie', 'podsumowanie')
+    .addItem('Pobierz komentarze do filmów', 'pobierzKomentarze')
     .addSeparator()
     .addItem('Dodaj klienta', 'dodajKlienta')
     .addItem('Odśwież linki klientów', 'menuLinki')
@@ -1305,6 +1306,93 @@ function ustawAlert() {
   alert_('Alert mailowy', v ? 'Zapisano. Mail przyjdzie rano tylko wtedy, gdy pojawi się nowy czerwony sygnał (dzienny limit wysyłki: ' + left + ').' : 'Alert wyłączony.');
 }
 
+/* ---------- komentarze trenera do filmów (Dysk Google) → Log.komentarz_dysk ----------
+ * Trener komentuje film klienta na Dysku (komentarz przypięty do czasu w filmie). Skrypt co ok. 30 min i z menu
+ * „Pobierz komentarze” przepisuje komentarze do kolumny komentarz_dysk przy serii z tym filmem; aplikacja pokazuje je
+ * klientowi przy następnym otwarciu. Ręczne uwagi trener wpisuje w komentarz_trenera (Log albo Sesje) – skrypt ich nie rusza.
+ */
+const KOM_DNI = 30;
+const fileIdOf_ = link => { const m = /\/d\/([\w-]{20,})|[?&]id=([\w-]{20,})/.exec(String(link || '')); return m ? (m[1] || m[2]) : ''; };
+const mmss_ = s => Math.floor(s / 60) + ':' + ('0' + Math.floor(s % 60)).slice(-2);
+
+/**
+ * Czysta funkcja: kotwica komentarza Dysku → sekunda filmu albo null. Format kotwicy dla filmów nie jest udokumentowany,
+ * więc szukamy pierwszej wartości pod kluczem z „time / start / offset / sec / ms”: liczba (ms, gdy klucz mówi o ms albo
+ * wartość > 36000), „15s”, „15.2s”, „0:15”, „PT15S”.
+ */
+function anchorSec_(anchor) {
+  let o = anchor;
+  if (typeof anchor === 'string') { try { o = JSON.parse(anchor); } catch (e) { return null; } }
+  let best = null;
+  const val = (v, key) => {
+    if (typeof v === 'number' && isFinite(v) && v >= 0) return /ms|milli/i.test(key) || v > 36000 ? v / 1000 : v;
+    const t = String(v).trim();
+    let m = /^(\d+(?:\.\d+)?)\s*s$/i.exec(t) || /^PT(\d+(?:\.\d+)?)S$/i.exec(t); if (m) return Number(m[1]);
+    m = /^(?:(\d+):)?(\d{1,2}):(\d{2})(?:\.\d+)?$/.exec(t); if (m) return (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+    if (/^\d+(\.\d+)?$/.test(t)) return val(Number(t), key);
+    return null;
+  };
+  (function walk(x, key) {
+    if (best !== null || x === null || x === undefined) return;
+    if (typeof x === 'object') { Object.keys(x).forEach(k => walk(x[k], k)); return; }
+    if (/time|start|offset|sec|ms|milli/i.test(key || '')) best = val(x, key);
+  })(o, '');
+  return best;
+}
+
+/** Czysta funkcja: komentarze Dysku jednego pliku → {text: „0:15 treść” po jednym w wierszu wg czasu, raw: pierwsza nierozpoznana kotwica}. */
+function commentLines_(comments) {
+  let raw = '';
+  const rows = (comments || []).filter(c => c && !c.deleted && !c.resolved && String(c.content || '').trim()).map(c => {
+    const sec = c.anchor ? anchorSec_(c.anchor) : null;
+    if (c.anchor && sec === null && !raw) raw = String(c.anchor).slice(0, 300);
+    return { sec: sec, at: String(c.createdTime || ''), txt: String(c.content).replace(/\s+/g, ' ').trim() };
+  }).sort((a, b) => (a.sec === null ? 1e9 : a.sec) - (b.sec === null ? 1e9 : b.sec) || a.at.localeCompare(b.at));
+  return { text: rows.map(r => (r.sec === null ? '' : mmss_(r.sec) + ' ') + r.txt).join('\n').slice(0, 4000), raw: raw };
+}
+
+/** Pobiera komentarze do filmów z ostatnich KOM_DNI dni i wpisuje do Log.komentarz_dysk → {files, changed, errors, raw}. */
+function syncComments_() {
+  const sh = sheet_('Log', LOG_HEADERS), v = sh.getDataRange().getValues(), h = v.shift();
+  const fi = h.indexOf('film_link'), zi = h.indexOf('zapisano'), ki = h.indexOf('komentarz_dysk'), since = Date.now() - KOM_DNI * 864e5, by = {};
+  const out = { files: 0, changed: 0, errors: 0, raw: '' };
+  if (fi < 0 || ki < 0) return out;
+  v.forEach((r, i) => {
+    const id = fileIdOf_(r[fi]), t = r[zi] instanceof Date ? r[zi].getTime() : Date.parse(r[zi]);
+    if (id && !(t < since)) (by[id] = by[id] || []).push(i);
+  });
+  const ids = Object.keys(by).slice(0, 150); out.files = ids.length;
+  if (!ids.length) return out;
+  const auth = { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() };
+  const res = UrlFetchApp.fetchAll(ids.map(id => ({ url: 'https://www.googleapis.com/drive/v3/files/' + id +
+    '/comments?pageSize=100&fields=comments(content,anchor,createdTime,deleted,resolved)', headers: auth, muteHttpExceptions: true })));
+  res.forEach((r, n) => {
+    if (r.getResponseCode() !== 200) { out.errors++; return; }
+    let c; try { c = commentLines_(JSON.parse(r.getContentText()).comments); } catch (e) { out.errors++; return; }
+    if (c.raw && !out.raw) out.raw = c.raw;
+    by[ids[n]].forEach(i => { if (String(v[i][ki] === undefined ? '' : v[i][ki]) !== c.text) { sh.getRange(i + 2, ki + 1).setValue(c.text); out.changed++; } });
+  });
+  return out;
+}
+
+/** Menu Trening → Pobierz komentarze. */
+function pobierzKomentarze() {
+  const o = syncComments_();
+  alert_('Komentarze do filmów', 'Sprawdzone filmy z ostatnich ' + KOM_DNI + ' dni: ' + o.files + '. Zmienione wiersze Logu: ' + o.changed + '.' +
+    (o.errors ? '\nFilmy, których nie udało się odczytać (usunięte albo brak dostępu): ' + o.errors + '.' : '') +
+    (o.raw ? '\n\nNie rozpoznałem czasu w komentarzu. Pokaż ten tekst Claude’owi:\n' + o.raw : ''));
+}
+
+/** Z wyzwalacza planów (co 15 min), nie częściej niż co 30 min; błąd nie zatrzymuje wczytywania planów. */
+function komentarzeAuto_() {
+  try {
+    const p = PropertiesService.getScriptProperties(), last = Number(p.getProperty('KOM_TS')) || 0;
+    if (Date.now() - last < 30 * 60000) return;
+    p.setProperty('KOM_TS', String(Date.now()));
+    syncComments_();
+  } catch (err) { Logger.log('komentarze: ' + err); }
+}
+
 /** Czysta funkcja: wiersze Planu, których klienta nie ma w zakładce Klienci → {ids: {klient: liczba wierszy}, n}. */
 function orphanPlans_(plan, klienci) {
   const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase(), known = {}, ids = {};
@@ -1347,7 +1435,8 @@ const PLAN_HEADERS = ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'nr', '
   'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok'];
 const PLAN_REQUIRED = ['klient', 'tydzien', 'jednostka', 'nr', 'cwiczenie', 'serie', 'powt'];
 
-function wczytajPlany() {
+function wczytajPlany(e) {
+  if (e && e.triggerUid) komentarzeAuto_();
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return;
   try {

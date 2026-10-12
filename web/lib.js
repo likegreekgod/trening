@@ -446,6 +446,20 @@
     return Object.values(by).map(b => ({ part: b.part, now: b.now, all: b.all, avg: Math.round(b.prev / 4 * 10) / 10 }))
       .sort((a, b) => b.now - a.now || b.avg - a.avg || a.part.localeCompare(b.part, 'pl'));
   };
+  /**
+   * komentarze trenera: Log.komentarz_trenera (ręczny) i Log.komentarz_dysk (z komentarzy do filmu na Dysku, „0:15 treść”)
+   * oraz Sesje.komentarz_trenera → [{key, date, title, lines: [{t, txt}]}] od najnowszych; key zmienia się razem z treścią,
+   * więc poprawiony komentarz znów jest „nowy”
+   */
+  L.coachNotes = (logs, sessions) => {
+    const t = v => String(v === undefined || v === null ? '' : v).trim(), out = [];
+    const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };
+    const lines = txt => txt.split(/\n+/).map(x => x.trim()).filter(Boolean).map(x => { const m = /^(\d{1,3}:\d{2})\s+(.*)$/.exec(x); return m ? { t: m[1], txt: m[2] } : { t: '', txt: x }; });
+    const add = (kind, r, title, txt) => { if (txt) out.push({ key: kind + '|' + r.id + '|' + hash(txt), date: String(r.data || '').slice(0, 10), title, lines: lines(txt) }); };
+    (logs || []).forEach(l => add('L', l, t(l.cwiczenie) + ' · seria ' + t(l.seria), [t(l.komentarz_trenera), t(l.komentarz_dysk)].filter(Boolean).join('\n')));
+    (sessions || []).forEach(s => add('S', s, 'Trening ' + t(s.jednostka), t(s.komentarz_trenera)));
+    return out.sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title, 'pl'));
+  };
   /** pomiary dyspozycji w czasie: [{date, v}] dla klucza (cmj_sr, vbt_test) */
   L.readySeries = (rows, key) => (rows || []).map(r => ({ date: String(r.data || '').slice(0, 10), v: nf(r[key]) }))
     .filter(p => p.v > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.date)).sort((a, b) => a.date.localeCompare(b.date));

@@ -10,6 +10,14 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Poprawka trenera: alias wolno dać tylko temu samemu ćwiczeniu pod inną nazwą. Regresja albo wariant z innym sprzętem to osobne ćwiczenie: Hanging Knee Raise (regresja Hanging Leg Raise), Pin Overhead Squat (przysiad OHS z martwego punktu na dole), Ring Dip (dipy na kółkach), Push-Up Hold (izometria, nie pompka) mają własne wiersze bez filmu, a błędne aliasy są wycofane (`CW_WYCOFANE`, „Wczytaj bazę ćwiczeń” usuwa je z arkusza).
 - „Wczytaj bazę ćwiczeń” można klikać wielokrotnie: dopisuje nowe ćwiczenia i aliasy, usuwa puste wiersze z samą nazwą, które mają już dopasowanie; ręcznych wpisów nie zmienia. Wiersz z samą nazwą nie zasłania aliasu.
 
+## 2026-10-13 · Komentarze trenera do filmów
+
+- Trener komentuje film klienta na Dysku Google (komentarz przypięty do czasu w filmie). Skrypt przepisuje komentarze do `Log.komentarz_dysk` przy serii z tym filmem: automatycznie co ok. 30 min (przy okazji wyzwalacza planów, bez nowego wyzwalacza) i z menu „Pobierz komentarze do filmów”. Sprawdzane są filmy z ostatnich 30 dni.
+- Klient nie dostaje powiadomienia z Dysku (plik należy do trenera, klient nie ma do niego dostępu), więc widzi komentarze w aplikacji: karta „Trener skomentował” na górze Treningu, po „Przeczytane” lista pod przyciskiem. Zmieniony komentarz znów jest nowy.
+- Uwagi bez filmu trener wpisuje ręcznie w `komentarz_trenera` (Log: do serii, Sesje: do całego treningu); skrypt tych kolumn nie rusza.
+- Format czasu w komentarzu Dysku nie jest udokumentowany: `anchorSec_` rozpoznaje kilka zapisów, a nierozpoznany pokazuje w menu, żeby dało się go dopisać. Komentarz rozwiązany albo usunięty na Dysku znika z aplikacji.
+- Powiadomienie na zablokowany telefon: dopiero w wersji ze sklepu.
+
 ## 2026-10-13 · Otwarta baza ćwiczeń i porządek w Planie
 
 - Do zakładki Ćwiczenia dochodzą 762 ćwiczenia z free-exercise-db (domena publiczna), których nie było w bazie: nazwa i partia główna, bez filmu (ta baza ma tylko zdjęcia). Razem ok. 1400 wierszy. Pominięte: 111 pozycji, które są już w bazie pod tą samą nazwą lub aliasem, oraz 3 warianty bojów.
