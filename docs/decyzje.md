@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-12 · Alert mailowy
+
+- Mail tylko przy nowym czerwonym sygnale (ból > 3/10, ≥ 2 FAIL w ćwiczeniu, dyspozycja „Zmęczenie”). Pomarańczowe (zaległa jednostka, koniec planu, brak treningu) zostają w zakładce Przegląd: codzienny mail o nich szybko przestałby być czytany.
+- Ten sam sygnał jest zgłaszany raz, a nie przez 7 dni, w których widać go w Przeglądzie.
+- Wysyła tylko poranny wyzwalacz; kliknięcie „Odśwież podsumowanie” nie wysyła nic.
+- Adres trenera siedzi we właściwościach skryptu (menu „Ustaw adres alertu”), nie w repo ani w arkuszu. Domyślnie alert jest wyłączony.
+- Nowy zakres uprawnień (poczta) wymaga jednorazowej zgody właściciela zaraz po wdrożeniu.
+
 ## 2026-10-12 · Baza ćwiczeń (zakładka Ćwiczenia)
 
 - Zakładka `Ćwiczenia` startuje z gotowej bazy: 624 ćwiczenia z biblioteki Catalyst Athletics z filmem na YouTube (`apps-script/Cwiczenia.gs`, menu „Wczytaj bazę ćwiczeń”). W repo są tylko nazwy, identyfikatory filmów i partie, bez opisów.
