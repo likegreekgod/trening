@@ -282,6 +282,18 @@ test('weeklyTonnage, zoneReps, loadCalendar, readySeries: objętość i obciąż
     [{ date: '2026-10-01', v: 40 }, { date: '2026-10-02', v: 41.5 }]);
 });
 
+test('hardSetsByPart: serie twarde na partię w tym tygodniu i średnia z 4 poprzednich', () => {
+  const S = (name, date, x) => Object.assign({ name, plan: name, date, kg: 100, reps: 5, rpe: 8, fail: false, drop: false }, x || {});
+  const parts = { 'przysiad tylny': ['nogi', 'pośladki'], 'leg press': 'nogi', 'wiosłowanie': ['plecy'] }, today = '2026-10-14';   // środa, tydzień od 12.10
+  const sets = [S('Przysiad  Tylny', '2026-10-12'), S('Przysiad tylny', '2026-10-12', { rpe: 6 }), S('Leg press', '2026-10-13', { rpe: '', fail: true }),
+    S('Hack', '2026-10-13', { plan: 'Przysiad tylny', rpe: 5, drop: true }),      // zamiennik spoza słownika → partia z nazwy z planu
+    S('Wiosłowanie', '2026-10-05'), S('Wiosłowanie', '2026-09-28'), S('Wiosłowanie', '2026-09-14', { rpe: 6 }),
+    S('Przysiad tylny', '2026-09-07'),                                           // 5 tygodni temu: poza oknem
+    S('Plank', '2026-10-12')];                                                   // bez partii
+  assert.deepEqual(L.hardSetsByPart(sets, parts, today), [{ part: 'nogi', now: 3, all: 4, avg: 0 }, { part: 'pośladki', now: 2, all: 3, avg: 0 }, { part: 'plecy', now: 0, all: 0, avg: 0.5 }]);
+  assert.deepEqual(L.hardSetsByPart(sets, {}, today), []);
+});
+
 test('localDate: data w strefie telefonu', () => {
   assert.equal(L.localDate(new Date(2026, 9, 10, 0, 30)), '2026-10-10');
   assert.match(L.localDate(), /^\d{4}-\d{2}-\d{2}$/);

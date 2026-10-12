@@ -2,6 +2,16 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-12 · Baza ćwiczeń (zakładka Ćwiczenia)
+
+- Zakładka `Ćwiczenia` startuje z gotowej bazy: 624 ćwiczenia z biblioteki Catalyst Athletics z filmem na YouTube (`apps-script/Cwiczenia.gs`, menu „Wczytaj bazę ćwiczeń”). W repo są tylko nazwy, identyfikatory filmów i partie, bez opisów.
+- Pierwsza wersja dopasowywała tylko dokładną nazwę i w prawdziwych planach trafiała w 14 z 57 ćwiczeń. Teraz: dokładna nazwa lub alias → nazwa podstawowa → te same słowa i skróty. W tych samych planach film ma 32 z 57; reszta to ćwiczenia spoza bazy albo nazwy do aliasu.
+- Bez zgadywania po podobieństwie („Snatch Pull” to nie „Snatch”): zły film jest gorszy niż brak filmu. Na inne nazwy jest kolumna `aliasy`.
+- Kompleks („Hang Clean + Jerk”) nie ma jednego filmu: aplikacja pokazuje osobny przycisk dla każdej rozpoznanej części, podpisany nazwą ćwiczenia. Kompleks, który ma własny wiersz w bazie, dostaje swój film.
+- Partie mięśniowe: ćwiczenie liczy się do każdej partii głównej. Boje olimpijskie i ich warianty, mobilność i ćwiczenia techniczne nie mają partii, żeby rwania nie zawyżały serii twardych na pośladki i dwugłowe.
+- „Jerk” w planach to domyślnie alias „Split Jerk” (do zmiany w arkuszu).
+- Na później: klient dokłada własną jednostkę poza planem i wybiera ćwiczenia z tej bazy; plany pisane od razu nazwami z bazy (lista w skillu trenera).
+
 ## 2026-10-12 · Uwagi klientów po v2
 
 - „Wszystko jak w planie” pokazywało „Zapisano 0 serii”, gdy klient odhaczył serie ręcznie, a przycisk został na ekranie. Teraz przycisk jest widoczny tylko, gdy są niezapisane serie z planu (znika po odhaczeniu, wraca po wyczyszczeniu serii).

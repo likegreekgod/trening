@@ -762,6 +762,29 @@ test('Czas treningu: przypadkowy start 2 h wcześniej → liczy od pierwszej zap
   await ctx.close();
 });
 
+// --- v3 PR 3: zakładka Ćwiczenia – instruktaż i partie ---
+test('Ćwiczenia: „Jak wykonać” z linkiem z bazy, kompleks z filmem każdej części, serie twarde na partię w Postęp → Objętość', async () => {
+  const data = Object.assign({}, PROG, { cfg: Object.assign({}, PROG.cfg, { swap: true }), parts: { 'przysiad tylny': ['nogi'], 'rwanie': ['całe ciało'] },
+    plan: PROG.plan.map(r => Object.assign({}, r, r.name === 'Przysiad tylny' ? { infos: [{ n: 'Back Squat', u: 'https://example.test/przysiad' }], parts: ['nogi'] }
+      : { infos: [{ n: 'Hang Snatch', u: 'https://example.test/hs' }, { n: 'Overhead Squat', u: 'https://example.test/ohs' }], parts: ['całe ciało'] })) });
+  const { ctx, p } = await page([], false, { data });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  const links = await p.$$eval('a.inf', a => a.map(x => [x.getAttribute('href'), x.target, x.rel, x.textContent.trim(), Math.round(x.getBoundingClientRect().height) >= 44]));
+  assert.deepEqual(links, [['https://example.test/przysiad', '_blank', 'noopener', '▶ Jak wykonać', true],
+    ['https://example.test/hs', '_blank', 'noopener', '▶ Hang Snatch', true], ['https://example.test/ohs', '_blank', 'noopener', '▶ Overhead Squat', true]]);   // kompleks: film każdej części
+  await p.click('[data-swap="1"]'); await p.click('#sheet [data-to]'); await p.click('#sheet [data-why="Brak sprzętu"]'); await p.click('#sw-ok');
+  assert.equal((await p.$$('a.inf')).length, 2);                                 // po zamianie instruktaż oryginału znika
+  await p.click('[data-unswap="1"]');
+  await p.click('#nav [data-tab="postep"]'); await p.click('[data-pt="obj"]');
+  const hp = await p.$$eval('.hp', r => r.map(x => [x.querySelector('span').textContent, x.querySelector('.hpb').getAttribute('aria-label')]));
+  assert.deepEqual(hp.map(x => x[0]).sort(), ['całe ciało', 'nogi']);
+  assert.match(hp.find(x => x[0] === 'nogi')[1], /^nogi: \d+ serii twardych, średnio [\d,]+$/);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.$eval('.hp', e => e.scrollIntoView({ block: 'center' })); await p.screenshot({ path: path.join(SCREENS, 'partie.png') }); }
+  assert.deepEqual(p.external, []); assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('offline: czcionki i lib.js z pamięci service workera', async () => {
   const { ctx, p } = await page([]);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');

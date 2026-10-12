@@ -63,6 +63,10 @@ Kolumna `data` w Sesjach to data z planu; faktyczny dzień treningu to `start` (
 
 **Dyspozycja**: id = klient|data (jeden wpis dziennie), zapisano, klient, data, cmj1–3, cmj_sr, sen, stres, zmeczenie, bolesnosc, hooper_suma, vbt_test, werdykt, powody. Zapis: `saveDyspozycja`; `getData` zwraca `readiness`.
 
+**Ćwiczenia** (baza, startowo z `apps-script/Cwiczenia.gs` przez menu „Wczytaj bazę ćwiczeń”; poprawki trener robi w arkuszu): cwiczenie, aliasy („;”), instruktaz (link http/https), partia (kilka przez „;”), zamienniki („;”), grupa. Dopasowanie nazwy z planu (`exIndex_`, `exFind_`): dokładna nazwa lub alias → nazwa podstawowa (bez nawiasów, „– TEST”, „z pauzą…”) → te same słowa i skróty (DB, SL, RDL); bez zgadywania po podobieństwie. Kompleks „A + B” bez własnego wiersza składa się z części (`exInfo_`). `getData` dokłada do wierszy planu `infos` [{n, u}] i `parts` [], domyślne `swaps` i `group` (plan ma pierwszeństwo) oraz mapę `parts` {nazwa → [partie]} dla nazw z planu, logu i zamienników klienta. Menu „Uzupełnij listę ćwiczeń” dopisuje nazwy z Planu bez dopasowania.
+
+**Podsumowanie_partie** (`computeParts_`): klient × tydzień × partia: serie, serie twarde (RPE ≥ 7, FAIL, DROP), tonaż; ćwiczenie liczy się do każdej swojej partii; po zamianie liczy się wykonane ćwiczenie. Boje olimpijskie i ich warianty nie mają partii w bazie.
+
 **Przegląd** (liczony w `podsumowanie`, `computeOverview_`): jeden wiersz na aktywnego klienta, najpilniejsi na górze; `pilnosc` = 3 × sygnały czerwone + pomarańczowe (ból > 3/10, FAIL, dyspozycja, zaległe jednostki, brak treningu, koniec planu), ostatni trening, ten tydzień zrobione/plan, uwagi klienta, filmy z 7 dni. Progi i okna: stała `PRZ` i `docs/plan-v3.md`.
 
 **Bloki** (liczone w `podsumowanie`, `computeBlocks_`): klient × blok, daty, tygodnie, jednostki, wykonanie, tonaż, zmiana e1RM, najlepsze boje, sRPE, samopoczucie, dyspozycja, ból, statusy, **wnioski** (wpisuje trener; `keepNotes_` zachowuje je przy przeliczaniu).
