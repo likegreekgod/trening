@@ -303,6 +303,7 @@ test('cwSync_: nowe wiersze, dopisane aliasy, usuwane zaślepki; ręczne wpisy z
   assert.deepEqual(plain(C.cwSync_([['Front Squat', 'abcdefghijk', '', '']], sheet, { 'Front Squat': 'fs' })).aliases, [{ i: 10, value: 'Mój alias' }]);
   assert.deepEqual(plain(C.cwBaza_([['A', 'id1', 'p', 'x'], ['B', 'id2', '']], { A: 'y; z', B: 'b' }, [['D', 'd1; d2', 'łydki']])),
     [['A', 'id1', 'p', 'x; y; z'], ['B', 'id2', '', 'b'], ['D', '', 'łydki', 'd1; d2']]);
+  assert.deepEqual(plain(C.cwBaza_([], {}, [], [['F', 'klatka']])), [['F', '', 'klatka', '']]);
 });
 
 test('zaślepka nie zasłania aliasu, „tempo” to dopisek', () => {
@@ -320,9 +321,10 @@ test('CW_BAZA, CW_ALIASY, CW_DODATKI: baza ćwiczeń do wczytania', () => {
   B.forEach(b => { assert.ok(b.length === 3 || b.length === 4); assert.match(b[1], /^[\w-]{6,20}$/); b[2].split('; ').filter(Boolean).forEach(p => assert.ok(PARTS.includes(p), b[0] + ': ' + p)); });
   const names = B.map(b => b[0]), D = Array.from(C.CW_DODATKI);
   Object.keys(C.CW_ALIASY).forEach(k => assert.ok(names.includes(k), 'alias do nieistniejącego ćwiczenia: ' + k));
-  D.forEach(d => { assert.equal(d.length, 3); assert.ok(!names.includes(d[0]), d[0]); assert.ok(d[2]); });
-  const all = C.cwBaza_(B, C.CW_ALIASY, D), s = C.cwSync_(all, []);
-  assert.equal(s.add.length, 624 + D.length);
+  D.forEach(d => { assert.equal(d.length, 3); assert.ok(!names.includes(d[0]), d[0]); assert.ok(d[1] || d[2], d[0]); });   // wiersz bez danych byłby zaślepką
+  const F = Array.from(C.CW_FEDB), all = C.cwBaza_(B, C.CW_ALIASY, D, F), s = C.cwSync_(all, []);
+  assert.equal(s.add.length, 624 + D.length + F.length);
+  assert.ok(F.length > 700); F.forEach(x => { assert.equal(x.length, 2); assert.ok(x[0] && x[1], x[0]); });
   const rows = plain(s.add).map(r => Object.fromEntries(C.CW_HEADERS.map((h, i) => [h, r[i]]))), ix = C.exIndex_(rows), f = n => (C.exFind_(ix, n) || {}).name || null;
   const keys = {}; rows.forEach(r => [r.cwiczenie].concat(r.aliasy.split(';')).map(C.exKey_).filter(Boolean).forEach(k => { assert.ok(!keys[k], 'powtórzona nazwa lub alias: ' + k); keys[k] = 1; }));
   assert.deepEqual(plain(C.cwSync_(all, rows)), { add: [], aliases: [], drop: [] });   // drugie wczytanie nic nie zmienia
@@ -330,11 +332,12 @@ test('CW_BAZA, CW_ALIASY, CW_DODATKI: baza ćwiczeń do wczytania', () => {
     ['Snatch Pull', 'Block Power Clean', 'Chin-up', 'Dumbbell Lateral Raise', 'Single-Leg RDL', 'Block Power Snatch', 'Jerk Dip', '1-1/4 Back Squat']);
   assert.deepEqual(['Przysiad tylny', 'Ciąg rwaniowy (z podłogi, do pełnego wyprostu)', 'Wykroki bułgarskie (hantle), tempo 3-1-X', 'Sotts Press', 'Wypychanie na suwnicy', 'Power jerk z rack — 2 s pauza w dipie + 3 s fiksacja'].map(f),
     ['Back Squat', 'Snatch Pull', 'Bulgarian Split Squat', 'Press In Snatch (Sots Press)', 'Leg Press', 'Pause Power Jerk']);
-  assert.deepEqual(['Ring Dips', 'Hanging Knee Raise', 'Pin OHS'].map(f), ['Ring Dip', 'Hanging Knee Raise', 'Pin Overhead Squat']);   // regresja i inny sprzęt to osobne ćwiczenia
+  assert.deepEqual(['Ring Dips', 'Hanging Knee Raise', 'Pin OHS', 'Pushup Hold (jak najgłębiej)', 'Pause Clean (2 s pod kolanem)'].map(f), ['Ring Dip', 'Hanging Knee Raise', 'Pin Overhead Squat', 'Push-Up Hold', 'Segment Clean']);   // regresja i inny sprzęt to osobne ćwiczenia
   Object.keys(C.CW_WYCOFANE).forEach(k => { assert.ok(names.includes(k)); C.CW_WYCOFANE[k].split(';').forEach(a => assert.ok(!((C.CW_ALIASY[k] || '').split(';').map(C.exKey_).includes(C.exKey_(a))), a)); });
   const old = rows.map(r => r.cwiczenie === 'Dip' ? Object.assign({}, r, { aliasy: 'Ring Dips; Dipy' }) : r);
   assert.deepEqual(plain(C.cwSync_(all, old, C.CW_WYCOFANE)), { add: [], aliases: [{ i: old.findIndex(r => r.cwiczenie === 'Dip'), value: 'Dipy' }], drop: [] });
-  assert.deepEqual(['Slow Snatch', 'Ring Y-Raise', 'Drop Squat to Jump'].map(f), Array(3).fill(null));   // bez zgadywania: alias albo własny wiersz
+  assert.deepEqual(['Slow Snatch', 'Single Arm Cable Pull (fixed on bench)', 'Barbell Squat', 'Jerk from blocks (cluster)', 'Dumbbell Bench Press'].map(f), ['Slow-Motion Snatch', 'Single-Arm Pulldown', 'Back Squat', 'Jerk From Blocks', 'Dumbbell Bench Press']);
+  assert.deepEqual(['Snatch Pull z haka', 'Rot. wewn. biodra z gumą (siad na skrzyni)'].map(f), Array(2).fill(null));   // bez zgadywania: alias albo własny wiersz
   assert.deepEqual(C.exInfo_(ix, 'Hang Clean (nad kolanem) + Jerk').infos.map(i => i.n), ['Hang Clean', 'Split Jerk']);   // „Jerk” to alias Split Jerk
   assert.deepEqual([C.exInfo_(ix, 'Snatch').parts.length, C.exInfo_(ix, 'Back Squat').parts.length > 0, C.exInfo_(ix, 'Suwnica').infos.length], [0, true, 0]);   // boje bez partii, dodatki bez filmu
 });
@@ -372,4 +375,11 @@ test('alertMail_: mail tylko przy nowym czerwonym sygnale, bez powtórek', () =>
   assert.match(m2.body, /^Nowe sygnały do reakcji:\n• Anna: [^\n]+\n[^\n]+\n\nBez zmian od poprzedniego alertu:\n• ewa: [^\n]+\n\nSzczegóły w zakładce Przegląd\.\n/);
   assert.deepEqual(plain(C.alertMail_([ov[2]], 'stary|sygnał')), { send: false, subject: '', body: '', sig: '' });
   assert.equal(C.alertMail_([], '').send, false);
+});
+
+test('orphanPlans_: wiersze Planu bez klienta w zakładce Klienci', () => {
+  const klienci = [{ klient_id: 'Anna' }, { klient_id: 'jan-nowak', aktywny: 'NIE' }, { klient_id: '' }];
+  const plan = [{ klient: 'anna' }, { klient: ' ANNA ' }, { klient: 'jan nowak' }, { klient: 'jan-nowak' }, { klient: 'jan' }, { klient: 'jan' }, { klient: '' }];
+  assert.deepEqual(plain(C.orphanPlans_(plan, klienci)), { ids: { 'jan nowak': 1, jan: 2 }, n: 3 });   // nieaktywny klient zachowuje plan
+  assert.deepEqual(plain(C.orphanPlans_(plan.slice(0, 2), klienci)), { ids: {}, n: 0 });
 });

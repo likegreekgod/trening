@@ -565,6 +565,7 @@ function onOpen() {
     .addItem('Wczytaj bazę ćwiczeń', 'wczytajBazeCwiczen')
     .addItem('Uzupełnij listę ćwiczeń', 'uzupelnijCwiczenia')
     .addItem('Sprawdź arkusz', 'sprawdzArkusz')
+    .addItem('Usuń plany bez klienta', 'usunPlanyBezKlienta')
     .addItem('Zainstaluj wyzwalacze', 'menuWyzwalacze')
     .addItem('Ustaw adres alertu', 'ustawAlert')
     .addToUi();
@@ -1082,11 +1083,11 @@ function missingExercises_(plan, dictRows) {
   return out.sort((a, b) => a.localeCompare(b, 'pl'));
 }
 
-/** Czysta funkcja: baza do wczytania = CW_BAZA z aliasami z CW_ALIASY + CW_DODATKI → [nazwa, id filmu, partie, aliasy]. */
-function cwBaza_(baza, aliasy, dodatki) {
+/** Czysta funkcja: baza do wczytania = CW_BAZA z aliasami z CW_ALIASY + CW_DODATKI + CW_FEDB → [nazwa, id filmu, partie, aliasy]. */
+function cwBaza_(baza, aliasy, dodatki, fedb) {
   const al = aliasy || {};
   return (baza || []).map(b => [b[0], b[1], b[2], [b[3], al[b[0]]].filter(Boolean).join('; ')])
-    .concat((dodatki || []).map(d => [d[0], '', d[2], d[1]]));
+    .concat((dodatki || []).map(d => [d[0], '', d[2], d[1]])).concat((fedb || []).map(f => [f[0], '', f[1], '']));
 }
 
 /** wiersz-zaślepka: sama nazwa dopisana przez „Uzupełnij listę ćwiczeń”, bez żadnych danych */
@@ -1128,7 +1129,7 @@ function appendCw_(rows) {
  * które mają już dopasowanie. Linków, partii, zamienników ani ręcznie wpisanych aliasów nie zmienia.
  */
 function wczytajBazeCwiczen() {
-  const sh = sheet_('Ćwiczenia', CW_HEADERS), s = cwSync_(cwBaza_(CW_BAZA, CW_ALIASY, CW_DODATKI), tableOf_('Ćwiczenia'), CW_WYCOFANE);
+  const sh = sheet_('Ćwiczenia', CW_HEADERS), s = cwSync_(cwBaza_(CW_BAZA, CW_ALIASY, CW_DODATKI, CW_FEDB), tableOf_('Ćwiczenia'), CW_WYCOFANE);
   const col = CW_HEADERS.indexOf('aliasy') + 1;
   s.aliases.forEach(a => sh.getRange(a.i + 2, col).setValue(a.value));
   s.drop.slice().sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
@@ -1302,6 +1303,30 @@ function ustawAlert() {
   props.deleteProperty('ALERT_SIG');
   const left = MailApp.getRemainingDailyQuota();
   alert_('Alert mailowy', v ? 'Zapisano. Mail przyjdzie rano tylko wtedy, gdy pojawi się nowy czerwony sygnał (dzienny limit wysyłki: ' + left + ').' : 'Alert wyłączony.');
+}
+
+/** Czysta funkcja: wiersze Planu, których klienta nie ma w zakładce Klienci → {ids: {klient: liczba wierszy}, n}. */
+function orphanPlans_(plan, klienci) {
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase(), known = {}, ids = {};
+  (klienci || []).forEach(k => { if (lc(k.klient_id)) known[lc(k.klient_id)] = 1; });
+  let n = 0;
+  (plan || []).forEach(r => { const c = lc(r.klient); if (c && !known[c]) { ids[c] = (ids[c] || 0) + 1; n++; } });
+  return { ids: ids, n: n };
+}
+
+/** Menu Trening → Usuń plany bez klienta: po potwierdzeniu usuwa z Planu wiersze klientów, których nie ma w zakładce Klienci. */
+function usunPlanyBezKlienta() {
+  const ui = SpreadsheetApp.getUi(), o = orphanPlans_(tableOf_('Plan'), tableOf_('Klienci'));
+  if (!o.n) { alert_('Plany bez klienta', 'Każdy wiersz Planu należy do klienta z zakładki Klienci. Nic do usunięcia.'); return; }
+  const list = Object.keys(o.ids).map(id => '• ' + id + ': ' + o.ids[id] + ' wierszy').join('\n');
+  const ans = ui.alert('Plany bez klienta', 'W Planie są wiersze klientów, których nie ma w zakładce Klienci:\n' + list +
+    '\n\nUsunąć te wiersze z Planu? Log i Sesje zostają bez zmian. Cofniesz to tylko przez Plik → Historia wersji.', ui.ButtonSet.YES_NO);
+  if (ans !== ui.Button.YES) return;
+  const sh = SpreadsheetApp.getActive().getSheetByName('Plan'), v = sh.getDataRange().getValues(), h = v.shift(), ci = h.indexOf('klient');
+  const keep = v.filter(r => !o.ids[String(r[ci]).trim().toLowerCase()]);
+  sh.getRange(2, 1, v.length, h.length).clearContent();
+  if (keep.length) sh.getRange(2, 1, keep.length, h.length).setValues(keep);
+  alert_('Plany bez klienta', 'Usunięto wierszy: ' + (v.length - keep.length) + '.');
 }
 
 /** Menu Trening → Przegląd klientów: przelicza wszystko i otwiera zakładkę. */

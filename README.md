@@ -78,8 +78,9 @@ Wyślij klientom nowe linki z kolumny E. Stare linki (`…/exec?k=…`) działaj
 | Komu trzeba się przyjrzeć | Arkusz → menu **Trening → Przegląd klientów** (zakładka Przegląd) |
 | Podsumowanie tygodnia | Arkusz → menu **Trening → Odśwież podsumowanie** |
 | Nowy klient, linki | menu **Trening → Dodaj klienta**, **Odśwież linki klientów** |
-| Instruktaż i partie mięśniowe | zakładka **Ćwiczenia** (nazwa, aliasy, link, partie, zamienniki); menu **Trening → Wczytaj bazę ćwiczeń** wypełnia ją 624 ćwiczeniami z filmami, **Uzupełnij listę ćwiczeń** dopisuje nazwy z planów bez dopasowania |
+| Instruktaż i partie mięśniowe | zakładka **Ćwiczenia** (nazwa, aliasy, link, partie, zamienniki); menu **Trening → Wczytaj bazę ćwiczeń** wypełnia ją bazą (624 ćwiczenia z filmami + ok. 780 bez filmu, z partiami), **Uzupełnij listę ćwiczeń** dopisuje nazwy z planów bez dopasowania |
 | Coś nie działa | menu **Trening → Sprawdź arkusz** (klucze, linki, wyzwalacze, plany, pliki z błędami) |
+| Plan wczytany pod złym identyfikatorem klienta | menu **Trening → Usuń plany bez klienta** (pyta o potwierdzenie) |
 | Wyzwalacze (5:00 i co 15 min) | menu **Trening → Zainstaluj wyzwalacze** |
 | Alert mailowy o nowym czerwonym sygnale | menu **Trening → Ustaw adres alertu** (adres zostaje we właściwościach skryptu; puste = wyłączony) |
 | Ustawienia klienta | Klienci: F ból, G tryb (PROSTY/PRO), H dod_serie, I masters |
