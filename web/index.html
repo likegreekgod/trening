@@ -230,6 +230,9 @@
   details.help li{margin-bottom:6px}
   .timebox{display:flex;align-items:baseline;gap:12px;background:var(--panel);color:var(--light-white);border-radius:0;padding:10px 12px}
   .timebox .clock{font:800 34px/1 var(--f-display);letter-spacing:.04em;color:var(--light-amber);font-variant-numeric:tabular-nums}
+  #t-reset{margin-top:8px}
+  .sess .fl{margin-top:10px}
+  .sess .fl input{font:400 17px/1.3 var(--f-body)}
   .timebox small{color:var(--light-white);opacity:.8;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
   #toast{position:fixed;left:50%;bottom:calc(72px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel);color:var(--light-white);
          border-left:4px solid var(--light-amber);padding:10px 16px;border-radius:0;font-size:15px;display:none;z-index:9;max-width:calc(100% - 32px)}
@@ -492,8 +495,8 @@ function curSess(){
   return SESS['local|' + skey()] || Object.values(SESS).find(x => String(x.id).endsWith('|' + skey())) || {};
 }
 function startOf(){
-  const cand = [];
-  const loc = tGet()[skey()]; if (loc) cand.push(loc);
+  let cand = [];
+  const m = tGet(), loc = m[skey()], from = m['r|' + skey()]; if (loc) cand.push(loc);
   // awaryjnie: najwcześniejszy zapis serii z serwera (np. inny telefon / wyczyszczona przeglądarka)
   Object.values(LOGS).forEach(l => {
     const p = String(l.id).split('|');
@@ -501,8 +504,14 @@ function startOf(){
       const t = Date.parse(l.zapisano); if (!isNaN(t)) cand.push(t);
     }
   });
-  return cand.length ? Math.min(...cand) : null;
+  if (from) cand = cand.filter(t => t >= from);       // po „Licz od teraz” wcześniejsze zapisy nie cofają startu
+  return cand.length ? Math.min(...cand) : (from || null);
 }
+/** czas treningu od teraz (klient włączył trening przypadkiem albo za wcześnie) */
+function restartClock(){
+  const m = tGet(); m[skey()] = m['r|' + skey()] = Date.now(); tSet(m); tick();
+}
+const LATE_START_MIN = 30;   // tyle bez żadnej zapisanej serii od startu → pierwsza seria zaczyna liczenie od nowa
 function markStart(){
   if (!cur.day || curSess().id) return;           // jednostka już zamknięta – nie liczymy od nowa
   const m = tGet();
@@ -671,7 +680,7 @@ function helpCard(){
     <li>Rwanie i podrzut: dotknij świateł i oceń podejście (Łatwo, Średnio, Walka, Spalone). Pod spodem pojawi się propozycja ciężaru na kolejne serie.</li>
     <li>Dodałeś wiersz przez pomyłkę? Dotknij <b>✕</b> przy jego numerze, a potem <b>„usuń?”</b>.</li>
     <li>Film jest opcjonalny: ikona kamery przy serii. Najlepiej krótki, nagrany w 720p. Potrzebny jest zasięg.</li>
-    <li>Na koniec przewiń w dół i dotknij <b>„Zakończ i zapisz trening”</b>.</li>
+    <li>Na koniec przewiń w dół i dotknij <b>„Zakończ i zapisz trening”</b>. Czas liczy się sam od pierwszego wpisu. Włączyłeś za wcześnie? Na dole jest <b>„Licz czas od teraz”</b> i pole do poprawienia minut.</li>
   </ol></details>`;
 }
 
@@ -1199,7 +1208,7 @@ function card(ex){
     ${head}
     <div class="sets">${rows}</div>
     ${tools}
-    ${SIMPLE && !allDone && !oly ? `<button class="btn all" data-all="${ex.order}">✓ Wszystko jak w planie</button>` : ''}
+    ${SIMPLE && !oly ? `<button class="btn all" data-all="${ex.order}" ${allDone ? 'hidden' : ''}>✓ Wszystko jak w planie</button>` : ''}
   </div>`;
 }
 /* ---------- podsumowanie: przyciski zamiast suwaków, ból z wyborem miejsca ---------- */
@@ -1244,6 +1253,8 @@ function sessCard(s0){
     ${painBlock}
     <label>Czas treningu</label>
     <div class="timebox"><span class="clock">${clockText()}</span><small>${s.id ? 'zapisany' : 'liczy się od pierwszego wpisu do „Zakończ”'}</small></div>
+    ${s.id ? '' : '<button type="button" class="btn sm" id="t-reset">Licz czas od teraz</button>'}
+    <label class="fl" for="smin">Popraw czas, jeśli się nie zgadza (min)<input id="smin" inputmode="numeric" value="${esc(s.id && !blank(s.czas_min) ? s.czas_min : '')}" placeholder="policzę sam"></label>
     <label for="snote">Uwagi dla trenera</label><textarea id="snote" rows="3">${esc(s.uwagi || '')}</textarea>
     <div style="height:10px"></div><button class="btn p" id="saveSess">${s.id ? 'Zapisz zmiany' : 'Zakończ i zapisz ' + (SIMPLE ? 'trening' : 'jednostkę')}</button></div>`;
 }
@@ -1263,6 +1274,11 @@ function sessClick(e){
     return true;
   }
   return false;
+}
+/** „✓ Wszystko jak w planie” tylko wtedy, gdy zostały niezapisane serie z planu (po ręcznym odhaczeniu znika, po wyczyszczeniu wraca) */
+function refreshAll(o){
+  const b = document.querySelector(`[data-all="${o}"]`);
+  if (b) b.hidden = !document.querySelector(`.set[data-o="${o}"][data-k="p"][data-st=""]`);
 }
 /** stan pola odhaczenia: '' (puste) → ok (✓ zrobiona) → x (✕ nieudana, FAIL); pend = czeka na zapis / w kolejce */
 function setState(row, st, pend){
@@ -1300,6 +1316,11 @@ function bindRow(row, ex, s0){
   const kind = row.dataset.k;
   const btn = row.querySelector('.ok'), nt = row.querySelector('.nt'), lt = row.querySelector('.lt'), cam = row.querySelector('.cam');
   const save = (st, oc) => {
+    // start dawno temu, a to pierwsza zapisana seria: trening był włączony przypadkiem albo za wcześnie
+    const t0 = tGet()[skey()];
+    if (st && t0 && !curSess().id && Date.now() - t0 > LATE_START_MIN * 60000 && !document.querySelector('.set[data-st]:not([data-st=""])')) {
+      restartClock(); toast('Czas treningu liczę od teraz.');
+    }
     markStart();
     const was = row.dataset.st;
     if (lt) row.dataset.rate = st ? oc || '' : '';
@@ -1307,7 +1328,7 @@ function bindRow(row, ex, s0){
     const p = payloadOf(row, ex, s0);
     if (!was && st && kind !== 'w') startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce
     putLocal(ex, p);
-    refreshStats(); updateSug(ex);
+    refreshStats(); updateSug(ex); refreshAll(ex.order);
     send('logSet', p).then(() => { if (row.dataset.st === st) setState(row, st); }).catch(() => {});
     if (st && navigator.vibrate) navigator.vibrate(st === 'x' ? [30, 60, 30] : 30);
   };
@@ -1363,8 +1384,7 @@ function bind(exs, s0){
   document.querySelectorAll('[data-all]').forEach(b => b.onclick = () => {
     const todo = [...document.querySelectorAll(`.set[data-o="${b.dataset.all}"][data-k="p"][data-st=""] .ok`)];
     todo.forEach(btn => btn.click());
-    b.style.display = 'none';
-    toast('Zapisano ' + todo.length + ' ' + plural(todo.length, 'serię', 'serie', 'serii') + '.');
+    toast(todo.length ? 'Zapisano ' + todo.length + ' ' + plural(todo.length, 'serię', 'serie', 'serii') + '.' : 'Wszystkie serie są już zapisane.');
   });
   // skopiuj kg / powt. / RPE z 1. serii do pozostałych niezaznaczonych serii roboczych i dodatkowych
   document.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
@@ -1411,6 +1431,13 @@ function bind(exs, s0){
     if (saved) send('deleteSet', { week: cur.week, day: cur.day, order: ex.order, set }).catch(() => {});
     toast('Usunięto serię ' + set + '.');
   };
+  // „Licz czas od teraz”: drugie dotknięcie potwierdza
+  const tr = $('#t-reset');
+  if (tr) tr.onclick = () => {
+    if (tr.dataset.arm) { restartClock(); delete tr.dataset.arm; tr.textContent = 'Licz czas od teraz'; toast('Czas treningu liczę od teraz.'); return; }
+    tr.dataset.arm = '1'; tr.textContent = 'Na pewno? Dotknij jeszcze raz';
+    setTimeout(() => { if (tr.isConnected && tr.dataset.arm) { delete tr.dataset.arm; tr.textContent = 'Licz czas od teraz'; } }, 4000);
+  };
   $('#saveSess').onclick = () => {
     stopRest(); wake(false);
     const s = curSess(), k = skey();
@@ -1422,7 +1449,8 @@ function bind(exs, s0){
     const vals = Object.values(pains);
     const end = Date.now(), st = startOf();
     // jednostka już zapisana → zachowaj pierwotny czas; nowa → od pierwszego wpisu do teraz
-    const minutes = s.id ? (blank(s.czas_min) ? '' : s.czas_min) : (st ? Math.max(1, Math.round((end - st) / 60000)) : '');
+    const own = num($('#smin').value);                  // ręczna poprawka ma pierwszeństwo
+    const minutes = isNum(own) && own > 0 ? Math.round(own) : s.id ? (blank(s.czas_min) ? '' : s.czas_min) : (st ? Math.max(1, Math.round((end - st) / 60000)) : '');
     const p = { week: cur.week, day: cur.day, date: s0.date, knee: pains.kolano ?? '', shoulder: pains.bark ?? '',
       pain: Object.entries(pains).map(([a, b]) => a + ':' + b).join('; '), painMax: vals.length ? Math.max(...vals) : '',
       feel: +$('#feel').dataset.v || 3,
@@ -1431,7 +1459,7 @@ function bind(exs, s0){
       end: s.id ? (s.koniec || '') : new Date(end).toISOString() };
     SESS['local|' + k] = { id: 'local|' + k, bol_kolano: p.knee, bol_bark: p.shoulder, bol: p.pain, bol_max: p.painMax, rpe_sesji: p.rpeSession, samopoczucie: p.feel, czas_min: p.minutes,
       uwagi: p.note, start: p.start, koniec: p.end };
-    const m = tGet(); delete m[k]; tSet(m);
+    const m = tGet(); delete m[k]; delete m['r|' + k]; tSet(m);
     const msg = s.id ? 'Zmiany zapisane.' : (SIMPLE ? 'Trening' : 'Jednostka') + ' zapisan' + (SIMPLE ? 'y' : 'a') + (minutes ? ' (' + minutes + ' min)' : '') + '. Dobra robota!';
     send('logSession', p).then(() => { toast(msg); render(); }).catch(() => { toast('Brak sieci – zapiszę, gdy wróci połączenie.'); render(); });
   };
