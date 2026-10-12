@@ -10,6 +10,11 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Poprawka trenera: alias wolno dać tylko temu samemu ćwiczeniu pod inną nazwą. Regresja albo wariant z innym sprzętem to osobne ćwiczenie: Hanging Knee Raise (regresja Hanging Leg Raise), Pin Overhead Squat (przysiad OHS z martwego punktu na dole), Ring Dip (dipy na kółkach), Push-Up Hold (izometria, nie pompka) mają własne wiersze bez filmu, a błędne aliasy są wycofane (`CW_WYCOFANE`, „Wczytaj bazę ćwiczeń” usuwa je z arkusza).
 - „Wczytaj bazę ćwiczeń” można klikać wielokrotnie: dopisuje nowe ćwiczenia i aliasy, usuwa puste wiersze z samą nazwą, które mają już dopasowanie; ręcznych wpisów nie zmienia. Wiersz z samą nazwą nie zasłania aliasu.
 
+## 2026-10-13 · Bloki i plany bez kilogramów
+
+- Aplikacja jest nowa, więc pierwszy plan każdego klienta to blok B1. Menu „Uzupełnij puste bloki” wpisuje blok tam, gdzie go brakuje (ostatni blok klienta albo B1), po potwierdzeniu.
+- Plan może mieć `procent` bez `kg`, gdy nie znamy jeszcze maksów klienta: klient wpisuje ciężar sam, a „max dziś”, propozycje ciężaru i statystyki intensywności dla bojów ruszą po dopisaniu kg.
+
 ## 2026-10-13 · Komentarze trenera do filmów
 
 - Trener komentuje film klienta na Dysku Google (komentarz przypięty do czasu w filmie). Skrypt przepisuje komentarze do `Log.komentarz_dysk` przy serii z tym filmem: automatycznie co ok. 30 min (przy okazji wyzwalacza planów, bez nowego wyzwalacza) i z menu „Pobierz komentarze do filmów”. Sprawdzane są filmy z ostatnich 30 dni.

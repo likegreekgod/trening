@@ -405,3 +405,9 @@ test('anchorSec_, commentLines_, fileIdOf_: komentarze Dysku z czasem w filmie',
   assert.deepEqual(plain(C.commentLines_([])), { text: '', raw: '' });
   assert.deepEqual([C.LOG_HEADERS.slice(-2), C.SES_HEADERS.slice(-1), C.LOG_HEADERS.length, C.SES_HEADERS.length].map(x => plain(x)), [['komentarz_trenera', 'komentarz_dysk'], ['komentarz_trenera'], 24, 17]);
 });
+
+test('fillBlocks_: pusty blok = ostatni blok klienta albo B1', () => {
+  const plan = [{ klient: 'anna', blok: '' }, { klient: 'Anna', blok: 'B2' }, { klient: 'anna' }, { klient: 'bob', blok: ' ' }, { klient: 'bob', blok: null }, { klient: '', blok: '' }, { klient: 'ewa', blok: 'B1' }];
+  assert.deepEqual(plain(C.fillBlocks_(plan)), { rows: [[0, 'B1'], [2, 'B2'], [3, 'B1'], [4, 'B1']], ids: { anna: 2, bob: 2 } });
+  assert.deepEqual(plain(C.fillBlocks_([{ klient: 'ewa', blok: 'B1' }])), { rows: [], ids: {} });
+});
