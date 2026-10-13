@@ -796,7 +796,8 @@ function openCMJ(rd, done){
   let slot = rd.cmj.findIndex(x => !isNum(x)); if (slot < 0) slot = 0;
   openSheet(`<h2 id="sheet-t">CMJ z filmu</h2><p class="sub">Telefon na podłodze 2–3 m z boku, kadr na stopy. Zaznacz ostatnią klatkę na ziemi i pierwszą po lądowaniu.</p>
     <label class="fl">Jak nagrano<select id="cmj-preset">${CMJ_PRESETS.map(q => `<option value="${q[0]}">${q[1]}</option>`).join('')}</select></label>
-    <label class="btn p">Nagraj lub wybierz film<input type="file" accept="video/*" hidden id="cmj-file"></label>
+    <label class="btn p">Nagraj film<input type="file" accept="video/*" capture="environment" hidden id="cmj-rec"></label>
+    <label class="btn">Wybierz film z telefonu<input type="file" accept="video/*" hidden id="cmj-file"></label>
     <div id="cmj-stage"><p class="sub">Wysokość = 1,22625 · t² (t = czas lotu w s). Przy 240 kl/s błąd jednej klatki to ok. ±0,5 cm, przy 30 kl/s ok. ±4 cm.</p></div>
     <button type="button" class="btn" data-close>Zamknij</button>`);
   SHEET_ON_CLOSE = () => { if (url) URL.revokeObjectURL(url); };
@@ -810,7 +811,7 @@ function openCMJ(rd, done){
     $('#cmj-save').onclick = () => { rd.cmj[slot] = Math.round(hh * 10) / 10; closeSheet(); done(); };
   };
   $('#cmj-preset').onchange = e => { preset = CMJ_PRESETS.find(q => q[0] === e.target.value); upd(); };
-  $('#cmj-file').onchange = e => {
+  $('#cmj-file').onchange = $('#cmj-rec').onchange = e => {
     const file = e.target.files[0]; if (!file) return;
     if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(file); tk = tl = null;
     $('#cmj-stage').innerHTML = `<div class="vbox"><video id="cmj-v" muted playsinline preload="auto"></video></div>
@@ -1651,7 +1652,7 @@ function vbtStage(file, ex, row, s0){
   cv.addEventListener('click', e => {
     if (abort.busy || !video.videoWidth) return;
     const b = cv.getBoundingClientRect(), px = (e.clientX - b.left) * cv.width / b.width / ds, py = (e.clientY - b.top) * cv.height / b.height / ds;
-    if (!c0) { c0 = { x: px, y: py }; hint.textContent = 'Teraz dotknij krawędzi talerza (kalibracja: 450 mm).'; }
+    if (!c0) { c0 = { x: px, y: py }; hint.textContent = 'Teraz dotknij górnej krawędzi talerza (kalibracja: 450 mm).'; }
     else if (!r0) {
       r0 = Math.hypot(px - c0.x, py - c0.y);
       if (r0 < 6) { r0 = null; hint.textContent = 'Za blisko środka. Dotknij samej krawędzi talerza.'; return; }
@@ -1699,8 +1700,9 @@ function openCam(ex, row, s0){
     ${l.film_link ? `<a class="btn" href="${esc(l.film_link)}" target="_blank" rel="noopener">Otwórz zapisany film</a>` : ''}
     ${saved}
     ${SIMPLE ? '' : `<div class="seg" role="group" aria-label="Co zrobić z filmem"><button type="button" data-m="film">Tylko film</button><button type="button" data-m="vbt">Film + ścieżka + VBT</button></div>
-    <p class="sub" id="cam-tip" hidden>Nagraj z boku, cały talerz w kadrze, telefon nieruchomo. Analiza działa w telefonie, także bez sieci.</p>`}
-    <label class="btn p">${l.film_link ? 'Nagraj lub wybierz nowy film' : 'Nagraj lub wybierz film'}<input type="file" accept="video/*" hidden id="cam-file"></label>
+    <p class="sub" id="cam-tip" hidden>Nagraj z boku, cały talerz w kadrze, telefon nieruchomo na wysokości bioder. Lekki skos jest w porządku: prędkość i wysokość liczą się z ruchu w pionie. Analiza działa w telefonie, także bez sieci.</p>`}
+    <label class="btn p">${l.film_link ? 'Nagraj nowy film' : 'Nagraj film'}<input type="file" accept="video/*" capture="environment" hidden id="cam-rec"></label>
+    <label class="btn">Wybierz film z telefonu<input type="file" accept="video/*" hidden id="cam-file"></label>
     <div id="cam-stage"></div>
     <div class="bar" id="cam-bar"><i></i></div>
     <p class="hint" id="cam-msg" hidden></p>
@@ -1710,7 +1712,7 @@ function openCam(ex, row, s0){
   const setMode = m => { mode = m; document.querySelectorAll('#sheet [data-m]').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === m)); const t = $('#cam-tip'); if (t) t.hidden = m !== 'vbt'; };
   document.querySelectorAll('#sheet [data-m]').forEach(b => b.onclick = () => setMode(b.dataset.m));
   setMode(mode);
-  $('#cam-file').onchange = e => {
+  $('#cam-file').onchange = $('#cam-rec').onchange = e => {
     const file = e.target.files[0]; if (!file) return;
     markStart();
     if (mode === 'vbt') vbtStage(file, ex, row, s0); else uploadVideo(ex, s0, file, row);
