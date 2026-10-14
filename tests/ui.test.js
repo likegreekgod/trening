@@ -448,10 +448,12 @@ test('Film: kamera przy każdej serii (nie przy rozgrzewce), wgranie do wybranej
   assert.equal(await p.$eval('.set[data-o="1"][data-s="2"] .cam', b => b.classList.contains('has')), true);
   await p.click('.set[data-o="1"][data-s="2"] .cam');
   assert.deepEqual(await p.$$eval('#sheet input[type=file]', i => i.map(x => [x.id, x.accept, x.getAttribute('capture')])), [['cam-rec', 'video/*', 'environment'], ['cam-file', 'video/*', null]]);   // osobno aparat i wybór pliku
-  await p.setInputFiles('#cam-file', MP4); await p.waitForSelector('#sheet', { state: 'hidden' });
+  await p.setInputFiles('#cam-file', MP4); await p.waitForSelector('#sheet', { state: 'hidden' });   // okno zamyka się od razu, film idzie w tle
+  await p.waitForFunction(() => /Film wysłany/.test(document.querySelector('#toast').textContent));
   assert.equal(calls.find(c => c.fn === 'startUpload').args[0].set, 2);
-  assert.deepEqual((({ set, vbt, video, done }) => ({ set, vbt, video, done }))(lastSet(calls)),
-    { set: 2, vbt: 0.85, video: 'https://drive.google.com/file/d/f1/view', done: true });    // film nie kasuje prędkości ani ✓
+  assert.deepEqual(calls.find(c => c.fn === 'logVideo').args[0], { link: 'https://drive.google.com/file/d/f1/view', week: 1, day: 'T1', order: 1, set: 2, name: calls.find(c => c.fn === 'startUpload').args[0].name, date: calls.find(c => c.fn === 'startUpload').args[0].date });
+  assert.deepEqual((({ set, vbt, done }) => ({ set, vbt, done }))(lastSet(calls)), { set: 2, vbt: 0.85, done: true });   // film nie kasuje prędkości ani ✓
+  assert.equal(await p.$eval('.set[data-o="1"][data-s="2"] .cam', b => b.className), 'cam has');
   await p.click('.set[data-o="1"][data-s="2"] .ok'); await p.waitForTimeout(80);         // ✓ → ✕ zachowuje film
   assert.equal(lastSet(calls).video, 'https://drive.google.com/file/d/f1/view');
   await p.click('.set[data-o="1"][data-s="2"] .cam');
@@ -468,10 +470,19 @@ test('Film: bez sieci czytelny komunikat zamiast błędu; tryb PROSTY bez pola p
   assert.equal(await p.$('#cam-vbt'), null);
   await ctx.setOffline(true);
   await p.setInputFiles('#cam-file', MP4);
-  await p.waitForSelector('#cam-msg:not([hidden])');
-  assert.match(await p.textContent('#cam-msg'), /Brak sieci: film dodasz po odzyskaniu zasięgu/);
+  await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.match(await p.textContent('#toast'), /Brak sieci: film poczeka w telefonie/);
   assert.equal(calls.filter(c => c.fn === 'startUpload').length, 0);
-  assert.equal(await p.isVisible('#sheet'), true);
+  assert.equal(await p.$eval('.set[data-o="1"][data-s="1"] .cam', b => b.classList.contains('pend')), true);
+  assert.match(await p.textContent('#sync'), /filmy w kolejce: 1/);
+  await p.click('.set[data-o="1"][data-s="1"] .cam'); await p.waitForSelector('#cam-q .vq');
+  assert.match(await p.textContent('#cam-q'), /Film czeka w kolejce \(brak sieci\)/);
+  assert.deepEqual(await a11y(p), []);
+  await p.click('#sheet [data-close]');
+  await ctx.setOffline(false);                                                    // sieć wraca → film wysyła się sam
+  await p.waitForFunction(() => /Film wysłany/.test(document.querySelector('#toast').textContent));
+  assert.deepEqual(calls.filter(c => /Upload|uploadChunk|logVideo/.test(c.fn)).map(c => c.fn), ['startUpload', 'uploadChunk', 'logVideo']);
+  assert.equal(await p.$eval('.set[data-o="1"][data-s="1"] .cam', b => b.classList.contains('pend')), false);
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
@@ -549,7 +560,8 @@ test('Okno kamery: „Film + ścieżka + VBT” na nagranym pliku → wynik, zap
   const an = sets.find(s => s.path), last = sets[sets.length - 1];
   assert.ok(an.vbt > 1.2 && an.vbtPeak >= an.vbt && an.height > 80 && JSON.parse(an.path).length > 5);
   assert.deepEqual((({ ocena, rpe, done }) => ({ ocena, rpe, done }))(an), { ocena: 'S', rpe: 8, done: true });   // ocena boju zachowana
-  assert.equal(last.video, 'https://drive.google.com/file/d/f1/view');
+  await p.waitForFunction(() => /Film wysłany/.test(document.querySelector('#toast').textContent), null, { timeout: 15000 });
+  assert.equal(calls.find(c => c.fn === 'logVideo').args[0].link, 'https://drive.google.com/file/d/f1/view');
   assert.equal(last.path, an.path);                                              // film nie kasuje analizy
   await p.click('.set[data-s="1"] .cam');
   assert.match(await p.textContent('.saved'), /Zapisana analiza: v max/);
@@ -834,4 +846,38 @@ test('Komentarze trenera: karta z nowymi, „Przeczytane”, lista pod przyciski
   await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.set');
   assert.deepEqual([await t2.p.$('.cnote'), await t2.p.$('#cn-all')], [null, null]);
   await t2.ctx.close();
+});
+
+// --- kolejka filmów: wysyłka kawałkami prosto do Google, przerwana i wznowiona po ponownym otwarciu ---
+test('Film w kolejce: kawałki po 8 MB, przerwa w połowie, wznowienie po ponownym otwarciu od miejsca przerwania', async () => {
+  const calls = [], UP = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,webViewLink&upload_id=ABC-123';
+  const api = b => b.fn === 'startUpload' ? { uploadId: 'u1', chunk: 4194304, url: UP } : b.fn === 'uploadStatus' ? { next: 8388608 } : null;
+  const { ctx, p } = await page(calls, false, { data: PRO, api });
+  const puts = []; let cut = true;
+  await ctx.route('https://www.googleapis.com/upload/**', async r => {
+    const q = r.request(), cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'PUT', 'Access-Control-Allow-Headers': 'Content-Range, Content-Type' };
+    if (q.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
+    const range = q.headers()['content-range'] || '', len = (q.postDataBuffer() || Buffer.alloc(0)).length;
+    puts.push([range, len]);
+    if (/^bytes 0-/.test(range)) return r.fulfill({ status: 308, headers: cors });
+    if (cut) { cut = false; return r.abort('internetdisconnected'); }               // przerwa: telefon w kieszeni, brak zasięgu
+    return r.fulfill({ status: 200, headers: Object.assign({ 'Content-Type': 'application/json' }, cors), body: JSON.stringify({ id: 'f9', webViewLink: 'https://drive.google.com/file/d/f9/view' }) });
+  });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('.set[data-o="1"][data-s="1"] .cam');
+  const BIG = { name: 'duzy.mp4', mimeType: 'video/mp4', buffer: Buffer.alloc(9 * 1048576 + 123, 7) };
+  await p.setInputFiles('#cam-file', BIG); await p.waitForSelector('#sheet', { state: 'hidden' });
+  await p.waitForTimeout(1500);
+  assert.deepEqual(puts, [['bytes 0-8388607/9437307', 8388608], ['bytes 8388608-9437306/9437307', 1048699]]);
+  assert.equal(calls.filter(c => c.fn === 'logVideo').length, 0);
+  assert.equal(await p.$eval('.set[data-o="1"][data-s="1"] .cam', b => b.classList.contains('pend')), true);
+  await p.reload(); await p.waitForSelector('.set[data-o="1"]');                   // aplikacja otwarta ponownie: plik czekał w telefonie
+  await p.waitForFunction(() => /Film wysłany/.test(document.querySelector('#toast').textContent), null, { timeout: 10000 });
+  assert.deepEqual(calls.filter(c => c.fn === 'uploadStatus').map(c => c.args), [[UP, 9437307]]);
+  assert.deepEqual(puts.slice(2), [['bytes 8388608-9437306/9437307', 1048699]]);    // tylko brakujący kawałek, nie od zera
+  assert.equal(calls.filter(c => c.fn === 'startUpload').length, 1);
+  assert.equal(calls.find(c => c.fn === 'logVideo').args[0].link, 'https://drive.google.com/file/d/f9/view');
+  assert.equal(await p.$eval('.set[data-o="1"][data-s="1"] .cam', b => b.classList.contains('pend')), false);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
 });

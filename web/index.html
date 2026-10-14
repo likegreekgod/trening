@@ -194,6 +194,9 @@
   .cam{height:44px;border:1px solid var(--line);border-radius:2px;background:transparent;color:var(--muted);display:grid;place-items:center;padding:0}
   .cam svg{width:22px;height:22px}
   .cam.has{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .cam.pend{border:2px dashed var(--accent);color:var(--accent);background:transparent}
+  .vq{border-left:4px solid var(--accent);padding:4px 0 4px 10px;margin:8px 0;font-size:15px}
+  .vq .btn{margin:6px 6px 0 0}
   .sh-in a.btn{text-decoration:none}
   /* analiza ścieżki i VBT */
   .vbox{background:var(--panel);display:grid;place-items:center}
@@ -660,7 +663,7 @@ function load(){
     const keep = cached ? { w: cur.week, d: cur.day } : null;
     useData(d);
     if (keep) { cur.week = keep.w; cur.day = keep.d; } else pickDefault();
-    render(); setSync('gotowe'); flush();
+    render(); setSync('gotowe'); flush(); vqRun();
   }).catch(e => {
     if (!cached) { $('#main').innerHTML = '<div class="empty">Błąd: ' + esc(e.message) + '</div>'; setSync('błąd'); }
     else setSync('offline – ostatnie dane');
@@ -1069,6 +1072,7 @@ function renderTrening(){
   $('#main').innerHTML = h;
   bind(exs, s0);
   bindNotes();
+  vqMarks();
   refreshStats();
   $('#go-dysp').onclick = () => { TAB = 'dysp'; render(); window.scrollTo(0, 0); };
 }
@@ -1517,33 +1521,152 @@ $('#main').addEventListener('change', e => { if (e.target.closest('.set')) markS
 function readB64(blob){
   return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(blob); });
 }
-function directPut(url, file, onProg){
+/* ---------- kolejka filmów: plik zostaje w telefonie (IndexedDB), wysyłka kawałkami, wznawiana po przerwie ----------
+ * Przerwa (aplikacja w tle, wygaszony ekran, brak sieci, zamknięta aplikacja) nie kasuje postępu: przy powrocie do
+ * aplikacji, odzyskaniu sieci albo następnym otwarciu wysyłka rusza od miejsca, w którym stanęła. Postęp sesji trzymamy
+ * w localStorage (vqp_…), żeby nie zapisywać filmu ponownie po każdym kawałku.
+ */
+const VQ_CHUNK = 8 * 1024 * 1024;                              // wielokrotność 256 KB (wymóg Google)
+const VQ_MEM = {}, VQ_LIVE = {};                               // VQ_MEM: gdy IndexedDB niedostępne; VQ_LIVE: sesje znane w tym uruchomieniu
+let VQ_DB = null, VQ_BUSY = false, VQ_WAKE = null, VQ_NOW = null, VQ_IDS = [];
+function vqDb(){
+  if (!VQ_DB) VQ_DB = new Promise((res, rej) => {
+    try { const r = indexedDB.open('trening-filmy', 1); r.onupgradeneeded = () => r.result.createObjectStore('q', { keyPath: 'id' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }
+    catch (e) { rej(e); }
+  });
+  return VQ_DB;
+}
+async function vqTx(mode, fn){
+  const db = await vqDb();
+  return new Promise((res, rej) => { const t = db.transaction('q', mode), q = fn(t.objectStore('q')); t.oncomplete = () => res(q ? q.result : undefined); t.onerror = () => rej(t.error); });
+}
+async function vqAll(){
+  let saved = []; try { saved = await vqTx('readonly', s => s.getAll()) || []; } catch (e) {}
+  const by = {}; saved.concat(Object.values(VQ_MEM)).forEach(r => { if (r.key === KEY) by[r.id] = r; });
+  return Object.values(by).sort((a, b) => a.created - b.created);
+}
+async function vqPut(r){ VQ_MEM[r.id] = r; try { await vqTx('readwrite', s => s.put(r)); delete VQ_MEM[r.id]; } catch (e) {} }
+async function vqDel(id){ delete VQ_MEM[id]; delete VQ_LIVE[id]; try { localStorage.removeItem('vqp_' + id); } catch (e) {} try { await vqTx('readwrite', s => s.delete(id)); } catch (e) {} }
+const vqP = id => { try { return JSON.parse(localStorage.getItem('vqp_' + id) || '{}'); } catch (e) { return {}; } };
+const vqPSet = (id, p) => { try { localStorage.setItem('vqp_' + id, JSON.stringify(p)); } catch (e) {} };
+const vqId = (v) => [KEY, v.week, v.day, v.order, v.set].join('|');
+/** film do kolejki i od razu w drogę; arkusz kamery można zamknąć */
+async function queueVideo(ex, s0, file, row){
+  const set = setKey(row.dataset.s), v = { week: cur.week, day: cur.day, order: ex.order, set, name: ex.name, date: s0.date };
+  const r = { id: vqId(v), key: KEY, file, size: file.size, v, created: Date.now(),
+    meta: { date: s0.date, day: cur.day, name: ex.name, set, fileName: file.name, mimeType: file.type || 'video/mp4', size: file.size } };
+  await vqDel(r.id); await vqPut(r);
+  closeSheet(); vqMarks();
+  toast(navigator.onLine === false ? 'Brak sieci: film poczeka w telefonie i wyśle się sam po odzyskaniu zasięgu.'
+    : 'Film w kolejce (seria ' + setLabel(set, row.dataset.k) + '). Możesz trenować dalej.');
+  vqRun();
+}
+/** stan w pasku i oznaczenie kamer przy seriach z filmem w kolejce */
+async function vqMarks(){
+  const all = await vqAll(); VQ_IDS = all.map(r => r.id);
+  document.querySelectorAll('.set').forEach(row => {
+    const c = row.querySelector('.cam'), ex = PLAN.find(x => x.week === cur.week && x.day === cur.day && x.order === +row.dataset.o);
+    if (c && ex) c.classList.toggle('pend', VQ_IDS.indexOf(vqId({ week: cur.week, day: cur.day, order: ex.order, set: setKey(row.dataset.s) })) >= 0);
+  });
+  const bad = all.filter(r => vqP(r.id).failed).length, wait = all.length - bad;
+  if (VQ_NOW) setSync('film ' + Math.round(100 * VQ_NOW.f) + '%' + (wait > 1 ? ' · w kolejce ' + wait : ''));
+  else if (wait) setSync('filmy w kolejce: ' + wait + (navigator.onLine === false ? ' (brak sieci)' : ''));
+  else if (bad) setSync('film niewysłany – otwórz kamerę przy serii');
+}
+async function vqWake(on){
+  try {
+    if (on && !VQ_WAKE && navigator.wakeLock) VQ_WAKE = await navigator.wakeLock.request('screen');
+    if (!on && VQ_WAKE) { VQ_WAKE.release(); VQ_WAKE = null; }
+  } catch (e) { VQ_WAKE = null; }
+}
+const vqNet = e => /Failed to fetch|NetworkError|Load failed|sieć|HTTP 5|timeout/i.test(String(e && e.message));
+async function vqRun(){
+  if (VQ_BUSY || navigator.onLine === false || !KEY) return;
+  VQ_BUSY = true;
+  try {
+    for (;;) {
+      const r = (await vqAll()).find(x => !vqP(x.id).failed);
+      if (!r || navigator.onLine === false) break;
+      vqWake(true);                                             // ekran nie gaśnie, dopóki film się wysyła
+      try { await vqOne(r); }
+      catch (e) {
+        if (vqNet(e)) break;                                    // sieć: spróbujemy przy powrocie do aplikacji / sieci
+        const p = vqP(r.id); p.tries = (p.tries || 0) + 1;
+        if (/wygasła|expired/i.test(e.message)) { p.url = null; p.uploadId = null; p.next = 0; }
+        if (p.tries >= 3) p.failed = e.message;
+        vqPSet(r.id, p); delete VQ_LIVE[r.id];
+        if (!p.failed) break;
+      }
+    }
+  } finally { VQ_BUSY = false; VQ_NOW = null; vqWake(false); vqMarks(); }
+}
+function vqXhr(url, blob, range, onProg){
   return new Promise((res, rej) => {
     const x = new XMLHttpRequest();
     x.open('PUT', url);
+    if (range) x.setRequestHeader('Content-Range', range);
     x.upload.onprogress = e => { if (e.lengthComputable) onProg(e.loaded / e.total); };
     x.onload = () => {
+      if (x.status === 308) return res({ done: false });
       if (x.status === 200 || x.status === 201) {
-        try { const f = JSON.parse(x.responseText); res({ id: f.id, link: f.webViewLink || ('https://drive.google.com/file/d/' + f.id + '/view') }); }
+        try { const f = JSON.parse(x.responseText); res({ done: true, link: f.webViewLink || ('https://drive.google.com/file/d/' + f.id + '/view') }); }
         catch (e) { rej(new Error('odpowiedź Drive nieczytelna')); }
-      } else rej(new Error('Drive ' + x.status));
+      } else rej(new Error(x.status >= 500 ? 'HTTP ' + x.status : 'Drive ' + x.status));
     };
-    x.onerror = () => rej(new Error('direct-blocked'));
-    x.send(file);
+    x.onerror = () => rej(new Error('Failed to fetch'));
+    x.send(blob);
   });
 }
-async function relayUpload(meta, file, onProg){
-  const init = await call('startUpload', meta);
-  let start = 0, out = null;
-  while (start < file.size) {
-    const end = Math.min(start + init.chunk, file.size);
-    const b64 = await readB64(file.slice(start, end));
-    out = await call('uploadChunk', init.uploadId, b64, start, file.size);
-    start = end; onProg(start / file.size);
+/** jeden film: sesja → kawałki → link przy serii */
+async function vqOne(r){
+  const p = vqP(r.id), save = () => vqPSet(r.id, p);
+  const show = f => { VQ_NOW = { id: r.id, f }; vqMarks(); };
+  if (p.link) return vqDone(r, p.link);
+  if (!p.url && !p.uploadId) {
+    const init = await call('startUpload', Object.assign({ origin: location.origin }, r.meta));
+    Object.assign(p, init.url ? { url: init.url, mode: 'direct' } : { uploadId: init.uploadId, chunk: init.chunk, mode: 'relay' }, { next: 0 });
+    save(); VQ_LIVE[r.id] = 1;
   }
-  return out;
+  if (p.url && !VQ_LIVE[r.id] && p.next > 0) {                 // wznowienie: zapytaj Google, ile naprawdę doszło
+    const st = await call('uploadStatus', p.url, r.size);
+    if (st.done) { p.link = st.link; save(); return vqDone(r, st.link); }
+    if (st.expired) { p.url = null; p.next = 0; save(); return vqOne(r); }
+    p.next = st.next; save();
+  }
+  VQ_LIVE[r.id] = 1;
+  if (p.mode === 'direct') {
+    while (p.next < r.size) {
+      const end = Math.min(p.next + VQ_CHUNK, r.size), from = p.next;
+      let res;
+      try { res = await vqXhr(p.url, r.file.slice(from, end), 'bytes ' + from + '-' + (end - 1) + '/' + r.size, f => show((from + f * (end - from)) / r.size)); }
+      catch (e) {
+        if (from > 0 || navigator.onLine === false || !vqNet(e)) throw e;
+        // pierwszy kawałek odrzucony mimo sieci: przeglądarka nie puszcza wysyłki kawałkami → cały plik naraz, a potem przez serwer
+        try { res = await vqXhr(p.url, r.file, '', f => show(f)); }
+        catch (e2) { Object.assign(p, { url: null, mode: 'relay', next: 0 }); const init = await call('startUpload', r.meta); p.uploadId = init.uploadId; p.chunk = init.chunk; save(); return vqOne(r); }
+      }
+      if (res.done) { p.link = res.link; save(); return vqDone(r, res.link); }
+      p.next = end; save();
+    }
+  }
+  while (p.next < r.size) {                                     // przez serwer (gdy Google nie przyjmuje wysyłki z przeglądarki)
+    const end = Math.min(p.next + p.chunk, r.size);
+    const out = await call('uploadChunk', p.uploadId, await readB64(r.file.slice(p.next, end)), p.next, r.size);
+    p.next = end; save(); show(end / r.size);
+    if (out.done) { p.link = out.link; save(); return vqDone(r, out.link); }
+  }
+  throw new Error('wysyłka nie zakończyła się linkiem');
 }
-const NO_NET = 'Brak sieci: film dodasz po odzyskaniu zasięgu. Serie zapisują się normalnie i wyślą same.';
+async function vqDone(r, link){
+  await call('logVideo', Object.assign({ link }, r.v));
+  const suffix = ['', r.v.week, r.v.day, r.v.order, r.v.set].join('|');
+  for (const k in LOGS) if (k.endsWith(suffix)) LOGS[k].film_link = link;
+  await vqDel(r.id);
+  toast('Film wysłany: ' + r.v.name + ', seria ' + r.v.set + '.');
+  document.querySelectorAll('.set').forEach(row => { const ex = PLAN.find(x => x.week === cur.week && x.day === cur.day && x.order === +row.dataset.o); if (ex) camMark(row, ex); });
+}
+window.addEventListener('online', vqRun);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') vqRun(); });
 const camMark = (row, ex) => { const l = getLog(ex, setKey(row.dataset.s)) || {}, c = row.querySelector('.cam'); if (c) c.classList.toggle('has', !!l.film_link || !blank(l.vbt_ms) || !!l.sciezka); };
 /* ---------- śledzenie talerza na klatkach filmu: dopasowanie wzorca (SAD) na zmniejszonym szarym obrazie, co 1/30 s ---------- */
 /**
@@ -1681,8 +1804,7 @@ function vbtStage(file, ex, row, s0){
         const o = vbtOut(res), p = Object.assign(payloadOf(row, ex, s0), { vbt: o.vbt, vbtPeak: o.vbtPeak, height: o.height, path: JSON.stringify(o.path) });
         putLocal(ex, p); camMark(row, ex);
         send('logSet', p).catch(() => {});
-        if (navigator.onLine === false) { closeSheet(); toast('Analiza zapisana. Film dodasz po odzyskaniu zasięgu.'); }
-        else { sv.disabled = true; toast('Analiza zapisana, wysyłam film…'); uploadVideo(ex, s0, file, row); }
+        queueVideo(ex, s0, file, row);
       };
     } catch (err) { hint.textContent = 'Analiza przerwana: ' + err.message; }
     pg.style.display = 'none'; abort.busy = false; abort.done = true; $('#vgo').disabled = false;
@@ -1699,6 +1821,7 @@ function openCam(ex, row, s0){
   openSheet(`<h2 id="sheet-t">Film · seria ${esc(setLabel(set, row.dataset.k))}</h2><p class="sub">${esc(ex.name)}</p>
     ${l.film_link ? `<a class="btn" href="${esc(l.film_link)}" target="_blank" rel="noopener">Otwórz zapisany film</a>` : ''}
     ${saved}
+    <div id="cam-q"></div>
     ${SIMPLE ? '' : `<div class="seg" role="group" aria-label="Co zrobić z filmem"><button type="button" data-m="film">Tylko film</button><button type="button" data-m="vbt">Film + ścieżka + VBT</button></div>
     <p class="sub" id="cam-tip" hidden>Nagraj z boku, cały talerz w kadrze, telefon nieruchomo na wysokości bioder. Lekki skos jest w porządku: prędkość i wysokość liczą się z ruchu w pionie. Analiza działa w telefonie, także bez sieci.</p>`}
     <label class="btn p">${l.film_link ? 'Nagraj nowy film' : 'Nagraj film'}<input type="file" accept="video/*" capture="environment" hidden id="cam-rec"></label>
@@ -1709,13 +1832,21 @@ function openCam(ex, row, s0){
     ${SIMPLE ? '' : `<label class="fl">Prędkość z urządzenia (m/s)<input id="cam-vbt" inputmode="decimal" value="${esc(fmtKg(blank(l.vbt_ms) ? '' : l.vbt_ms))}" placeholder="np. 0,85"></label>
     <button type="button" class="btn" id="cam-vsave">Zapisz prędkość</button>`}
     <button type="button" class="btn" data-close>Zamknij</button>`);
+  vqAll().then(all => {
+    const r = all.find(x => x.id === vqId({ week: cur.week, day: cur.day, order: ex.order, set })), box = $('#cam-q'); if (!r || !box) return;
+    const p = vqP(r.id), now = VQ_NOW && VQ_NOW.id === r.id ? Math.round(100 * VQ_NOW.f) + '%' : '';
+    box.innerHTML = `<div class="vq" role="status">${p.failed ? 'Film nie został wysłany: ' + esc(p.failed) : now ? 'Film się wysyła: ' + now : 'Film czeka w kolejce' + (navigator.onLine === false ? ' (brak sieci)' : '')} · ${Math.round(r.size / 1048576)} MB<br>` +
+      (p.failed ? '<button type="button" class="btn sm" id="vq-retry">Spróbuj ponownie</button>' : '') + '<button type="button" class="btn sm" id="vq-del">Usuń z kolejki</button></div>';
+    const rt = $('#vq-retry'); if (rt) rt.onclick = () => { vqPSet(r.id, {}); closeSheet(); vqRun(); toast('Wysyłam film ponownie.'); };
+    $('#vq-del').onclick = async () => { if (VQ_NOW && VQ_NOW.id === r.id) { toast('Film właśnie się wysyła – poczekaj albo spróbuj za chwilę.'); return; } await vqDel(r.id); closeSheet(); vqMarks(); toast('Usunięto film z kolejki.'); };
+  });
   const setMode = m => { mode = m; document.querySelectorAll('#sheet [data-m]').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === m)); const t = $('#cam-tip'); if (t) t.hidden = m !== 'vbt'; };
   document.querySelectorAll('#sheet [data-m]').forEach(b => b.onclick = () => setMode(b.dataset.m));
   setMode(mode);
   $('#cam-file').onchange = $('#cam-rec').onchange = e => {
     const file = e.target.files[0]; if (!file) return;
     markStart();
-    if (mode === 'vbt') vbtStage(file, ex, row, s0); else uploadVideo(ex, s0, file, row);
+    if (mode === 'vbt') vbtStage(file, ex, row, s0); else queueVideo(ex, s0, file, row);
   };
   const vs = $('#cam-vsave');
   if (vs) vs.onclick = () => {
@@ -1724,35 +1855,6 @@ function openCam(ex, row, s0){
     send('logSet', p).catch(() => {});
     closeSheet(); toast(isNum(v) ? 'Zapisano prędkość ' + fmtKg(v) + ' m/s.' : 'Usunięto prędkość.');
   };
-}
-async function uploadVideo(ex, s0, file, row){
-  const set = setKey(row.dataset.s), msg = t => { const m = $('#cam-msg'); if (m) { m.textContent = t; m.hidden = false; } };
-  const prog = f => { const b = $('#cam-bar'); if (b) { b.style.display = 'block'; b.querySelector('i').style.width = Math.max(2, Math.round(100 * f)) + '%'; } };
-  if (navigator.onLine === false) { msg(NO_NET); return; }
-  prog(0); setSync('wgrywanie filmu…');
-  const meta = { date: s0.date, day: cur.day, name: ex.name, set, fileName: file.name, mimeType: file.type || 'video/mp4', size: file.size };
-  const t0 = Date.now();
-  try {
-    let out, mode = 'bezpośrednio';
-    try {
-      const init = await call('startUpload', Object.assign({ origin: location.origin }, meta));
-      if (!init.url) throw new Error('direct-blocked');
-      out = await directPut(init.url, file, prog);
-    } catch (e) {
-      if (e.message !== 'direct-blocked') throw e;
-      mode = 'przez serwer'; prog(0);
-      out = await relayUpload(meta, file, prog);
-    }
-    const p = Object.assign(payloadOf(row, ex, s0), { video: out.link,
-      note: 'film ' + mode + ', ' + Math.round(file.size / 1048576) + ' MB, ' + Math.round((Date.now() - t0) / 1000) + ' s' });
-    putLocal(ex, p); camMark(row, ex);
-    send('logSet', p).catch(() => {});
-    closeSheet(); toast('Film wgrany ' + mode + ' (seria ' + setLabel(set, row.dataset.k) + ').');
-  } catch (e) {
-    const b = $('#cam-bar'); if (b) b.style.display = 'none';
-    const net = /Failed to fetch|NetworkError|Load failed/i.test(e.message);
-    msg(net ? NO_NET : 'Nie udało się wgrać filmu: ' + e.message); setSync(net ? 'brak sieci – film niewysłany' : 'błąd filmu');
-  }
 }
 
 load();

@@ -61,7 +61,7 @@ function doGet(e) {
 /* ---------- API dla aplikacji na GitHub Pages ----------
  * POST (Content-Type text/plain, bez preflight CORS), body: {fn, key, args:[…]} → {ok:true, result} | {ok:false, error}
  */
-const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, saveDyspozycja, przesunJednostke };
+const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke };
 
 function doPost(e) {
   let out;
@@ -255,6 +255,48 @@ function uploadChunk(key, uploadId, b64, start, total) {
     return { done: true, id: f.id, link: f.webViewLink || ('https://drive.google.com/file/d/' + f.id + '/view') };
   }
   throw new Error('Drive upload ' + code + ': ' + res.getContentText());
+}
+
+/** Czysta funkcja: nagłówek Range z odpowiedzi 308 sesji resumable („bytes=0-1234”) → następny bajt do wysłania. */
+function rangeNext_(range) {
+  const m = /bytes=0-(\d+)/.exec(String(range || ''));
+  return m ? Number(m[1]) + 1 : 0;
+}
+const UPLOAD_URL_ = /^https:\/\/www\.googleapis\.com\/upload\/drive\/v3\/files\?[^\s]*upload_id=[\w-]+/;
+
+/**
+ * Ile bajtów filmu dotarło do Google (wznowienie po przerwie: aplikacja w tle, brak sieci, zamknięty telefon).
+ * url = adres sesji resumable z startUpload. → {next} albo {done, id, link}; sesja nieważna → {expired: true}.
+ */
+function uploadStatus(key, url, total) {
+  mustClient_(key);
+  if (!UPLOAD_URL_.test(String(url || ''))) throw new Error('Zły adres sesji wgrywania.');
+  const res = UrlFetchApp.fetch(url, { method: 'put', headers: { 'Content-Range': 'bytes */' + Number(total) },
+    payload: '', muteHttpExceptions: true, followRedirects: false });
+  const code = res.getResponseCode(), h = res.getHeaders();
+  if (code === 308) return { next: rangeNext_(h['Range'] || h['range']) };
+  if (code === 200 || code === 201) {
+    const f = JSON.parse(res.getContentText());
+    return { done: true, id: f.id, link: f.webViewLink || ('https://drive.google.com/file/d/' + f.id + '/view') };
+  }
+  if (code === 404 || code === 410) return { expired: true };
+  throw new Error('Drive status ' + code);
+}
+
+/** Link do filmu przy serii (po wgraniu w tle). Zmienia tylko film_link, a gdy serii nie ma jeszcze w Logu – dopisuje wiersz. */
+function logVideo(key, v) {
+  const client = mustClient_(key);
+  if (!/^https:\/\/drive\.google\.com\//.test(String(v.link || ''))) throw new Error('Zły link do filmu.');
+  const id = [client.id, v.week, v.day, v.order, v.set].join('|');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Log', LOG_HEADERS);
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(id).matchEntireCell(true).findNext();
+    if (hit) sh.getRange(hit.getRow(), LOG_HEADERS.indexOf('film_link') + 1).setValue(v.link);
+    else sh.appendRow([id, new Date(), client.id, v.week, v.day, v.date || today_(), v.order, v.name, v.set, '', '', '', '', '', v.link, '', '']);
+  } finally { lock.releaseLock(); }
+  return { ok: true, id: id };
 }
 
 /* ---------- POMOCNICZE ---------- */
