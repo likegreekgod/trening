@@ -411,3 +411,11 @@ test('fillBlocks_: pusty blok = ostatni blok klienta albo B1', () => {
   assert.deepEqual(plain(C.fillBlocks_(plan)), { rows: [[0, 'B1'], [2, 'B2'], [3, 'B1'], [4, 'B1']], ids: { anna: 2, bob: 2 } });
   assert.deepEqual(plain(C.fillBlocks_([{ klient: 'ewa', blok: 'B1' }])), { rows: [], ids: {} });
 });
+
+test('rangeNext_ i adres sesji: wznowienie wysyłki filmu', () => {
+  assert.deepEqual(['bytes=0-8388607', 'bytes=0-0', '', undefined, 'zły'].map(C.rangeNext_), [8388608, 1, 0, 0, 0]);
+  assert.ok(C.UPLOAD_URL_.test('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,webViewLink&upload_id=ABC-123_x'));
+  assert.ok(!C.UPLOAD_URL_.test('https://example.test/upload/drive/v3/files?upload_id=ABC'));
+  assert.ok(!C.UPLOAD_URL_.test('https://www.googleapis.com/drive/v3/files/abc'));
+  assert.ok(C.API_FNS.uploadStatus && C.API_FNS.logVideo);
+});
