@@ -40,7 +40,7 @@ Google Fonts: Big Shoulders Display 600/700/800 (nagłówki, wersaliki, liczby w
 
 ## Styl Pomost
 
-- Ostre rogi 2 px, cienkie linie zamiast kart. Ćwiczenie to sekcja z linią 2 px nad nazwą, serie to wiersze tabeli z linią 1 px.
+- ~~Ostre rogi 2 px, cienkie linie zamiast kart.~~ Zmienione 15.10.2026 na prośbę trenera (ekran wyglądał na przytłoczony): sekcje to osobne karty z zaokrągleniem 18 px i odstępem 14 px, kontrolki 10 px. Serie dalej są wierszami tabeli z linią 1 px wewnątrz karty ćwiczenia.
 - Zakładki i przełączniki podkreślone akcentem, bez pigułek.
 - Timer przerwy: ciemny pasek na całą szerokość nad dolnym menu, bursztynowe cyfry.
 - Przy recepcie mały kwadrat w kolorze talerza: ≤60% biały, 61–70% zielony, 71–80% żółty, 81–90% niebieski, >90% czerwony.
