@@ -943,3 +943,13 @@ test('Pasek skoku ciężaru i „jak poprzednia”: +2,5 / +5 / przytrzymanie +1
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
+
+test('Pasek przerwy leży na menu, nie nachodzi na nie', async () => {
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForSelector('#rest:not([hidden])');
+  const g = await p.evaluate(() => { const r = document.querySelector('#rest').getBoundingClientRect(), n = document.querySelector('.nav').getBoundingClientRect(); return [Math.round(r.bottom * 2) / 2, Math.round(n.top * 2) / 2]; });
+  assert.equal(g[0], g[1]);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'przerwa.png'), clip: { x: 0, y: 844 - 160, width: 390, height: 160 } }); }
+  await ctx.close();
+});
