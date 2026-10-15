@@ -914,3 +914,32 @@ test('Karta ćwiczenia: wiersze „+”, kg → talerze, zmiana na kolejne serie
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
+
+test('Pasek skoku ciężaru i „jak poprzednia”: +2,5 / +5 / przytrzymanie +1, ✓ przenosi na kolejne, ręczne wartości zostają', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.step[data-o="1"]');
+  const kgs = () => p.$$eval('.set[data-o="1"][data-k="p"] .kg', i => i.map(x => x.value + (x.classList.contains('auto') ? '*' : '')));
+  assert.deepEqual(await kgs(), ['50*', '50*', '50*']);                         // * = wpisane automatycznie (szare)
+  assert.equal(await p.$eval('.step[data-o="1"]', s => s.previousElementSibling.dataset.s), '1');
+  await p.click('.step[data-o="1"] [data-d="2.5"]');
+  assert.deepEqual(await kgs(), ['52,5', '52,5*', '52,5*']);
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(80);
+  assert.equal(await p.$eval('.step[data-o="1"]', s => s.previousElementSibling.dataset.s), '2');   // pasek przechodzi do następnej serii
+  assert.equal(await p.textContent('.step[data-o="1"] b'), '52,5 kg');
+  await p.click('.step[data-o="1"] [data-d="5"]');
+  assert.deepEqual(await kgs(), ['52,5', '57,5', '57,5*']);
+  const b = await p.$('.step[data-o="1"] [data-d="-2.5"]'), r = await b.boundingBox();
+  await p.mouse.move(r.x + r.width / 2, r.y + r.height / 2); await p.mouse.down(); await p.waitForTimeout(650); await p.mouse.up();
+  assert.deepEqual(await kgs(), ['52,5', '56,5', '56,5*']);                       // przytrzymanie = −1 kg
+  await p.fill('.set[data-o="1"][data-s="3"] .kg', '40'); await p.dispatchEvent('.set[data-o="1"][data-s="3"] .kg', 'change');
+  await p.fill('.set[data-o="1"][data-s="2"] .reps', '6'); await p.dispatchEvent('.set[data-o="1"][data-s="2"] .reps', 'change');
+  await p.click('.set[data-o="1"][data-s="2"] .ok'); await p.waitForTimeout(80);
+  assert.deepEqual(await kgs(), ['52,5', '56,5', '40']);                          // ręczne 40 zostaje
+  assert.equal(await p.inputValue('.set[data-o="1"][data-s="3"] .reps'), '6');    // powtórzenia poszły za serią 2
+  assert.equal(await p.textContent('.step[data-o="1"] b'), '40 kg');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.$eval('.step[data-o="1"]', e => e.scrollIntoView({ block: 'center' })); await p.screenshot({ path: path.join(SCREENS, 'skok.png') }); }
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});

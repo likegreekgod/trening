@@ -40,7 +40,7 @@
           --ink:#edf4f2;--ink-2:#cfdcd5;--muted:#a3ab86;
           --primary:#c5cfa9;--on-primary:#0f1612;--accent:#e0a34a;--on-accent:#0f1612;
           --ok:#62b07a;--warn:#e0a34a;--bad:#e3826b;
-          --panel:#050806;--light-off:#26302a;--h1:#535b3f;--h2:#747c59;--h3:#99a17a;--h4:#c5cfa9;--shadow:none;--bar:#050806;--bar-ink:#edf4f2;--bar-muted:#a3ab86;--bar-line:#26302a;color-scheme:dark}
+          --panel:#050806;--light-off:#26302a;--h1:#535b3f;--h2:#747c59;--h3:#99a17a;--h4:#c5cfa9;--shadow:none;--bar:#2e4a3b;--bar-ink:#ffffff;--bar-muted:#cfdcd5;--bar-line:#4c6555;color-scheme:dark}
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   [hidden]{display:none!important}                      /* atrybut hidden wygrywa z display:grid/flex */
@@ -50,7 +50,7 @@
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
   /* nagłówek: tydzień · jednostka · data, tytuł, statystyki (czas, serie, tonaż) */
-  header{position:sticky;top:0;z-index:5;background:var(--bar);color:var(--bar-ink);padding:10px 16px 12px}
+  header{position:sticky;top:0;z-index:5;background:var(--bar);color:var(--bar-ink);border-bottom:3px solid var(--accent);padding:10px 16px 12px}
   header .eyebrow,header #sync,header .stats span{color:var(--bar-muted)}
   header h1,header .stats b{color:var(--bar-ink)}
   header .stats span{border-left-color:var(--bar-line)}
@@ -80,7 +80,7 @@
 
   /* dolne menu: zakładka aktywna = pasek akcentu u góry */
   .nav{position:fixed;left:0;right:0;bottom:0;z-index:8;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
-       background:var(--bar);border-top:0;padding-bottom:env(safe-area-inset-bottom,0px)}
+       background:var(--bar);border-top:2px solid var(--accent);padding-bottom:env(safe-area-inset-bottom,0px)}
   .nav button{position:relative;border:0;background:transparent;min-height:58px;display:grid;place-items:center;gap:2px;padding:6px 0;
               font:600 12px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--bar-muted)}
   .nav svg{width:22px;height:22px}
@@ -222,6 +222,10 @@
   .card.fold .fsum{display:block}
   .card.fold .chev{transform:rotate(45deg);margin-top:4px}
   .card.fold{padding-top:10px;padding-bottom:10px}
+  .set[data-st=""] input.auto{color:var(--muted)}
+  .step{display:grid;grid-template-columns:1fr 1fr 1.3fr 1fr 1fr;gap:6px;align-items:center;margin:2px 0 6px;padding:6px;border-radius:var(--r);background:var(--surface-2)}
+  .step button{min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);font:600 15px/1 var(--f-mono);touch-action:manipulation;-webkit-user-select:none;user-select:none}
+  .step b{text-align:center;font:700 22px/1 var(--f-display);color:var(--ink)}
   .cam.pend{border:2px dashed var(--accent);color:var(--accent);background:transparent}
   .vq{border-left:4px solid var(--accent);padding:4px 0 4px 10px;margin:8px 0;font-size:15px}
   .vq .btn{margin:6px 6px 0 0}
@@ -725,7 +729,7 @@ function helpCard(){
     <li>Ciężar i powtórzenia są już wpisane według planu. Zmieniaj je tylko, jeśli zrobiłeś inaczej.</li>
     <li>Po każdej serii wybierz, jak było ciężko, i dotknij <b>✓</b>. Zielony = zapisane.</li>
     <li>Całe ćwiczenie poszło zgodnie z planem? Dotknij <b>„✓ Wszystko jak w planie”</b>.</li>
-    <li>Rozgrzewkę dopiszesz wierszem <b>„+ rozgrzewka”</b> nad seriami. Zmiana ciężaru lub powtórzeń w serii przechodzi sama na kolejne niezrobione serie. Dotknięcie podkreślonego ciężaru pokazuje talerze.</li>
+    <li>Rozgrzewkę dopiszesz wierszem <b>„+ rozgrzewka”</b> nad seriami. Po ✓ kolejne serie same przejmują ciężar i powtórzenia (szare liczby = wpisane automatycznie). Pasek −5 / −2,5 / +2,5 / +5 pod bieżącą serią zmienia ją i kolejne; przytrzymanie ±2,5 daje ±1 kg. Dotknięcie podkreślonego ciężaru pokazuje talerze.</li>
     <li>Seria się nie udała? Dotknij <b>✓</b> jeszcze raz: zmieni się w czerwony <b>✕</b> (nieudana). Trzecie dotknięcie czyści pole. Drop set (od razu lżej, do zmęczenia) dodajesz wierszem <b>„+ drop set”</b> pod seriami. Zrobione ćwiczenie samo się zwija; dotknij nazwy, żeby je otworzyć.</li>
     <li>Żółte pole = seria czeka na wysłanie (brak zasięgu). Wyśle się sama.</li>
     <li>Rwanie i podrzut: dotknij świateł i oceń podejście (Łatwo, Średnio, Walka, Spalone). Pod spodem pojawi się propozycja ciężaru na kolejne serie.</li>
@@ -1228,6 +1232,7 @@ function rowHtml(ex, set, kind, def){
   const ph = kind === 'w' || kind === 'd' ? ' placeholder="kg"' : '', phr = kind === 'w' || kind === 'd' ? ' placeholder="powt."' : '';
   const rpeCell = kind === 'w' ? `<div class="lbl">${SIMPLE ? 'rozgrzewka' : 'rozgrz.'}</div>` : effortSel(l);
   const oly = isOly(ex) && kind !== 'w', q = oly ? rateOf(l) : '';
+  const auto = v => (kind === 'p' || kind === 'x') && blank(v) ? ' auto' : '';     // szare: z planu albo z poprzedniej serii
   // kamera przy serii roboczej, dodatkowej i drop (nie przy rozgrzewce); wypełniona = jest film albo prędkość
   const has = !!l.film_link || !blank(l.vbt_ms) || !!l.sciezka;
   const camCell = kind === 'w' ? '<div></div>'
@@ -1238,15 +1243,15 @@ function rowHtml(ex, set, kind, def){
     : `<span>${setLabel(set, kind)}</span>`;
   if (oly) return `<div class="set ${cls} oly k-${kind} ${fail ? 'fail' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}" data-st="${st}" data-rate="${q}">
       <div class="n">${num0}</div>
-      <input inputmode="decimal" class="kg" value="${esc(fmtKg(kg))}"${ph} aria-label="kg">
-      <input inputmode="numeric" class="reps" value="${esc(reps)}"${phr} aria-label="powtórzenia">
+      <input inputmode="decimal" class="kg${auto(l.kg)}" value="${esc(fmtKg(kg))}"${ph} aria-label="kg">
+      <input inputmode="numeric" class="reps${auto(l.powt)}" value="${esc(reps)}"${phr} aria-label="powtórzenia">
       <button type="button" class="lt ${queued(ex, set) ? 'pend' : ''}" aria-label="Ocena: ${q ? RATE[q].label : 'brak'} – dotknij, aby ocenić">${lightsHtml(q)}<small>${q ? RATE[q].label : 'oceń'}</small></button>
       ${camCell}
     </div>`;
   return `<div class="set ${cls} k-${kind} ${fail ? 'fail' : ''} ${drop ? 't-d' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}" data-st="${st}">
       <div class="n">${num0}</div>
-      <input inputmode="decimal" class="kg" value="${esc(fmtKg(kg))}"${ph} aria-label="kg">
-      <input inputmode="numeric" class="reps" value="${esc(reps)}"${phr} aria-label="powtórzenia">
+      <input inputmode="decimal" class="kg${auto(l.kg)}" value="${esc(fmtKg(kg))}"${ph} aria-label="kg">
+      <input inputmode="numeric" class="reps${auto(l.powt)}" value="${esc(reps)}"${phr} aria-label="powtórzenia">
       ${rpeCell}
       <button class="ok ${queued(ex, set) ? 'pend' : ''}" aria-label="Seria ${STATE_TXT[st]}">${st === 'x' ? '✕' : '✓'}</button>
       ${camCell}
@@ -1360,13 +1365,48 @@ function sessClick(e){
 function refreshAll(o, saved){
   const b = document.querySelector(`[data-all="${o}"]`);
   if (b) b.hidden = !document.querySelector(`.set[data-o="${o}"][data-k="p"][data-st=""]`);
-  foldSum(o);
+  foldSum(o); placeStep(o);
   if (saved && cardDone(o) && foldGet()[foldKey(o)] === undefined) setTimeout(() => {   // ostatnia seria zapisana → zwiń i pokaż następne
     if (!cardDone(o)) return;
     setFold(o, true);
     const next = document.querySelector(`.card[data-card="${o}"]`) && document.querySelector(`.card[data-card="${o}"]`).nextElementSibling;
     if (next && next.classList.contains('card')) next.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 900);
+}
+/* kolejne serie jak poprzednia: niezrobione serie robocze po tej przejmują jej kg i powt. (tylko pola automatyczne, szare) */
+const workRows = o => [...document.querySelectorAll(`.set[data-o="${o}"]`)].filter(r => r.dataset.k === 'p' || r.dataset.k === 'x');
+function followRow(row){
+  const all = workRows(row.dataset.o);
+  all.slice(all.indexOf(row) + 1).forEach(r => {
+    if (r.dataset.st) return;
+    ['.kg', '.reps'].forEach(c => { const x = r.querySelector(c), s = row.querySelector(c); if (x && s && x.classList.contains('auto')) x.value = s.value; });
+  });
+}
+/* pasek skoku ciężaru pod pierwszą niezrobioną serią roboczą: zmienia ją i kolejne; przytrzymanie ±2,5 = ±1 kg */
+const STEP_HOLD_MS = 500;
+function placeStep(o){
+  document.querySelectorAll(`.step[data-o="${o}"]`).forEach(x => x.remove());
+  const row = workRows(o).find(r => !r.dataset.st), i = row && row.querySelector('.kg'), kg = i ? num(i.value) : NaN;
+  if (!row || !isNum(kg)) return;                                             // BW, „max” itp.: bez paska
+  row.insertAdjacentHTML('afterend', `<div class="step" data-o="${o}" role="group" aria-label="Ciężar serii ${esc(row.dataset.s)} i kolejnych">
+    <button type="button" data-d="-5" aria-label="minus 5 kg">−5</button><button type="button" data-d="-2.5" data-f="-1" aria-label="minus 2,5 kg (przytrzymaj: minus 1 kg)">−2,5</button>
+    <b>${esc(fmtKg(kg))} kg</b>
+    <button type="button" data-d="2.5" data-f="1" aria-label="plus 2,5 kg (przytrzymaj: plus 1 kg)">+2,5</button><button type="button" data-d="5" aria-label="plus 5 kg">+5</button></div>`);
+  let held = null, used = false;
+  row.nextElementSibling.querySelectorAll('button').forEach(b => {
+    b.onpointerdown = () => { used = false; clearTimeout(held); if (b.dataset.f) held = setTimeout(() => { used = true; bump(o, +b.dataset.f); }, STEP_HOLD_MS); };
+    b.onpointerup = b.onpointerleave = b.onpointercancel = () => clearTimeout(held);
+    b.oncontextmenu = e => e.preventDefault();
+    b.onclick = () => { if (used) { used = false; return; } bump(o, +b.dataset.d); };
+  });
+}
+function bump(o, d){
+  const row = workRows(o).find(r => !r.dataset.st); if (!row) return;
+  const i = row.querySelector('.kg'), v = Math.max(0, Math.round((num(i.value) + d) * 100) / 100);
+  i.value = fmtKg(v); i.classList.remove('auto');
+  workRows(o).slice(workRows(o).indexOf(row) + 1).forEach(r => { const x = r.querySelector('.kg'); if (!r.dataset.st && x && x.classList.contains('auto')) x.value = fmtKg(v); });
+  placeStep(o);
+  const ex = PLAN.find(x => x.week === cur.week && x.day === cur.day && x.order === +o); if (ex) updateSug(ex);
 }
 /* zwijanie ćwiczeń: stan w localStorage per jednostka; brak wpisu = zwinięte, gdy wszystkie serie robocze zrobione */
 const FK = 'fold_' + KEY;
@@ -1436,6 +1476,7 @@ function bindRow(row, ex, s0){
     const p = payloadOf(row, ex, s0);
     if (!was && st && kind !== 'w') startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce
     putLocal(ex, p);
+    if (st) followRow(row);
     refreshStats(); updateSug(ex); refreshAll(ex.order, !!st);
     send('logSet', p).then(() => { if (row.dataset.st === st) setState(row, st); }).catch(() => {});
     if (st && navigator.vibrate) navigator.vibrate(st === 'x' ? [30, 60, 30] : 30);
@@ -1494,18 +1535,12 @@ function bind(exs, s0){
     todo.forEach(btn => btn.click());
     toast(todo.length ? 'Zapisano ' + todo.length + ' ' + plural(todo.length, 'serię', 'serie', 'serii') + '.' : 'Wszystkie serie są już zapisane.');
   });
-  // zmiana kg / powt. w serii przechodzi na kolejne niezrobione serie robocze, które miały tę samą wartość
-  document.querySelectorAll('.sets').forEach(box => {
-    box.addEventListener('focusin', e => { const i = e.target.closest('.kg, .reps'); if (i) i.dataset.was = i.value; });
-    box.addEventListener('change', e => {
-      const i = e.target.closest('.kg, .reps'), row = i && i.closest('.set'); if (!row || (row.dataset.k !== 'p' && row.dataset.k !== 'x')) return;
-      const was = i.dataset.was, c = i.classList.contains('kg') ? '.kg' : '.reps', all = rowsOf(row.dataset.o).filter(r => r.dataset.k === 'p' || r.dataset.k === 'x');
-      let n = 0;
-      all.slice(all.indexOf(row) + 1).forEach(r => { const x = r.querySelector(c); if (x && !r.dataset.st && x.value === was && x.value !== i.value) { x.value = i.value; n++; } });
-      i.dataset.was = i.value;
-      if (n) toast('Zmieniono też ' + n + ' ' + plural(n, 'kolejną serię', 'kolejne serie', 'kolejnych serii') + '.');
-    });
-  });
+  // ręczna zmiana kg / powt. w serii roboczej: wartość klienta (już nie szara) i przejście na kolejne serie z wartościami automatycznymi
+  document.querySelectorAll('.sets').forEach(box => box.addEventListener('change', e => {
+    const i = e.target.closest('.kg, .reps'), row = i && i.closest('.set'); if (!row || (row.dataset.k !== 'p' && row.dataset.k !== 'x')) return;
+    i.classList.remove('auto'); followRow(row); placeStep(row.dataset.o);
+  }));
+  exs.forEach(ex => placeStep(ex.order));
   // + rozgrzewka (R1, R2…) przed seriami roboczymi
   document.querySelectorAll('[data-warm]').forEach(b => b.onclick = () => {
     const o = b.dataset.warm, ex = exOf(o), ws = rowsOf(o, 'w'), set = 'R' + (ws.length + 1);
@@ -1518,7 +1553,7 @@ function bind(exs, s0){
     const work = rowsOf(o).filter(r => r.dataset.k === 'p' || r.dataset.k === 'x'), last = work[work.length - 1];
     const set = ex.sets + rowsOf(o, 'x').length + 1;
     addRow(o, rowHtml(ex, set, 'x', { kg: num(last.querySelector('.kg').value), reps: num(last.querySelector('.reps').value) }), last);
-    bindRow(rowOf(o, set), ex, s0); refreshDel(o);
+    bindRow(rowOf(o, set), ex, s0); refreshDel(o); placeStep(o);
   });
   // + drop set (D1, D2…) po ostatniej serii, ~80% ciężaru poprzedniej
   document.querySelectorAll('[data-drop]').forEach(b => b.onclick = () => {
@@ -1535,7 +1570,7 @@ function bind(exs, s0){
     const row = del.closest('.set'), o = row.dataset.o, ex = exOf(o), set = setKey(row.dataset.s);
     const saved = !!getLog(ex, set), suffix = lid(ex, set);
     Object.keys(LOGS).forEach(k => { if (k.endsWith(suffix)) delete LOGS[k]; });
-    row.remove(); refreshDel(o); refreshStats();
+    row.remove(); refreshDel(o); refreshStats(); placeStep(o);
     if (saved) send('deleteSet', { week: cur.week, day: cur.day, order: ex.order, set }).catch(() => {});
     toast('Usunięto serię ' + set + '.');
   };

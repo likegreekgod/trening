@@ -10,6 +10,13 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Poprawka trenera: alias wolno dać tylko temu samemu ćwiczeniu pod inną nazwą. Regresja albo wariant z innym sprzętem to osobne ćwiczenie: Hanging Knee Raise (regresja Hanging Leg Raise), Pin Overhead Squat (przysiad OHS z martwego punktu na dole), Ring Dip (dipy na kółkach), Push-Up Hold (izometria, nie pompka) mają własne wiersze bez filmu, a błędne aliasy są wycofane (`CW_WYCOFANE`, „Wczytaj bazę ćwiczeń” usuwa je z arkusza).
 - „Wczytaj bazę ćwiczeń” można klikać wielokrotnie: dopisuje nowe ćwiczenia i aliasy, usuwa puste wiersze z samą nazwą, które mają już dopasowanie; ręcznych wpisów nie zmienia. Wiersz z samą nazwą nie zasłania aliasu.
 
+## 2026-10-15 · Seria jak poprzednia i pasek skoku ciężaru
+
+- W ciemnym motywie pasy góra/dół są zielone jak w jasnym (czarny nie odcinał się od tła), z pomarańczową linią.
+- „+ seria” tylko dla klientów z `dod_serie` (bez zmian, decyzja trenera).
+- Ciężar i powtórzenia wpisane automatycznie (z planu albo z poprzedniej serii) są szare. Po ✓ i po ręcznej zmianie kolejne niezrobione serie przejmują wartości tej serii, ale tylko w polach szarych: wpisane ręcznie zostają.
+- Pod pierwszą niezrobioną serią roboczą jest pasek −5 · −2,5 · ciężar · +2,5 · +5 (przytrzymanie ±2,5 = ±1 kg); zmienia tę serię i kolejne szare. Po ✓ przechodzi do następnej serii. Bez paska, gdy ciężar nie jest liczbą (BW).
+
 ## 2026-10-15 · Pasy, zwijanie ćwiczeń, opcje w tabeli
 
 - Nagłówek i dolne menu to pełnoszerokie ciemne pasy (bez zaokrągleń), żeby oddzielały się od kart.
