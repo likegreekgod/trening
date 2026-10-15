@@ -10,6 +10,13 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Poprawka trenera: alias wolno dać tylko temu samemu ćwiczeniu pod inną nazwą. Regresja albo wariant z innym sprzętem to osobne ćwiczenie: Hanging Knee Raise (regresja Hanging Leg Raise), Pin Overhead Squat (przysiad OHS z martwego punktu na dole), Ring Dip (dipy na kółkach), Push-Up Hold (izometria, nie pompka) mają własne wiersze bez filmu, a błędne aliasy są wycofane (`CW_WYCOFANE`, „Wczytaj bazę ćwiczeń” usuwa je z arkusza).
 - „Wczytaj bazę ćwiczeń” można klikać wielokrotnie: dopisuje nowe ćwiczenia i aliasy, usuwa puste wiersze z samą nazwą, które mają już dopasowanie; ręcznych wpisów nie zmienia. Wiersz z samą nazwą nie zasłania aliasu.
 
+## 2026-10-15 · Pasy, zwijanie ćwiczeń, opcje w tabeli
+
+- Nagłówek i dolne menu to pełnoszerokie ciemne pasy (bez zaokrągleń), żeby oddzielały się od kart.
+- Ćwiczenie zwija się do jednej linii (nazwa, „3 z 3 serii · tonaż · ✓”) po zapisaniu ostatniej serii roboczej i ekran przewija się do następnego; dotknięcie nazwy zwija i rozwija. Ręczny wybór zostaje zapamiętany w telefonie.
+- Rząd przycisków pod seriami zastąpiły wiersze w tabeli (wybrany wariant C): „+ rozgrzewka” nad seriami, „+ seria” i „+ drop set” pod nimi. Talerze: dotknięcie podkreślonego ciężaru w recepcie. „Jak 1. seria” zastąpiło przenoszenie zmiany kg / powt. na kolejne niezrobione serie, które miały tę samą wartość.
+- Zegar: start sprzed ponad 4 h bez zakończonego treningu to zapomniany start — zegar pokazuje „–”, a najbliższa zapisana seria liczy czas od nowa (trener widział 139 h).
+
 ## 2026-10-15 · Karty zamiast linii
 
 - Trener: aplikacja wygląda chaotycznie i przytłaczająco. Wzór: osobne kafelki z odstępem. Każda sekcja (ćwiczenie, jednostka w Planie, karta Postępu, Dyspozycja, komentarze trenera) jest teraz kartą na jaśniejszym tle z zaokrągleniem i odstępem 14 px; kontrolki mają zaokrąglone rogi. Kolory, czcionki i rozmiary bez zmian; wszystkie przyciski dalej ≥ 44 px.

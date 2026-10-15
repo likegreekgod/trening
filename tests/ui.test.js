@@ -881,3 +881,36 @@ test('Film w kolejce: kawałki po 8 MB, przerwa w połowie, wznowienie po ponown
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
+
+// --- układ: zwijanie ćwiczeń, opcje w tabeli, zmiana przechodzi na kolejne serie, zapomniany start zegara ---
+test('Karta ćwiczenia: wiersze „+”, kg → talerze, zmiana na kolejne serie, zwijanie samo i ręcznie, zegar po 4 h', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await p.$('[data-copy]'), null);                                   // „Jak 1. seria” zastąpione
+  assert.deepEqual(await p.$$eval('.card[data-card="1"] .ghost', b => b.map(x => x.textContent.trim().replace(/\s+/g, ' '))), ['+ rozgrzewka', '+ seria zostało 1', '+ drop set']);
+  await p.click('.card[data-card="1"] .kgb'); assert.equal(await p.textContent('#sheet-t'), 'Talerze'); await p.click('#sheet [data-close]');
+  await p.fill('.set[data-o="1"][data-s="1"] .kg', '55'); await p.dispatchEvent('.set[data-o="1"][data-s="1"] .kg', 'change');
+  assert.deepEqual(await p.$$eval('.set[data-o="1"][data-k="p"] .kg', i => i.map(x => x.value)), ['55', '55', '55']);
+  await p.fill('.set[data-o="1"][data-s="3"] .kg', '50'); await p.dispatchEvent('.set[data-o="1"][data-s="3"] .kg', 'change');
+  await p.fill('.set[data-o="1"][data-s="1"] .kg', '60'); await p.dispatchEvent('.set[data-o="1"][data-s="1"] .kg', 'change');
+  assert.deepEqual(await p.$$eval('.set[data-o="1"][data-k="p"] .kg', i => i.map(x => x.value)), ['60', '60', '50']);   // inną wartość zostawia
+  await p.evaluate(() => { const m = tGet(); m[skey()] = Date.now() - 6 * 864e5; tSet(m); tick(); });      // start sprzed 6 dni
+  assert.equal(await p.textContent('#stats .clock'), '–');
+  await p.click('[data-all="1"]');
+  assert.match(await p.textContent('#stats .clock'), /^00:0\d$/);                 // pierwsza zapisana seria liczy od teraz
+  await p.waitForSelector('.card[data-card="1"].fold', { timeout: 3000 });        // ostatnia seria → ćwiczenie się zwija
+  assert.match(await p.textContent('.card[data-card="1"] .fsum'), /^3 z 3 serii · [\d ]+ kg · ✓$/);
+  assert.equal(await p.getAttribute('.card[data-card="1"] .fold-b', 'aria-expanded'), 'false');
+  assert.equal(await p.isVisible('.set[data-o="1"][data-s="1"]'), false);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.$eval('.card[data-card="1"]', e => { e.scrollIntoView({ block: 'center' }); document.querySelector('#toast').style.display = 'none'; }); await p.screenshot({ path: path.join(SCREENS, 'zwiniete.png') }); }
+  await p.click('.card[data-card="1"] .fold-b');                                   // otwarcie ręczne zostaje po ponownym wejściu
+  assert.equal(await p.isVisible('.set[data-o="1"][data-s="1"]'), true);
+  await p.reload(); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await p.$('.card[data-card="1"].fold'), null);
+  await p.click('.card[data-card="2"] .fold-b');                                   // niezrobione też można zwinąć
+  assert.equal(await p.$eval('.card[data-card="2"]', c => c.classList.contains('fold')), true);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
