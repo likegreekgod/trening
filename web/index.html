@@ -83,9 +83,9 @@
        background:var(--bar);border-top:0;padding-bottom:env(safe-area-inset-bottom,0px)}
   .nav button{position:relative;border:0;background:transparent;min-height:58px;display:grid;place-items:center;gap:2px;padding:6px 0;
               font:600 12px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--bar-muted)}
-  .nav svg{width:22px;height:22px}
-  .nav button[aria-current="page"]{color:var(--bar-ink)}
-  .nav button[aria-current="page"]::before{content:"";position:absolute;top:0;left:22%;right:22%;height:3px;background:var(--accent)}
+  .nav svg{width:22px;height:22px;box-sizing:content-box;padding:3px 16px;border-radius:999px;transition:background-color .15s}
+  .nav button[aria-current="page"]{color:var(--bar-ink);font-weight:700}
+  .nav button[aria-current="page"] svg{background:var(--accent);color:var(--on-accent)}        /* wybrana zakładka: kapsuła za ikoną */
 
   /* ekran Plan */
   .tabs{border-bottom:1px solid var(--line);margin:8px 0 0}
