@@ -80,12 +80,12 @@
 
   /* dolne menu: zakładka aktywna = pasek akcentu u góry */
   .nav{position:fixed;left:0;right:0;bottom:0;z-index:8;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
-       background:var(--bar);border-top:2px solid var(--accent);padding-bottom:env(safe-area-inset-bottom,0px)}
+       background:var(--bar);border-top:0;padding-bottom:env(safe-area-inset-bottom,0px)}
   .nav button{position:relative;border:0;background:transparent;min-height:58px;display:grid;place-items:center;gap:2px;padding:6px 0;
               font:600 12px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--bar-muted)}
   .nav svg{width:22px;height:22px}
   .nav button[aria-current="page"]{color:var(--bar-ink)}
-  .nav button[aria-current="page"]::before{content:"";position:absolute;top:-1px;left:22%;right:22%;height:3px;background:var(--accent)}
+  .nav button[aria-current="page"]::before{content:"";position:absolute;top:0;left:22%;right:22%;height:3px;background:var(--accent)}
 
   /* ekran Plan */
   .tabs{border-bottom:1px solid var(--line);margin:8px 0 0}
@@ -402,7 +402,8 @@
   .rx .badge + b,.rx b{white-space:nowrap}
 
   /* timer przerwy: ciemny pasek na całą szerokość nad dolnym menu, bursztynowe cyfry */
-  #rest{position:fixed;left:0;right:0;bottom:calc(59px + env(safe-area-inset-bottom,0px));z-index:7;background:var(--panel);color:var(--light-white);
+  #rest{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));          /* = wysokość menu: przerwa leży na menu */
+       z-index:7;background:var(--panel);color:var(--light-white);
         padding:8px 16px 0;display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center}
   .rtop{display:grid;min-width:0}
   .rlbl{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
