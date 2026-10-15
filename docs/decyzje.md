@@ -10,6 +10,10 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Poprawka trenera: alias wolno dać tylko temu samemu ćwiczeniu pod inną nazwą. Regresja albo wariant z innym sprzętem to osobne ćwiczenie: Hanging Knee Raise (regresja Hanging Leg Raise), Pin Overhead Squat (przysiad OHS z martwego punktu na dole), Ring Dip (dipy na kółkach), Push-Up Hold (izometria, nie pompka) mają własne wiersze bez filmu, a błędne aliasy są wycofane (`CW_WYCOFANE`, „Wczytaj bazę ćwiczeń” usuwa je z arkusza).
 - „Wczytaj bazę ćwiczeń” można klikać wielokrotnie: dopisuje nowe ćwiczenia i aliasy, usuwa puste wiersze z samą nazwą, które mają już dopasowanie; ręcznych wpisów nie zmienia. Wiersz z samą nazwą nie zasłania aliasu.
 
+## 2026-10-15 · Karty zamiast linii
+
+- Trener: aplikacja wygląda chaotycznie i przytłaczająco. Wzór: osobne kafelki z odstępem. Każda sekcja (ćwiczenie, jednostka w Planie, karta Postępu, Dyspozycja, komentarze trenera) jest teraz kartą na jaśniejszym tle z zaokrągleniem i odstępem 14 px; kontrolki mają zaokrąglone rogi. Kolory, czcionki i rozmiary bez zmian; wszystkie przyciski dalej ≥ 44 px.
+
 ## 2026-10-14 · Kolejka filmów
 
 - Uwaga klienta: aplikacja nie działa w tle, filmy wgrywają się ciężko. Przyczyna: film szedł jednym kawałkiem, więc wyjście z aplikacji albo wygaszony ekran zrywały wysyłkę, a ponowna próba szła od zera wolniejszą drogą przez serwer.

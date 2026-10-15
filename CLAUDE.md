@@ -144,7 +144,7 @@ Konwencje Damiana:
 ### Zasady v2
 
 - v2 powstaje w `web/`. `apps-script/Index.html` zostaje bez zmian (tylko poprawki błędów).
-- Styl Pomost: ostre rogi 2 px, linie zamiast kart, zakładki podkreślone akcentem. Tokeny kolorów z tabeli w specyfikacji, jasny i ciemny motyw przez `prefers-color-scheme`.
+- Styl Pomost z kartami (od 15.10.2026): każda sekcja (ćwiczenie, jednostka w Planie, wykres, dyspozycja) to osobna karta na tle `--surface` z zaokrągleniem `--rc` i odstępem `--gap`; kontrolki zaokrąglone `--r`; pasek stanu karty jako cień wewnętrzny z lewej. Zakładki podkreślone akcentem. Tokeny kolorów z tabeli w specyfikacji, jasny i ciemny motyw przez `prefers-color-scheme`.
 - Etykiety ≥ 12 px (obok zasad dostępności wyżej).
 - Czcionki (Big Shoulders Display, Instrument Sans, IBM Plex Mono) jako woff2 w `web/fonts/` (licencja OFL), dopisane do cache w `sw.js`. Bez linku do Google Fonts; to jedyny wyjątek od zasady „wszystko inline”.
 - Różnice między klientami tylko flagami z zakładki Klienci (`zamiana`, `skala`, `sufit_oly`) zwracanymi w `cfg` z getData.
