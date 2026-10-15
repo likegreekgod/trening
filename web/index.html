@@ -33,14 +33,14 @@
         --f-display:"Big Shoulders Display","Arial Narrow",system-ui,sans-serif;
         --f-body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
         --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
-        --r:10px;--rc:18px;--gap:14px;--shadow:0 1px 2px rgba(23,34,28,.06),0 4px 14px rgba(23,34,28,.05);
+        --r:10px;--rc:18px;--gap:14px;--bar:#31473a;--bar-ink:#ffffff;--bar-muted:#cfdcd5;--bar-line:#4c6555;--shadow:0 1px 2px rgba(23,34,28,.06),0 4px 14px rgba(23,34,28,.05);
         color-scheme:light}
   @media (prefers-color-scheme: dark){
     :root{--bg:#0f1612;--surface:#18221c;--surface-2:#223029;--line:#2f3f36;
           --ink:#edf4f2;--ink-2:#cfdcd5;--muted:#a3ab86;
           --primary:#c5cfa9;--on-primary:#0f1612;--accent:#e0a34a;--on-accent:#0f1612;
           --ok:#62b07a;--warn:#e0a34a;--bad:#e3826b;
-          --panel:#050806;--light-off:#26302a;--h1:#535b3f;--h2:#747c59;--h3:#99a17a;--h4:#c5cfa9;--shadow:none;color-scheme:dark}
+          --panel:#050806;--light-off:#26302a;--h1:#535b3f;--h2:#747c59;--h3:#99a17a;--h4:#c5cfa9;--shadow:none;--bar:#050806;--bar-ink:#edf4f2;--bar-muted:#a3ab86;--bar-line:#26302a;color-scheme:dark}
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   [hidden]{display:none!important}                      /* atrybut hidden wygrywa z display:grid/flex */
@@ -50,7 +50,13 @@
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
   /* nagłówek: tydzień · jednostka · data, tytuł, statystyki (czas, serie, tonaż) */
-  header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 16px 10px}
+  header{position:sticky;top:0;z-index:5;background:var(--bar);color:var(--bar-ink);padding:10px 16px 12px}
+  header .eyebrow,header #sync,header .stats span{color:var(--bar-muted)}
+  header h1,header .stats b{color:var(--bar-ink)}
+  header .stats span{border-left-color:var(--bar-line)}
+  header .sc button{border-color:var(--bar-muted);color:var(--bar-muted)}
+  header .sc button[aria-pressed="true"]{background:var(--bar-ink);color:var(--bar)}
+  header .tag{border-color:var(--bar-muted);color:var(--bar-ink)}
   .hrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
   .eyebrow{font:600 12px/1.3 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
   h1{margin:2px 0 0;font:800 25px/1.02 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink-2);
@@ -74,11 +80,11 @@
 
   /* dolne menu: zakładka aktywna = pasek akcentu u góry */
   .nav{position:fixed;left:0;right:0;bottom:0;z-index:8;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
-       background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+       background:var(--bar);border-top:0;padding-bottom:env(safe-area-inset-bottom,0px)}
   .nav button{position:relative;border:0;background:transparent;min-height:58px;display:grid;place-items:center;gap:2px;padding:6px 0;
-              font:600 12px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+              font:600 12px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--bar-muted)}
   .nav svg{width:22px;height:22px}
-  .nav button[aria-current="page"]{color:var(--ink-2)}
+  .nav button[aria-current="page"]{color:var(--bar-ink)}
   .nav button[aria-current="page"]::before{content:"";position:absolute;top:-1px;left:22%;right:22%;height:3px;background:var(--accent)}
 
   /* ekran Plan */
@@ -198,6 +204,24 @@
   .cam{height:44px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--muted);display:grid;place-items:center;padding:0}
   .cam svg{width:22px;height:22px}
   .cam.has{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .ghost{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;border:1px dashed var(--line);border-radius:var(--r);background:transparent;
+         color:var(--muted);font:600 13px/1.2 var(--f-body);letter-spacing:.04em;padding:0 12px;text-align:left}
+  .ghost small{font:500 12px/1 var(--f-mono);letter-spacing:0;color:var(--muted)}
+  .ghost.w{margin:6px 0 2px}
+  .ghost.d{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+  .ghosts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+  .ghosts .ghost:only-child,.ghosts .ghost[hidden] + .ghost{grid-column:1 / -1}
+  .kgb{display:inline-flex;align-items:center;min-height:44px;border:0;border-radius:0;background:transparent;padding:0 2px;margin:-10px 0;
+       font:500 16px var(--f-mono);color:var(--ink);text-decoration:underline dotted 1.5px;text-underline-offset:4px}
+  .ch{align-items:center}
+  .fold-b{flex:1;min-width:0;min-height:44px;border:0;background:transparent;padding:0;text-align:left;display:flex;align-items:flex-start;gap:10px;color:inherit}
+  .ft{flex:1;min-width:0;display:grid;gap:3px}
+  .chev{flex:none;width:10px;height:10px;margin:8px 4px 0 2px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-135deg);transition:transform .2s}
+  .fsum{font:500 13px/1.2 var(--f-mono);color:var(--muted);display:none}
+  .card.fold .cbody{display:none}
+  .card.fold .fsum{display:block}
+  .card.fold .chev{transform:rotate(45deg);margin-top:4px}
+  .card.fold{padding-top:10px;padding-bottom:10px}
   .cam.pend{border:2px dashed var(--accent);color:var(--accent);background:transparent}
   .vq{border-left:4px solid var(--accent);padding:4px 0 4px 10px;margin:8px 0;font-size:15px}
   .vq .btn{margin:6px 6px 0 0}
@@ -537,6 +561,7 @@ function startOf(){
 function restartClock(){
   const m = tGet(); m[skey()] = m['r|' + skey()] = Date.now(); tSet(m); tick();
 }
+const STALE_H = 4;           // tyle godzin od startu bez zamknięcia treningu → start był zapomniany, liczymy od nowa
 const LATE_START_MIN = 30;   // tyle bez żadnej zapisanej serii od startu → pierwsza seria zaczyna liczenie od nowa
 function markStart(){
   if (!cur.day || curSess().id) return;           // jednostka już zamknięta – nie liczymy od nowa
@@ -553,7 +578,7 @@ function clockText(){
   const s = curSess();
   if (s.id) return blank(s.czas_min) ? '–' : s.czas_min + ' min';
   const st = startOf();
-  return st ? fmtDur(Date.now() - st) : '00:00';
+  return !st ? '00:00' : Date.now() - st > STALE_H * 3600000 ? '–' : fmtDur(Date.now() - st);
 }
 function tick(){ document.querySelectorAll('.clock').forEach(e => e.textContent = clockText()); }
 setInterval(tick, 1000);
@@ -700,8 +725,8 @@ function helpCard(){
     <li>Ciężar i powtórzenia są już wpisane według planu. Zmieniaj je tylko, jeśli zrobiłeś inaczej.</li>
     <li>Po każdej serii wybierz, jak było ciężko, i dotknij <b>✓</b>. Zielony = zapisane.</li>
     <li>Całe ćwiczenie poszło zgodnie z planem? Dotknij <b>„✓ Wszystko jak w planie”</b>.</li>
-    <li>Rozgrzewkę możesz dopisać przyciskiem <b>„+ Rozgrzewka”</b>, a <b>„⇣ Jak 1. seria”</b> przepisuje ciężar i powtórzenia do kolejnych serii.</li>
-    <li>Seria się nie udała? Dotknij <b>✓</b> jeszcze raz: zmieni się w czerwony <b>✕</b> (nieudana). Trzecie dotknięcie czyści pole. Drop set (od razu lżej, do zmęczenia) dodajesz przyciskiem <b>„+ Drop”</b>.</li>
+    <li>Rozgrzewkę dopiszesz wierszem <b>„+ rozgrzewka”</b> nad seriami. Zmiana ciężaru lub powtórzeń w serii przechodzi sama na kolejne niezrobione serie. Dotknięcie podkreślonego ciężaru pokazuje talerze.</li>
+    <li>Seria się nie udała? Dotknij <b>✓</b> jeszcze raz: zmieni się w czerwony <b>✕</b> (nieudana). Trzecie dotknięcie czyści pole. Drop set (od razu lżej, do zmęczenia) dodajesz wierszem <b>„+ drop set”</b> pod seriami. Zrobione ćwiczenie samo się zwija; dotknij nazwy, żeby je otworzyć.</li>
     <li>Żółte pole = seria czeka na wysłanie (brak zasięgu). Wyśle się sama.</li>
     <li>Rwanie i podrzut: dotknij świateł i oceń podejście (Łatwo, Średnio, Walka, Spalone). Pod spodem pojawi się propozycja ciężaru na kolejne serie.</li>
     <li>Dodałeś wiersz przez pomyłkę? Dotknij <b>✕</b> przy jego numerze, a potem <b>„usuń?”</b>.</li>
@@ -1078,12 +1103,13 @@ function renderTrening(){
   bind(exs, s0);
   bindNotes();
   vqMarks();
+  bindFold(exs);
   refreshStats();
   $('#go-dysp').onclick = () => { TAB = 'dysp'; render(); window.scrollTo(0, 0); };
 }
 function rxPro(ex){
   const hasKg = typeof ex.kg === 'number', z = plateZone(ex.pct);
-  return `${ex.sets}×${esc(ex.reps)}` + (ex.kg !== '' ? ` · <b>${esc(fmtKg(ex.kg))}${hasKg ? ' kg' : ''}</b>` : '') +
+  return `${ex.sets}×${esc(ex.reps)}` + (ex.kg !== '' ? ' · ' + (typeof ex.kg === 'number' ? `<button type="button" class="kgb" data-plates="${ex.order}" aria-label="Talerze na ${esc(fmtKg(ex.kg))} kg">${esc(fmtKg(ex.kg))} kg</button>` : `<b>${esc(fmtKg(ex.kg))}</b>`) : '') +
          (ex.pct !== null ? ` <span class="badge">${z ? `<i class="zone ${z}" aria-hidden="true"></i>` : ''}${Math.round(ex.pct * 1000) / 10}%</span>` : '') +
          (isOly(ex) ? maxToday(ex) : ex.rpe === '' ? '' : SCALE === 'RIR' ? ` · RIR ≥${rirMin(ex.rpe)}` : ` · RPE ≤${esc(fmtKg(ex.rpe))}`);
 }
@@ -1139,7 +1165,7 @@ function rxSimple(ex){
   const repTxt = /^\d+$/.test(reps) ? `${r} ${plural(r, 'powtórzenie', 'powtórzenia', 'powtórzeń')}`
     : range ? `${range[1]}–${range[2]} ${plural(+range[2], 'powtórzenie', 'powtórzenia', 'powtórzeń')}` : esc(reps);
   return `${n} ${plural(n, 'seria', 'serie', 'serii')} po ${repTxt}` +
-         (ex.kg !== '' ? ` · <b>${esc(fmtKg(ex.kg))}${typeof ex.kg === 'number' ? ' kg' : ''}</b>` : '') + (isOly(ex) ? maxToday(ex) : '');
+         (ex.kg !== '' ? ' · ' + (typeof ex.kg === 'number' ? `<button type="button" class="kgb" data-plates="${ex.order}" aria-label="Talerze na ${esc(fmtKg(ex.kg))} kg">${esc(fmtKg(ex.kg))} kg</button>` : `<b>${esc(fmtKg(ex.kg))}</b>`) : '') + (isOly(ex) ? maxToday(ex) : '');
 }
 function hintSimple(ex){
   if (typeof ex.rpe !== 'number' || ex.rpe >= 10) return '';
@@ -1241,16 +1267,15 @@ function card(ex){
     : SIMPLE
     ? `<div class="set-head set simple"><div class="lbl">#</div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">jak ciężko?</div><div></div><div></div></div>`
     : `<div class="set-head set"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">${SCALE}</div><div></div><div></div></div>`;
-  const tools = `<div class="tools">
-      <button class="btn sm" data-warm="${ex.order}">+ Rozgrzewka</button>
-      ${ex.sets > 1 ? `<button class="btn sm" data-copy="${ex.order}">⇣ Jak 1. seria</button>` : ''}
-      ${allowX > 0 ? `<button class="btn sm x" data-extra="${ex.order}" ${extra >= allowX ? 'hidden' : ''}>+ Seria (${Math.max(0, allowX - extra)})</button>` : ''}
-      <button class="btn sm d" data-drop="${ex.order}">+ Drop</button>
-      <button class="btn sm" data-plates="${ex.order}">Talerze</button>
+  const tools = `<div class="ghosts">
+      ${allowX > 0 ? `<button type="button" class="ghost" data-extra="${ex.order}" ${extra >= allowX ? 'hidden' : ''}>+ seria <small>zostało ${Math.max(0, allowX - extra)}</small></button>` : ''}
+      <button type="button" class="ghost d" data-drop="${ex.order}">+ drop set</button>
     </div>`;
+  const warmRow = `<button type="button" class="ghost w" data-warm="${ex.order}">+ rozgrzewka</button>`;
   const dropInfo = plannedDrops(ex) ? `<div class="hint">+ ${plannedDrops(ex)} × drop set po ostatniej serii (ok. −20% ciężaru, do upadku technicznego).</div>` : '';
   return `<div class="card ${ex.prio === 'K' ? 'k' : ''} ${oly ? 'oly' : ''}" data-card="${ex.order}">
-    <div class="ch"><div class="cn">${esc(ex.name)}</div><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span></div>
+    <div class="ch"><button type="button" class="fold-b" data-fold="${ex.order}" aria-expanded="true"><span class="ft"><span class="cn">${esc(ex.name)}</span><span class="fsum"></span></span><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span><i class="chev" aria-hidden="true"></i></button></div>
+    <div class="cbody">
     ${ex.swap ? `<div class="swapped"><span>Zamiast: ${esc(ex.swap.from)} · ${esc(ex.swap.why)}</span><button type="button" class="btn sm" data-unswap="${ex.order}">Cofnij zamianę</button></div>`
       : SWAP ? `<button type="button" class="btn sm swb" data-swap="${ex.order}">⇄ Zamień ćwiczenie</button>` : ''}
     ${!ex.swap ? (ex.infos || []).map((i, n, a) => `<a class="btn sm inf" href="${esc(i.u)}" target="_blank" rel="noopener">▶ ${a.length > 1 ? esc(i.n) : 'Jak wykonać'}</a>`).join('') : ''}
@@ -1260,9 +1285,11 @@ function card(ex){
     ${dropInfo}
     ${ex.note ? `<div class="note">${esc(ex.note)}</div>` : ''}
     ${head}
+    ${warmRow}
     <div class="sets">${rows}</div>
     ${tools}
     ${SIMPLE && !oly ? `<button class="btn all" data-all="${ex.order}" ${allDone ? 'hidden' : ''}>✓ Wszystko jak w planie</button>` : ''}
+    </div>
   </div>`;
 }
 /* ---------- podsumowanie: przyciski zamiast suwaków, ból z wyborem miejsca ---------- */
@@ -1330,9 +1357,36 @@ function sessClick(e){
   return false;
 }
 /** „✓ Wszystko jak w planie” tylko wtedy, gdy zostały niezapisane serie z planu (po ręcznym odhaczeniu znika, po wyczyszczeniu wraca) */
-function refreshAll(o){
+function refreshAll(o, saved){
   const b = document.querySelector(`[data-all="${o}"]`);
   if (b) b.hidden = !document.querySelector(`.set[data-o="${o}"][data-k="p"][data-st=""]`);
+  foldSum(o);
+  if (saved && cardDone(o) && foldGet()[foldKey(o)] === undefined) setTimeout(() => {   // ostatnia seria zapisana → zwiń i pokaż następne
+    if (!cardDone(o)) return;
+    setFold(o, true);
+    const next = document.querySelector(`.card[data-card="${o}"]`) && document.querySelector(`.card[data-card="${o}"]`).nextElementSibling;
+    if (next && next.classList.contains('card')) next.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 900);
+}
+/* zwijanie ćwiczeń: stan w localStorage per jednostka; brak wpisu = zwinięte, gdy wszystkie serie robocze zrobione */
+const FK = 'fold_' + KEY;
+function foldGet(){ try { return JSON.parse(localStorage.getItem(FK) || '{}'); } catch (e) { return {}; } }
+const foldKey = o => [cur.week, cur.day, o].join('|');
+const work = o => [...document.querySelectorAll(`.set[data-o="${o}"]:not([data-k="w"])`)];
+const cardDone = o => { const w = work(o); return w.length > 0 && w.every(r => r.dataset.st); };
+function foldSum(o){
+  const s = document.querySelector(`.card[data-card="${o}"] .fsum`); if (!s) return;
+  const w = work(o), done = w.filter(r => r.dataset.st), ton = done.reduce((a, r) => { const kg = num(r.querySelector('.kg').value), n = num(r.querySelector('.reps').value); return a + (r.dataset.st === 'ok' && isNum(kg) && isNum(n) ? kg * n : 0); }, 0);
+  s.textContent = done.length + ' z ' + w.length + ' ' + plural(w.length, 'serii', 'serii', 'serii') + (ton ? ' · ' + fmtKg(Math.round(ton)) + ' kg' : '') + (cardDone(o) ? ' · ✓' : '');
+}
+function setFold(o, on, keep = true){
+  const c = document.querySelector(`.card[data-card="${o}"]`); if (!c) return;
+  c.classList.toggle('fold', on); c.querySelector('.fold-b').setAttribute('aria-expanded', String(!on));
+  if (keep) { const m = foldGet(); m[foldKey(o)] = on ? 1 : 0; try { localStorage.setItem(FK, JSON.stringify(m)); } catch (e) {} }
+}
+function bindFold(exs){
+  exs.forEach(ex => { const st = foldGet()[foldKey(ex.order)]; foldSum(ex.order); setFold(ex.order, st === undefined ? cardDone(ex.order) : st === 1, false); });
+  document.querySelectorAll('[data-fold]').forEach(b => b.onclick = () => setFold(b.dataset.fold, !b.closest('.card').classList.contains('fold')));
 }
 /** stan pola odhaczenia: '' (puste) → ok (✓ zrobiona) → x (✕ nieudana, FAIL); pend = czeka na zapis / w kolejce */
 function setState(row, st, pend){
@@ -1372,7 +1426,7 @@ function bindRow(row, ex, s0){
   const save = (st, oc) => {
     // start dawno temu, a to pierwsza zapisana seria: trening był włączony przypadkiem albo za wcześnie
     const t0 = tGet()[skey()];
-    if (st && t0 && !curSess().id && Date.now() - t0 > LATE_START_MIN * 60000 && !document.querySelector('.set[data-st]:not([data-st=""])')) {
+    if (st && t0 && !curSess().id && (Date.now() - t0 > STALE_H * 3600000 || Date.now() - t0 > LATE_START_MIN * 60000 && !document.querySelector('.set[data-st]:not([data-st=""])'))) {
       restartClock(); toast('Czas treningu liczę od teraz.');
     }
     markStart();
@@ -1382,7 +1436,7 @@ function bindRow(row, ex, s0){
     const p = payloadOf(row, ex, s0);
     if (!was && st && kind !== 'w') startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce
     putLocal(ex, p);
-    refreshStats(); updateSug(ex); refreshAll(ex.order);
+    refreshStats(); updateSug(ex); refreshAll(ex.order, !!st);
     send('logSet', p).then(() => { if (row.dataset.st === st) setState(row, st); }).catch(() => {});
     if (st && navigator.vibrate) navigator.vibrate(st === 'x' ? [30, 60, 30] : 30);
   };
@@ -1423,7 +1477,7 @@ function bind(exs, s0){
       last.querySelector('.n').insertAdjacentHTML('beforeend', '<button class="del" aria-label="usuń serię">✕</button>');
     });
     const b = document.querySelector(`[data-extra="${o}"]`);
-    if (b) { const left = allowedExtra(ex) - rowsOf(o, 'x').length; b.hidden = left <= 0; b.textContent = '+ Seria (' + Math.max(0, left) + ')'; }
+    if (b) { const left = allowedExtra(ex) - rowsOf(o, 'x').length; b.hidden = left <= 0; b.innerHTML = '+ seria <small>zostało ' + Math.max(0, left) + '</small>'; }
   };
   const addRow = (o, html, after, before) => {
     if (after) after.insertAdjacentHTML('afterend', html); else before.insertAdjacentHTML('beforebegin', html);
@@ -1440,17 +1494,17 @@ function bind(exs, s0){
     todo.forEach(btn => btn.click());
     toast(todo.length ? 'Zapisano ' + todo.length + ' ' + plural(todo.length, 'serię', 'serie', 'serii') + '.' : 'Wszystkie serie są już zapisane.');
   });
-  // skopiuj kg / powt. / RPE z 1. serii do pozostałych niezaznaczonych serii roboczych i dodatkowych
-  document.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
-    const o = b.dataset.copy, src = rowOf(o, 1);
-    let n = 0;
-    rowsOf(o).filter(r => r.dataset.k === 'p' || r.dataset.k === 'x').forEach(r => {
-      if (r === src || r.dataset.st) return;
-      ['.kg', '.reps', '.rpe'].forEach(c => { if (src.querySelector(c) && r.querySelector(c)) r.querySelector(c).value = src.querySelector(c).value; });
-      n++;
+  // zmiana kg / powt. w serii przechodzi na kolejne niezrobione serie robocze, które miały tę samą wartość
+  document.querySelectorAll('.sets').forEach(box => {
+    box.addEventListener('focusin', e => { const i = e.target.closest('.kg, .reps'); if (i) i.dataset.was = i.value; });
+    box.addEventListener('change', e => {
+      const i = e.target.closest('.kg, .reps'), row = i && i.closest('.set'); if (!row || (row.dataset.k !== 'p' && row.dataset.k !== 'x')) return;
+      const was = i.dataset.was, c = i.classList.contains('kg') ? '.kg' : '.reps', all = rowsOf(row.dataset.o).filter(r => r.dataset.k === 'p' || r.dataset.k === 'x');
+      let n = 0;
+      all.slice(all.indexOf(row) + 1).forEach(r => { const x = r.querySelector(c); if (x && !r.dataset.st && x.value === was && x.value !== i.value) { x.value = i.value; n++; } });
+      i.dataset.was = i.value;
+      if (n) toast('Zmieniono też ' + n + ' ' + plural(n, 'kolejną serię', 'kolejne serie', 'kolejnych serii') + '.');
     });
-    if (n) markStart();
-    toast(n ? 'Uzupełniono ' + n + ' ' + plural(n, 'serię', 'serie', 'serii') + ' jak 1. seria.' : 'Brak serii do uzupełnienia.');
   });
   // + rozgrzewka (R1, R2…) przed seriami roboczymi
   document.querySelectorAll('[data-warm]').forEach(b => b.onclick = () => {
