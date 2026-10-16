@@ -469,3 +469,17 @@ test('Ćwiczenia: kolumna „glowna” robi z nazwy klienta alias; exNames_ do w
   assert.deepEqual(Array.from(C.missingExercises_([{ cwiczenie: 'młotki' }, { cwiczenie: 'coś' }], rows)), ['coś']);
   assert.equal(C.CW_HEADERS[C.CW_HEADERS.length - 1], 'glowna');
 });
+
+test('errRow_, errRecent_: błędy z aplikacji w zakładce Błędy i w Przeglądzie', () => {
+  const now = new Date('2026-10-16T10:00:00Z');
+  assert.deepEqual(plain(C.errRow_('anna', { kind: 'film', msg: '  Drive\n500 ', ver: 'v24', ua: 'Mozilla/5.0  (Linux)' }, now)), [now.toISOString(), 'anna', 'film', 'Drive 500', 'v24', 'Mozilla/5.0 (Linux)']);
+  assert.equal(C.errRow_('anna', { kind: 'cokolwiek', msg: 'x' }, now)[2], 'js');
+  assert.equal(C.errRow_('anna', { msg: 'a'.repeat(1000) }, now)[3].length, 400);
+  assert.equal(C.errRow_('anna', { msg: ' ' }, now), null);
+  const errs = [{ kiedy: new Date('2026-10-15T08:00:00Z'), klient: 'anna', rodzaj: 'zapis' }, { kiedy: '2026-10-14T08:00:00Z', klient: 'Anna', rodzaj: 'zapis' },
+    { kiedy: '2026-10-13T08:00:00Z', klient: 'anna', rodzaj: 'film' }, { kiedy: '2026-10-01T08:00:00Z', klient: 'anna', rodzaj: 'js' }, { kiedy: '2026-10-15T08:00:00Z', klient: 'bob', rodzaj: 'js' }];
+  assert.equal(C.errRecent_(errs, 'anna', '2026-10-16', 7), '1× film, 2× zapis');
+  assert.equal(C.errRecent_([], 'anna', '2026-10-16', 7), '');
+  assert.ok(C.API_FNS.getExNames && C.API_FNS.logError && typeof C.onEdit === 'function');
+  assert.equal(C.PRZ_HEADERS[C.PRZ_HEADERS.length - 1], 'bledy_7dni');
+});

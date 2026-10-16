@@ -958,6 +958,7 @@ test('Pasek przerwy leży na menu, nie nachodzi na nie', async () => {
 test('Własny trening: Plan → wyszukiwarka z bazy, własna nazwa, zapis W1, trening jak każdy, „+ ćwiczenie”, ponowne otwarcie', async () => {
   const calls = [], data = Object.assign({}, DATA, { plan: DATA.plan.slice(), exNames: [['Hammer Curl', 1], ['EZ-Curl', 1], ['Barbell Curl', 0], ['Pull-up', 1]] });
   const api = b => {                                                             // serwer: zapis jednostki do Planu
+    if (b.fn === 'getExNames') return data.exNames;
     if (b.fn !== 'addOwnUnit') return null;
     const u = b.args[0];
     data.plan = data.plan.filter(r => !(r.week === u.week && r.day === u.day)).concat(u.exercises.map((e, i) => ({ week: u.week, day: u.day, title: 'Własny · ' + u.title, date: u.date, order: i + 1,
@@ -969,6 +970,7 @@ test('Własny trening: Plan → wyszukiwarka z bazy, własna nazwa, zapis W1, tr
   await p.click('#nav [data-tab="plan"]'); await p.click('#own-new');
   assert.equal(await p.textContent('#sheet-t'), 'Własny trening');
   assert.match(await p.textContent('#ow-res'), /Twoje ćwiczenia/);                // pusto: ćwiczenia z planu
+  await p.waitForFunction(() => EXN.list.length > 0);                          // nazwy z bazy pobrane dopiero teraz
   await p.fill('#ow-q', 'curl'); await p.dispatchEvent('#ow-q', 'input');
   assert.deepEqual(await p.$$eval('#ow-res .ow-add', b => b.map(x => x.textContent.trim())), ['Hammer Curlfilm', 'EZ-Curlfilm', 'Barbell Curl', '+ Dodaj „curl” jako nowe ćwiczenie']);
   await p.click('#ow-res .ow-add[data-n="Hammer Curl"]');
@@ -1013,4 +1015,16 @@ test('Własny trening: Plan → wyszukiwarka z bazy, własna nazwa, zapis W1, tr
   await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.set'); await t2.p.click('#nav [data-tab="plan"]');
   assert.equal(await t2.p.$('#own-new'), null);
   await t2.ctx.close();
+});
+
+test('Błędy aplikacji: zgłoszenie do arkusza, ten sam błąd raz dziennie', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.evaluate(() => { setTimeout(() => { throw new Error('test błędu'); }, 0); setTimeout(() => { throw new Error('test błędu'); }, 5); });
+  await p.waitForTimeout(300);
+  const e = calls.filter(c => c.fn === 'logError').map(c => c.args[0]);
+  assert.equal(e.length, 1);
+  assert.equal(e[0].kind, 'js'); assert.match(e[0].msg, /test błędu/);
+  await ctx.close();
 });

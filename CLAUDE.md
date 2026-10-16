@@ -69,6 +69,8 @@ Kolumna `data` w Sesjach to data z planu; faktyczny dzień treningu to `start` (
 
 **Przegląd** (liczony w `podsumowanie`, `computeOverview_`): jeden wiersz na aktywnego klienta, najpilniejsi na górze; `pilnosc` = 3 × sygnały czerwone + pomarańczowe (ból > 3/10, FAIL, dyspozycja, zaległe jednostki, brak treningu, koniec planu), ostatni trening, ten tydzień zrobione/plan, uwagi klienta, filmy z 7 dni. Progi i okna: stała `PRZ` i `docs/plan-v3.md`.
 
+**Niezawodność**: `cwRowsCached_` (Ćwiczenia w CacheService w kawałkach, `cwCacheClear_`, prosty wyzwalacz `onEdit`), `getData.ms` (czasy etapów), `ownWrite_` (własny trening bez przepisywania Planu), zakładka Błędy (`logError`, `errRow_`, `errRecent_`; w aplikacji `reportErr`, limit 5 dziennie).
+
 **Własny trening klienta** (`addOwnUnit`, `ownRows_`, `ownRecent_`; aplikacja `openOwn` / `applyOwn`, lib `ownWeek`, `ownNextDay`, `exSearch`): jednostki W1, W2… z `Plan.zrodlo = klient`; `own_(r)` wyłącza je z wykonania planu (computeSummary_, computeBlocks_, computeOverview_) i chroni przy `mergePlan_`. `getData` zwraca `row.own`, `cfg.own` (Klienci M „wlasne”) i `exNames` do wyszukiwarki. Ćwiczenia: kolumna `glowna` = alias ćwiczenia głównego (`exIndex_` drugi przebieg, `cwMerge_` przenosi do aliasów).
 
 **Kolejka filmów** (web/index.html, `queueVideo` / `vqRun` / `vqOne`): plik w IndexedDB `trening-filmy`, postęp sesji w localStorage `vqp_<id>`; wysyłka kawałkami po 8 MB na sesję resumable z `startUpload` (z Origin), awaryjnie cały plik naraz, a potem przez serwer (`uploadChunk`). Wznowienie pyta `uploadStatus` (serwer odczytuje Range, bo przeglądarka go nie widzi), link przy serii zapisuje `logVideo` (tylko film_link). Test UI symuluje przerwę i wznowienie po przeładowaniu.

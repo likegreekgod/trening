@@ -10,6 +10,12 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Poprawka trenera: alias wolno dać tylko temu samemu ćwiczeniu pod inną nazwą. Regresja albo wariant z innym sprzętem to osobne ćwiczenie: Hanging Knee Raise (regresja Hanging Leg Raise), Pin Overhead Squat (przysiad OHS z martwego punktu na dole), Ring Dip (dipy na kółkach), Push-Up Hold (izometria, nie pompka) mają własne wiersze bez filmu, a błędne aliasy są wycofane (`CW_WYCOFANE`, „Wczytaj bazę ćwiczeń” usuwa je z arkusza).
 - „Wczytaj bazę ćwiczeń” można klikać wielokrotnie: dopisuje nowe ćwiczenia i aliasy, usuwa puste wiersze z samą nazwą, które mają już dopasowanie; ręcznych wpisów nie zmienia. Wiersz z samą nazwą nie zasłania aliasu.
 
+## 2026-10-16 · Niezawodność: szybsze otwarcie, bezpieczny zapis, zakładka Błędy
+
+- Pomiar 16.10 (profil trenera): otwarcie aplikacji 4–5 s, odpowiedź 230 KB, w tym 40 KB listy ćwiczeń potrzebnej tylko przy własnym treningu. Lista idzie teraz osobno (`getExNames`, w telefonie na dobę), a zakładka Ćwiczenia jest w pamięci podręcznej skryptu (6 h; czyszczona po menu i każdej ręcznej edycji zakładki przez `onEdit`). `getData` zwraca `ms` z czasami etapów, żeby mierzyć dalej, zanim ruszymy Log.
+- Własny trening nie przepisuje już całej zakładki Plan (ryzyko nadpisania ręcznej zmiany trenera): usuwa tylko swoje wiersze i dopisuje nowe na końcu.
+- Zakładka **Błędy**: aplikacja zgłasza błędy skryptu, zapisy odrzucone przez serwer, zapisy czekające w kolejce ponad dobę mimo sieci i filmy, których nie udało się wysłać. Najwyżej 5 dziennie na klienta, ten sam opis raz dziennie, ostatnie 3000 wpisów. W Przeglądzie kolumna `bledy_7dni` (bez sygnału: najpierw zobaczymy, ile tego jest).
+
 ## 2026-10-16 · Własny trening klienta
 
 - Klient może złożyć trening poza planem: Plan → „+ własny trening”, ćwiczenia z wyszukiwarki (najpierw z jego planu, potem cała baza) albo pod własną nazwą. Robi go jak każdy inny (serie, filmy, przerwy, podsumowanie) i może dopisać ćwiczenia („+ ćwiczenie”). Usunąć można tylko świeżo dodane, nie te z zapisanymi seriami.
