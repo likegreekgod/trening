@@ -314,3 +314,19 @@ test('coachNotes: komentarze trenera do serii, filmu i treningu', () => {
   assert.equal(L.coachNotes([Object.assign({}, logs[2])], [])[0].key, n[0].key);
   assert.deepEqual(L.coachNotes([], []), []); assert.deepEqual(L.coachNotes(undefined, undefined), []);
 });
+
+test('ownWeek, ownNextDay, exSearch: własny trening klienta', () => {
+  const plan = [{ week: 1, day: 'T1', date: '2026-10-05' }, { week: 1, day: 'T2', date: '2026-10-07' }, { week: 2, day: 'T1', date: '2026-10-12' },
+    { week: 2, day: 'W1', date: '2026-10-20', own: true }, { week: 2, day: 'W3', date: '2026-10-21', own: true }];
+  assert.deepEqual(['2026-10-01', '2026-10-06', '2026-10-12', '2026-10-30'].map(d => L.ownWeek(plan, d)), [1, 1, 2, 2]);
+  assert.equal(L.ownWeek([], '2026-10-01'), 1);
+  assert.deepEqual([L.ownNextDay(plan, 2), L.ownNextDay(plan, 1)], ['W4', 'W1']);
+  const base = [['Hammer Curl', 1], ['EZ-Curl', 1], ['Barbell Curl', 0], ['Back Squat', 1], ['Łańcuch – wiosłowanie', 0]];
+  assert.deepEqual(L.exSearch(['Uginanie młotkowe', 'Hammer Curl'], base, 'curl').map(r => [r.name, r.film, r.mine]),
+    [['Hammer Curl', true, true], ['EZ-Curl', true, false], ['Barbell Curl', false, false]]);       // najpierw ćwiczenia z planu
+  assert.deepEqual(L.exSearch(['Uginanie młotkowe'], base, '').map(r => r.name), ['Uginanie młotkowe']);   // pusto = tylko swoje
+  assert.deepEqual(L.exSearch([], base, 'lancuch').map(r => r.name), ['Łańcuch – wiosłowanie']);           // bez polskich znaków
+  assert.deepEqual(L.exSearch([], base, 'curl hammer').map(r => r.name), ['Hammer Curl']);
+  assert.equal(L.exSearch([], base.concat(Array.from({ length: 30 }, (_, i) => ['Curl ' + i, 0])), 'curl').length, 12);
+  assert.deepEqual([...L.lightWeeks([{ week: 1, sets: 3, reps: '5', kg: 100 }, { week: 2, sets: 3, reps: '5', kg: 100 }, { week: 2, sets: 9, reps: '10', kg: 50, own: true }])], []);
+});

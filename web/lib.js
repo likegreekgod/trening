@@ -77,6 +77,7 @@
   L.lightWeeks = plan => {
     const ton = {};
     plan.forEach(r => {
+      if (r.own) return;                                                       // własny trening klienta nie zmienia obrazu planu
       const kg = typeof r.kg === 'number' ? r.kg : NaN, reps = L.repsDefault(r.reps);
       ton[r.week] = (ton[r.week] || 0) + (kg > 0 && reps > 0 ? (Number(r.sets) || 0) * reps * kg : 0);
     });
@@ -89,6 +90,32 @@
   };
 
   /** „Blok B2 · tydz. 1”: numer tygodnia liczony od pierwszego tygodnia bloku; bez kolumny blok → null */
+  /* ---------- własny trening klienta ---------- */
+  /** tydzień planu dla daty: ostatni tydzień, którego pierwsza jednostka trenera wypada nie później niż ta data (inaczej pierwszy) */
+  L.ownWeek = (plan, date) => {
+    const first = {};
+    plan.forEach(r => { if (r.own || !r.date) return; if (!first[r.week] || r.date < first[r.week]) first[r.week] = r.date; });
+    const ws = Object.keys(first).map(Number).sort((a, b) => a - b);
+    if (!ws.length) return Math.max(1, ...plan.map(r => Number(r.week) || 1));
+    return ws.filter(w => first[w] <= date).pop() || ws[0];
+  };
+  /** następna wolna nazwa własnej jednostki w tygodniu: W1, W2… */
+  L.ownNextDay = (plan, week) => {
+    const n = plan.filter(r => r.week === week && /^W\d+$/.test(r.day)).map(r => +r.day.slice(1));
+    return 'W' + ((n.length ? Math.max(...n) : 0) + 1);
+  };
+  /**
+   * wyszukiwarka ćwiczeń: najpierw ćwiczenia z planu klienta, potem baza [[nazwa, film]]; wszystkie słowa zapytania muszą
+   * wystąpić w nazwie (bez wielkości liter i polskich znaków). → [{name, film, mine}]
+   */
+  L.exSearch = (planNames, base, q, limit = 12) => {
+    const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
+    const words = fold(q).split(/\s+/).filter(Boolean), hit = n => words.every(w => fold(n).includes(w)), seen = {}, out = [];
+    const film = {}; (base || []).forEach(b => { film[fold(b[0])] = !!b[1]; });
+    (planNames || []).forEach(n => { const k = fold(n); if (!seen[k] && hit(n)) { seen[k] = 1; out.push({ name: n, film: !!film[k], mine: true }); } });
+    if (words.length) (base || []).forEach(b => { const k = fold(b[0]); if (!seen[k] && hit(b[0])) { seen[k] = 1; out.push({ name: b[0], film: !!b[1], mine: false }); } });
+    return out.slice(0, limit);
+  };
   L.blockInfo = (plan, week) => {
     const r = plan.find(x => x.week === week && x.block);
     if (!r) return null;

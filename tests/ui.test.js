@@ -953,3 +953,64 @@ test('Pasek przerwy leży na menu, nie nachodzi na nie', async () => {
   if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'przerwa.png'), clip: { x: 0, y: 844 - 160, width: 390, height: 160 } }); }
   await ctx.close();
 });
+
+// --- własny trening klienta ---
+test('Własny trening: Plan → wyszukiwarka z bazy, własna nazwa, zapis W1, trening jak każdy, „+ ćwiczenie”, ponowne otwarcie', async () => {
+  const calls = [], data = Object.assign({}, DATA, { plan: DATA.plan.slice(), exNames: [['Hammer Curl', 1], ['EZ-Curl', 1], ['Barbell Curl', 0], ['Pull-up', 1]] });
+  const api = b => {                                                             // serwer: zapis jednostki do Planu
+    if (b.fn !== 'addOwnUnit') return null;
+    const u = b.args[0];
+    data.plan = data.plan.filter(r => !(r.week === u.week && r.day === u.day)).concat(u.exercises.map((e, i) => ({ week: u.week, day: u.day, title: 'Własny · ' + u.title, date: u.date, order: i + 1,
+      name: e.name, prio: 'A', sets: e.sets, reps: e.reps, pct: null, kg: e.kg === '' ? '' : Number(e.kg.replace(',', '.')), rpe: '', note: '', extra: null, drop: 0, group: '', block: '', swaps: [], infos: [], parts: [], own: true })));
+    return { ok: true };
+  };
+  const { ctx, p } = await page(calls, false, { data, api });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('#nav [data-tab="plan"]'); await p.click('#own-new');
+  assert.equal(await p.textContent('#sheet-t'), 'Własny trening');
+  assert.match(await p.textContent('#ow-res'), /Twoje ćwiczenia/);                // pusto: ćwiczenia z planu
+  await p.fill('#ow-q', 'curl'); await p.dispatchEvent('#ow-q', 'input');
+  assert.deepEqual(await p.$$eval('#ow-res .ow-add', b => b.map(x => x.textContent.trim())), ['Hammer Curlfilm', 'EZ-Curlfilm', 'Barbell Curl', '+ Dodaj „curl” jako nowe ćwiczenie']);
+  await p.click('#ow-res .ow-add[data-n="Hammer Curl"]');
+  await p.fill('#ow-q', 'Wznosy z gumą'); await p.dispatchEvent('#ow-q', 'input');
+  await p.click('#ow-res .ow-new');
+  await p.fill('#ow-list [data-i="1"][data-f="sets"]', '2'); await p.dispatchEvent('#ow-list [data-i="1"][data-f="sets"]', 'input');
+  await p.fill('#ow-list [data-i="0"][data-f="kg"]', '12,5'); await p.dispatchEvent('#ow-list [data-i="0"][data-f="kg"]', 'input');
+  await p.fill('#ow-title', 'Ramiona');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'wlasny.png') }); }
+  await p.click('#ow-save');
+  await p.waitForSelector('#sheet', { state: 'hidden' });
+  const u = calls.find(c => c.fn === 'addOwnUnit').args[0];
+  assert.deepEqual([u.week, u.day, u.title, u.exercises], [1, 'W1', 'Ramiona', [{ name: 'Hammer Curl', sets: 3, reps: '10', kg: '12,5' }, { name: 'Wznosy z gumą', sets: 2, reps: '10', kg: '' }]]);
+  assert.match(await p.textContent('#eyebrow'), /W1/);
+  assert.equal(await p.textContent('#title'), 'Własny · Ramiona');
+  assert.deepEqual(await p.$$eval('.card .fold-b .cn', e => e.map(x => x.textContent)), ['Hammer Curl', 'Wznosy z gumą']);
+  assert.equal(await p.inputValue('.set[data-o="1"][data-s="1"] .kg'), '12,5');
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(80);
+  assert.deepEqual((({ day, order, set, name }) => ({ day, order, set, name }))(lastSet(calls)), { day: 'W1', order: 1, set: 1, name: 'Hammer Curl' });
+  await p.click('#own-add');
+  assert.equal(await p.textContent('#sheet-t'), 'Dodaj ćwiczenie');
+  assert.equal((await p.$$('#ow-list .ow-it.old')).length, 2);                   // istniejących nie da się usunąć
+  await p.fill('#ow-q', 'pull'); await p.dispatchEvent('#ow-q', 'input'); await p.click('#ow-res .ow-add[data-n="Pull-up"]');
+  await p.click('#ow-save'); await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.equal((await p.$$('.card[data-card]')).length, 3);
+  await p.reload(); await p.waitForSelector('.set');                            // po ponownym otwarciu trening jest (z serwera)
+  await p.click('#nav [data-tab="plan"]');
+  assert.match(await p.textContent('#plan'), /W1.*Własny · Ramiona.*własny.*3 ćwiczenia/s);
+  assert.deepEqual(await a11y(p), []);
+  // zapis, który nie doszedł (brak sieci), czeka w kolejce i jest widoczny po ponownym otwarciu, zanim serwer go dostanie
+  await p.evaluate(() => { const q = qGet(); q.push({ fn: 'addOwnUnit', payload: { week: 1, day: 'W2', date: '2026-10-08', title: '', exercises: [{ name: 'Plank', sets: 3, reps: '30 s', kg: '' }] } }); qSet(q); });
+  const before = calls.filter(c => c.fn === 'addOwnUnit').length;
+  await p.reload(); await p.waitForSelector('.set'); await p.click('#nav [data-tab="plan"]');
+  assert.match(await p.textContent('#plan'), /W2 Własny/);
+  await p.waitForFunction(n => true, null); await p.waitForTimeout(300);
+  assert.equal(calls.filter(c => c.fn === 'addOwnUnit').length, before + 1);      // kolejka wysłana po połączeniu
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+  const off = Object.assign({}, data, { cfg: Object.assign({}, DATA.cfg, { own: false }) });   // Klienci „wlasne” = NIE
+  const t2 = await page([], false, { data: off });
+  await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.set'); await t2.p.click('#nav [data-tab="plan"]');
+  assert.equal(await t2.p.$('#own-new'), null);
+  await t2.ctx.close();
+});
