@@ -536,16 +536,35 @@ function call(fn, ...args){
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(j => { if (!j.ok) throw new Error(j.error || 'błąd serwera'); return j.result; });
 }
+/* ---------- zgłaszanie błędów do zakładki „Błędy” (trener widzi je w Przeglądzie) ----------
+ * Najwyżej ERR_DAY zgłoszeń dziennie, ten sam opis raz na dzień; bez kolejki (gdy nie ma sieci, nie ma czego zgłaszać).
+ */
+const ERR_DAY = 5, ERK = 'err_' + KEY;
+const isNet = e => /Failed to fetch|NetworkError|Load failed|HTTP 5|timeout/i.test(String(e && e.message || e));
+function reportErr(kind, msg){
+  try {
+    if (!KEY || navigator.onLine === false || !msg) return;
+    const day = localDate(), m = JSON.parse(localStorage.getItem(ERK) || '{}'), s = m.day === day ? m : { day, n: 0, seen: [] }, k = kind + '|' + String(msg).slice(0, 120);
+    if (s.n >= ERR_DAY || s.seen.indexOf(k) >= 0) return;
+    s.n++; s.seen.push(k); localStorage.setItem(ERK, JSON.stringify(s));
+    call('logError', { kind, msg: String(msg).slice(0, 400), ua: navigator.userAgent }).catch(() => {});
+  } catch (e) {}
+}
+window.addEventListener('error', e => reportErr('js', (e.message || 'błąd') + ' @' + String(e.filename || '').split('/').pop() + ':' + (e.lineno || '')));
+window.addEventListener('unhandledrejection', e => { const r = e.reason; if (!isNet(r)) reportErr('js', 'obietnica: ' + (r && r.message || r)); });
 function send(fn, payload){
   setSync('zapisywanie…');
   return call(fn, payload).then(r => { setSync('zapisano ✓'); return r; })
-    .catch(err => { const q = qGet(); q.push({fn, payload}); qSet(q); setSync('offline – w kolejce (' + q.length + ')'); throw err; });
+    .catch(err => { const q = qGet(); q.push({fn, payload, t: Date.now()}); qSet(q); setSync('offline – w kolejce (' + q.length + ')');
+      if (!isNet(err)) reportErr('zapis', fn + ': ' + err.message); throw err; });
 }
 async function flush(){
   const q = qGet(); if (!q.length) return;
   const rest = [];
   for (const it of q) { try { await call(it.fn, it.payload); } catch(e) { rest.push(it); } }
   qSet(rest); setSync(rest.length ? 'offline – w kolejce (' + rest.length + ')' : 'zsynchronizowano ✓');
+  const old = rest.filter(it => it.t && Date.now() - it.t > 864e5);           // zapis, który nie przechodzi od ponad doby mimo sieci
+  if (old.length && navigator.onLine !== false) reportErr('kolejka', old.length + ' zapisów czeka od ' + Math.round((Date.now() - Math.min(...old.map(it => it.t))) / 36e5) + ' h: ' + [...new Set(old.map(it => it.fn))].join(', '));
   // wysłane serie przestają być żółte
   document.querySelectorAll('.set .ok.pend').forEach(b => {
     const r = b.closest('.set'), ex = PLAN.find(x => x.week === cur.week && x.day === cur.day && x.order === +r.dataset.o);
@@ -1107,7 +1126,14 @@ function bindNotes(){
 }
 /* ---------- własny trening klienta: składanie z ćwiczeń z bazy, zapis do Planu jako W1, W2… ---------- */
 const ownOn = () => !!(DATA && DATA.cfg && DATA.cfg.own !== false);
-let OWN = null;                                                   // {week, day, date, title, list: [{name, sets, reps, kg, old}], edit}
+let OWN = null;
+/* lista nazw z bazy: pobierana dopiero przy własnym treningu, trzymana w telefonie na dobę */
+const EXK = 'exn_' + KEY;
+let EXN = (() => { try { return JSON.parse(localStorage.getItem(EXK) || 'null') || { t: 0, list: [] }; } catch (e) { return { t: 0, list: [] }; } })();
+function exnLoad(done){
+  if (EXN.list.length && Date.now() - EXN.t < 864e5) return;
+  call('getExNames').then(list => { EXN = { t: Date.now(), list: list || [] }; try { localStorage.setItem(EXK, JSON.stringify(EXN)); } catch (e) {} done(); }).catch(() => {});
+}                                                   // {week, day, date, title, list: [{name, sets, reps, kg, old}], edit}
 /** wiersze planu własnej jednostki (lokalnie, zanim serwer odpowie); save = zapis w pamięci telefonu */
 function applyOwn(u, save){
   const same = PLAN.filter(r => r.week === u.week && !r.own), block = (same[0] || PLAN[PLAN.length - 1] || {}).block || '';
@@ -1134,11 +1160,11 @@ function openOwn(unit){
     <button type="button" class="btn" data-close>Anuluj</button>`);
   const q = $('#ow-q');
   q.oninput = () => ownRes(q.value);
-  ownRes(''); ownList();
+  ownRes(''); ownList(); exnLoad(() => { const qq = $('#ow-q'); if (qq) ownRes(qq.value); });
   $('#ow-save').onclick = ownSave;
 }
 function ownRes(q){
-  const mine = [...new Set(PLAN.slice().reverse().map(r => r.name))], res = exSearch(mine, (DATA && DATA.exNames) || [], q);
+  const mine = [...new Set(PLAN.slice().reverse().map(r => r.name))], res = exSearch(mine, EXN.list, q);
   const exact = res.some(r => r.name.toLowerCase() === String(q).trim().toLowerCase());
   $('#ow-res').innerHTML = (q.trim() ? '' : '<div class="lbl">Twoje ćwiczenia</div>') +
     res.map(r => `<button type="button" class="opt ow-add" data-n="${esc(r.name)}">${esc(r.name)}${r.film ? '<small class="ow-f">film</small>' : ''}</button>`).join('') +
@@ -1782,7 +1808,7 @@ async function vqRun(){
         if (vqNet(e)) break;                                    // sieć: spróbujemy przy powrocie do aplikacji / sieci
         const p = vqP(r.id); p.tries = (p.tries || 0) + 1;
         if (/wygasła|expired/i.test(e.message)) { p.url = null; p.uploadId = null; p.next = 0; }
-        if (p.tries >= 3) p.failed = e.message;
+        if (p.tries >= 3) { p.failed = e.message; reportErr('film', r.v.name + ' S' + r.v.set + ', ' + Math.round(r.size / 1048576) + ' MB: ' + e.message); }
         vqPSet(r.id, p); delete VQ_LIVE[r.id];
         if (!p.failed) break;
       }

@@ -61,7 +61,7 @@ function doGet(e) {
 /* ---------- API dla aplikacji na GitHub Pages ----------
  * POST (Content-Type text/plain, bez preflight CORS), body: {fn, key, args:[…]} → {ok:true, result} | {ok:false, error}
  */
-const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit };
+const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError };
 
 function doPost(e) {
   let out;
@@ -79,14 +79,16 @@ function doPost(e) {
 /* ---------- API (google.script.run – stara wersja, link /exec?k=) ---------- */
 
 function getData(key) {
-  const client = mustClient_(key);
+  const t0 = Date.now(), ms = {}, lap = k => { ms[k] = Date.now() - t0; };
+  const client = mustClient_(key); lap('klient');
   const ss = SpreadsheetApp.getActive();
-  const plan = ss.getSheetByName('Plan').getDataRange().getValues();
+  const plan = ss.getSheetByName('Plan').getDataRange().getValues(); lap('plan');
   const h = plan.shift();
   const idx = name => h.indexOf(name);
   const ix = idx('dod_serie'), idr = idx('drop');
   const opt = (r, name) => idx(name) < 0 || r[idx(name)] === null || r[idx(name)] === undefined ? '' : String(r[idx(name)]).trim();
-  const cwRows = tableOf_('Ćwiczenia'), cwIx = exIndex_(cwRows), memo = {}, pm = {};
+  const cwRows = cwRowsCached_(); lap('cwiczenia');
+  const cwIx = exIndex_(cwRows), memo = {}, pm = {}; lap('indeks');
   const dxOf = n => { const k = exKey_(n); if (!k) return exInfo_(cwIx, ''); if (!memo[k]) { memo[k] = exInfo_(cwIx, n); if (memo[k].parts.length) pm[k] = memo[k].parts; } return memo[k]; };
   const rows = plan.filter(r => String(r[idx('klient')]).toLowerCase() === client.id)
     .map(r => { const dx = dxOf(r[idx('cwiczenie')]), own = opt(r, 'zamienniki').split(';').map(s => s.trim()).filter(Boolean); return {
@@ -100,7 +102,8 @@ function getData(key) {
       group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
       swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts, own: opt(r, 'zrodlo').toLowerCase() === 'klient'
     }; });
-  const sessions = readRows_('Sesje', SES_HEADERS, client.id), logs = readRows_('Log', LOG_HEADERS, client.id);
+  lap('wiersze');
+  const sessions = readRows_('Sesje', SES_HEADERS, client.id), logs = readRows_('Log', LOG_HEADERS, client.id); lap('log');
   logs.forEach(l => dxOf(l.cwiczenie));
   rows.forEach(r => r.swaps.forEach(dxOf));
   fillDates_(rows, sessions, today_());
@@ -108,7 +111,7 @@ function getData(key) {
       swap: client.swap, scale: client.scale, olyCeil: client.olyCeil, own: client.own },
     plan: rows, logs: logs, sessions: sessions,
     readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id),
-    parts: pm, exNames: client.own ? exNames_(cwRows) : [] };
+    parts: pm, ms: Object.assign(ms, { razem: Date.now() - t0 }) };
 }
 
 /** Zapis jednej serii. Idempotentny po id (klient|tydz|jedn|nr|seria). */
@@ -705,7 +708,7 @@ function podsumowanie(e) {
   const klienci = tableOf_('Klienci'), dys = tableOf_('Dyspozycja');
   const res = computeSummary_(plan, log, ses, klienci, { localDay });
   const bl = computeBlocks_(plan, log, ses, dys, res.rows, { localDay });
-  const ov = computeOverview_(plan, log, ses, klienci, dys, res.rows, { today: today_(), localDay });
+  const ov = computeOverview_(plan, log, ses, klienci, dys, res.rows, { today: today_(), localDay, errs: tableOf_('Błędy') });
   writeTable_('Przegląd', PRZ_HEADERS, ov, (sh, n) => {
     if (!n) return;
     const c = PRZ_HEADERS.indexOf('pilnosc') + 1;
@@ -1207,7 +1210,7 @@ function wczytajBazeCwiczen() {
   const col = CW_HEADERS.indexOf('aliasy') + 1;
   s.aliases.forEach(a => sh.getRange(a.i + 2, col).setValue(a.value));
   s.drop.slice().sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
-  appendCw_(s.add);
+  appendCw_(s.add); cwCacheClear_();
   const left = missingExercises_(tableOf_('Plan'), tableOf_('Ćwiczenia')).length;
   alert_('Ćwiczenia', 'Nowe ćwiczenia: ' + s.add.length + ', wiersze ze zmienionymi aliasami: ' + s.aliases.length + ', usunięte puste wiersze: ' + s.drop.length +
     '.\nĆwiczenia z planów nadal bez dopasowania: ' + left + (left ? ' (menu „Uzupełnij listę ćwiczeń” pokaże je na dole zakładki).' : '.'));
@@ -1221,7 +1224,7 @@ function uzupelnijCwiczenia() {
   const dict = tableOf_('Ćwiczenia'), have = {};
   dict.forEach(r => { have[exKey_(r.cwiczenie)] = 1; });
   const miss = missingExercises_(tableOf_('Plan'), dict), fresh = miss.filter(n => !have[exKey_(n)]);
-  appendCw_(fresh.map(n => [n, '', '', '', '', '']));
+  appendCw_(fresh.map(n => [n, '', '', '', '', ''])); cwCacheClear_();
   alert_('Ćwiczenia', (mg.drop.length ? 'Przeniesiono do aliasów (kolumna glowna): ' + mg.drop.length + '.\n' : '') + (miss.length ? 'Ćwiczenia z planów bez dopasowania: ' + miss.length + ' (nowo dopisane na dole: ' + fresh.length + '). Uzupełnij przy nich link i partię albo wpisz w kolumnie „glowna” nazwę ćwiczenia z bazy (ta nazwa zostanie jego aliasem).' : 'Wszystkie ćwiczenia z planów mają dopasowanie w bazie.'));
 }
 
@@ -1260,7 +1263,7 @@ function computeParts_(plan, log, ses, dictRows, opts) {
  * jednostka zaległa (≥ 2 dni po dacie z planu, do 28 dni wstecz), brak treningu ≥ 7 dni, plan kończy się za ≤ 7 dni albo brak planu.
  */
 const PRZ_HEADERS = ['klient', 'imie', 'pilnosc', 'do_reakcji', 'ostatni_trening', 'dni_temu', 'ten_tydzien', 'zalegle', 'status_tygodnia',
-  'uwagi_klienta', 'filmy_7dni', 'koniec_planu_dni', 'czerwone', 'wlasne_7dni'];
+  'uwagi_klienta', 'filmy_7dni', 'koniec_planu_dni', 'czerwone', 'wlasne_7dni', 'bledy_7dni'];
 const PRZ = { late: 2, lateMax: 28, window: 7, readyDays: 3, idle: 7, planEnd: 7 };
 
 function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
@@ -1332,7 +1335,7 @@ function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
     return [c, String(k.imie || ''), 3 * red.length + amb.length, red.concat(amb).join('; '), last, ago,
       wk.filter(u => u.done).length + '/' + wk.length, late.length || '', st ? st[SI] + (st[1] === ws ? '' : ' (tydz. od ' + dm(st[1]) + ')') : '',
       note ? dm(note.act) + ': ' + String(note.s.uwagi).replace(/\s+/g, ' ').slice(0, 300) : '',
-      logs.filter(x => !blank_(x.l.film_link) && recent(x.day)).length || '', left, red.length || '', ownRecent_(plan, ses, c, today, PRZ.window, opts && opts.localDay)];
+      logs.filter(x => !blank_(x.l.film_link) && recent(x.day)).length || '', left, red.length || '', ownRecent_(plan, ses, c, today, PRZ.window, opts && opts.localDay), errRecent_(opts && opts.errs, c, today, PRZ.window)];
   }).sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0]));
 }
 
@@ -1379,9 +1382,7 @@ function addOwnUnit(key, u) {
     const plan = tableOf_('Plan'), res = ownRows_(client.id, u, plan);
     if (res.error) throw new Error(res.error);
     const day = String(u.day).trim(), week = Number(u.week);
-    const keep = plan.filter(r => !(String(r.klient).toLowerCase() === client.id && Number(r.tydzien) === week && String(r.jednostka) === day));
-    planTextCols_();
-    writePlanRows_(keep.concat(res.rows));
+    ownWrite_(client.id, week, day, res.rows);
     return { ok: true, rows: res.rows.length };
   } finally { lock.releaseLock(); }
 }
@@ -1396,6 +1397,93 @@ function ownRecent_(plan, ses, clientId, today, days, localDay) {
     if (ago >= 0 && ago < days) out.push([d, T[u] + ' ' + d.slice(8, 10) + '.' + d.slice(5, 7)]);
   });
   return out.sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]).join('; ');
+}
+
+/* ---------- pamięć podręczna zakładki Ćwiczenia (ok. 1400 wierszy czytanych przy każdym otwarciu aplikacji) ----------
+ * Trzymamy zwięzłe wiersze w CacheService (kawałki po ok. 90 KB, limit Google to 100 KB na klucz) na CW_TTL sekund.
+ * Czyszczą ją: Wczytaj bazę / Uzupełnij listę ćwiczeń i każda ręczna edycja zakładki (onEdit).
+ */
+const CW_TTL = 21600, CW_CHUNK = 90000;
+function cwRowsCached_() {
+  const c = CacheService.getScriptCache();
+  try {
+    const n = Number(c.get('cw_n'));
+    if (n > 0) {
+      const parts = c.getAll(Array.from({ length: n }, (_, i) => 'cw_' + i)), s = Array.from({ length: n }, (_, i) => parts['cw_' + i]);
+      if (s.every(x => typeof x === 'string')) return JSON.parse(s.join('')).map(a => Object.fromEntries(CW_HEADERS.map((h, i) => [h, a[i]])));
+    }
+  } catch (e) { /* uszkodzona pamięć: czytamy arkusz */ }
+  const rows = tableOf_('Ćwiczenia');
+  try {
+    const s = JSON.stringify(rows.map(r => CW_HEADERS.map(h => r[h] === undefined || r[h] === null ? '' : r[h]))), put = {};
+    for (let i = 0; i * CW_CHUNK < s.length; i++) put['cw_' + i] = s.slice(i * CW_CHUNK, (i + 1) * CW_CHUNK);
+    put.cw_n = String(Object.keys(put).length);
+    c.putAll(put, CW_TTL);
+  } catch (e) { /* za duże albo usługa niedostępna: bez pamięci */ }
+  return rows;
+}
+function cwCacheClear_() { try { CacheService.getScriptCache().remove('cw_n'); } catch (e) {} }
+
+/** Prosty wyzwalacz: ręczna edycja zakładki Ćwiczenia czyści pamięć podręczną (link, alias, glowna widać od razu). */
+function onEdit(e) {
+  try { if (e && e.range && e.range.getSheet().getName() === 'Ćwiczenia') cwCacheClear_(); } catch (err) {}
+}
+
+/** API: lista nazw do wyszukiwarki własnego treningu (osobno, żeby nie obciążać każdego otwarcia aplikacji). */
+function getExNames(key) {
+  const client = mustClient_(key);
+  return client.own ? exNames_(cwRowsCached_()) : [];
+}
+
+/* ---------- błędy z aplikacji klienta → zakładka „Błędy” ---------- */
+const ERR_HEADERS = ['kiedy', 'klient', 'rodzaj', 'opis', 'wersja', 'urzadzenie'];
+const ERR_KINDS = ['js', 'zapis', 'kolejka', 'film'];
+/** Czysta funkcja: zgłoszenie z aplikacji → wiersz zakładki Błędy (przycięte pola, znany rodzaj) albo null. */
+function errRow_(clientId, e, now) {
+  e = e || {};
+  const kind = ERR_KINDS.indexOf(String(e.kind)) >= 0 ? String(e.kind) : 'js';
+  const msg = String(e.msg === undefined || e.msg === null ? '' : e.msg).replace(/\s+/g, ' ').trim().slice(0, 400);
+  if (!msg) return null;
+  return [now, clientId, kind, msg, String(e.ver || '').slice(0, 20), String(e.ua || '').replace(/\s+/g, ' ').slice(0, 120)];
+}
+/** API: zgłoszenie błędu (aplikacja wysyła najwyżej kilka dziennie). */
+function logError(key, e) {
+  const client = mustClient_(key), row = errRow_(client.id, e, new Date());
+  if (!row) return { ok: false };
+  const sh = sheet_('Błędy', ERR_HEADERS);
+  sh.appendRow(row);
+  if (sh.getLastRow() > 3001) sh.deleteRows(2, sh.getLastRow() - 3001);       // najwyżej 3000 ostatnich wpisów
+  return { ok: true };
+}
+/** Czysta funkcja: Przegląd – zgłoszenia klienta z ostatnich dni → „2× zapis, 1× film”. */
+function errRecent_(errs, clientId, today, days) {
+  const n = {}, t = Date.parse(today);
+  (errs || []).forEach(r => {
+    if (String(r.klient).toLowerCase() !== clientId) return;
+    const d = r.kiedy instanceof Date ? r.kiedy.getTime() : Date.parse(r.kiedy);
+    if (!(t - d < days * 864e5) || d - t > 864e5) return;
+    n[r.rodzaj] = (n[r.rodzaj] || 0) + 1;
+  });
+  return Object.keys(n).sort().map(k => n[k] + '× ' + k).join(', ');
+}
+
+/** Własny trening bez przepisywania całej zakładki Plan: usuwa wiersze tej jednostki i dopisuje nowe na końcu. */
+function ownWrite_(clientId, week, day, rows) {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
+  const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
+  PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(k); h.push(k); } });   // brakujące kolumny (np. zrodlo)
+  const n = sh.getLastRow() - 1, ci = h.indexOf('klient'), wi = h.indexOf('tydzien'), di = h.indexOf('jednostka');
+  if (n > 0) {
+    const v = sh.getRange(2, 1, n, h.length).getValues(), hit = [];
+    v.forEach((r, i) => { if (String(r[ci]).toLowerCase() === clientId && Number(r[wi]) === week && String(r[di]) === day) hit.push(i + 2); });
+    for (let i = hit.length - 1; i >= 0;) {                                   // od dołu, ciągłymi blokami
+      let j = i; while (j > 0 && hit[j - 1] === hit[j] - 1) j--;
+      sh.deleteRows(hit[j], i - j + 1); i = j - 1;
+    }
+  }
+  const start = sh.getLastRow() + 1;
+  ['data', 'powt', 'kg'].forEach(k => sh.getRange(start, h.indexOf(k) + 1, rows.length, 1).setNumberFormat('@'));
+  sh.getRange(start, 1, rows.length, h.length).setValues(rows.map(r => h.map(k => r[k] === undefined || r[k] === null ? '' : r[k])));
 }
 
 /* ---------- alert mailowy: raz dziennie rano, tylko gdy pojawił się nowy czerwony sygnał ---------- */
