@@ -61,7 +61,7 @@ function doGet(e) {
 /* ---------- API dla aplikacji na GitHub Pages ----------
  * POST (Content-Type text/plain, bez preflight CORS), body: {fn, key, args:[…]} → {ok:true, result} | {ok:false, error}
  */
-const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke };
+const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit };
 
 function doPost(e) {
   let out;
@@ -86,7 +86,7 @@ function getData(key) {
   const idx = name => h.indexOf(name);
   const ix = idx('dod_serie'), idr = idx('drop');
   const opt = (r, name) => idx(name) < 0 || r[idx(name)] === null || r[idx(name)] === undefined ? '' : String(r[idx(name)]).trim();
-  const cwIx = exIndex_(tableOf_('Ćwiczenia')), memo = {}, pm = {};
+  const cwRows = tableOf_('Ćwiczenia'), cwIx = exIndex_(cwRows), memo = {}, pm = {};
   const dxOf = n => { const k = exKey_(n); if (!k) return exInfo_(cwIx, ''); if (!memo[k]) { memo[k] = exInfo_(cwIx, n); if (memo[k].parts.length) pm[k] = memo[k].parts; } return memo[k]; };
   const rows = plan.filter(r => String(r[idx('klient')]).toLowerCase() === client.id)
     .map(r => { const dx = dxOf(r[idx('cwiczenie')]), own = opt(r, 'zamienniki').split(';').map(s => s.trim()).filter(Boolean); return {
@@ -98,17 +98,17 @@ function getData(key) {
       extra: ix < 0 || r[ix] === '' || r[ix] === null ? null : (Number(r[ix]) || 0),
       drop: idr < 0 ? 0 : (Number(r[idr]) || 0),
       group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
-      swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts
+      swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts, own: opt(r, 'zrodlo').toLowerCase() === 'klient'
     }; });
   const sessions = readRows_('Sesje', SES_HEADERS, client.id), logs = readRows_('Log', LOG_HEADERS, client.id);
   logs.forEach(l => dxOf(l.cwiczenie));
   rows.forEach(r => r.swaps.forEach(dxOf));
   fillDates_(rows, sessions, today_());
   return { cfg: { name: client.name, pain: client.pain, simple: client.simple, extra: client.extra,
-      swap: client.swap, scale: client.scale, olyCeil: client.olyCeil },
+      swap: client.swap, scale: client.scale, olyCeil: client.olyCeil, own: client.own },
     plan: rows, logs: logs, sessions: sessions,
     readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id),
-    parts: pm };
+    parts: pm, exNames: client.own ? exNames_(cwRows) : [] };
 }
 
 /** Zapis jednej serii. Idempotentny po id (klient|tydz|jedn|nr|seria). */
@@ -315,7 +315,7 @@ function findClient_(key) {
         extra: Number(String(v[i][7] === undefined ? '' : v[i][7]).replace(',', '.')) || 0,
         swap: cell(v[i], 9) === 'TAK',
         scale: cell(v[i], 10) === 'RIR' ? 'RIR' : 'RPE',
-        olyCeil: olyCeil_(v[i][11]) };
+        olyCeil: olyCeil_(v[i][11]), own: cell(v[i], 12) !== 'NIE' };
     }
   }
   return null;
@@ -444,6 +444,7 @@ function setup() {
   if (!kl.getRange(1, 10).getValue()) kl.getRange(1, 10).setValue('zamiana');
   if (!kl.getRange(1, 11).getValue()) kl.getRange(1, 11).setValue('skala');
   if (!kl.getRange(1, 12).getValue()) kl.getRange(1, 12).setValue('sufit_oly');
+  if (!kl.getRange(1, 13).getValue()) kl.getRange(1, 13).setValue('wlasne');
   // listy rozwijane: „tryb”, „zamiana”, „skala”
   const list = (col, vals) => kl.getRange(2, col, Math.max(kl.getMaxRows() - 1, 1), 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(vals, true).setAllowInvalid(true).build());
@@ -808,7 +809,7 @@ function computeSummary_(plan, log, ses, klienci, opts) {
   plan.forEach(r => {
     const c = String(r.klient).toLowerCase(), u = key(c, r.tydzien, r.jednostka);
     const w = weekOf_(AD[u] || (blank_(r.data) ? SD[u] : r.data));
-    if (!c || !w) return;
+    if (!c || !w || own_(r)) return;
     const a = acc(c, w); a.planned += n_(r.serie) || 0; a.planW[r.tydzien] = 1;
     const pk = n_(r.kg), pr = repsOf_(r.powt);
     if (pk > 0 && pr > 0) a.planTon += (n_(r.serie) || 0) * pr * pk;
@@ -824,7 +825,7 @@ function computeSummary_(plan, log, ses, klienci, opts) {
     const typ = String(l.typ || ''), fail = /FAIL/.test(typ), drop = /DROP/.test(typ) || /^D/i.test(s);
     const kg = n_(l.kg), reps = n_(l.powt), rpe = n_(l.rpe);
     a.work++; x.sets++;
-    if (/^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) a.donePlanned++; else a.addDrop++;
+    if (own_(pr)) { /* własny trening: objętość tak, wykonanie planu nie */ } else if (/^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) a.donePlanned++; else a.addDrop++;
     if (fail) { a.fail++; x.fail++; }
     const grp = groupOf_(pr.grupa, name), lift = grp === 'R' || grp === 'P', o = a.o;
     if (!lift) { a.strWork++; if (fail) a.strFail++; }
@@ -984,7 +985,7 @@ const NO_BLOCK = '(bez bloku)';
 function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
   const key = (...a) => a.map(String).join('|');
   const AD = unitDates_(ses, opts && opts.localDay);
-  const U = {}, P = {}, X = {};
+  const U = {}, P = {}, X = {}, OWN = {};
   const blockOf = r => String(r.blok === undefined || r.blok === null ? '' : r.blok).trim() || NO_BLOCK;
   plan.forEach(r => {
     const c = String(r.klient).toLowerCase(); if (!c) return;
@@ -993,6 +994,7 @@ function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
     const x = X[c + '|' + b] || (X[c + '|' + b] = { c, b, units: {}, weeks: [], planned: 0, donePlanned: 0, ton: 0,
       e1: {}, best: { R: [0, ''], P: [0, ''] }, rpe: [], feel: [], pain: NaN, dates: [] });
     U[u] = x;
+    if (own_(r)) { OWN[u] = 1; return; }                                    // własny: objętość tak, jednostki i wykonanie nie
     x.planned += n_(r.serie) || 0;
     if (!x.units[u]) { x.units[u] = 0; x.weeks.push(n_(r.tydzien)); const pd = blank_(r.data) ? NaN : day_(r.data), d = AD[u] || (isNaN(pd) ? '' : iso_(pd)); if (d) x.dates.push(d); }
   });
@@ -1002,7 +1004,7 @@ function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
     if (!x || /^R/i.test(s)) return;
     const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
     const fail = /FAIL/.test(String(l.typ || '')), kg = n_(l.kg), reps = n_(l.powt), rpe = n_(l.rpe);
-    if (/^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) x.donePlanned++;
+    if (!own_(pr) && /^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) x.donePlanned++;
     if (kg > 0 && reps > 0) x.ton += kg * reps;
     const name = String(l.cwiczenie), grp = groupOf_(pr.grupa, name);
     if ((grp === 'R' || grp === 'P') && !fail && kg > x.best[grp][0]) x.best[grp] = [kg, name];
@@ -1013,7 +1015,7 @@ function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
   });
   ses.forEach(s => {
     const x = U[key(String(s.klient).toLowerCase(), s.tydzien, s.jednostka)]; if (!x) return;
-    x.units[key(String(s.klient).toLowerCase(), s.tydzien, s.jednostka)] = 1;
+    if (!OWN[key(String(s.klient).toLowerCase(), s.tydzien, s.jednostka)]) x.units[key(String(s.klient).toLowerCase(), s.tydzien, s.jednostka)] = 1;
     const r = n_(s.rpe_sesji), f = n_(s.samopoczucie);
     if (r >= 0) x.rpe.push(r);
     if (f > 0) x.feel.push(f);
@@ -1070,7 +1072,7 @@ function keepNotes_(rows, old) {
  * „z pauzą…”, „, tempo …”), 3) te same słowa w innej kolejności i skróty (DB, SL, RDL…). Kompleks „A + B” bez własnego wiersza
  * dostaje instruktaż każdej rozpoznanej części. Wiersz z samą nazwą (bez danych) nie bierze udziału w dopasowaniu. „… 1¼” szuka najpierw wariantu „1-1/4 …”, potem ćwiczenia bez dopisku.
  */
-const CW_HEADERS = ['cwiczenie', 'aliasy', 'instruktaz', 'partia', 'zamienniki', 'grupa'];
+const CW_HEADERS = ['cwiczenie', 'aliasy', 'instruktaz', 'partia', 'zamienniki', 'grupa', 'glowna'];
 const PART_HEADERS = ['klient', 'tydzien_od', 'partia', 'serie', 'serie_twarde', 'tonaz_kg'];
 const EX_ABBR = { db: 'dumbbell', kb: 'kettlebell', bb: 'barbell', sl: 'single leg', rdl: 'romanian deadlift', ohs: 'overhead squat' };
 const EX_STOP = ['and', 'from', 'the', 'a', 'on', 'with', 'to'];
@@ -1089,7 +1091,7 @@ function exTok_(v) {
 function exIndex_(rows) {
   const ix = { k: {}, b: {}, t: {} };
   (rows || []).forEach(r => {
-    const name = exStr_(r.cwiczenie).trim().replace(/\s+/g, ' '); if (!name || cwEmpty_(r)) return;
+    const name = exStr_(r.cwiczenie).trim().replace(/\s+/g, ' '); if (!name || cwEmpty_(r) || exStr_(r.glowna).trim()) return;
     const url = exStr_(r.instruktaz).trim(), g = exStr_(r.grupa).trim().toUpperCase();
     const e = { name: name, info: /^https?:\/\/\S+$/i.test(url) ? url : '',
       parts: exStr_(r.partia).split(/[;,]/).map(s => s.trim().toLowerCase()).filter(Boolean),
@@ -1099,7 +1101,34 @@ function exIndex_(rows) {
       ix.k[k] = e; if (b && !ix.b[b]) ix.b[b] = e; if (t && !ix.t[t]) ix.t[t] = e;
     });
   });
+  (rows || []).forEach(r => {                                                // wiersze z „glowna”: nazwa wskazuje ćwiczenie główne
+    const g = exStr_(r.glowna).trim(), n = exStr_(r.cwiczenie).trim(); if (!g || !n) return;
+    const e = exFind_(ix, g); if (!e) return;
+    const k = exKey_(n), b = exBase_(n), t = exTok_(n);
+    if (!ix.k[k]) ix.k[k] = e; if (b && !ix.b[b]) ix.b[b] = e; if (t && !ix.t[t]) ix.t[t] = e;
+  });
   return ix;
+}
+
+/** Czysta funkcja: nazwy do wyszukiwarki własnego treningu [[nazwa, 1 = ma film]], bez wierszy-aliasów i zaślepek. */
+function exNames_(rows) {
+  const seen = {}, out = [];
+  (rows || []).forEach(r => { const n = exStr_(r.cwiczenie).trim().replace(/\s+/g, ' '), k = exKey_(n); if (!n || seen[k] || cwEmpty_(r) || exStr_(r.glowna).trim()) return; seen[k] = 1; out.push([n, /^https?:\/\//i.test(exStr_(r.instruktaz).trim()) ? 1 : 0]); });
+  return out;
+}
+
+/** Czysta funkcja: wiersze z „glowna” → nazwa dopisana do aliasów ćwiczenia głównego, wiersz do usunięcia → {aliases: [{i, value}], drop}. */
+function cwMerge_(rows) {
+  const ix = exIndex_(rows), at = {}, val = {}, drop = [];
+  (rows || []).forEach((r, i) => { const k = exKey_(r.cwiczenie); if (k && !exStr_(r.glowna).trim() && !cwEmpty_(r)) at[k] = i; });
+  (rows || []).forEach((r, i) => {
+    const g = exStr_(r.glowna).trim(), n = exStr_(r.cwiczenie).trim(); if (!g || !n) return;
+    const e = exFind_(ix, g), j = e ? at[exKey_(e.name)] : undefined; if (j === undefined) return;
+    const cur = val[j] !== undefined ? val[j] : exStr_(rows[j].aliasy), list = cwList_(cur);
+    if (list.map(exKey_).indexOf(exKey_(n)) < 0) list.push(n);
+    val[j] = list.join('; '); drop.push(i);
+  });
+  return { aliases: Object.keys(val).map(j => ({ i: Number(j), value: val[j] })), drop: drop };
 }
 
 /** Czysta funkcja: wiersz bazy dla nazwy z planu albo null. */
@@ -1135,7 +1164,7 @@ function cwBaza_(baza, aliasy, dodatki, fedb) {
 }
 
 /** wiersz-zaślepka: sama nazwa dopisana przez „Uzupełnij listę ćwiczeń”, bez żadnych danych */
-const cwEmpty_ = r => ['aliasy', 'instruktaz', 'partia', 'zamienniki', 'grupa'].every(h => !exStr_(r[h]).trim());
+const cwEmpty_ = r => ['aliasy', 'instruktaz', 'partia', 'zamienniki', 'grupa', 'glowna'].every(h => !exStr_(r[h]).trim());
 const cwList_ = v => exStr_(v).split(';').map(s => s.trim()).filter(Boolean);
 
 /**
@@ -1164,6 +1193,7 @@ function cwSync_(baza, dictRows, wycofane) {
 
 function appendCw_(rows) {
   const sh = sheet_('Ćwiczenia', CW_HEADERS);
+  rows = rows.map(r => r.concat(Array(Math.max(0, CW_HEADERS.length - r.length)).fill('')));     // krótsze wiersze dopełnione do nagłówków
   if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, CW_HEADERS.length).setValues(rows);
   sh.activate();
 }
@@ -1185,11 +1215,14 @@ function wczytajBazeCwiczen() {
 
 /** Menu Trening → Uzupełnij listę ćwiczeń: dopisuje nazwy z Planu, których nie udało się dopasować do bazy. */
 function uzupelnijCwiczenia() {
+  const sh0 = sheet_('Ćwiczenia', CW_HEADERS), mg = cwMerge_(tableOf_('Ćwiczenia')), col = CW_HEADERS.indexOf('aliasy') + 1;
+  mg.aliases.forEach(a => sh0.getRange(a.i + 2, col).setValue(a.value));
+  mg.drop.slice().sort((a, b) => b - a).forEach(i => sh0.deleteRow(i + 2));
   const dict = tableOf_('Ćwiczenia'), have = {};
   dict.forEach(r => { have[exKey_(r.cwiczenie)] = 1; });
   const miss = missingExercises_(tableOf_('Plan'), dict), fresh = miss.filter(n => !have[exKey_(n)]);
   appendCw_(fresh.map(n => [n, '', '', '', '', '']));
-  alert_('Ćwiczenia', miss.length ? 'Ćwiczenia z planów bez dopasowania: ' + miss.length + ' (nowo dopisane na dole: ' + fresh.length + '). Uzupełnij przy nich link i partię albo usuń wiersz i dopisz nazwę jako alias przy właściwym ćwiczeniu.' : 'Wszystkie ćwiczenia z planów mają dopasowanie w bazie.');
+  alert_('Ćwiczenia', (mg.drop.length ? 'Przeniesiono do aliasów (kolumna glowna): ' + mg.drop.length + '.\n' : '') + (miss.length ? 'Ćwiczenia z planów bez dopasowania: ' + miss.length + ' (nowo dopisane na dole: ' + fresh.length + '). Uzupełnij przy nich link i partię albo wpisz w kolumnie „glowna” nazwę ćwiczenia z bazy (ta nazwa zostanie jego aliasem).' : 'Wszystkie ćwiczenia z planów mają dopasowanie w bazie.'));
 }
 
 /**
@@ -1227,7 +1260,7 @@ function computeParts_(plan, log, ses, dictRows, opts) {
  * jednostka zaległa (≥ 2 dni po dacie z planu, do 28 dni wstecz), brak treningu ≥ 7 dni, plan kończy się za ≤ 7 dni albo brak planu.
  */
 const PRZ_HEADERS = ['klient', 'imie', 'pilnosc', 'do_reakcji', 'ostatni_trening', 'dni_temu', 'ten_tydzien', 'zalegle', 'status_tygodnia',
-  'uwagi_klienta', 'filmy_7dni', 'koniec_planu_dni', 'czerwone'];
+  'uwagi_klienta', 'filmy_7dni', 'koniec_planu_dni', 'czerwone', 'wlasne_7dni'];
 const PRZ = { late: 2, lateMax: 28, window: 7, readyDays: 3, idle: 7, planEnd: 7 };
 
 function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
@@ -1244,7 +1277,7 @@ function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
     const c = lc(k.klient_id), red = [], amb = [];
     // jednostki z planu: data z planu, czy zrobiona, faktyczny dzień
     const U = {};
-    plan.forEach(r => { if (lc(r.klient) !== c) return; const u = key(c, r.tydzien, r.jednostka); if (!U[u]) U[u] = { name: String(r.jednostka), date: planDay(r.data), done: false, act: '' }; });
+    plan.forEach(r => { if (lc(r.klient) !== c || own_(r)) return; const u = key(c, r.tydzien, r.jednostka); if (!U[u]) U[u] = { name: String(r.jednostka), date: planDay(r.data), done: false, act: '' }; });
     const mine = ses.filter(s => lc(s.klient) === c).map(s => { const u = key(c, s.tydzien, s.jednostka); return { s, u, act: AD[u] || planDay(s.data) }; });
     mine.forEach(m => { if (U[m.u]) { U[m.u].done = true; U[m.u].act = m.act; } });
     const units = Object.values(U);
@@ -1299,8 +1332,70 @@ function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
     return [c, String(k.imie || ''), 3 * red.length + amb.length, red.concat(amb).join('; '), last, ago,
       wk.filter(u => u.done).length + '/' + wk.length, late.length || '', st ? st[SI] + (st[1] === ws ? '' : ' (tydz. od ' + dm(st[1]) + ')') : '',
       note ? dm(note.act) + ': ' + String(note.s.uwagi).replace(/\s+/g, ' ').slice(0, 300) : '',
-      logs.filter(x => !blank_(x.l.film_link) && recent(x.day)).length || '', left, red.length || ''];
+      logs.filter(x => !blank_(x.l.film_link) && recent(x.day)).length || '', left, red.length || '', ownRecent_(plan, ses, c, today, PRZ.window, opts && opts.localDay)];
   }).sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0]));
+}
+
+/* ---------- własny trening klienta (jednostka W1, W2… poza planem trenera) ----------
+ * Klient składa trening z ćwiczeń z bazy (albo własnych nazw) i robi go jak każdy inny. Wiersze trafiają do Planu
+ * z zrodlo = „klient”: wczytanie nowego planu ich nie kasuje, nie liczą się do wykonania planu ani zaległych,
+ * ale liczą się do tonażu, obciążenia i serii na partię. Klienci M „wlasne” = NIE wyłącza tę funkcję klientowi.
+ */
+const own_ = r => String(r && r.zrodlo !== undefined && r.zrodlo !== null ? r.zrodlo : '').trim().toLowerCase() === 'klient';
+const OWN_MAX = 20;
+
+/**
+ * Czysta funkcja: wiersze Planu dla własnej jednostki → {rows} albo {error}. u = {week, day, date, title, exercises: [{name, sets, reps, kg}]}.
+ * plan = wiersze Planu tego klienta (do sprawdzenia, że jednostka o tej nazwie nie jest jednostką trenera, i do bloku).
+ */
+function ownRows_(clientId, u, plan) {
+  u = u || {};
+  const week = Number(u.week), day = String(u.day || '').trim(), date = String(u.date || '');
+  if (!(week >= 1) || !/^W\d{1,3}$/.test(day)) return { error: 'Zła jednostka.' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Zła data.' };
+  const mine = (plan || []).filter(r => String(r.klient).toLowerCase() === clientId);
+  if (mine.some(r => Number(r.tydzien) === week && String(r.jednostka) === day && !own_(r))) return { error: 'Ta jednostka jest w planie trenera.' };
+  const ex = [].concat(u.exercises || []).map(e => ({ name: String(e && e.name || '').trim().replace(/\s+/g, ' ').slice(0, 80),
+    sets: Math.round(Number(e && e.sets)), reps: String(e && e.reps === undefined ? '' : e.reps).trim().slice(0, 12), kg: e && e.kg })).filter(e => e.name);
+  if (!ex.length) return { error: 'Dodaj co najmniej jedno ćwiczenie.' };
+  if (ex.length > OWN_MAX) return { error: 'Najwyżej ' + OWN_MAX + ' ćwiczeń.' };
+  if (ex.some(e => !(e.sets >= 1 && e.sets <= 10) || !e.reps)) return { error: 'Serie 1–10 i powtórzenia przy każdym ćwiczeniu.' };
+  const same = mine.filter(r => Number(r.tydzien) === week && !own_(r)), blok = same.length ? String(same[0].blok || '') : String((mine[mine.length - 1] || {}).blok || '');
+  const title = 'Własny' + (String(u.title || '').trim() ? ' · ' + String(u.title).trim().slice(0, 40) : '');
+  return { rows: ex.map((e, i) => {
+    const kg = e.kg === undefined || e.kg === null || String(e.kg).trim() === '' ? '' : (isFinite(Number(String(e.kg).replace(',', '.'))) ? Number(String(e.kg).replace(',', '.')) : String(e.kg).slice(0, 10));
+    return { klient: clientId, tydzien: week, jednostka: day, tytul: title, data: date, nr: i + 1, cwiczenie: e.name, prio: 'A',
+      serie: e.sets, powt: e.reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: blok, zrodlo: 'klient' };
+  }) };
+}
+
+/** API: zapis (albo poprawka) własnej jednostki. Cała lista ćwiczeń za każdym razem; zrobione serie zostają w Logu. */
+function addOwnUnit(key, u) {
+  const client = mustClient_(key);
+  if (!client.own) throw new Error('Własne treningi są wyłączone – zapytaj trenera.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const plan = tableOf_('Plan'), res = ownRows_(client.id, u, plan);
+    if (res.error) throw new Error(res.error);
+    const day = String(u.day).trim(), week = Number(u.week);
+    const keep = plan.filter(r => !(String(r.klient).toLowerCase() === client.id && Number(r.tydzien) === week && String(r.jednostka) === day));
+    planTextCols_();
+    writePlanRows_(keep.concat(res.rows));
+    return { ok: true, rows: res.rows.length };
+  } finally { lock.releaseLock(); }
+}
+
+/** Czysta funkcja: Przegląd – własne treningi klienta z ostatnich dni → „Ramiona 16.10; Własny 18.10”. */
+function ownRecent_(plan, ses, clientId, today, days, localDay) {
+  const key = (...a) => a.map(String).join('|'), AD = unitDates_(ses, localDay), T = {}, out = [];
+  (plan || []).forEach(r => { if (own_(r) && String(r.klient).toLowerCase() === clientId) T[key(clientId, r.tydzien, r.jednostka)] = String(r.tytul || '').replace(/^Własny( · )?/, '') || 'Własny'; });
+  Object.keys(T).forEach(u => {
+    const d = AD[u]; if (!d) return;
+    const ago = Math.round((Date.parse(today) - Date.parse(d)) / 864e5);
+    if (ago >= 0 && ago < days) out.push([d, T[u] + ' ' + d.slice(8, 10) + '.' + d.slice(5, 7)]);
+  });
+  return out.sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]).join('; ');
 }
 
 /* ---------- alert mailowy: raz dziennie rano, tylko gdy pojawił się nowy czerwony sygnał ---------- */
@@ -1509,7 +1604,7 @@ function przeglad() {
  * Każdy import zapisuje wiersz w zakładce „Import”.
  */
 const PLAN_HEADERS = ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'nr', 'cwiczenie', 'prio', 'serie', 'powt',
-  'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok'];
+  'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok', 'zrodlo'];
 const PLAN_REQUIRED = ['klient', 'tydzien', 'jednostka', 'nr', 'cwiczenie', 'serie', 'powt'];
 
 function wczytajPlany(e) {
@@ -1579,15 +1674,17 @@ function mergePlan_(existing, incoming, ses) {
   const clients = [...new Set(incoming.map(r => lc(r.klient)))];
   const done = {};
   ses.forEach(s => { done[unit(s)] = 1; });
-  const others = [], kept = [], keptBlock = {};
+  const others = [], kept = [], keptBlock = {}, keptOwn = {};
   existing.forEach(r => {
     if (r.klient === '' || r.klient === undefined) return;
     if (clients.indexOf(lc(r.klient)) < 0) others.push(r);
+    else if (own_(r)) { kept.push(r); keptOwn[unit(r)] = 1; }                // własny trening klienta zostaje
     else if (done[unit(r)]) { kept.push(r); keptBlock[unit(r)] = blk(r); }
   });
   const errors = [], warnings = [], fresh = [], skipped = {};
   incoming.forEach(r => {
     const u = unit(r);
+    if (keptOwn[u]) { if (!skipped[u]) warnings.push(lc(r.klient) + ' tyg. ' + r.tydzien + ' ' + r.jednostka + ': to własny trening klienta, wiersze z pliku pominięte'); skipped[u] = 1; return; }
     if (!(u in keptBlock)) { fresh.push(r); return; }
     if (blk(r) && keptBlock[u] !== blk(r)) {                              // plik z blokiem ≠ blok zrobionej jednostki
       const was = keptBlock[u] || NO_BLOCK;

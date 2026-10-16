@@ -419,3 +419,53 @@ test('rangeNext_ i adres sesji: wznowienie wysyłki filmu', () => {
   assert.ok(!C.UPLOAD_URL_.test('https://www.googleapis.com/drive/v3/files/abc'));
   assert.ok(C.API_FNS.uploadStatus && C.API_FNS.logVideo);
 });
+
+// --- własny trening klienta ---
+test('ownRows_: walidacja i wiersze Planu własnej jednostki', () => {
+  const plan = [{ klient: 'anna', tydzien: 2, jednostka: 'T1', blok: 'B1' }, { klient: 'anna', tydzien: 2, jednostka: 'W1', zrodlo: 'klient', blok: 'B1' }];
+  const u = { week: 2, day: 'W2', date: '2026-10-16', title: ' Ramiona ', exercises: [{ name: ' Hammer  Curl ', sets: 3, reps: 10, kg: '12,5' }, { name: 'Pull-up', sets: 3, reps: '6', kg: 'BW' }, { name: '' }] };
+  const r = plain(C.ownRows_('anna', u, plan));
+  assert.deepEqual(r.rows.map(x => [x.jednostka, x.nr, x.cwiczenie, x.serie, x.powt, x.kg, x.tytul, x.blok, x.zrodlo, x.prio]),
+    [['W2', 1, 'Hammer Curl', 3, '10', 12.5, 'Własny · Ramiona', 'B1', 'klient', 'A'], ['W2', 2, 'Pull-up', 3, '6', 'BW', 'Własny · Ramiona', 'B1', 'klient', 'A']]);
+  assert.equal(C.ownRows_('anna', Object.assign({}, u, { title: '' }), plan).rows[0].tytul, 'Własny');
+  const err = x => C.ownRows_('anna', Object.assign({}, u, x), plan).error;
+  assert.deepEqual([err({ day: 'T1' }), err({ day: 'W1x' }), err({ week: 0 }), err({ date: '16.10' }), err({ exercises: [] }), err({ exercises: [{ name: 'X', sets: 0, reps: 5 }] }), err({ exercises: [{ name: 'X', sets: 3, reps: '' }] })],
+    ['Zła jednostka.', 'Zła jednostka.', 'Zła jednostka.', 'Zła data.', 'Dodaj co najmniej jedno ćwiczenie.', 'Serie 1–10 i powtórzenia przy każdym ćwiczeniu.', 'Serie 1–10 i powtórzenia przy każdym ćwiczeniu.']);
+  assert.equal(C.ownRows_('anna', Object.assign({}, u, { day: 'W1' }), [{ klient: 'anna', tydzien: 2, jednostka: 'W1' }]).error, 'Ta jednostka jest w planie trenera.');
+  assert.equal(C.ownRows_('anna', Object.assign({}, u, { exercises: Array(21).fill({ name: 'X', sets: 1, reps: 1 }) }), plan).error, 'Najwyżej 20 ćwiczeń.');
+  assert.ok(C.API_FNS.addOwnUnit);
+  assert.equal(C.PLAN_HEADERS[C.PLAN_HEADERS.length - 1], 'zrodlo');
+});
+
+test('mergePlan_ zostawia własne treningi; podsumowanie i bloki liczą ich objętość, ale nie wykonanie planu', () => {
+  const R = (j, nr, x) => Object.assign({ klient: 'robert', tydzien: 1, jednostka: j, data: d(1, 0), nr, cwiczenie: 'Przysiad', prio: 'A', serie: 2, powt: '5', kg: 100, blok: 'B1' }, x || {});
+  const own = R('W1', 1, { cwiczenie: 'Hammer Curl', kg: 10, zrodlo: 'klient', data: d(1, 1) });
+  const m = C.mergePlan_([R('T1', 1), own], [R('T1', 1, { kg: 105 }), R('W1', 1)], []);
+  assert.deepEqual(m.rows.map(r => r.jednostka + (r.zrodlo || '') + r.kg), ['W1klient10', 'T1105']);
+  assert.match(m.warnings[0], /własny trening klienta/);
+  const plan = [R('T1', 1), own];
+  const L = (j, nr, s, kg, cw) => ({ klient: 'robert', tydzien: 1, jednostka: j, data: d(1, 0), nr_cw: nr, cwiczenie: cw, seria: s, kg, powt: 5, rpe: 7, wykonane: 'TAK', typ: '' });
+  const log = [L('T1', 1, 1, 100, 'Przysiad'), L('W1', 1, 1, 10, 'Hammer Curl'), L('W1', 1, 2, 10, 'Hammer Curl')];
+  const H = C.SUM_HEADERS, row = C.computeSummary_(plan, log, [], []).rows[0];
+  assert.equal(row[H.indexOf('wykonanie_%')], 50);                                 // 1 z 2 serii planu trenera, własne nie podbijają
+  assert.equal(row[H.indexOf('tonaz_kg')], 500 + 100);                            // ale ich tonaż się liczy
+  assert.equal(row[H.indexOf('dod+drop')], 0);
+  const ses = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', start: d(1, 0) + 'T17:00:00Z' }, { klient: 'robert', tydzien: 1, jednostka: 'W1', start: d(1, 1) + 'T17:00:00Z' }];
+  const b = C.computeBlocks_(plan, log, ses, [], [], {}), BH = C.BLOK_HEADERS;
+  assert.equal(b[0][BH.indexOf('jednostki')], '1/1');                              // własna jednostka nie jest jednostką planu
+  assert.equal(b[0][BH.indexOf('tonaz_kg')], 600);
+  assert.equal(C.ownRecent_(plan.concat([R('W2', 1, { zrodlo: 'klient', tytul: 'Własny · Ramiona' })]), ses.concat([{ klient: 'robert', tydzien: 1, jednostka: 'W2', start: d(1, 2) + 'T17:00:00Z' }]), 'robert', d(1, 3), 7),
+    'Własny ' + d(1, 1).slice(8, 10) + '.' + d(1, 1).slice(5, 7) + '; Ramiona ' + d(1, 2).slice(8, 10) + '.' + d(1, 2).slice(5, 7));
+  assert.equal(C.ownRecent_(plan, ses, 'robert', d(3, 0), 7), '');
+});
+
+test('Ćwiczenia: kolumna „glowna” robi z nazwy klienta alias; exNames_ do wyszukiwarki', () => {
+  const rows = [{ cwiczenie: 'Hammer Curl', instruktaz: 'https://example.test/hc', partia: 'biceps' }, { cwiczenie: 'młotki', glowna: 'Hammer Curl' },
+    { cwiczenie: 'zaślepka' }, { cwiczenie: 'Pull-up', aliasy: 'podciąganie', partia: 'plecy' }, { cwiczenie: 'drążek', glowna: 'podciąganie' }, { cwiczenie: 'coś', glowna: 'Nie ma takiego' }];
+  const ix = C.exIndex_(rows);
+  assert.deepEqual(['młotki', 'Młotki', 'drążek', 'coś', 'zaślepka'].map(n => (C.exFind_(ix, n) || {}).name || null), ['Hammer Curl', 'Hammer Curl', 'Pull-up', null, null]);
+  assert.deepEqual(plain(C.exNames_(rows)), [['Hammer Curl', 1], ['Pull-up', 0]]);
+  assert.deepEqual(plain(C.cwMerge_(rows)), { aliases: [{ i: 0, value: 'młotki' }, { i: 3, value: 'podciąganie; drążek' }], drop: [1, 4] });
+  assert.deepEqual(Array.from(C.missingExercises_([{ cwiczenie: 'młotki' }, { cwiczenie: 'coś' }], rows)), ['coś']);
+  assert.equal(C.CW_HEADERS[C.CW_HEADERS.length - 1], 'glowna');
+});

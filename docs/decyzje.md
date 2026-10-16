@@ -10,6 +10,14 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Poprawka trenera: alias wolno dać tylko temu samemu ćwiczeniu pod inną nazwą. Regresja albo wariant z innym sprzętem to osobne ćwiczenie: Hanging Knee Raise (regresja Hanging Leg Raise), Pin Overhead Squat (przysiad OHS z martwego punktu na dole), Ring Dip (dipy na kółkach), Push-Up Hold (izometria, nie pompka) mają własne wiersze bez filmu, a błędne aliasy są wycofane (`CW_WYCOFANE`, „Wczytaj bazę ćwiczeń” usuwa je z arkusza).
 - „Wczytaj bazę ćwiczeń” można klikać wielokrotnie: dopisuje nowe ćwiczenia i aliasy, usuwa puste wiersze z samą nazwą, które mają już dopasowanie; ręcznych wpisów nie zmienia. Wiersz z samą nazwą nie zasłania aliasu.
 
+## 2026-10-16 · Własny trening klienta
+
+- Klient może złożyć trening poza planem: Plan → „+ własny trening”, ćwiczenia z wyszukiwarki (najpierw z jego planu, potem cała baza) albo pod własną nazwą. Robi go jak każdy inny (serie, filmy, przerwy, podsumowanie) i może dopisać ćwiczenia („+ ćwiczenie”). Usunąć można tylko świeżo dodane, nie te z zapisanymi seriami.
+- W arkuszu to jednostka W1, W2… w tygodniu planu, do którego należy data, w Planie z `zrodlo = klient`. Wczytanie nowego planu z Dysku jej nie kasuje.
+- Nie liczy się do wykonania planu, jednostek w Blokach ani zaległych; liczy się do tonażu, obciążenia, serii na partię i Postępu. W Przeglądzie kolumna `wlasne_7dni` (bez sygnału).
+- Własna nazwa ćwiczenia trafia do „Uzupełnij listę ćwiczeń”. Trener wpisuje w kolumnie `glowna` nazwę ćwiczenia z bazy: od razu działa jako alias (film, partie), a „Uzupełnij listę ćwiczeń” przenosi ją do aliasów ćwiczenia głównego i usuwa wiersz.
+- Domyślnie dla wszystkich; Klienci M `wlasne` = NIE wyłącza. Dopisywanie ćwiczeń do jednostek trenera: na razie nie.
+
 ## 2026-10-15 · Dolne menu: kapsuła zamiast kreski
 
 - Wybrana zakładka ma pomarańczową kapsułę za ikoną i pogrubiony podpis (wariant A z trzech pokazanych); kreska nad zakładką usunięta.

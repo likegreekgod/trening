@@ -226,6 +226,21 @@
   .step{display:grid;grid-template-columns:1fr 1fr 1.3fr 1fr 1fr;gap:6px;align-items:center;margin:2px 0 6px;padding:6px;border-radius:var(--r);background:var(--surface-2)}
   .step button{min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);font:600 15px/1 var(--f-mono);touch-action:manipulation;-webkit-user-select:none;user-select:none}
   .step b{text-align:center;font:700 22px/1 var(--f-display);color:var(--ink)}
+  .ghost.own-new{justify-content:center;margin-top:var(--gap);min-height:52px;font-size:14px}
+  .ghost.own-add{justify-content:center;margin-top:var(--gap)}
+  .ow-res{display:grid;gap:6px;margin:6px 0 10px}
+  .ow-res .opt{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .ow-f{font:500 12px/1 var(--f-mono);color:var(--ok);border:1px solid var(--ok);border-radius:999px;padding:2px 7px}
+  .ow-new{border-style:dashed;color:var(--accent)}
+  .ow-h{margin-top:6px}
+  .ow-it{display:grid;grid-template-columns:1fr 54px 64px 64px 44px;gap:6px;align-items:end;padding:8px 0;border-bottom:1px solid var(--line)}
+  .ow-it b{grid-column:1 / -1;font-weight:600}
+  .ow-it label{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:grid;gap:3px}
+  .ow-it label:first-of-type{grid-column:2}
+  .ow-it input{height:44px;text-align:center;padding:0 4px}
+  .ow-it .ow-rm{width:44px;height:44px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--muted)}
+  .ow-it.old{display:flex;justify-content:space-between;gap:8px;color:var(--muted)}
+  .ow-it.old b{color:var(--ink)}
   .cam.pend{border:2px dashed var(--accent);color:var(--accent);background:transparent}
   .vq{border-left:4px solid var(--accent);padding:4px 0 4px 10px;margin:8px 0;font-size:15px}
   .vq .btn{margin:6px 6px 0 0}
@@ -509,7 +524,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes } = window.TL;
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, ownWeek, ownNextDay, exSearch } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -680,6 +695,7 @@ function useData(d){
     const p = it.payload;
     if (it.fn === 'logSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, kg: p.kg, powt: p.reps, rpe: p.rpe, vbt_ms: p.vbt, wykonane: p.done ? 'TAK' : '', film_link: p.video, typ: p.typ, ocena: p.ocena || '', zamiana: p.swap || '', vbt_peak: p.vbtPeak, wysokosc_cm: p.height, sciezka: p.path }; }
     if (it.fn === 'przesunJednostke') applyMoves(p, false);
+    if (it.fn === 'addOwnUnit') applyOwn(p, false);                           // własny trening czekający w kolejce
     if (it.fn === 'saveDyspozycja') applyReady(p, false);
   });
 }
@@ -982,13 +998,15 @@ function renderPlan(){
           <button class="btn sm" data-noshift>Nie</button></div>` : '';
     h += `<section class="unit ${state(u)}" id="u-${u.week}-${esc(u.day)}">
       <div class="uh"><div class="dd"><b>${ddmm(u.date).slice(0, 2)}</b><small>${weekday(u.date)} · ${monthShort(u.date)}</small></div>
-        <div class="ut"><strong>${esc(u.day)}</strong> ${esc(u.title)}<small>${exs.length} ${plural(exs.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} · ${done ? 'zrobiona ✓' : u.date === today ? 'dziś' : u.date < today ? 'niezrobiona' : 'zaplanowana'}</small></div></div>
+        <div class="ut"><strong>${esc(u.day)}</strong> ${esc(u.title)}${u.rows[0] && u.rows[0].own ? ' <span class="tag">własny</span>' : ''}<small>${exs.length} ${plural(exs.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} · ${done ? 'zrobiona ✓' : u.date === today ? 'dziś' : u.date < today ? 'niezrobiona' : 'zaplanowana'}</small></div></div>
       <details><summary>Ćwiczenia</summary><ol>${exs.map(ex => `<li><b>${esc(ex.name)}</b><span>${SIMPLE ? rxSimple(ex) : rxPro(ex)}</span></li>`).join('')}</ol></details>
       <div class="uact"><button class="btn go" data-go="${k}">Przejdź do treningu</button>
         ${done ? '' : `<label class="btn mvl">Zmień datę<input type="date" class="mv" data-mv="${k}" value="${u.date}" aria-label="Nowa data ${esc(u.day)}"></label>`}</div>
       ${offer}</section>`;
   });
+  if (ownOn()) h += '<button type="button" class="ghost own-new" id="own-new">+ własny trening</button>';
   $('#plan').innerHTML = h;
+  const on = $('#own-new'); if (on) on.onclick = () => openOwn(null);
   const unitOf = k => { const [w, d] = k.split('|'); return units(PLAN).find(u => String(u.week) === w && u.day === d); };
   document.querySelectorAll('[data-pw]').forEach(b => b.onclick = () => { PW = +b.dataset.pw; lastMove = null; renderPlan(); });
   document.querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
@@ -1087,6 +1105,80 @@ function bindNotes(){
   if (ok) ok.onclick = () => { cnMark(cnAll().map(n => n.key)); renderTrening(); };
   if (all) all.onclick = () => openSheet(`<h2 id="sheet-t">Komentarze trenera</h2><p class="sub">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>${cnList(cnAll().slice(0, 40))}<button type="button" class="btn" data-close="1">Zamknij</button>`);
 }
+/* ---------- własny trening klienta: składanie z ćwiczeń z bazy, zapis do Planu jako W1, W2… ---------- */
+const ownOn = () => !!(DATA && DATA.cfg && DATA.cfg.own !== false);
+let OWN = null;                                                   // {week, day, date, title, list: [{name, sets, reps, kg, old}], edit}
+/** wiersze planu własnej jednostki (lokalnie, zanim serwer odpowie); save = zapis w pamięci telefonu */
+function applyOwn(u, save){
+  const same = PLAN.filter(r => r.week === u.week && !r.own), block = (same[0] || PLAN[PLAN.length - 1] || {}).block || '';
+  const kgOf = v => String(v === undefined || v === null ? '' : v).trim() === '' ? '' : isNum(num(v)) ? num(v) : String(v);
+  const rows = u.exercises.map((e, i) => ({ week: u.week, day: u.day, title: 'Własny' + (u.title ? ' · ' + u.title : ''), date: u.date, order: i + 1,
+    name: e.name, prio: 'A', sets: +e.sets, reps: String(e.reps), pct: null, kg: kgOf(e.kg), rpe: '', note: '', extra: null, drop: 0,
+    group: '', block, swaps: [], infos: [], parts: [], own: true }));
+  DATA.plan = DATA.plan.filter(r => !(r.week === u.week && r.day === u.day)).concat(rows); PLAN = DATA.plan;
+  if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
+}
+function openOwn(unit){
+  OWN = unit ? { week: unit.week, day: unit.day, date: unit.date, title: String(unit.title || '').replace(/^Własny( · )?/, ''), edit: true,
+      list: unit.rows.slice().sort((a, b) => a.order - b.order).map(r => ({ name: r.name, sets: r.sets, reps: String(r.reps), kg: r.kg === '' ? '' : String(fmtKg(r.kg)), old: true })) }
+    : { date: localDate(), title: '', list: [], edit: false };
+  openSheet(`<h2 id="sheet-t">${OWN.edit ? 'Dodaj ćwiczenie' : 'Własny trening'}</h2>
+    <p class="sub">${OWN.edit ? 'Dopisz ćwiczenia do tego treningu.' : 'Poza planem trenera. Trener zobaczy go w arkuszu.'}</p>
+    ${OWN.edit ? '' : `<label class="fl">Dzień<input type="date" id="ow-date" value="${OWN.date}"></label>
+    <label class="fl">Tytuł (opcjonalnie)<input id="ow-title" maxlength="40" placeholder="np. Ramiona" value=""></label>`}
+    <label class="fl">Szukaj ćwiczenia<input id="ow-q" autocomplete="off" placeholder="np. curl, przysiad, plank"></label>
+    <div id="ow-res" class="ow-res"></div>
+    <div class="lbl ow-h">Wybrane ćwiczenia</div><div id="ow-list"></div>
+    <p class="hint" id="ow-err" role="alert" hidden></p>
+    <button type="button" class="btn p" id="ow-save">${OWN.edit ? 'Zapisz' : 'Zapisz i zacznij'}</button>
+    <button type="button" class="btn" data-close>Anuluj</button>`);
+  const q = $('#ow-q');
+  q.oninput = () => ownRes(q.value);
+  ownRes(''); ownList();
+  $('#ow-save').onclick = ownSave;
+}
+function ownRes(q){
+  const mine = [...new Set(PLAN.slice().reverse().map(r => r.name))], res = exSearch(mine, (DATA && DATA.exNames) || [], q);
+  const exact = res.some(r => r.name.toLowerCase() === String(q).trim().toLowerCase());
+  $('#ow-res').innerHTML = (q.trim() ? '' : '<div class="lbl">Twoje ćwiczenia</div>') +
+    res.map(r => `<button type="button" class="opt ow-add" data-n="${esc(r.name)}">${esc(r.name)}${r.film ? '<small class="ow-f">film</small>' : ''}</button>`).join('') +
+    (q.trim() && !exact ? `<button type="button" class="opt ow-add ow-new" data-n="${esc(q.trim().replace(/\s+/g, ' ').slice(0, 80))}">+ Dodaj „${esc(q.trim().slice(0, 80))}” jako nowe ćwiczenie</button>` : '') +
+    (q.trim() && !res.length ? '<p class="sub">Nie ma takiego ćwiczenia w bazie. Możesz dodać je pod własną nazwą — trener podepnie film.</p>' : '');
+  document.querySelectorAll('.ow-add').forEach(b => b.onclick = () => {
+    const n = b.dataset.n, last = PLAN.slice().reverse().find(r => r.name === n);
+    OWN.list.push({ name: n, sets: last ? last.sets : 3, reps: last ? String(last.reps) : '10', kg: last && last.kg !== '' ? String(fmtKg(last.kg)) : '' });
+    $('#ow-q').value = ''; ownRes(''); ownList(); toast('Dodano: ' + n + '.');
+  });
+}
+function ownList(){
+  const box = $('#ow-list');
+  box.innerHTML = !OWN.list.length ? '<p class="sub">Jeszcze nic. Wyszukaj ćwiczenie powyżej i dotknij, żeby dodać.</p>'
+    : OWN.list.map((e, i) => e.old ? `<div class="ow-it old"><b>${esc(e.name)}</b><span>${esc(String(e.sets))} × ${esc(e.reps)}${e.kg ? ' · ' + esc(e.kg) + ' kg' : ''}</span></div>`
+      : `<div class="ow-it"><b>${esc(e.name)}</b>
+        <label>serie<input inputmode="numeric" data-i="${i}" data-f="sets" value="${esc(String(e.sets))}"></label>
+        <label>powt.<input data-i="${i}" data-f="reps" value="${esc(e.reps)}"></label>
+        <label>kg<input inputmode="decimal" data-i="${i}" data-f="kg" value="${esc(e.kg)}" placeholder="—"></label>
+        <button type="button" class="ow-rm" data-rm="${i}" aria-label="Usuń ${esc(e.name)}">✕</button></div>`).join('');
+  box.querySelectorAll('input[data-i]').forEach(inp => inp.oninput = () => { OWN.list[+inp.dataset.i][inp.dataset.f] = inp.value; });
+  box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { OWN.list.splice(+b.dataset.rm, 1); ownList(); });
+}
+function ownSave(){
+  const err = t => { const e = $('#ow-err'); e.textContent = t; e.hidden = false; };
+  if (!OWN.list.length) return err('Dodaj co najmniej jedno ćwiczenie.');
+  if (OWN.list.some(e => !(+e.sets >= 1 && +e.sets <= 10) || !String(e.reps).trim())) return err('Przy każdym ćwiczeniu wpisz serie (1–10) i powtórzenia.');
+  if (!OWN.edit) {
+    const d = $('#ow-date').value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return err('Wybierz dzień.');
+    OWN.date = d; OWN.title = $('#ow-title').value.trim(); OWN.week = ownWeek(PLAN, d); OWN.day = ownNextDay(PLAN, OWN.week);
+  }
+  const u = { week: OWN.week, day: OWN.day, date: OWN.date, title: OWN.title,
+    exercises: OWN.list.map(e => ({ name: e.name, sets: +e.sets, reps: String(e.reps).trim(), kg: String(e.kg || '').trim() })) };
+  applyOwn(u, true);
+  send('addOwnUnit', u).catch(() => {});
+  closeSheet();
+  cur.week = u.week; cur.day = u.day; TAB = 'trening'; render(); window.scrollTo(0, 0);
+  toast(OWN.edit ? 'Dodano do treningu.' : 'Własny trening gotowy.');
+}
 function renderTrening(){
   let exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order);
   if (!exs.length) { pickDefault(); exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order); }
@@ -1103,10 +1195,12 @@ function renderTrening(){
   });
   let h = notesCard() + readyBanner() + helpCard();
   exs.forEach(ex => h += card(ex));
+  if (s0.own && ownOn() && !sessDone(cur.week, cur.day)) h += '<button type="button" class="ghost own-add" id="own-add">+ ćwiczenie</button>';
   h += sessCard(s0);
   $('#main').innerHTML = h;
   bind(exs, s0);
   bindNotes();
+  const oa = $('#own-add'); if (oa) oa.onclick = () => openOwn(units(PLAN).find(u => u.week === cur.week && u.day === cur.day));
   vqMarks();
   bindFold(exs);
   refreshStats();
