@@ -66,6 +66,7 @@ Zasady dla kolejnych bloków:
 - Każdy wiersz planu ma kolumnę `blok` (np. `B2`). Aplikacja pokazuje klientowi „Blok B2 · tydz. 1”.
 - Jednostki już zrobione zostają w planie bez zmian. Plik, który nadpisałby zrobioną jednostkę innego bloku, jest odrzucany z podpowiedzią numeracji.
 - `data` jest wstępna (klient może ją przesunąć), `zamienniki` to nazwy rozdzielone „;”.
+- `serie` od 1 do 40. Opcjonalnie: `tryb` = `EMOM` (licznik minut i „+ runda”; nazwa zaczynająca się od „EMOM” działa tak samo), `ciecie` (1 = tnij jako pierwsze przy „Skróć trening”; puste = nie tnij) i `serie_min` (do ilu serii można skrócić ćwiczenie, zanim się je usunie). Bez `ciecie` w jednostce aplikacja proponuje cięcie tylko ćwiczeń opcjonalnych (B) od końca.
 
 ## Rozwój aplikacji w Claude Code
 
@@ -92,6 +93,8 @@ Zasady dla kolejnych bloków:
 | Komentarz do filmu klienta | skomentuj film na Dysku (z czasem); klient zobaczy to w aplikacji w ciągu ok. 30 min albo od razu po **Trening → Pobierz komentarze do filmów**. Uwaga bez filmu: kolumna `komentarz_trenera` w Logu lub Sesjach |
 | Wyzwalacze (5:00 i co 15 min) | menu **Trening → Zainstaluj wyzwalacze** |
 | Alert mailowy o nowym czerwonym sygnale | menu **Trening → Ustaw adres alertu** (adres zostaje we właściwościach skryptu; puste = wyłączony) |
-| Ustawienia klienta | Klienci: F ból, G tryb (PROSTY/PRO), H dod_serie, I masters |
+| Ustawienia klienta | Klienci: F ból, G tryb (PROSTY/PRO), H dod_serie, I masters, J zamiana (NIE / TRENER = zamienniki z planu i bazy / DOWOLNA = cała baza i własna nazwa; dawne TAK = TRENER) |
+| Komentarz klienta do ćwiczenia, pominięte ćwiczenia | Log: `uwagi` przy seriach ćwiczenia; pominięte = wiersz z serią 0 i typem `SKIP` (powód w `uwagi`); w Podsumowanie_cw kolumny `uwagi_klienta` i `pominiete`, pominięte główne i korekcyjne w Przeglądzie |
+| Film testu CMJ | Dysk: `<Imię>/Dyspozycja/<data>/`, link w zakładce Dyspozycja, kolumna `film_link` |
 | Wymuszenie nowej wersji na telefonach | podbij `VERSION` w `web/sw.js` |
 | Analiza wyników | projekt claude.ai: „przeanalizuj ostatni tydzień …” |
