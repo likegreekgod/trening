@@ -55,6 +55,7 @@ test('z kluczem: plan, tryb prosty, kompleks 1+1 = 2, zapis serii przez API', as
   const { ctx, p } = await page(calls);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
   assert.equal(await p.title(), 'Trening – Robert');
+  assert.equal(await p.getAttribute('meta[name="color-scheme"]', 'content'), 'light dark');   // bez przyciemniania przez system (Samsung)
   assert.equal(await p.textContent('#title'), 'FBW A');
   assert.match(await p.textContent('#eyebrow'), /Tydz\. 1 · T1 · wt 06\.10/);
   assert.equal(await fval(p, '.set[data-o="2"][data-s="1"] .reps'), '2');
