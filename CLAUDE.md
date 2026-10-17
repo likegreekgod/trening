@@ -152,7 +152,7 @@ Konwencje Damiana:
   - bez `maximum-scale`;
   - cele dotyku ≥ 44 px;
   - kolory tylko przez zmienne w `:root`;
-  - jasny motyw przez `prefers-color-scheme`.
+  - jasny motyw przez `prefers-color-scheme`; `<meta name="color-scheme" content="light dark">` zostaje, bo bez niego Samsung / Chrome przyciemniają jasny motyw po swojemu.
 
 ### Zasady v2
 

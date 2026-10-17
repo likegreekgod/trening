@@ -12,6 +12,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- aplikacja ma własny jasny i ciemny motyw: bez tego Samsung / Chrome przyciemniają jasny motyw po swojemu (czarny nagłówek, szare karty) -->
+<meta name="color-scheme" content="light dark">
 <style>
   /* Czcionki lokalne (OFL, web/fonts/), też offline przez sw.js. Zakresy: łaciński + rozszerzony (polskie znaki). */
   @font-face{font-family:"Big Shoulders Display";font-weight:100 900;font-display:swap;src:url(fonts/big-shoulders-display-latin-ext-wght-normal.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
@@ -723,11 +725,13 @@ function audioUnlock(){
     if (!AC) AC = new C();
     if (AC.state === 'suspended') AC.resume();
     const src = AC.createBufferSource(); src.buffer = AC.createBuffer(1, 1, 22050); src.connect(AC.destination); src.start(0);
+    acIdle(400);
   } catch (e) {}
 }
 function beep(n, freq = 880, dur = 0.18, gap = 0.12){
   if (!AC || !SG.sound) return;
   try {
+    clearTimeout(AC_IDLE);
     if (AC.state === 'suspended') AC.resume();
     const t0 = AC.currentTime + 0.03, v = Math.max(0.05, Math.min(1, +SG.vol || 0.7));
     for (let i = 0; i < n; i++) {
@@ -737,8 +741,12 @@ function beep(n, freq = 880, dur = 0.18, gap = 0.12){
       g.gain.setValueAtTime(v, t + dur - 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur + 0.02);
     }
+    acIdle(1000 * n * (dur + gap) + 400);
   } catch (e) {}
 }
+/** po dźwięku wstrzymaj kontekst audio: Android nie trzyma wtedy systemowej kontrolki multimediów; kolejny sygnał wznawia go (beep → resume) */
+let AC_IDLE = null;
+function acIdle(ms){ clearTimeout(AC_IDLE); AC_IDLE = setTimeout(() => { try { if (AC && AC.state === 'running') AC.suspend(); } catch (e) {} }, ms); }
 const vib = pat => { if (SG.vib && navigator.vibrate) try { navigator.vibrate(pat); } catch (e) {} };
 function flash(){ document.body.classList.remove('flash'); void document.body.offsetWidth; document.body.classList.add('flash'); setTimeout(() => document.body.classList.remove('flash'), 1700); }
 const END_VIB = [300, 150, 300, 150, 600];
