@@ -5,6 +5,8 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 ## 2026-10-18 · Inne kolory na Samsungu, kontrolka multimediów
 
 - Na S24 aplikacja miała czarny nagłówek, ciemnoczerwoną kapsułę w menu i szare karty: telefon automatycznie przyciemniał jasny motyw (tryb ciemny Samsunga / „ciemne strony” w przeglądarce), bo strona deklarowała w CSS tylko jasny. Teraz `<meta name="color-scheme" content="light dark">`: system widzi, że aplikacja ma własny ciemny motyw, i jej nie przyciemnia.
+- Klienci J pokazywała dalej tylko TAK/NIE: listy rozwijane ustawiał jednorazowy `setup()`. Teraz odświeża je też menu „Odśwież linki klientów” (`klienciListy_`).
+- Ekran Dyspozycja pokazuje pod formularzem kartę „Ostatnie pomiary” (7 ostatnich dni: werdykt, ankieta, CMJ, prędkość); wykresy całej historii zostają w Postęp → Dyspozycja.
 - Po sygnale przerwy Android pokazywał pływającą kontrolkę multimediów. Kontekst dźwięku jest teraz wstrzymywany chwilę po sygnale i wznawiany przy następnym.
 
 ## 2026-10-17 · Uwagi z testów 16–17.10: EMOM, komentarz do ćwiczenia, pomijanie, pasek tygodnia, CMJ, sygnał przerwy
