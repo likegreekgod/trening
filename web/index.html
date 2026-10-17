@@ -394,6 +394,8 @@
   .verdict + .card{margin-top:18px}
   .verdict.lv-none{box-shadow:inset 6px 0 0 var(--line),var(--shadow)}
   .vcount{font:500 13px var(--f-mono);color:var(--ink-2);margin:6px 0 0!important}
+  .rhist .kv{flex-wrap:wrap}
+  .rhist .kv b{font-size:14px}
   .card.dsum{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px}
   .card.dsum b{font:500 15px var(--f-mono);color:var(--ink)}
   .card.dsum .btn{margin:0!important}
@@ -1049,6 +1051,17 @@ function readyBanner(){
   return `<button type="button" class="ready lv-${lvl}" id="go-dysp">` + (r ? `<b>${esc(r.werdykt)}</b><span>${READY_ADVICE[lvl]}</span>`
     : '<b>Dyspozycja dnia</b><span>Nie zmierzono dziś. Dotknij: ankieta, skok i prędkość, ok. 3 min.</span>') + '</button>';
 }
+/** ostatnie zapisane dni (bez dzisiejszego): data, werdykt, ankieta, CMJ, prędkość; pełna historia w Postęp → Dyspozycja */
+function readyHistory(){
+  const today = localDate(), f = v => isNum(num(v)) ? fmtKg(Math.round(num(v) * 100) / 100) : '';
+  const rows = readyRows().filter(x => x.data && x.data !== today && (x.werdykt || x.hooper_suma || x.cmj_sr || x.vbt_test))
+    .sort((a, b) => b.data.localeCompare(a.data)).slice(0, 7);
+  if (!rows.length) return '';
+  return `<section class="card rhist"><div class="cn">Ostatnie pomiary</div>` + rows.map(r => {
+    const parts = [f(r.hooper_suma) && 'ankieta ' + f(r.hooper_suma), f(r.cmj_sr) && 'CMJ ' + f(r.cmj_sr) + ' cm', f(r.vbt_test) && f(r.vbt_test) + ' m/s'].filter(Boolean).join(' · ');
+    return `<div class="kv"><span>${weekday(r.data)} ${ddmm(r.data)}${r.werdykt ? ' · ' + esc(r.werdykt) : ''}</span><b>${esc(parts || '–')}</b></div>`;
+  }).join('') + `<p class="sub">Wykresy całej historii: Postęp → Dyspozycja.</p></section>`;
+}
 const READY_MIN = 5;     // tyle pomiarów, zanim aplikacja oceni dyspozycję (wcześniej: „Zbieram Twoją średnią”)
 const readyCount = () => readyRows().filter(x => x.data && x.data !== localDate()).length;
 function renderDysp(){
@@ -1067,7 +1080,7 @@ function renderDysp(){
   const sumLine = [isFinite(v.hs) ? 'Ankieta ' + v.hs : '', isFinite(sp.avg) ? 'CMJ ' + f1(sp.avg) + ' cm' : '', isNum(num(rd.vbt)) ? f2(num(rd.vbt)) + ' m/s' : ''].filter(Boolean).join(' · ');
   if (rd.saved && !rd.edit) {
     $('#dysp').innerHTML = verdictCard + `<section class="card dsum"><div><div class="lbl">Zapisane dziś</div><b>${esc(sumLine || '–')}</b></div><button type="button" class="btn" id="rd-edit">Edytuj</button></section>
-      <p class="sub">To wskazówka do rozmowy z trenerem, nie diagnoza.</p>`;
+      <p class="sub">To wskazówka do rozmowy z trenerem, nie diagnoza.</p>` + readyHistory();
     $('#rd-edit').onclick = () => { rd.edit = true; renderDysp(); };
     return;
   }
@@ -1086,7 +1099,7 @@ function renderDysp(){
       <label class="fl">Prędkość (m/s)<input id="rd-vbt" inputmode="decimal" value="${esc(fmtKg(rd.vbt))}" placeholder="np. 1,05"></label>
       <div class="kv"><span>Twoja średnia (5 pomiarów)</span><b>${collecting ? '–' : f2(base.vbt) + ' m/s'}</b></div></section>
     <button type="button" class="btn p" id="rd-save">${rd.saved ? 'Zapisz zmiany' : 'Zapisz dyspozycję'}</button>
-    <p class="sub">${rd.saved ? 'Dzisiejsza dyspozycja jest zapisana.' : 'Pomiary zostają w telefonie, dopóki nie dotkniesz „Zapisz”.'} To wskazówka do rozmowy z trenerem, nie diagnoza.</p>`;
+    <p class="sub">${rd.saved ? 'Dzisiejsza dyspozycja jest zapisana.' : 'Pomiary zostają w telefonie, dopóki nie dotkniesz „Zapisz”.'} To wskazówka do rozmowy z trenerem, nie diagnoza.</p>` + readyHistory();
   const keep = () => { const y = window.scrollY; rd.saved = false; rd.edit = true; rdKeep(); renderDysp(); window.scrollTo(0, y); };
   document.querySelectorAll('#dysp .scale[data-q] button').forEach(b => b.onclick = () => { rd.hooper[b.parentElement.dataset.q] = +b.dataset.v; keep(); });
   document.querySelectorAll('#dysp input[data-j]').forEach(i => i.onchange = () => { const x = num(i.value); rd.cmj[+i.dataset.j] = isNum(x) ? x : ''; if (!isNum(x)) rd.excl[+i.dataset.j] = false; keep(); });

@@ -511,12 +511,7 @@ function setup() {
   if (!kl.getRange(1, 11).getValue()) kl.getRange(1, 11).setValue('skala');
   if (!kl.getRange(1, 12).getValue()) kl.getRange(1, 12).setValue('sufit_oly');
   if (!kl.getRange(1, 13).getValue()) kl.getRange(1, 13).setValue('wlasne');
-  // listy rozwijane: „tryb”, „zamiana”, „skala”
-  const list = (col, vals) => kl.getRange(2, col, Math.max(kl.getMaxRows() - 1, 1), 1).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(vals, true).setAllowInvalid(true).build());
-  list(7, ['PROSTY', 'PRO']);
-  list(10, ['NIE', 'TRENER', 'DOWOLNA', 'TAK']);
-  list(11, ['RPE', 'RIR']);
+  klienciListy_(kl);
   // klucze liczbowe (Arkusze potrafią zamienić je na liczbę) → nowy klucz tekstowy
   const keys = kl.getRange(2, 1, kl.getLastRow() - 1, 1).getValues();
   keys.forEach((r, i) => { if (!/^k[0-9a-f]{11}$/.test(String(r[0]))) kl.getRange(i + 2, 1).setValue(newKey_()); });
@@ -686,7 +681,19 @@ function onOpen() {
 /* ---------- menu Trening: to, co dotąd wymagało edytora Apps Script ---------- */
 function alert_(title, text) { SpreadsheetApp.getUi().alert(title, text, SpreadsheetApp.getUi().ButtonSet.OK); }
 
+/** Listy rozwijane w Klienci: G „tryb”, J „zamiana”, K „skala” (setup i menu „Odśwież linki klientów”, żeby nowe wartości doszły do istniejącego arkusza). */
+function klienciListy_(kl) {
+  kl = kl || SpreadsheetApp.getActive().getSheetByName('Klienci');
+  if (!kl) return;
+  const list = (col, vals) => kl.getRange(2, col, Math.max(kl.getMaxRows() - 1, 1), 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(vals, true).setAllowInvalid(true).build());
+  list(7, ['PROSTY', 'PRO']);
+  list(10, ['NIE', 'TRENER', 'DOWOLNA', 'TAK']);
+  list(11, ['RPE', 'RIR']);
+}
+
 function menuLinki() {
+  klienciListy_();                                                     // także nowe wartości list (np. zamiana TRENER / DOWOLNA)
   if (!linkBase_()) { alert_('Linki klientów', 'Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL.'); return; }
   linki();
   const n = Math.max(0, SpreadsheetApp.getActive().getSheetByName('Klienci').getLastRow() - 1);

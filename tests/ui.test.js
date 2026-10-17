@@ -609,6 +609,9 @@ test('Dyspozycja: ankieta, skoki i prędkość → werdykt wg progów, zapis, ba
   await p.click('#go-dysp'); await p.waitForSelector('#dysp .verdict');
   assert.equal(await p.getAttribute('#nav [data-tab="dysp"]', 'aria-current'), 'page');
   assert.equal(await p.textContent('.verdict h2'), 'Brak pomiaru');
+  // historia: ostatnie zapisane dni pod formularzem (najnowszy na górze)
+  assert.equal(await p.$$eval('#dysp .rhist .kv', k => k.length), 6);
+  assert.match(await p.$eval('#dysp .rhist .kv', k => k.textContent), /06\.09 · Dobra dyspozycja.*ankieta 12 · CMJ 40 cm · 1 m\/s/);
   await hooper(p, 4);                                                           // suma 16 = średnia 12 + 4 → uwaga
   assert.equal(await p.textContent('.verdict h2'), 'Uwaga');
   for (const i of [0, 1, 2]) { await p.fill(`#dysp input[data-j="${i}"]`, '38'); await p.press(`#dysp input[data-j="${i}"]`, 'Tab'); }
