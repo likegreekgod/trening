@@ -1,6 +1,6 @@
 // Service worker: pliki aplikacji w pamięci telefonu → start bez sieci.
 // Zmień VERSION przy każdej publikacji, żeby telefony pobrały nową wersję.
-const VERSION = 'v27';
+const VERSION = 'v28';
 const CACHE = 'trening-' + VERSION;
 const SHELL = ['./', 'index.html', 'config.js', 'lib.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon.svg', 'icons/favicon-32.png',
   'icons/apple-touch-icon.png', 'icons/icon-maskable-192.png', 'icons/icon-maskable-512.png', 'icons/icon-mono.svg',

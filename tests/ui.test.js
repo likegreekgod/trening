@@ -27,7 +27,7 @@ test.before(async () => {
 test.after(async () => { await browser.close(); server.close(); });
 
 async function page(calls, offline, opt = {}) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: opt.scheme || 'light' });
+  const ctx = await browser.newContext(Object.assign({ viewport: { width: 390, height: 844 }, colorScheme: opt.scheme || 'light' }, opt.ua ? { userAgent: opt.ua } : {}));
   const data = opt.data || DATA;
   await ctx.route('**/macros/**', async r => {
     if (offline) return r.abort();
@@ -1233,4 +1233,21 @@ for (const w of [360, 412]) test(`Pasek tygodnia przy ${w} px: 7 dni bez przewij
   assert.deepEqual(await a11y(p), []);
   assert.deepEqual(p.errors, []);
   await ctx.close();
+});
+
+test('Samsung Internet: podpowiedź „otwórz w Chrome”, „Rozumiem” chowa ją na stałe; w Chrome jej nie ma', async () => {
+  const ua = 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36';
+  const { ctx, p } = await page([], false, { ua });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  assert.match(await p.textContent('.sbnote'), /otwórz link od trenera w Chrome/);
+  assert.deepEqual(await a11y(p), []);
+  await p.click('#sb-ok');
+  assert.equal(await p.$('.sbnote'), null);
+  await p.reload(); await p.waitForSelector('.set');
+  assert.equal(await p.$('.sbnote'), null);
+  await ctx.close();
+  const c = await page([]);
+  await c.p.goto(base + '?k=kabc'); await c.p.waitForSelector('.set');
+  assert.equal(await c.p.$('.sbnote'), null);
+  await c.ctx.close();
 });
