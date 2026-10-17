@@ -330,3 +330,78 @@ test('ownWeek, ownNextDay, exSearch: własny trening klienta', () => {
   assert.equal(L.exSearch([], base.concat(Array.from({ length: 30 }, (_, i) => ['Curl ' + i, 0])), 'curl').length, 12);
   assert.deepEqual([...L.lightWeeks([{ week: 1, sets: 3, reps: '5', kg: 100 }, { week: 2, sets: 3, reps: '5', kg: 100 }, { week: 2, sets: 9, reps: '10', kg: 50, own: true }])], []);
 });
+
+// --- 17.10: EMOM, CMJ (rozrzut, klatkaż), pasek tygodnia, pominięcia, „Skróć trening” ---
+test('isEmom: kolumna tryb albo nazwa „EMOM …”', () => {
+  assert.equal(L.isEmom({ name: 'EMOM Power Snatch from blocks' }), true);
+  assert.equal(L.isEmom({ name: 'Rwanie', mode: 'emom' }), true);
+  assert.equal(L.isEmom({ name: 'Przysiad (bez EMOM)' }), false);
+  assert.equal(L.SETS_MAX, 40);
+});
+
+test('cmjSpread: mediana, skok odstający > 8%, średnia bez wykluczonych', () => {
+  const r = L.cmjSpread([41.7, 45.9, 41.1]);
+  assert.equal(r.median, 41.7); assert.deepEqual(r.out, [1]); assert.equal(Math.round(r.avg * 10) / 10, 42.9);
+  const x = L.cmjSpread([41.7, 45.9, 41.1], [false, true, false]);
+  assert.equal(Math.round(x.avg * 10) / 10, 41.4); assert.equal(x.n, 2);
+  assert.deepEqual(L.cmjSpread([40, 41, 42]).out, []);
+  assert.deepEqual(L.cmjSpread([40, '', 50]).out, []);                           // przy 2 skokach bez oceny rozrzutu
+  assert.ok(isNaN(L.cmjSpread(['', '', '']).avg));
+});
+
+test('mp4Fps: klatkaż ścieżki wideo (mdhd + stts) i com.android.capture.fps', () => {
+  const u32 = n => [n >>> 24 & 255, n >>> 16 & 255, n >>> 8 & 255, n & 255], s4 = t => [...t].map(c => c.charCodeAt(0));
+  const box = (t, ...p) => { const b = [].concat(...p); return u32(b.length + 8).concat(s4(t), b); };
+  const f32 = v => { const b = Buffer.alloc(4); b.writeFloatBE(v); return [...b]; };
+  const vide = (scale, delta, count) => box('trak', box('mdia',
+    box('mdhd', [0, 0, 0, 0], u32(0), u32(0), u32(scale), u32(count * delta), [0, 0, 0, 0]),
+    box('hdlr', [0, 0, 0, 0], u32(0), s4('vide'), u32(0), u32(0), u32(0), [0]),
+    box('minf', box('stbl', box('stts', [0, 0, 0, 0], u32(1), u32(count), u32(delta))))));
+  const soun = box('trak', box('mdia', box('hdlr', [0, 0, 0, 0], u32(0), s4('soun'), u32(0), u32(0), u32(0), [0])));
+  const meta = box('meta', box('hdlr', [0, 0, 0, 0], u32(0), s4('mdta'), u32(0), u32(0), u32(0), [0]),
+    box('keys', [0, 0, 0, 0], u32(1), u32(8 + 23), s4('mdta'), s4('com.android.capture.fps')),
+    box('ilst', u32(28), u32(1), box('data', u32(23), u32(0), f32(240))));          // pozycja ilst: typ = numer klucza (1)
+  const file = new Uint8Array(box('ftyp', s4('isom'), u32(0)).concat(box('moov', soun, vide(90000, 3000, 120), meta)));
+  assert.deepEqual(L.mp4Fps(file), { fps: 30, capture: 240 });                  // eksport slow-mo: plik 30 kl./s, nagranie 240
+  assert.deepEqual(L.mp4Fps(new Uint8Array(box('moov', vide(24000, 100, 50)))), { fps: 240, capture: NaN });
+  assert.equal(L.slowNameLowFps('DJI_slowmotion_0042.mp4', 30), true);
+  assert.equal(L.slowNameLowFps('skok.mp4', 30), false);
+  assert.equal(L.slowNameLowFps('slow.mp4', 240), false);
+  // plik 30 kl./s z nagrania 240: 2 s pliku = 0,25 s lotu → h = g·t²/8
+  const t = L.cmjFlight(1, 3, 30, 240); assert.equal(t, 0.25);
+  assert.equal(Math.round(L.cmjHeight(t) * 10) / 10, 7.7);
+  assert.equal(L.cmjFlight(1, 1.5, NaN, 240), 0.5);                              // bez kl./s pliku: czas pliku
+});
+
+test('weekDays i pickUnit: pasek Pn–Nd ze stanami, domyślna jednostka', () => {
+  const list = [{ week: 1, day: 'S1', date: '2026-10-19', done: true }, { week: 1, day: 'T1', date: '2026-10-20', done: false },
+    { week: 1, day: 'S2', date: '2026-10-21', done: false }, { week: 1, day: 'T2', date: '2026-10-23', done: false }, { week: 1, day: 'W1', date: '2026-10-23', done: false }];
+  assert.equal(L.mondayOf('2026-10-25'), '2026-10-19'); assert.equal(L.mondayOf('2026-10-19'), '2026-10-19');
+  const d = L.weekDays(list, '2026-10-19', '2026-10-21');
+  assert.deepEqual(d.map(x => x.items.map(i => i.day + ':' + i.st).join(',')), ['S1:done', 'T1:late', 'S2:today', '', 'T2:plan,W1:plan', '', '']);
+  assert.equal(d[6].date, '2026-10-25');
+  assert.equal(L.pickUnit(list, '2026-10-21').day, 'S2');
+  assert.equal(L.pickUnit(list, '2026-10-22').day, 'T2');                         // najbliższa następna
+  assert.equal(L.pickUnit(list.slice(0, 1), '2026-10-30').day, 'S1');             // nic dalej: ostatnia
+});
+
+test('skipText / parseSkip i cutPlan: kolejność cięcia, serie_min, domyślnie B od końca', () => {
+  const k = { to: 2, from: 4, why: 'brak czasu' };
+  assert.equal(L.skipText(k), 'skrócone do 2 z 4 serii · brak czasu');
+  assert.deepEqual(L.parseSkip(L.skipText(k)), k);
+  assert.deepEqual(L.parseSkip('ból: kolano'), { to: 0, from: 0, why: 'ból: kolano' });
+  const E = (order, prio, sets, x) => Object.assign({ order, name: 'E' + order, prio, sets, done: 0 }, x || {});
+  // A 4 s × (45+120) = 11 min, B 3 × 135 s, K 2 × 105 s
+  const unit = [E(1, 'A', 4), E(2, 'B', 3), E(3, 'B', 3), E(4, 'K', 2)];
+  const def = L.cutPlan(unit, 22);                                              // razem 28 min
+  assert.deepEqual(def.cuts.map(c => c.order + '→' + c.to), ['3→0']);              // B od końca, K i A nietknięte
+  assert.equal(def.fits, true);
+  assert.deepEqual(L.cutPlan(unit, 5).cuts.map(c => c.order + '→' + c.to), ['3→0', '2→0']);
+  assert.equal(L.cutPlan(unit, 5).fits, false);
+  // z planu: ciecie 1 = K (najpierw do serie_min 1, potem całe), potem A do 2 serii, potem do zrobionych
+  const plan = [E(1, 'A', 4, { cut: 2, setsMin: 2, done: 1 }), E(2, 'B', 3), E(4, 'K', 2, { cut: 1, setsMin: 1 })];
+  assert.deepEqual(L.cutPlan(plan, 17).cuts.map(c => c.order + '→' + c.to), ['4→1']);
+  assert.deepEqual(L.cutPlan(plan, 14).cuts.map(c => c.order + '→' + c.to), ['4→0', '1→2']);
+  assert.deepEqual(L.cutPlan(plan, 3).cuts.map(c => c.order + '→' + c.to), ['4→0', '1→1']);   // B bez „ciecie” zostaje
+  assert.deepEqual(L.cutPlan(plan, 999).cuts, []);
+});

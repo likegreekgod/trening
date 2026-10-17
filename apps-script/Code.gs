@@ -12,11 +12,13 @@
  * Klienci, kolumna H „dod_serie”: ile dodatkowych serii klient może dopisać do każdego ćwiczenia (puste/0 = nie może).
  * Plan, kolumna „dod_serie” (opcjonalna): to samo dla konkretnego ćwiczenia — ma pierwszeństwo przed kolumną H.
  * Plan, kolumna „drop” (opcjonalna): liczba zaplanowanych drop setów po ostatniej serii.
- * Log, seria: 1…n robocze, n+1… dodatkowe, R1… rozgrzewka, D1… drop set.
- * Log, typ: DROP, FAIL (nieudana) lub DROP+FAIL; puste = zwykła seria.
+ * Log, seria: 1…n robocze, n+1… dodatkowe, R1… rozgrzewka, D1… drop set, 0 = ćwiczenie pominięte / skrócone (typ SKIP).
+ * Log, typ: DROP, FAIL (nieudana) lub DROP+FAIL; SKIP = pominięte (uwagi = powód); puste = zwykła seria.
+ * Log, uwagi: komentarz klienta do ćwiczenia (ten sam we wszystkich seriach ćwiczenia, logNote).
+ * Plan, kolumny opcjonalne: „tryb” (EMOM), „ciecie” (1 = tnij jako pierwsze przy „Skróć trening”), „serie_min”.
  * Plan bez dat (kolumna „data” pusta): jednostka zamknięta dostaje datę wykonania z Sesji, niezamknięta — dzisiejszą.
  *   Dzięki temu aplikacja otwiera pierwszą niezrobioną jednostkę, a Log/Sesje/podsumowanie mają faktyczne daty.
- * Klienci, kolumna J „zamiana”: TAK = klient może zamienić ćwiczenie (z powodem).
+ * Klienci, kolumna J „zamiana”: TRENER (albo TAK) = zamienniki z planu i bazy; DOWOLNA = cała baza i własna nazwa; puste/NIE = bez zamiany.
  * Klienci, kolumna K „skala”: RIR = widok RIR zamiast RPE (arkusz zawsze zapisuje RPE; RIR = 10 − RPE).
  * Klienci, kolumna L „sufit_oly”: ułamek 1RM ponad plan dla bojów (domyślnie 0,05).
  * Plan, kolumna „zamienniki” (opcjonalna): nazwy rozdzielone „;”. Kolumna „blok” (opcjonalna): np. B2;
@@ -33,7 +35,7 @@ const LOG_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data',
 const SES_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data',
   'bol_kolano', 'bol_bark', 'samopoczucie', 'czas_min', 'uwagi', 'start', 'koniec', 'bol', 'bol_max', 'rpe_sesji', 'komentarz_trenera'];
 const DYS_HEADERS = ['id', 'zapisano', 'klient', 'data', 'cmj1', 'cmj2', 'cmj3', 'cmj_sr',
-  'sen', 'stres', 'zmeczenie', 'bolesnosc', 'hooper_suma', 'vbt_test', 'werdykt', 'powody'];
+  'sen', 'stres', 'zmeczenie', 'bolesnosc', 'hooper_suma', 'vbt_test', 'werdykt', 'powody', 'cmj_wykluczone', 'film_link'];
 const OCENY = ['L', 'S', 'W', 'X'];   // boje: Łatwo / Średnio / Walka / Spalone
 
 /* ---------- WEB ---------- */
@@ -61,7 +63,8 @@ function doGet(e) {
 /* ---------- API dla aplikacji na GitHub Pages ----------
  * POST (Content-Type text/plain, bez preflight CORS), body: {fn, key, args:[…]} → {ok:true, result} | {ok:false, error}
  */
-const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError };
+const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError,
+  logNote, logReadyVideo };
 
 function doPost(e) {
   let out;
@@ -100,7 +103,8 @@ function getData(key) {
       extra: ix < 0 || r[ix] === '' || r[ix] === null ? null : (Number(r[ix]) || 0),
       drop: idr < 0 ? 0 : (Number(r[idr]) || 0),
       group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
-      swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts, own: opt(r, 'zrodlo').toLowerCase() === 'klient'
+      swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts, own: opt(r, 'zrodlo').toLowerCase() === 'klient',
+      mode: opt(r, 'tryb').toUpperCase(), cut: Number(opt(r, 'ciecie')) || null, setsMin: opt(r, 'serie_min') === '' ? null : Number(opt(r, 'serie_min'))
     }; });
   lap('wiersze');
   const sessions = readRows_('Sesje', SES_HEADERS, client.id), logs = readRows_('Log', LOG_HEADERS, client.id); lap('log');
@@ -143,7 +147,36 @@ function saveDyspozycja(key, d) {
   upsert_('Dyspozycja', DYS_HEADERS, id, [id, new Date(), client.id, date,
     v((d.cmj || [])[0]), v((d.cmj || [])[1]), v((d.cmj || [])[2]), v(d.cmjAvg),
     v(h.sen), v(h.stres), v(h.zmeczenie), v(h.bolesnosc), v(h.suma), v(d.vbt),
-    String(d.verdict || ''), [].concat(d.reasons || []).join('; ')]);
+    String(d.verdict || ''), [].concat(d.reasons || []).join('; '), cmjExcl_(d.excl)]);
+  return { ok: true, id: id };
+}
+
+/** Wykluczone skoki CMJ (nie wchodzą do cmj_sr, zostają w cmj1–3): [false, true, false] / [2] → „2”. */
+function cmjExcl_(x) {
+  const a = [].concat(x || []), out = [];
+  a.forEach((v, i) => { if (v === true) out.push(i + 1); else if ([1, 2, 3].indexOf(Number(v)) >= 0 && typeof v !== 'boolean') out.push(Number(v)); });
+  return [...new Set(out)].sort().join(',');
+}
+
+/** Link do filmu skoku CMJ w zakładce Dyspozycja (kolumna film_link, kilka filmów rozdzielonych „ ; ”). Brak wpisu z tego dnia → nowy wiersz z samym linkiem. */
+function logReadyVideo(key, v) {
+  const client = mustClient_(key);
+  if (!/^https:\/\/drive\.google\.com\//.test(String(v.link || ''))) throw new Error('Zły link do filmu.');
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(v.date || '')) ? v.date : today_();
+  const id = [client.id, date].join('|'), col = DYS_HEADERS.indexOf('film_link') + 1;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Dyspozycja', DYS_HEADERS);
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(id).matchEntireCell(true).findNext();
+    if (hit) {
+      const c = sh.getRange(hit.getRow(), col), was = String(c.getValue() || '');
+      if (was.indexOf(v.link) < 0) c.setValue(was ? was + ' ; ' + v.link : v.link);
+    } else {
+      const row = DYS_HEADERS.map(() => ''); row[0] = id; row[1] = new Date(); row[2] = client.id; row[3] = date; row[col - 1] = v.link;
+      sh.appendRow(row);
+    }
+  } finally { lock.releaseLock(); }
   return { ok: true, id: id };
 }
 
@@ -183,6 +216,25 @@ function planMoves_(plan, sessions, clientId, moves) {
   return { rows, moved, skipped };
 }
 
+/**
+ * Komentarz klienta do ćwiczenia (np. „face pull 3×10 na TRX”): kolumna Log „uwagi” we wszystkich zapisanych seriach
+ * tego ćwiczenia w jednostce. Serie zapisane później dostają go z aplikacji (logSet, pole note).
+ */
+function logNote(key, n) {
+  const client = mustClient_(key);
+  const pre = [client.id, n.week, n.day, n.order].join('|') + '|', note = String(n.note || '').slice(0, 500);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Log', LOG_HEADERS), last = sh.getLastRow();
+    if (last < 2) return { ok: true, rows: 0 };
+    const ids = sh.getRange(2, 1, last - 1, 1).getValues(), col = LOG_HEADERS.indexOf('uwagi') + 1;
+    let k = 0;
+    ids.forEach((r, i) => { if (String(r[0]).indexOf(pre) === 0) { sh.getRange(i + 2, col).setValue(note); k++; } });
+    return { ok: true, rows: k };
+  } finally { lock.releaseLock(); }
+}
+
 /** Usunięcie serii dodanej przez klienta (rozgrzewka / dodatkowa / drop) — kasuje wiersz w Log. */
 function deleteSet(key, s) {
   const client = mustClient_(key);
@@ -211,10 +263,10 @@ function logSession(key, s) {
 function startUpload(key, meta) {
   const client = mustClient_(key);
   meta.date = meta.date || today_();
-  const folder = sessionFolder_(client, meta.date, meta.day);
+  const folder = meta.kind === 'cmj' ? readyFolder_(client, meta.date) : sessionFolder_(client, meta.date, meta.day);
   const safe = String(meta.name).replace(/[^\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ \-]/g, '').slice(0, 40);
   const ext = (String(meta.fileName).match(/\.[a-z0-9]+$/i) || ['.mp4'])[0];
-  const fileName = `${meta.date}_${meta.day}_${safe}_s${meta.set || 0}${ext}`;
+  const fileName = meta.kind === 'cmj' ? `${meta.date}_CMJ_skok${meta.set || 0}${ext}` : `${meta.date}_${meta.day}_${safe}_s${meta.set || 0}${ext}`;
   const headers = {
     Authorization: 'Bearer ' + ScriptApp.getOAuthToken(),
     'X-Upload-Content-Type': meta.mimeType || 'video/mp4',
@@ -316,12 +368,18 @@ function findClient_(key) {
         pain: cell(v[i], 5) === 'TAK',
         simple: cell(v[i], 6) === 'PROSTY',
         extra: Number(String(v[i][7] === undefined ? '' : v[i][7]).replace(',', '.')) || 0,
-        swap: cell(v[i], 9) === 'TAK',
+        swap: swapMode_(cell(v[i], 9)),
         scale: cell(v[i], 10) === 'RIR' ? 'RIR' : 'RPE',
         olyCeil: olyCeil_(v[i][11]), own: cell(v[i], 12) !== 'NIE' };
     }
   }
   return null;
+}
+
+/** Klienci J „zamiana”: TAK / TRENER → zamienniki z planu i bazy, DOWOLNA → cała baza i własna nazwa, inne → brak (false). */
+function swapMode_(v) {
+  v = String(v || '').trim().toUpperCase();
+  return v === 'TAK' || v === 'TRENER' ? 'TRENER' : v === 'DOWOLNA' ? 'DOWOLNA' : false;
 }
 
 /** Klienci L „sufit_oly”: ułamek (0,05) albo procent (5 / „5%”); puste lub błędne = 0,05. */
@@ -432,6 +490,11 @@ function sessionFolder_(client, date, day) {
   return child_(child_(rootFolder_(), client.name), `${date}_${day}`);
 }
 
+/** Filmy testu CMJ: „Trening – Klienci/<Imię>/Dyspozycja/<RRRR-MM-DD>/”. */
+function readyFolder_(client, date) {
+  return child_(child_(child_(rootFolder_(), client.name), 'Dyspozycja'), String(date));
+}
+
 /** Uruchom raz ręcznie z edytora — nadaje uprawnienia i tworzy zakładki/folder. */
 function setup() {
   planTextCols_();
@@ -452,7 +515,7 @@ function setup() {
   const list = (col, vals) => kl.getRange(2, col, Math.max(kl.getMaxRows() - 1, 1), 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(vals, true).setAllowInvalid(true).build());
   list(7, ['PROSTY', 'PRO']);
-  list(10, ['TAK', 'NIE']);
+  list(10, ['NIE', 'TRENER', 'DOWOLNA', 'TAK']);
   list(11, ['RPE', 'RIR']);
   // klucze liczbowe (Arkusze potrafią zamienić je na liczbę) → nowy klucz tekstowy
   const keys = kl.getRange(2, 1, kl.getLastRow() - 1, 1).getValues();
@@ -591,12 +654,13 @@ function go(e){e.preventDefault();var f=e.target,b=document.getElementById('b'),
  */
 const SUM_HEADERS = ['klient', 'tydzien_od', 'tyg_planu', 'jednostki', 'wykonanie_%', 'serie_rob', 'serie_twarde', 'tonaz_kg',
   'NL_%', 'sr_int_%', 'fail_%', 'dod+drop', 'sRPE_TL_AU', 'ACWR', 'monotonia', 'strain', 'e1RM_zm_%', 'RPE_vs_plan',
-  'samopocz_sr', 'samopocz_min', 'bol_max', 'status', 'powody'];
+  'samopocz_sr', 'samopocz_min', 'bol_max', 'status', 'powody', 'opcjonalne'];
 const OLY_HEADERS = ['klient', 'tydzien_od', 'masters', 'NL_R', 'NL_P', 'NL_CR', 'NL_CP', 'NL_PS', 'NL_I', 'NL_razem', 'spec_%',
   'int_R_%', 'int_P_%', 'int_CR_%', 'int_CP_%', 'int_PS_%', 'z≤60', 'z61-70', 'z71-80', 'z81-90', 'z91-100', 'z>100', 'z>80_%', 'NL>90',
   'max_R', 'max_P', 'skut_≥85_%', 'spal_<85_%', 'VBT_80-90_zm_ms', 'sygnaly'];
 const GROUPS = ['R', 'P', 'CR', 'CP', 'PS', 'I'];
-const SUMX_HEADERS = ['klient', 'tydzien_od', 'cwiczenie', 'serie', 'tonaz_kg', 'e1RM_max', 'NL', 'sr_int_%', 'RPE_sr', 'fail'];
+const SUMX_HEADERS = ['klient', 'tydzien_od', 'cwiczenie', 'serie', 'tonaz_kg', 'e1RM_max', 'NL', 'sr_int_%', 'RPE_sr', 'fail',
+  'uwagi_klienta', 'pominiete'];
 const STATUS_BG = { '🔴 za dużo': '#f8c9c4', '🟠 uwaga': '#fde2b8', '🟢 OK': '#cdebd3', '🔵 za lekko': '#cfe0fb', '– za mało danych': '#eeeeee' };
 
 function onOpen() {
@@ -793,8 +857,19 @@ function unitDates_(ses, localDay) {
   return AD;
 }
 
+/**
+ * Ćwiczenia pominięte albo skrócone przez klienta (Log: seria 0, typ SKIP, uwagi = powód).
+ * → {klient|tydzien|jednostka|nr: powód}. Pominięte opcjonalne (B) nie obniżają wykonania planu.
+ */
+function skips_(log) {
+  const out = {};
+  (log || []).forEach(l => { if (/SKIP/.test(String(l.typ || ''))) out[[String(l.klient).toLowerCase(), l.tydzien, l.jednostka, l.nr_cw].join('|')] = String(l.uwagi || '').trim(); });
+  return out;
+}
+const optB_ = r => String(r && r.prio || '').trim().toUpperCase() === 'B';
+
 function computeSummary_(plan, log, ses, klienci, opts) {
-  const P = {}, B = {}, D = {}, M = {}, SD = {};
+  const P = {}, B = {}, D = {}, M = {}, SD = {}, SK = skips_(log);
   (klienci || []).forEach(k => { M[String(k.klient_id).toLowerCase()] = String(k.masters || '').trim().toUpperCase() === 'TAK'; });
   const g0 = () => ({ R: 0, P: 0, CR: 0, CP: 0, PS: 0, I: 0 });
   const key = (...a) => a.map(String).join('|');
@@ -805,7 +880,7 @@ function computeSummary_(plan, log, ses, klienci, opts) {
   const AD = unitDates_(ses, opts && opts.localDay);
   const acc = (c, w) => B[c + '|' + w] || (B[c + '|' + w] = { c, w, planW: {}, sess: 0, planned: 0, planTon: 0, donePlanned: 0, work: 0, hard: 0,
     ton: 0, nl: 0, intSum: 0, fail: 0, addDrop: 0, e1: {}, rpeDiff: [], feel: [], pain: NaN, srpe: 0, srpeN: 0, ex: {},
-    strWork: 0, strFail: 0, olyAny: false,
+    strWork: 0, strFail: 0, olyAny: false, optPlan: 0, optDone: {},
     o: { nl: g0(), int: g0(), intN: g0(), zones: [0, 0, 0, 0, 0, 0], nl90: 0, maxKg: { R: 0, P: 0 }, maxName: { R: '', P: '' }, maxRel: { R: 0, P: 0 },
          hiSets: 0, hiMade: 0, loSets: 0, loMiss: 0 } });
 
@@ -813,22 +888,36 @@ function computeSummary_(plan, log, ses, klienci, opts) {
     const c = String(r.klient).toLowerCase(), u = key(c, r.tydzien, r.jednostka);
     const w = weekOf_(AD[u] || (blank_(r.data) ? SD[u] : r.data));
     if (!c || !w || own_(r)) return;
-    const a = acc(c, w); a.planned += n_(r.serie) || 0; a.planW[r.tydzien] = 1;
+    const a = acc(c, w), k = key(c, r.tydzien, r.jednostka, r.nr); a.planW[r.tydzien] = 1;
+    if (optB_(r)) a.optPlan++;
+    if (!(optB_(r) && k in SK)) a.planned += n_(r.serie) || 0;              // pominięte / skrócone opcjonalne poza wykonaniem
     const pk = n_(r.kg), pr = repsOf_(r.powt);
     if (pk > 0 && pr > 0) a.planTon += (n_(r.serie) || 0) * pr * pk;
+  });
+
+  const exOf = (a, name) => a.ex[name] || (a.ex[name] = { sets: 0, ton: 0, e1: 0, nl: 0, intSum: 0, rpe: [], fail: 0, v80: [], notes: [], skip: [] });
+  // komentarze klienta do ćwiczenia (Log „uwagi”) i pominięcia, także bez wykonanej serii
+  log.forEach(l => {
+    const c = String(l.klient).toLowerCase(), note = String(l.uwagi || '').trim(), skip = /SKIP/.test(String(l.typ || ''));
+    if (!c || (!note && !skip)) return;
+    const w = weekOf_(AD[key(c, l.tydzien, l.jednostka)] || l.data); if (!w) return;
+    const x = exOf(acc(c, w), String(l.cwiczenie));
+    if (skip) x.skip.push(note || 'bez powodu'); else if (x.notes.indexOf(note) < 0) x.notes.push(note);
   });
 
   log.forEach(l => {
     if (String(l.wykonane).toUpperCase() !== 'TAK') return;
     const c = String(l.klient).toLowerCase(), s = String(l.seria), w = weekOf_(AD[key(c, l.tydzien, l.jednostka)] || l.data);
     if (!c || !w || /^R/i.test(s)) return;                                   // rozgrzewka poza objętością
-    const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
+    const pk = key(c, l.tydzien, l.jednostka, l.nr_cw), pr = P[pk] || {};
     const a = acc(c, w), name = String(l.cwiczenie);
-    const x = a.ex[name] || (a.ex[name] = { sets: 0, ton: 0, e1: 0, nl: 0, intSum: 0, rpe: [], fail: 0, v80: [] });
+    const x = exOf(a, name);
+    if (optB_(pr) && !own_(pr)) a.optDone[pk] = 1;
     const typ = String(l.typ || ''), fail = /FAIL/.test(typ), drop = /DROP/.test(typ) || /^D/i.test(s);
     const kg = n_(l.kg), reps = n_(l.powt), rpe = n_(l.rpe);
     a.work++; x.sets++;
-    if (own_(pr)) { /* własny trening: objętość tak, wykonanie planu nie */ } else if (/^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) a.donePlanned++; else a.addDrop++;
+    if (own_(pr) || (optB_(pr) && pk in SK)) { /* własny trening, skrócone opcjonalne: objętość tak, wykonanie planu nie */ }
+    else if (/^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) a.donePlanned++; else a.addDrop++;
     if (fail) { a.fail++; x.fail++; }
     const grp = groupOf_(pr.grupa, name), lift = grp === 'R' || grp === 'P', o = a.o;
     if (!lift) { a.strWork++; if (fail) a.strFail++; }
@@ -956,7 +1045,8 @@ function computeSummary_(plan, log, ses, klienci, opts) {
         a.work, a.hard, Math.round(a.ton), a.nl || '', a.nl ? r1_(100 * a.intSum / a.nl) : '', r1_(failPct), a.addDrop,
         a.srpeN ? Math.round(a.srpe) : '', r2_(acwr), r2_(mono), isFinite(mono) ? Math.round(a.srpe * mono) : '', r1_(e1chg), r2_(rpeVs),
         r1_(feelAvg), a.feel.length ? Math.min(...a.feel) : '', isNaN(a.pain) ? '' : a.pain, status,
-        (planLight ? ['tydzień lżejszy z planu'] : []).concat(R, O, L).join('; ')]);
+        (planLight ? ['tydzień lżejszy z planu'] : []).concat(R, O, L).join('; '),
+        a.optPlan ? Object.keys(a.optDone).length + '/' + a.optPlan : '']);
       if (a.olyAny) {
         const nlAll = GROUPS.reduce((s2, g) => s2 + o.nl[g], 0), spec = nlAll - o.nl.I, zAll = o.zones.reduce((s2, v) => s2 + v, 0);
         const mx = g => o.maxKg[g] ? o.maxKg[g] + ' kg' + (o.maxRel[g] ? ' · ' + Math.round(100 * o.maxRel[g]) + '%' : '') + ' (' + o.maxName[g] + ')' : '';
@@ -969,8 +1059,10 @@ function computeSummary_(plan, log, ses, klienci, opts) {
       }
       Object.keys(a.ex).sort().forEach(k => {
         const x = a.ex[k];
+        const why = {}; x.skip.forEach(t => { why[t] = (why[t] || 0) + 1; });
         exRows.push([c, a.w, k, x.sets, Math.round(x.ton), x.e1 ? r1_(x.e1) : '', x.nl || '', x.nl ? r1_(100 * x.intSum / x.nl) : '',
-          x.rpe.length ? r1_(x.rpe.reduce((s, v) => s + v, 0) / x.rpe.length) : '', x.fail || '']);
+          x.rpe.length ? r1_(x.rpe.reduce((s, v) => s + v, 0) / x.rpe.length) : '', x.fail || '', x.notes.join(' | '),
+          x.skip.length ? x.skip.length + '× ' + Object.keys(why).map(t => why[t] > 1 ? t + ' (' + why[t] + ')' : t).join(', ') : '']);
       });
     });
   });
@@ -988,7 +1080,7 @@ const NO_BLOCK = '(bez bloku)';
 function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
   const key = (...a) => a.map(String).join('|');
   const AD = unitDates_(ses, opts && opts.localDay);
-  const U = {}, P = {}, X = {}, OWN = {};
+  const U = {}, P = {}, X = {}, OWN = {}, SK = skips_(log);
   const blockOf = r => String(r.blok === undefined || r.blok === null ? '' : r.blok).trim() || NO_BLOCK;
   plan.forEach(r => {
     const c = String(r.klient).toLowerCase(); if (!c) return;
@@ -998,7 +1090,7 @@ function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
       e1: {}, best: { R: [0, ''], P: [0, ''] }, rpe: [], feel: [], pain: NaN, dates: [] });
     U[u] = x;
     if (own_(r)) { OWN[u] = 1; return; }                                    // własny: objętość tak, jednostki i wykonanie nie
-    x.planned += n_(r.serie) || 0;
+    if (!(optB_(r) && key(c, r.tydzien, r.jednostka, r.nr) in SK)) x.planned += n_(r.serie) || 0;
     if (!x.units[u]) { x.units[u] = 0; x.weeks.push(n_(r.tydzien)); const pd = blank_(r.data) ? NaN : day_(r.data), d = AD[u] || (isNaN(pd) ? '' : iso_(pd)); if (d) x.dates.push(d); }
   });
   log.forEach(l => {
@@ -1007,7 +1099,7 @@ function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
     if (!x || /^R/i.test(s)) return;
     const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
     const fail = /FAIL/.test(String(l.typ || '')), kg = n_(l.kg), reps = n_(l.powt), rpe = n_(l.rpe);
-    if (!own_(pr) && /^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) x.donePlanned++;
+    if (!own_(pr) && !(optB_(pr) && key(c, l.tydzien, l.jednostka, l.nr_cw) in SK) && /^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) x.donePlanned++;
     if (kg > 0 && reps > 0) x.ton += kg * reps;
     const name = String(l.cwiczenie), grp = groupOf_(pr.grupa, name);
     if ((grp === 'R' || grp === 'P') && !fail && kg > x.best[grp][0]) x.best[grp] = [kg, name];
@@ -1313,6 +1405,12 @@ function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
     Object.keys(fails).forEach(id => { if (fails[id] >= 2) red.push(fails[id] + '× FAIL: ' + id.split('|').pop()); });
     Object.keys(burns).forEach(id => { if (burns[id] >= 2) amb.push(burns[id] + '× spalone < 85%: ' + id.split('|').pop()); });
     Object.keys(swaps).forEach(z => amb.push('zamiana (ból): ' + z));
+    // pominięte ćwiczenia główne i korekcyjne (opcjonalne B bez sygnału)
+    log.filter(l => lc(l.klient) === c && /SKIP/.test(String(l.typ || ''))).forEach(l => {
+      const u = key(c, l.tydzien, l.jednostka), pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
+      if (optB_(pr) || own_(pr) || !recent(AD[u] || dayOf(l.zapisano) || planDay(l.data))) return;
+      amb.push('pominięte: ' + String(l.cwiczenie) + (blank_(l.uwagi) ? '' : ' (' + String(l.uwagi).trim().slice(0, 60) + ')'));
+    });
     // dyspozycja z ostatnich 3 dni (najnowszy wpis)
     const rd = (dys || []).filter(r => lc(r.klient) === c).map(r => ({ d: dayOf(r.data), w: String(r.werdykt || '') }))
       .filter(r => r.d && diff(today, r.d) >= 0 && diff(today, r.d) < PRZ.readyDays).sort((a, b) => a.d.localeCompare(b.d)).pop();
@@ -1346,6 +1444,7 @@ function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
  */
 const own_ = r => String(r && r.zrodlo !== undefined && r.zrodlo !== null ? r.zrodlo : '').trim().toLowerCase() === 'klient';
 const OWN_MAX = 20;
+const SETS_MAX = 40;   // górny limit serii ćwiczenia (EMOM 20+ rund)
 
 /**
  * Czysta funkcja: wiersze Planu dla własnej jednostki → {rows} albo {error}. u = {week, day, date, title, exercises: [{name, sets, reps, kg}]}.
@@ -1362,7 +1461,7 @@ function ownRows_(clientId, u, plan) {
     sets: Math.round(Number(e && e.sets)), reps: String(e && e.reps === undefined ? '' : e.reps).trim().slice(0, 12), kg: e && e.kg })).filter(e => e.name);
   if (!ex.length) return { error: 'Dodaj co najmniej jedno ćwiczenie.' };
   if (ex.length > OWN_MAX) return { error: 'Najwyżej ' + OWN_MAX + ' ćwiczeń.' };
-  if (ex.some(e => !(e.sets >= 1 && e.sets <= 10) || !e.reps)) return { error: 'Serie 1–10 i powtórzenia przy każdym ćwiczeniu.' };
+  if (ex.some(e => !(e.sets >= 1 && e.sets <= SETS_MAX) || !e.reps)) return { error: 'Serie 1–' + SETS_MAX + ' i powtórzenia przy każdym ćwiczeniu.' };
   const same = mine.filter(r => Number(r.tydzien) === week && !own_(r)), blok = same.length ? String(same[0].blok || '') : String((mine[mine.length - 1] || {}).blok || '');
   const title = 'Własny' + (String(u.title || '').trim() ? ' · ' + String(u.title).trim().slice(0, 40) : '');
   return { rows: ex.map((e, i) => {
@@ -1432,7 +1531,7 @@ function onEdit(e) {
 /** API: lista nazw do wyszukiwarki własnego treningu (osobno, żeby nie obciążać każdego otwarcia aplikacji). */
 function getExNames(key) {
   const client = mustClient_(key);
-  return client.own ? exNames_(cwRowsCached_()) : [];
+  return client.own || client.swap === 'DOWOLNA' ? exNames_(cwRowsCached_()) : [];   // własny trening i zamiana DOWOLNA
 }
 
 /* ---------- błędy z aplikacji klienta → zakładka „Błędy” ---------- */
@@ -1692,7 +1791,7 @@ function przeglad() {
  * Każdy import zapisuje wiersz w zakładce „Import”.
  */
 const PLAN_HEADERS = ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'nr', 'cwiczenie', 'prio', 'serie', 'powt',
-  'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok', 'zrodlo'];
+  'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok', 'zrodlo', 'tryb', 'ciecie', 'serie_min'];
 const PLAN_REQUIRED = ['klient', 'tydzien', 'jednostka', 'nr', 'cwiczenie', 'serie', 'powt'];
 
 function wczytajPlany(e) {
@@ -1738,7 +1837,10 @@ function validatePlan_(rows) {
     const w = 'wiersz ' + (i + 1) + ': ';
     PLAN_REQUIRED.forEach(k => { if (r[k] === undefined || r[k] === null || r[k] === '') e.push(w + 'brak „' + k + '”'); });
     if (r.data && !/^\d{4}-\d{2}-\d{2}$/.test(String(r.data))) e.push(w + 'data nie w formacie RRRR-MM-DD');
-    if (r.serie !== undefined && !(Number(r.serie) >= 1)) e.push(w + 'serie musi być ≥ 1');
+    if (r.serie !== undefined && !(Number(r.serie) >= 1 && Number(r.serie) <= SETS_MAX)) e.push(w + 'serie od 1 do ' + SETS_MAX);
+    if (!blank_(r.tryb) && ['EMOM'].indexOf(String(r.tryb).trim().toUpperCase()) < 0) e.push(w + 'tryb tylko EMOM (albo puste)');
+    if (!blank_(r.ciecie) && !(Number.isInteger(Number(r.ciecie)) && Number(r.ciecie) >= 1)) e.push(w + 'ciecie jako liczba całkowita ≥ 1 (1 = tnij jako pierwsze)');
+    if (!blank_(r.serie_min) && !(Number.isInteger(Number(r.serie_min)) && Number(r.serie_min) >= 1 && Number(r.serie_min) <= Number(r.serie))) e.push(w + 'serie_min od 1 do liczby serii');
     if (r.tydzien !== undefined && !(Number(r.tydzien) >= 1)) e.push(w + 'tydzien musi być ≥ 1');
     if (r.prio && ['A', 'B', 'K'].indexOf(String(r.prio)) < 0) e.push(w + 'prio tylko A/B/K');
     if (r.procent !== undefined && r.procent !== '' && !(Number(r.procent) > 0 && Number(r.procent) <= 1.3)) e.push(w + 'procent jako ułamek (np. 0.75)');

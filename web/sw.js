@@ -1,8 +1,9 @@
 // Service worker: pliki aplikacji w pamięci telefonu → start bez sieci.
 // Zmień VERSION przy każdej publikacji, żeby telefony pobrały nową wersję.
-const VERSION = 'v24';
+const VERSION = 'v25';
 const CACHE = 'trening-' + VERSION;
-const SHELL = ['./', 'index.html', 'config.js', 'lib.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
+const SHELL = ['./', 'index.html', 'config.js', 'lib.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon.svg', 'icons/favicon-32.png',
+  'icons/apple-touch-icon.png', 'icons/icon-maskable-192.png', 'icons/icon-maskable-512.png', 'icons/icon-mono.svg',
   // czcionki lokalne (OFL) – bez nich offline wróciłyby systemowe
   'fonts/big-shoulders-display-latin-ext-wght-normal.woff2',
   'fonts/big-shoulders-display-latin-wght-normal.woff2',

@@ -25,7 +25,7 @@ Filmy: telefon → Drive bezpośrednio (sesja resumable otwierana przez startUpl
 ```
 
 - `web/index.html` to jeden plik (HTML + CSS + JS), bez bundlera i frameworka; czyste funkcje (bez DOM) są w `web/lib.js` (`window.TL`, testy `tests/lib.test.js`), czcionki w `web/fonts/`. Cała komunikacja z serwerem idzie przez funkcję `call(fn, ...args)`.
-- `apps-script/Code.gs` jest powiązany z arkuszem `Trening – Aplikacja (dane)` (konto trenera, właściciel arkusza; `clasp login` musi być na tym samym koncie). API: `doPost` → `API_FNS` (getData, logSet, logSession, deleteSet, startUpload, uploadChunk, saveDyspozycja, przesunJednostke). Pierwszym argumentem każdej funkcji jest klucz klienta.
+- `apps-script/Code.gs` jest powiązany z arkuszem `Trening – Aplikacja (dane)` (konto trenera, właściciel arkusza; `clasp login` musi być na tym samym koncie). API: `doPost` → `API_FNS` (getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError, logNote, logReadyVideo). Pierwszym argumentem każdej funkcji jest klucz klienta.
 - `apps-script/Index.html` to stara wersja działająca przez `doGet` i `google.script.run` (linki `/exec?k=`). Zostaje na okres przejściowy. Nowe funkcje rób w `web/index.html`; starą wersję poprawiaj tylko przy błędach.
 - Klucz klienta w linku (`?k=k` + 11 znaków hex) jest jedynym zabezpieczeniem. PWA zapamiętuje go w `localStorage` („key”).
 - Nowe zapisy to nowe akcje w `API_FNS` wywoływane przez `call()` (np. `saveDyspozycja`), nigdy `google.script.run`.
@@ -48,22 +48,25 @@ Robi to automatycznie `.github/workflows/apps-script.yml` po scaleniu zmian w `a
 
 ## Dane (arkusz)
 
-**Plan** (PLAN_HEADERS w Code.gs): klient, tydzien, jednostka, tytul, data (RRRR-MM-DD, tekst; opcjonalna = wstępna, klient może przesunąć), nr, cwiczenie, prio (A/B/K), serie, powt (tekst: „8”, „6-8”, „8/str”, „1+1”), procent (ułamek), kg (liczba lub tekst: BW, guma), rpe_max, uwagi, dod_serie, drop, grupa (R/P/CR/CP/PS/I), zamienniki („;”), blok (np. B2).
+**Plan** (PLAN_HEADERS w Code.gs): klient, tydzien, jednostka, tytul, data (RRRR-MM-DD, tekst; opcjonalna = wstępna, klient może przesunąć), nr, cwiczenie, prio (A/B/K), serie, powt (tekst: „8”, „6-8”, „8/str”, „1+1”), procent (ułamek), kg (liczba lub tekst: BW, guma), rpe_max, uwagi, dod_serie, drop, grupa (R/P/CR/CP/PS/I), zamienniki („;”), blok (np. B2), zrodlo (klient = własny trening), tryb (EMOM), ciecie (1 = tnij pierwsze), serie_min. Serie 1–40 (`SETS_MAX`).
 Kolumny E (data), J (powt) i L (kg) muszą mieć format `@` ustawiony PRZED zapisem, bo inaczej Arkusze zamienią „6-8” w datę.
 Tygodnie u klienta numeruj **ciągle** między blokami (blok 2 od tyg. 7): id serii nie zawiera bloku, więc powtórzony numer tygodnia nadpisałby Log.
 
-**Klienci**: A klucz, B klient_id, C imie, D aktywny (TAK/NIE), E link, F bol (TAK), G tryb (PROSTY/PRO), H dod_serie, I masters (TAK), J zamiana (TAK/NIE), K skala (RPE/RIR), L sufit_oly (ułamek lub %, domyślnie 0,05). `getData` zwraca je w `cfg` jako `swap`, `scale`, `olyCeil`.
+**Klienci**: A klucz, B klient_id, C imie, D aktywny (TAK/NIE), E link, F bol (TAK), G tryb (PROSTY/PRO), H dod_serie, I masters (TAK), J zamiana (NIE / TRENER / DOWOLNA; TAK = TRENER, `swapMode_`), K skala (RPE/RIR), L sufit_oly (ułamek lub %, domyślnie 0,05). `getData` zwraca je w `cfg` jako `swap` ('TRENER' | 'DOWOLNA' | false), `scale`, `olyCeil`.
 
 **Log**: id = klient|tydzien|jednostka|nr|seria (upsert), zapisano, klient, tydzien, jednostka, data, nr_cw, cwiczenie, seria, kg, powt, rpe, vbt_ms, wykonane, film_link, uwagi, typ, ocena (L/S/W/X), vbt_peak, wysokosc_cm, sciezka (JSON), zamiana („oryginał → zamiennik | powód”).
-Wartości `seria`: 1…n robocze, n+1… dodatkowe, R1… rozgrzewka, D1… drop set. Wartości `typ`: DROP / FAIL / DROP+FAIL.
+Wartości `seria`: 1…n robocze, n+1… dodatkowe, R1… rozgrzewka, D1… drop set, 0 = ćwiczenie pominięte/skrócone. Wartości `typ`: DROP / FAIL / DROP+FAIL / SKIP (seria 0, `wykonane` puste, powód w `uwagi`: „skrócone do 2 z 4 serii · brak czasu” albo sam powód; `skips_`).
+`uwagi` w seriach = komentarz klienta do ćwiczenia (ten sam we wszystkich seriach; `logNote` poprawia wszystkie).
 `logSet` przyjmuje pola v2: `ocena`, `vbtPeak`, `height`, `path`, `swap` (brak = puste, stara aplikacja działa bez zmian).
 
 **Sesje**: id = klient|tydzien|jednostka, …, samopoczucie (1–5), czas_min, uwagi, start, koniec, bol („miejsce:0–10; …”), bol_max, rpe_sesji (0–10, CR-10).
 Kolumna `data` w Sesjach to data z planu; faktyczny dzień treningu to `start` (`unitDates_`) i według niego podsumowanie grupuje tygodnie.
 
-**Dyspozycja**: id = klient|data (jeden wpis dziennie), zapisano, klient, data, cmj1–3, cmj_sr, sen, stres, zmeczenie, bolesnosc, hooper_suma, vbt_test, werdykt, powody. Zapis: `saveDyspozycja`; `getData` zwraca `readiness`.
+**Dyspozycja**: id = klient|data (jeden wpis dziennie), zapisano, klient, data, cmj1–3, cmj_sr, sen, stres, zmeczenie, bolesnosc, hooper_suma, vbt_test, werdykt, powody, cmj_wykluczone („2”: skok poza `cmj_sr`), film_link (filmy CMJ, `logReadyVideo`, Dysk „<Imię>/Dyspozycja/<data>/”). Zapis: `saveDyspozycja` (krótszy wiersz, nie kasuje film_link); `getData` zwraca `readiness`.
 
 **Ćwiczenia** (baza, startowo z `apps-script/Cwiczenia.gs` przez menu „Wczytaj bazę ćwiczeń”; poprawki trener robi w arkuszu): cwiczenie, aliasy („;”), instruktaz (link http/https), partia (kilka przez „;”), zamienniki („;”), grupa. Dopasowanie nazwy z planu (`exIndex_`, `exFind_`): dokładna nazwa lub alias → nazwa podstawowa (bez nawiasów, „– TEST”, „z pauzą…”) → te same słowa i skróty (DB, SL, RDL); bez zgadywania po podobieństwie. Kompleks „A + B” bez własnego wiersza składa się z części (`exInfo_`). `getData` dokłada do wierszy planu `infos` [{n, u}] i `parts` [], domyślne `swaps` i `group` (plan ma pierwszeństwo) oraz mapę `parts` {nazwa → [partie]} dla nazw z planu, logu i zamienników klienta. Menu „Uzupełnij listę ćwiczeń” dopisuje nazwy z Planu bez dopasowania. W `Cwiczenia.gs` są też `CW_FEDB` (762 ćwiczenia z free-exercise-db: nazwa i partia, bez filmu), `CW_WYCOFANE` (błędne aliasy usuwane z arkusza), `CW_ALIASY` (polskie i potoczne nazwy ćwiczeń z bazy) i `CW_DODATKI` (ćwiczenia spoza Catalyst, bez filmu); `cwSync_` (czysta funkcja z testem) wylicza, co „Wczytaj bazę ćwiczeń” ma dopisać, i nie rusza ręcznych wpisów. Wiersz z samą nazwą (zaślepka) nie bierze udziału w dopasowaniu.
+
+**Pominięte i komentarze w podsumowaniu**: Podsumowanie_cw `uwagi_klienta`, `pominiete`; Podsumowanie `opcjonalne` (zrobione/plan B). Pominięte albo skrócone B nie wchodzą do `wykonanie_%` (Podsumowanie i Bloki), A/K tak; pominięte A/K = sygnał pomarańczowy w Przeglądzie.
 
 **Podsumowanie_partie** (`computeParts_`): klient × tydzień × partia: serie, serie twarde (RPE ≥ 7, FAIL, DROP), tonaż; ćwiczenie liczy się do każdej swojej partii; po zamianie liczy się wykonane ćwiczenie. Boje olimpijskie i ich warianty nie mają partii w bazie.
 
@@ -109,6 +112,7 @@ Konwencje Damiana:
   - „✓ Wszystko jak w planie”;
   - podpowiedź RIR;
   - ukryte VBT i %.
+- Pola kg / powt.: propozycja (plan, poprzednia seria, drop) to placeholder (`data-ph`, klasa `ph`), pole puste; wartość czytaj przez `fv(input)`, nową propozycję ustawiaj `setPh`. ✓ przy pustym polu wpisuje propozycję. Pole z wartością zaznacza się przy fokusie.
 - Serie:
   - dodatkowe przyciski „+ Rozgrzewka”, „⇣ Jak 1. seria”, „+ Seria (N)” i „+ Drop” (~80% ciężaru, w dół do 2,5 kg);
   - ✕ usuwa ostatni dodany wiersz w dwóch dotknięciach;
@@ -123,18 +127,23 @@ Konwencje Damiana:
   - Wake Lock od pierwszego wpisu do „Zakończ” (ponownie po powrocie do aplikacji);
   - „Talerze”: okno `#sheet` z rozkładem na stronę (`plates`), gryf 20/15 kg i zamki 2 × 2,5 kg zapamiętane w `pl_<klucz>`.
   - boje (grupa R/P z kolumny `grupa` albo po nazwie, `isOly`): zamiast RPE i ✓ światła sędziowskie; ocena Łatwo / Średnio / Walka / Spalone → `rpe` 7 / 8 / 9,5 / FAIL + `ocena` L/S/W/X; propozycja ciężaru pod ostatnio ocenionym podejściem (`sugOly`, „Ustaw X kg”); w recepcie „max dziś” = `olyCap` (plan + `sufit_oly` × 1RM, przy dyspozycji „Uwaga”/„Zmęczenie” = plan).
-  - „Zamień ćwiczenie” (tylko `cfg.swap`): zamienniki z kolumny planu `zamienniki` albo wg wzorca ruchu (`swapOptions`), powód z listy; zamiana w telefonie (`sw_<klucz>`) i w Logu (`zamiana` = „oryginał → zamiennik | powód”, `cwiczenie` = zamiennik); na innym telefonie odtwarzana z Logu.
+  - „Zamień ćwiczenie” (tylko `cfg.swap`): TRENER = zamienniki z kolumny planu `zamienniki`, bazy albo wg wzorca ruchu (`swapOptions`), bez własnej nazwy; DOWOLNA = też wyszukiwarka całej bazy (`getExNames`, `exSearch`) i własna nazwa; powód z listy; zamiana w telefonie (`sw_<klucz>`) i w Logu (`zamiana` = „oryginał → zamiennik | powód”, `cwiczenie` = zamiennik); na innym telefonie odtwarzana z Logu.
   - kamera przy każdej serii roboczej, dodatkowej i drop (`openCam`): film wgrywany do tej serii (Drive, bez zmian w wysyłce), bez sieci komunikat zamiast błędu (film nie trafia do kolejki); w PRO pole „Prędkość z urządzenia (m/s)” → `vbt_ms` (kolumny VBT w wierszu już nie ma);
   - każdy zapis serii buduje `payloadOf(row, ex, s0)` (stan ✓/✕, ocena, typ, zamiana, film i prędkość z dotychczasowego wpisu), więc kolejne zapisy niczego nie kasują.
   - PRO, okno kamery, tryb „Film + ścieżka + VBT” (`vbtStage`): suwak do startu powtórzenia, dotknięcie środka i krawędzi talerza (450 mm = kalibracja), `track()` śledzi talerz co 1/30 s (SAD na zmniejszonym obrazie), `analyse()` liczy powtórzenia; boje i ciągi: v max i uniesienie, pozostałe: najlepsze MCV i spadek; zapis `vbt_ms`, `vbt_peak`, `wysokosc_cm`, `sciezka` (JSON, cm, co 2 klatki), potem film na Drive. Analiza działa bez sieci. Wczesna wersja: dokładność sprawdzona tylko na ruchu syntetycznym (`tests/synth.js`), do walidacji z czujnikiem.
+- EMOM (`isEmom`: `tryb` = EMOM albo nazwa „EMOM …”): `emomBox` / `bindEmom`, zegar minut w `em_<klucz>` z sygnałem co minutę, „+ runda” = `row._save('ok')` na kolejnej serii (nowa seria dodatkowa ponad plan, do 40); bez przerwy i bez samozwijania.
+- Karta ćwiczenia: „Pomiń” (B) / „Pomiń…” z powodem (A/K) → `saveSkip` (seria 0, SKIP), `withSkip` skraca serie, „Przywróć” = `unSkip` (deleteSet seria 0); „Skróć trening” (`openCut`, lib `cutPlan`: `ciecie`, `serie_min`, bez nich B od końca); „Zwiń zrobione”; komentarz do ćwiczenia (`exNote`, `setNote`, `en_<klucz>`). Karta zwija się sama, gdy ćwiczenie staje się zrobione (także po ręcznym rozwinięciu).
+- Sygnał przerwy (`audioUnlock`, `beep`, `vib`, `flash`, `notifyBg`, ustawienia `sg_<klucz>` w `openSignal` pod ♪): koniec = 3 × 880 Hz, wibracja 300-150-300-150-600, mignięcie, powiadomienie w tle.
+- Klasy poziomów (dyspozycja: werdykt, baner, powody) to `lv-ok/warn/bad/none`. Nie używaj `.ok`, `.pend` itp. jako klasy stanu w innych komponentach: `.ok` to przycisk ✓ z wysokością 44 px.
 - Podsumowanie jednostki:
   - RPE sesji 0–10;
   - samopoczucie 1–5;
   - ból 0–10 per miejsce;
   - wszystko dużymi przyciskami.
-- Ekrany z dolnego menu (`TAB`): Trening (nagłówek: tydzień/blok · jednostka · data, czas, serie, tonaż; baner dyspozycji dnia), Dyspozycja i Plan (tygodnie, dni z kropkami, jednostki, „Przejdź do treningu”, „Zmień datę” → `przesunJednostke` + propozycja „przesuń też kolejne”). oraz Postęp.
+- Ekrany z dolnego menu (`TAB`): Trening (nagłówek: tydzień/blok · jednostka · data, czas, serie, tonaż; pasek tygodnia; baner dyspozycji dnia), Dyspozycja, Plan i Postęp.
+- Pasek tygodnia Pn–Nd (`weekBar` / `bindWeekBar`, lib `weekDays`, `pickUnit`, `mondayOf`) na Treningu i Planie: tydzień kalendarzowy `WK` (null = tydzień bieżącej jednostki), nagłówek „Blok · tydz. bloku · zakres”, jednostka w dniu faktycznym (Sesje.start) albo z planu; ✓ / ! zaległa / ● dziś; dotknięcie otwiera, przytrzymanie → `openMove` (widoczne dni, bez ukrytego pola daty) → `moveUnit` → `przesunJednostke` z komunikatem o wyniku + „przesuń też kolejne”; ◀ ▶, przesunięcie palcem, „Dziś”. Plan pokazuje jednostki z tego tygodnia.
 - Postęp (`renderPostep`, cała historia z `DATA.logs`): Siła (wybór ćwiczenia głównego, e1RM albo najlepsze zaliczone kg w bojach, rekordy akcentem, początek bloku zaznaczony), Objętość (tonaż tygodniowy 12 tyg., strefy % 1RM w kolorach talerzy z liczbami, kalendarz obciążenia 12 tyg. w skali `--h1…--h4`), Dyspozycja (CMJ z pasem średniej ±5%, prędkość na rozgrzewce). Wykresy to SVG budowane w `chartLine` / `chartBars`, jedna seria i jedna oś na wykres, pod każdym tabela z danymi; dane liczą funkcje z `lib.js` (`doneSets`, `strengthSeries`, `records`, `weeklyTonnage`, `zoneReps`, `loadCalendar`, `readySeries`).
-- Dyspozycja dnia (`renderDysp`): ankieta Hoopera 1–7, 3 skoki CMJ (cm ręcznie albo z filmu slow-mo: `openCMJ`, h = 1,22625·t²), prędkość na rozgrzewce; `verdict()` porównuje ze średnimi z historii (`readyBase`: Hooper 7, CMJ i prędkość 5 ostatnich wpisów) wg progów ze specyfikacji; zapis `saveDyspozycja` (offline przez kolejkę), szkic dnia w `rd_<klucz>`. Werdykt „Uwaga”/„Zmęczenie” obniża sufit dnia w bojach do ciężaru z planu.
+- Dyspozycja dnia (`renderDysp`): do `READY_MIN` (5) dni historii „Zbieram Twoją średnią · n/5” zamiast oceny; po zapisie pomiary zwinięte z „Edytuj”. Ankieta Hoopera 1–7, 3 skoki CMJ (cm ręcznie albo z filmu slow-mo: `openCMJ`, odbicie = pierwsza klatka w powietrzu, lądowanie = pierwsza z kontaktem, klatkaż z pliku `readMoov` + lib `mp4Fps`, `cmjFlight`, h = g·t²/8 = 1,22625·t²; skok > 8% od mediany: `cmjSpread`, wykluczenie ze średniej; film skoku → `queueCmjVideo`), prędkość na rozgrzewce; `verdict()` porównuje ze średnimi z historii (`readyBase`: Hooper 7, CMJ i prędkość 5 ostatnich wpisów) wg progów ze specyfikacji; zapis `saveDyspozycja` (offline przez kolejkę), szkic dnia w `rd_<klucz>`. Werdykt „Uwaga”/„Zmęczenie” obniża sufit dnia w bojach do ciężaru z planu.
 - Offline:
   - ostatnie getData leży w `localStorage` (`d_<klucz>`);
   - zapisy bez sieci trafiają do kolejki `q_<klucz>` i wysyłają się po powrocie połączenia; `useData` nakłada niewysłane zapisy z kolejki (serie, przesunięcia dat) na dane z serwera;

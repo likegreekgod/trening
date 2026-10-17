@@ -430,11 +430,12 @@ test('ownRows_: walidacja i wiersze Planu własnej jednostki', () => {
   assert.equal(C.ownRows_('anna', Object.assign({}, u, { title: '' }), plan).rows[0].tytul, 'Własny');
   const err = x => C.ownRows_('anna', Object.assign({}, u, x), plan).error;
   assert.deepEqual([err({ day: 'T1' }), err({ day: 'W1x' }), err({ week: 0 }), err({ date: '16.10' }), err({ exercises: [] }), err({ exercises: [{ name: 'X', sets: 0, reps: 5 }] }), err({ exercises: [{ name: 'X', sets: 3, reps: '' }] })],
-    ['Zła jednostka.', 'Zła jednostka.', 'Zła jednostka.', 'Zła data.', 'Dodaj co najmniej jedno ćwiczenie.', 'Serie 1–10 i powtórzenia przy każdym ćwiczeniu.', 'Serie 1–10 i powtórzenia przy każdym ćwiczeniu.']);
+    ['Zła jednostka.', 'Zła jednostka.', 'Zła jednostka.', 'Zła data.', 'Dodaj co najmniej jedno ćwiczenie.', 'Serie 1–40 i powtórzenia przy każdym ćwiczeniu.', 'Serie 1–40 i powtórzenia przy każdym ćwiczeniu.']);
+  assert.equal(err({ exercises: [{ name: 'EMOM Power Snatch', sets: 20, reps: 1 }] }), undefined);       // EMOM 20 rund
   assert.equal(C.ownRows_('anna', Object.assign({}, u, { day: 'W1' }), [{ klient: 'anna', tydzien: 2, jednostka: 'W1' }]).error, 'Ta jednostka jest w planie trenera.');
   assert.equal(C.ownRows_('anna', Object.assign({}, u, { exercises: Array(21).fill({ name: 'X', sets: 1, reps: 1 }) }), plan).error, 'Najwyżej 20 ćwiczeń.');
   assert.ok(C.API_FNS.addOwnUnit);
-  assert.equal(C.PLAN_HEADERS[C.PLAN_HEADERS.length - 1], 'zrodlo');
+  assert.deepEqual(Array.from(C.PLAN_HEADERS.slice(-4)), ['zrodlo', 'tryb', 'ciecie', 'serie_min']);   // nowe kolumny na końcu
 });
 
 test('mergePlan_ zostawia własne treningi; podsumowanie i bloki liczą ich objętość, ale nie wykonanie planu', () => {
@@ -482,4 +483,53 @@ test('errRow_, errRecent_: błędy z aplikacji w zakładce Błędy i w Przegląd
   assert.equal(C.errRecent_([], 'anna', '2026-10-16', 7), '');
   assert.ok(C.API_FNS.getExNames && C.API_FNS.logError && typeof C.onEdit === 'function');
   assert.equal(C.PRZ_HEADERS[C.PRZ_HEADERS.length - 1], 'bledy_7dni');
+});
+
+// --- 17.10: pominięte ćwiczenia, komentarze do ćwiczeń, EMOM i cięcie w planie ---
+test('validatePlan_: serie do 40, tryb EMOM, ciecie i serie_min', () => {
+  const R = x => Object.assign({ klient: 'anna', tydzien: 1, jednostka: 'T1', nr: 1, cwiczenie: 'EMOM Power Snatch', serie: 20, powt: '1' }, x);
+  assert.deepEqual(Array.from(C.validatePlan_([R({ tryb: 'EMOM', ciecie: 2, serie_min: 10 })])), []);
+  const e = C.validatePlan_([R({ serie: 41 }), R({ nr: 2, tryb: 'AMRAP' }), R({ nr: 3, ciecie: 0 }), R({ nr: 4, serie: 3, serie_min: 4 })]).join('\n');
+  for (const frag of ['serie od 1 do 40', 'tryb tylko EMOM', 'ciecie', 'serie_min']) assert.match(e, new RegExp(frag));
+});
+
+test('computeSummary_: pominięte opcjonalne nie obniżają wykonania, komentarze i pominięcia w Podsumowanie_cw', () => {
+  const P = (nr, cw, prio, serie) => ({ klient: 'anna', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr, cwiczenie: cw, prio, serie, powt: '10', kg: 20 });
+  const plan = [P(1, 'Przysiad', 'A', 2), P(2, 'Face Pull', 'B', 2), P(3, 'Plank', 'K', 2)];
+  const L = (nr, cw, s, x) => Object.assign({ klient: 'anna', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr_cw: nr, cwiczenie: cw, seria: s, kg: 20, powt: 10, rpe: 7, wykonane: 'TAK', typ: '', uwagi: '' }, x || {});
+  const log = [L(1, 'Przysiad', 1, { uwagi: 'z samą sztangą nad głową' }), L(1, 'Przysiad', 2, { uwagi: 'z samą sztangą nad głową' }),
+    L(2, 'Face Pull', 0, { wykonane: '', typ: 'SKIP', kg: '', powt: '', rpe: '', uwagi: '' }),
+    L(3, 'Plank', 0, { wykonane: '', typ: 'SKIP', kg: '', powt: '', rpe: '', uwagi: 'brak czasu' })];
+  const r = C.computeSummary_(plan, log, [], []), H = C.SUM_HEADERS, X = C.SUMX_HEADERS;
+  assert.equal(r.rows[0][H.indexOf('wykonanie_%')], 50);                          // 2 z 4 (A + K); B poza wykonaniem
+  assert.equal(r.rows[0][H.indexOf('opcjonalne')], '0/1');
+  const ex = n => r.exRows.find(x => x[2] === n);
+  assert.equal(ex('Przysiad')[X.indexOf('uwagi_klienta')], 'z samą sztangą nad głową');
+  assert.equal(ex('Face Pull')[X.indexOf('pominiete')], '1× bez powodu');
+  assert.equal(ex('Plank')[X.indexOf('pominiete')], '1× brak czasu');
+  assert.equal(ex('Plank')[X.indexOf('serie')], 0);
+  assert.equal(X[X.length - 1], 'pominiete'); assert.equal(H[H.length - 1], 'opcjonalne');
+});
+
+test('computeOverview_: pominięte ćwiczenie główne lub korekcyjne = sygnał, opcjonalne nie', () => {
+  const today = '2026-10-17';
+  const plan = [{ klient: 'anna', tydzien: 1, jednostka: 'T1', data: '2026-10-16', nr: 1, cwiczenie: 'Plank', prio: 'K', serie: 2 },
+    { klient: 'anna', tydzien: 1, jednostka: 'T1', data: '2026-10-16', nr: 2, cwiczenie: 'Face Pull', prio: 'B', serie: 2 },
+    { klient: 'anna', tydzien: 2, jednostka: 'T1', data: '2026-10-30', nr: 1, cwiczenie: 'Plank', prio: 'K', serie: 2 }];
+  const log = [{ klient: 'anna', tydzien: 1, jednostka: 'T1', data: '2026-10-16', zapisano: '2026-10-16T10:00:00Z', nr_cw: 1, cwiczenie: 'Plank', seria: 0, typ: 'SKIP', uwagi: 'ból', wykonane: '' },
+    { klient: 'anna', tydzien: 1, jednostka: 'T1', data: '2026-10-16', zapisano: '2026-10-16T10:00:00Z', nr_cw: 2, cwiczenie: 'Face Pull', seria: 0, typ: 'SKIP', uwagi: '', wykonane: '' }];
+  const ses = [{ klient: 'anna', tydzien: 1, jednostka: 'T1', data: '2026-10-16', start: '2026-10-16T09:00:00Z' }];
+  const row = C.computeOverview_(plan, log, ses, [{ klient_id: 'anna', imie: 'Anna', aktywny: 'TAK' }], [], [], { today, localDay: s => s.slice(0, 10) })[0];
+  const sig = row[C.PRZ_HEADERS.indexOf('do_reakcji')];
+  assert.match(sig, /pominięte: Plank \(ból\)/);
+  assert.doesNotMatch(sig, /Face Pull/);
+});
+
+test('swapMode_ i cmjExcl_: tryb zamiany z Klienci J, wykluczone skoki CMJ', () => {
+  assert.deepEqual(['TAK', 'trener', 'DOWOLNA', '', 'NIE'].map(C.swapMode_), ['TRENER', 'TRENER', 'DOWOLNA', false, false]);
+  assert.equal(C.cmjExcl_([false, true, false]), '2');
+  assert.equal(C.cmjExcl_([1, 3]), '1,3');
+  assert.equal(C.cmjExcl_(undefined), '');
+  assert.deepEqual(Array.from(C.DYS_HEADERS.slice(-2)), ['cmj_wykluczone', 'film_link']);
+  assert.ok(C.API_FNS.logNote && C.API_FNS.logReadyVideo);
 });

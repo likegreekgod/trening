@@ -491,6 +491,124 @@
   L.readySeries = (rows, key) => (rows || []).map(r => ({ date: String(r.data || '').slice(0, 10), v: nf(r[key]) }))
     .filter(p => p.v > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.date)).sort((a, b) => a.date.localeCompare(b.date));
 
+  /* ---------- 17.10: EMOM, CMJ (rozrzut, klatkaż), pasek tygodnia, skracanie treningu ---------- */
+  /** EMOM: kolumna planu „tryb” = EMOM albo nazwa zaczynająca się od „EMOM” */
+  L.isEmom = ex => String(ex && ex.mode || '').trim().toUpperCase() === 'EMOM' || /^\s*EMOM\b/i.test(String(ex && ex.name || ''));
+  L.SETS_MAX = 40;   // najwięcej serii jednego ćwiczenia (jak SETS_MAX w Code.gs)
+
+  /** wzór CMJ: h = g·t²/8 (Balsalobre-Fernández i in. 2015); t w s → cm */
+  L.CMJ_G = 9.81;
+  L.CMJ_FPS = [30, 60, 120, 200, 240];
+  /**
+   * Rozrzut skoków: mediana z wpisanych, odstające > 8% od mediany (Claudino i in. 2017: miarą główną zostaje średnia).
+   * jumps: [cm|''] × 3, excl: [bool] × 3 → {median, out: [indeksy odstających], avg (bez wykluczonych), n}
+   */
+  L.CMJ_OUT = 0.08;
+  L.cmjSpread = (jumps, excl = []) => {
+    const v = (jumps || []).map((x, i) => [nf(x), i]).filter(q => isFinite(q[0]) && q[0] > 0);
+    const s = v.map(q => q[0]).sort((a, b) => a - b), m = s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : NaN;
+    const out = v.length >= 3 ? v.filter(q => Math.abs(q[0] - m) / m > L.CMJ_OUT).map(q => q[1]) : [];
+    const used = v.filter(q => !excl[q[1]]).map(q => q[0]);
+    return { median: m, out, avg: L.mean(used), n: used.length };
+  };
+  /**
+   * Klatkaż z pudełka moov pliku MP4/MOV (Uint8Array): ścieżka wideo → fps = timescale ÷ najczęstszy czas próbki (stts);
+   * Android zapisuje faktyczny klatkaż slow-motion w meta „com.android.capture.fps”. → {fps, capture} (NaN = brak)
+   */
+  L.mp4Fps = u8 => {
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), str = (o, n) => String.fromCharCode(...u8.subarray(o, o + n));
+    let fps = NaN, capture = NaN;
+    const boxes = (from, to) => { const out = []; let o = from;
+      while (o + 8 <= to) { let sz = dv.getUint32(o), h = 8; const t = str(o + 4, 4);
+        if (sz === 1) { sz = Number(dv.getBigUint64(o + 8)); h = 16; } else if (sz === 0) sz = to - o;
+        if (sz < h || o + sz > to) break; out.push({ t, o, s: o + h, e: o + sz }); o += sz; }
+      return out; };
+    const find = (list, t) => list.find(b => b.t === t);
+    const top = boxes(0, u8.length), moov = find(top, 'moov') || { s: 0, e: u8.length };
+    const kids = boxes(moov.s, moov.e);
+    kids.filter(b => b.t === 'trak').forEach(tr => {
+      const mdia = find(boxes(tr.s, tr.e), 'mdia'); if (!mdia || isFinite(fps)) return;
+      const mb = boxes(mdia.s, mdia.e), hdlr = find(mb, 'hdlr'), mdhd = find(mb, 'mdhd'), minf = find(mb, 'minf');
+      if (!hdlr || str(hdlr.s + 8, 4) !== 'vide' || !mdhd || !minf) return;
+      const v1 = u8[mdhd.s] === 1, scale = dv.getUint32(mdhd.s + (v1 ? 20 : 12));
+      const stbl = find(boxes(minf.s, minf.e), 'stbl'), stts = stbl && find(boxes(stbl.s, stbl.e), 'stts');
+      if (!stts || !scale) return;
+      let best = [0, 0]; const n = dv.getUint32(stts.s + 4);
+      for (let i = 0; i < n && stts.s + 16 + 8 * i <= stts.e; i++) { const c = dv.getUint32(stts.s + 8 + 8 * i), d = dv.getUint32(stts.s + 12 + 8 * i); if (c > best[0] && d > 0) best = [c, d]; }
+      if (best[1]) fps = Math.round(100 * scale / best[1]) / 100;
+    });
+    // meta (QuickTime: keys + ilst), w moov albo w udta
+    const metas = []; kids.forEach(b => { if (b.t === 'meta') metas.push(b); if (b.t === 'udta') boxes(b.s, b.e).forEach(x => { if (x.t === 'meta') metas.push(x); }); });
+    metas.forEach(m => {
+      let mk = boxes(m.s, m.e); if (!find(mk, 'keys') && !find(mk, 'ilst')) mk = boxes(m.s + 4, m.e);       // ISO: FullBox z wersją
+      const keys = find(mk, 'keys'), ilst = find(mk, 'ilst'); if (!keys || !ilst) return;
+      const names = []; let o = keys.s + 8;
+      for (let i = 0, n = dv.getUint32(keys.s + 4); i < n && o + 8 <= keys.e; i++) { const sz = dv.getUint32(o); names.push(str(o + 8, sz - 8)); o += sz; }
+      boxes(ilst.s, ilst.e).forEach(it => {
+        const ix = dv.getUint32(it.o + 4), name = names[ix - 1]; if (name !== 'com.android.capture.fps') return;
+        const data = find(boxes(it.s, it.e), 'data'); if (!data) return;
+        const type = dv.getUint32(data.s) & 0xffffff, v = data.s + 8;
+        const x = type === 23 ? dv.getFloat32(v) : type === 24 ? dv.getFloat64(v) : type === 67 || type === 21 ? dv.getInt32(v) : NaN;
+        if (x > 0) capture = Math.round(x * 100) / 100;
+      });
+    });
+    return { fps, capture };
+  };
+  /** plik wygląda na slow-motion (DJI Mimo, Android), a deklaruje ≤ 30 kl./s → czas lotu byłby zawyżony kilkukrotnie */
+  L.slowNameLowFps = (name, fileFps) => fileFps > 0 && fileFps <= 30.5 && /slow|slo-?mo/i.test(String(name || ''));
+  /** czas lotu: znaczniki w sekundach pliku × (kl./s pliku ÷ kl./s nagrania); bez kl./s pliku = czas pliku */
+  L.cmjFlight = (tTake, tLand, fileFps, realFps) => tLand > tTake ? (tLand - tTake) * (fileFps > 0 && realFps > 0 ? fileFps / realFps : 1) : NaN;
+
+  /* pasek tygodnia (Pn–Nd): jednostka w dniu faktycznym (zrobiona) albo z planu / przesunięta */
+  L.mondayOf = d => L.addDays(d, -((new Date(utc(d)).getUTCDay() + 6) % 7));
+  /**
+   * list: [{week, day, date, done}] (date = faktyczny dzień zrobionej albo data z planu) → 7 dni od poniedziałku
+   * [{date, items: [{week, day, st}]}], st: done ✓ / late ! (po terminie, bez sesji) / today ● / plan
+   */
+  L.weekDays = (list, monday, today) => Array.from({ length: 7 }, (_, i) => {
+    const date = L.addDays(monday, i);
+    return { date, items: (list || []).filter(u => u.date === date)
+      .map(u => ({ week: u.week, day: u.day, st: u.done ? 'done' : date < today ? 'late' : date === today ? 'today' : 'plan' })) };
+  });
+  /** domyślna jednostka: dzisiejsza niezrobiona, potem najbliższa następna niezrobiona, potem ostatnia */
+  L.pickUnit = (list, today) => {
+    const s = (list || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+    return s.find(u => u.date === today && !u.done) || s.find(u => u.date >= today && !u.done) || s.find(u => u.date >= today) || s[s.length - 1] || null;
+  };
+
+  /* ---------- pominięte / skrócone ćwiczenie: Log seria 0, typ SKIP, uwagi = ten tekst ---------- */
+  L.SKIP_WHY = ['brak czasu', 'ból', 'sprzęt', 'inne'];
+  /** {to, from, why} → „skrócone do 2 z 4 serii · brak czasu” (to > 0) albo sam powód (całe pominięte) */
+  L.skipText = k => k && k.to > 0 ? 'skrócone do ' + k.to + ' z ' + k.from + ' serii' + (k.why ? ' · ' + k.why : '') : String(k && k.why || '');
+  L.parseSkip = t => { const m = /^skrócone do (\d+) z (\d+) serii(?: · (.*))?$/.exec(String(t || '').trim()); return m ? { to: +m[1], from: +m[2], why: m[3] || '' } : { to: 0, from: 0, why: String(t || '').trim() }; };
+
+  /* ---------- „Skróć trening”: cięcia wg planu (ciecie, serie_min) ---------- */
+  L.SET_SEC = 45;   // szacunek czasu jednej serii bez przerwy
+  /**
+   * exs: [{order, name, prio, sets, done, cut, setsMin, skip}] (done = zrobione serie robocze), minutes = ile zostało czasu.
+   * Kolejność: rosnąco po „ciecie”; bez „ciecie” w całej jednostce: B od końca. A i K bez „ciecie” nie są cięte.
+   * Ćwiczenie: najpierw do serie_min, potem całe (zostają zrobione). → {need, left, cuts: [{order, name, to, from}], fits}
+   */
+  L.cutPlan = (exs, minutes) => {
+    const sec = ex => Math.max(0, ex.sets - ex.done) * (L.SET_SEC + L.restSec(ex.prio));
+    const live = (exs || []).filter(ex => !ex.skip);
+    let need = live.reduce((a, ex) => a + sec(ex), 0);
+    const goal = Math.max(0, minutes) * 60, start = need, cuts = [];
+    const any = live.some(ex => ex.cut > 0);
+    const order = any ? live.filter(ex => ex.cut > 0).sort((a, b) => a.cut - b.cut || a.order - b.order)
+      : live.filter(ex => String(ex.prio).toUpperCase() === 'B').sort((a, b) => b.order - a.order);
+    const per = ex => L.SET_SEC + L.restSec(ex.prio);
+    order.forEach(ex => {
+      if (need <= goal) return;
+      let to = ex.sets;
+      const min = ex.setsMin > 0 ? Math.max(ex.setsMin, ex.done) : null;
+      if (min !== null && min < to) { need -= (to - min) * per(ex); to = min; }
+      if (need > goal && to > ex.done) { need -= (to - ex.done) * per(ex); to = ex.done; }
+      if (to < ex.sets) cuts.push({ order: ex.order, name: ex.name, from: ex.sets, to });
+    });
+    return { need: Math.ceil(start / 60), left: Math.ceil(need / 60), cuts, fits: need <= goal };
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);
