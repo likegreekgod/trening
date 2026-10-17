@@ -7,6 +7,7 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Na S24 aplikacja miała czarny nagłówek, ciemnoczerwoną kapsułę w menu i szare karty: telefon automatycznie przyciemniał jasny motyw (tryb ciemny Samsunga / „ciemne strony” w przeglądarce), bo strona deklarowała w CSS tylko jasny. Teraz `<meta name="color-scheme" content="light dark">`: system widzi, że aplikacja ma własny ciemny motyw, i jej nie przyciemnia.
 - Klienci J pokazywała dalej tylko TAK/NIE: listy rozwijane ustawiał jednorazowy `setup()`. Teraz odświeża je też menu „Odśwież linki klientów” (`klienciListy_`).
 - Ekran Dyspozycja pokazuje pod formularzem kartę „Ostatnie pomiary” (7 ostatnich dni: werdykt, ankieta, CMJ, prędkość); wykresy całej historii zostają w Postęp → Dyspozycja.
+- Sprawdzone na S24: kolory psuło przyciemnianie w Samsung Internet (aplikacja zainstalowana z Chrome wygląda poprawnie; meta `color-scheme` nie wystarcza dla Samsung Internet). W Samsung Internet aplikacja pokazuje na Treningu podpowiedź, żeby otworzyć link w Chrome; „Rozumiem” chowa ją na stałe w tym telefonie.
 - Po sygnale przerwy Android pokazywał pływającą kontrolkę multimediów. Kontekst dźwięku jest teraz wstrzymywany chwilę po sygnale i wznawiany przy następnym.
 
 ## 2026-10-17 · Uwagi z testów 16–17.10: EMOM, komentarz do ćwiczenia, pomijanie, pasek tygodnia, CMJ, sygnał przerwy
