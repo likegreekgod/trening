@@ -998,7 +998,7 @@ function helpCard(){
 
 /* ---------- render ---------- */
 function render(){
-  $('#nav').hidden = !PLAN.length;
+  $('#nav').hidden = !PLAN.length && !ownOn();                  // bez planu, ale z własnymi treningami: menu jest
   document.querySelectorAll('#nav [data-tab]').forEach(b => {
     b.setAttribute('aria-current', b.dataset.tab === TAB ? 'page' : 'false');
     b.onclick = () => { TAB = b.dataset.tab; WK = null; render(); window.scrollTo(0, 0); };
@@ -1608,7 +1608,15 @@ const curExs = () => PLAN.filter(r => r.week === cur.week && r.day === cur.day).
 function renderTrening(){
   if (!PLAN.some(r => r.week === cur.week && r.day === cur.day)) pickDefault();
   const exs = curExs();
-  if (!exs.length) { head(NAME, 'Trening'); $('#main').innerHTML = '<div class="empty">Brak planu.</div>'; return; }
+  if (!exs.length) {
+    head(NAME, 'Trening');
+    $('#main').innerHTML = ownOn()
+      ? '<section class="card first noplan"><div class="cn">Jeszcze nie masz planu</div><p class="sub">Trener doda go wkrótce. Do tego czasu możesz zrobić własny trening: wybierasz ćwiczenia i zapisujesz serie jak zwykle, a trener je widzi.</p>' +
+        '<button type="button" class="btn p" id="own-first">+ Własny trening</button></section>'
+      : '<div class="empty">Brak planu. Trener jeszcze go nie dodał.</div>';
+    const f = $('#own-first'); if (f) f.onclick = () => openOwn(null);
+    return;
+  }
   const s0 = exs[0];
   head(weekLabel(cur.week) + ' · ' + cur.day + ' · ' + weekday(s0.date) + ' ' + ddmm(s0.date) + (sessDone(cur.week, cur.day) ? ' · zrobiona ✓' : ''),
     s0.title || cur.day,

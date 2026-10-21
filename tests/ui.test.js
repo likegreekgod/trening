@@ -1251,3 +1251,28 @@ test('Samsung Internet: podpowiedź „otwórz w Chrome”, „Rozumiem” chowa
   assert.equal(await c.p.$('.sbnote'), null);
   await c.ctx.close();
 });
+
+test('Bez planu: klient z dostępem robi własny trening, menu i zakładki działają', async () => {
+  const calls = [], data = Object.assign({}, DATA, { plan: [], logs: [], sessions: [], exNames: [['Hammer Curl', 1], ['Back Squat', 1]] });
+  const api = b => b.fn === 'getExNames' ? data.exNames : null;
+  const { ctx, p } = await page(calls, false, { data, api });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#own-first');
+  assert.match(await p.textContent('#main'), /Jeszcze nie masz planu/);
+  assert.equal(await p.isVisible('#nav'), true);
+  for (const t of ['plan', 'dysp', 'postep', 'trening']) { await p.click(`#nav [data-tab="${t}"]`); await p.waitForTimeout(60); }
+  assert.deepEqual(await a11y(p), []);
+  await p.click('#own-first'); await p.waitForFunction(() => EXN.list.length > 0);
+  await p.fill('#ow-q', 'squat'); await p.dispatchEvent('#ow-q', 'input'); await p.click('#ow-res .ow-add[data-n="Back Squat"]');
+  await p.click('#ow-save'); await p.waitForSelector('.set[data-o="1"]');
+  assert.deepEqual((({ week, day }) => ({ week, day }))(calls.find(c => c.fn === 'addOwnUnit').args[0]), { week: 1, day: 'W1' });
+  assert.match(await p.textContent('#title'), /Własny/);
+  await p.click('#nav [data-tab="plan"]'); assert.match(await p.textContent('#plan'), /Własny/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+  const off = Object.assign({}, data, { cfg: Object.assign({}, DATA.cfg, { own: false }) });
+  const t2 = await page([], false, { data: off });
+  await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.empty');
+  assert.match(await t2.p.textContent('#main'), /Brak planu/);
+  assert.equal(await t2.p.isVisible('#nav'), false);
+  await t2.ctx.close();
+});
