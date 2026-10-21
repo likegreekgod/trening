@@ -2,6 +2,10 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-21 · Klient bez planu
+
+- Klient z dostępem, ale bez planu nie widzi już samego „Brak planu”: Trening pokazuje kartę „Jeszcze nie masz planu” z przyciskiem „+ Własny trening”, a dolne menu jest dostępne. Własna jednostka trafia do tygodnia 1. Gdy Klienci M `wlasne` = NIE, zostaje „Brak planu”.
+
 ## 2026-10-18 · Inne kolory na Samsungu, kontrolka multimediów
 
 - Na S24 aplikacja miała czarny nagłówek, ciemnoczerwoną kapsułę w menu i szare karty: telefon automatycznie przyciemniał jasny motyw (tryb ciemny Samsunga / „ciemne strony” w przeglądarce), bo strona deklarowała w CSS tylko jasny. Teraz `<meta name="color-scheme" content="light dark">`: system widzi, że aplikacja ma własny ciemny motyw, i jej nie przyciemnia.
