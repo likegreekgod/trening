@@ -6,6 +6,7 @@ Rozmawiaj z Damianem po polsku, zwięźle. Interfejs aplikacji jest po polsku.
 
 ## Dokumenty
 
+- `docs/stan.md`: **zacznij tutaj** — jak pracujemy, co czeka na Damiana, lista zadań. Aktualizuj po każdym zadaniu.
 - `docs/decyzje.md`: ustalenia projektowe, odrzucone pomysły, otwarte zadania. Nowe ustalenia dopisuj **na górze**, z datą. Przed propozycją zmiany sprawdź „Odrzucone i dlaczego”.
 - `docs/ui-v2-spec.md`: specyfikacja interfejsu v2 (obowiązująca przy pracy nad v2).
 - `docs/ui-v2-prototyp.html`: prototyp v2 na danych przykładowych, wzorzec wyglądu i kod komponentów (`track()`, `analyse()`, `sugOly`, `verdict`). Docelowy styl: **Pomost**; wariant „Obecny” służy tylko do porównania.
