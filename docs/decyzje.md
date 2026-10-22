@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-22 · Postęp → Tydzień
+
+- Podsumowanie tygodnia to pierwsza (domyślna) zakładka w Postępie, nie przycisk w dolnym menu (pięć wystarczy). Tydzień kalendarzowy z ◀ ▶ i „Dziś”; liczy się faktyczny dzień treningu. Karty pokazują się tylko z danymi.
+- Klient nie widzi statusu obciążenia z arkusza (za dużo / uwaga / OK / za lekko): to ocena dla trenera. Ból pokazujemy (max w tygodniu z miejscem).
+- Rekord tygodnia = wynik lepszy od całej wcześniejszej historii; pierwszy wynik ćwiczenia nie jest rekordem. Tonaż porównany ze średnią z 4 poprzednich tygodni z treningiem; w bieżącym tygodniu dopisek „(tydzień trwa)”.
+
 ## 2026-10-22 · Zakładka Trener: wszystkie komentarze
 
 - Klient widział tylko nowe komentarze (karta na Treningu) i pytał, czy trener obejrzał filmy z bieżącego tygodnia. Teraz piąty przycisk dolnego menu „Trener” pokazuje wszystkie komentarze: tydzień = karta (najnowszy otwarty, starsze zwinięte), w nim jednostki wg faktycznego dnia, najpierw komentarz do treningu, potem serie. Nowe mają „NOWE” do wyjścia z zakładki; kropka na przycisku, gdy są nieprzeczytane. Karta na Treningu zostaje („Przeczytane” / „Wszystkie komentarze”).

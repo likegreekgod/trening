@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-10-22, aplikacja v30.
+Stan na 2026-10-22, aplikacja v31.
 
 ## Jak pracujemy
 
@@ -18,7 +18,7 @@ Stan na 2026-10-22, aplikacja v30.
 Klient widział tylko komentarze do filmów z poprzedniego tygodnia i pytał, czy trener obejrzał filmy z bieżącego. Damian obiecał dwie rzeczy:
 
 1. ~~**Wszystkie komentarze trenera w jednym miejscu.**~~ Zrobione 22.10 (v30): zakładka Trener w dolnym menu, w Przeglądzie `filmy_bez_kom_7dni`. Sprawdzone 22.10: „Pobierz komentarze” = 67 filmów, 0 zmian, 0 błędów, czyli synchronizacja działa. Komentarze rozwiązane na Dysku nie trafiają do aplikacji.
-2. **Podsumowanie tygodnia w Postępie**, które zmienia się z tygodnia na tydzień. Szkic z 22.10: zakładka „Tydzień” z przełączaniem tygodni; karty z wykonaniem (jednostki, serie, tonaż w porównaniu ze średnią z 4 tyg.), rekordami tygodnia, odczuciami (RPE, samopoczucie, ból, dyspozycja), pominiętymi ćwiczeniami i komentarzami trenera; czysta funkcja `weekSummary` w lib.js. Czeka na decyzje: zakładka czy karta, bez statusu obciążenia z arkusza, ból tak czy nie.
+2. ~~**Podsumowanie tygodnia w Postępie**~~ Zrobione 22.10 (v31): Postęp → Tydzień (domyślna zakładka), bez statusu obciążenia, z bólem.
 
 ## Czeka na Damiana
 

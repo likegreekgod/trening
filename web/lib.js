@@ -509,6 +509,53 @@
       return { week: w.week, from: ds[0] || '', to: ds[ds.length - 1] || '', units };
     }).sort((a, b) => (nf(b.week) || 0) - (nf(a.week) || 0) || String(b.from).localeCompare(String(a.from)));
   };
+  /**
+   * podsumowanie tygodnia kalendarzowego (pon–niedz) do Postęp → Tydzień. d:
+   *   units [{week, day, date, done, own}] (date = faktyczny dzień zrobionej albo z planu), plan (wiersze getData),
+   *   sets (doneSets), sessions (Sesje), ready (Dyspozycja: data, werdykt), logs (Log: pominięte), notes (coachNotes),
+   *   dates {tydzień|jednostka → faktyczny dzień}.
+   * Własne treningi liczą się osobno (own) i nie wchodzą do „zrobione z planu”.
+   */
+  L.weekSummary = (mon, d) => {
+    const end = L.addDays(mon, 6), inW = x => !!x && x >= mon && x <= end, D = d.dates || {};
+    const ud = (w, j, fb) => D[w + '|' + j] || String(fb || '').slice(0, 10);
+    const us = (d.units || []).filter(u => inW(u.date)), plan = us.filter(u => !u.own);
+    const pk = {}; plan.forEach(u => { pk[u.week + '|' + u.day] = 1; });
+    const planSets = (d.plan || []).reduce((n, r) => n + (pk[r.week + '|' + r.day] ? Number(r.sets) || 0 : 0), 0);
+    const sets = (d.sets || []).filter(x => inW(x.date)), tonOf = xs => Math.round(xs.reduce((t, x) => t + (x.kg > 0 && x.reps > 0 ? x.kg * x.reps : 0), 0));
+    const prev = [1, 2, 3, 4].map(i => { const m = L.addDays(mon, -7 * i), e = L.addDays(m, 6); return tonOf((d.sets || []).filter(x => x.date >= m && x.date <= e)); }).filter(t => t > 0);
+    // rekordy: najlepszy wynik w tym tygodniu lepszy od wszystkiego wcześniej (pierwszy wynik w historii to jeszcze nie rekord)
+    const names = [...new Set((d.sets || []).filter(x => x.prio === 'A').map(x => x.name))], recs = [];
+    names.forEach(name => {
+      const ser = L.strengthSeries(d.sets || [], name), before = ser.filter(p => p.date < mon), now = ser.filter(p => inW(p.date) && p.pr);
+      if (!before.length || !now.length) return;
+      const top = now[now.length - 1], was = Math.max(...before.map(p => p.v));
+      recs.push({ name, v: top.v, delta: Math.round((top.v - was) * 10) / 10, date: top.date, oly: (d.sets || []).some(x => x.name === name && (x.grp === 'R' || x.grp === 'P')) });
+    });
+    // sesje: RPE, samopoczucie, czas, ból (najwyższy w tygodniu z miejscem)
+    const ses = (d.sessions || []).map(x => ({ x, date: ud(x.tydzien, x.jednostka, x.data) })).filter(o => inW(o.date)).sort((a, b) => a.date.localeCompare(b.date));
+    const vals = k => ses.map(o => nf(o.x[k])).filter(v => v >= 0);
+    let pain = null;
+    ses.forEach(o => {
+      String(o.x.bol || '').split(';').forEach(q => { const m = q.split(':'), v = nf((m[1] || '').trim()); if (v >= 0 && (!pain || v > pain.v)) pain = { place: (m[0] || '').trim(), v, date: o.date }; });
+      const bm = nf(o.x.bol_max); if (bm >= 0 && (!pain || bm > pain.v)) pain = { place: '', v: bm, date: o.date };
+    });
+    const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10 : null;
+    const ready = { ok: 0, warn: 0, bad: 0 };
+    (d.ready || []).forEach(r => { if (!inW(String(r.data || '').slice(0, 10)) || !r.werdykt) return; ready[/zmęcz/i.test(r.werdykt) ? 'bad' : /uwaga/i.test(r.werdykt) ? 'warn' : 'ok']++; });
+    const skips = (d.logs || []).filter(l => /SKIP/.test(l.typ || '') && inW(ud(l.tydzien, l.jednostka, l.data)))
+      .map(l => ({ name: String(l.cwiczenie || ''), why: String(l.uwagi || '').trim(), unit: String(l.jednostka) }));
+    const notes = (d.notes || []).filter(n => inW(ud(n.week, n.unit, n.date))).length;
+    return {
+      mon, end, week: plan.length ? plan[0].week : us.length ? us[0].week : null,
+      units: { plan: plan.length, done: plan.filter(u => u.done).length, list: plan.map(u => ({ day: u.day, date: u.date, done: !!u.done })), own: us.filter(u => u.own && u.done).length },
+      sets: { done: sets.length, plan: planSets }, ton: tonOf(sets), tonAvg: prev.length ? Math.round(prev.reduce((a, b) => a + b, 0) / prev.length) : null,
+      min: vals('czas_min').reduce((a, b) => a + b, 0), rpe: vals('rpe_sesji'), rpeAvg: avg(vals('rpe_sesji')), feel: avg(vals('samopoczucie').filter(v => v > 0)),
+      pain, ready, records: recs.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, 'pl')),
+      skips, fails: sets.filter(x => x.fail && x.grp !== 'R' && x.grp !== 'P').length, notes,
+      empty: !sets.length && !ses.length && !skips.length
+    };
+  };
   /** pomiary dyspozycji w czasie: [{date, v}] dla klucza (cmj_sr, vbt_test) */
   L.readySeries = (rows, key) => (rows || []).map(r => ({ date: String(r.data || '').slice(0, 10), v: nf(r[key]) }))
     .filter(p => p.v > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.date)).sort((a, b) => a.date.localeCompare(b.date));

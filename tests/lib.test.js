@@ -330,6 +330,34 @@ test('notesByWeek: komentarze trenera tygodniami i jednostkami', () => {
   assert.deepEqual(L.notesByWeek([], {}), []);
 });
 
+test('weekSummary: podsumowanie tygodnia w Postępie', () => {
+  const S = (date, name, kg, reps, x) => Object.assign({ name, date, kg, reps, rpe: 8, prio: 'A', grp: '', fail: false }, x || {});
+  const sets = [S('2026-10-06', 'Przysiad', 100, 5), S('2026-10-13', 'Przysiad', 100, 5),                 // poprzednie tygodnie: 500 i 500 kg
+    S('2026-10-20', 'Przysiad', 105, 5), S('2026-10-20', 'Przysiad', 105, 5, { fail: true }), S('2026-10-22', 'Wiosło', 50, 10, { prio: 'B' }),
+    S('2026-10-22', 'Rwanie', 70, 1, { grp: 'R', fail: true }), S('2026-10-22', 'Martwy', 140, 3)];   // martwy pierwszy raz: bez rekordu
+  const units = [{ week: 7, day: 'T1', date: '2026-10-20', done: true }, { week: 7, day: 'T2', date: '2026-10-22', done: true },
+    { week: 7, day: 'T3', date: '2026-10-24', done: false }, { week: 7, day: 'W1', date: '2026-10-23', done: true, own: true }, { week: 6, day: 'T1', date: '2026-10-13', done: true }];
+  const plan = [{ week: 7, day: 'T1', sets: 4 }, { week: 7, day: 'T2', sets: 3 }, { week: 7, day: 'T3', sets: 3 }, { week: 7, day: 'W1', sets: 9, own: true }, { week: 6, day: 'T1', sets: 5 }];
+  const sessions = [{ tydzien: 7, jednostka: 'T1', data: '2026-10-19', rpe_sesji: 7, samopoczucie: 4, czas_min: 60, bol: 'kolano:3; bark:1' },
+    { tydzien: 7, jednostka: 'T2', data: '2026-10-22', rpe_sesji: 8, samopoczucie: 3, czas_min: 75, bol: '', bol_max: '' },
+    { tydzien: 6, jednostka: 'T1', data: '2026-10-13', rpe_sesji: 9, czas_min: 50, bol: 'kolano:7' }];
+  const logs = [{ tydzien: 7, jednostka: 'T2', data: '2026-10-22', cwiczenie: 'Face pull', typ: 'SKIP', uwagi: 'brak czasu' }, { tydzien: 6, jednostka: 'T1', data: '2026-10-13', cwiczenie: 'X', typ: 'SKIP' }];
+  const ready = [{ data: '2026-10-20', werdykt: 'Dobra dyspozycja' }, { data: '2026-10-22', werdykt: 'Uwaga' }, { data: '2026-10-14', werdykt: 'Zmęczenie' }];
+  const notes = [{ week: '7', unit: 'T1', date: '2026-10-19' }, { week: '6', unit: 'T1', date: '2026-10-13' }];
+  const w = L.weekSummary('2026-10-20', { units, plan, sets, sessions, logs, ready, notes, dates: { '7|T1': '2026-10-20' } });
+  assert.deepEqual([w.end, w.week, w.units.plan, w.units.done, w.units.own], ['2026-10-26', 7, 3, 2, 1]);
+  assert.deepEqual(w.sets, { done: 5, plan: 10 });
+  assert.deepEqual([w.ton, w.tonAvg], [2040, 500]);
+  assert.deepEqual(w.records.map(r => [r.name, r.delta, r.oly]), [['Przysiad', Math.round((L.e1rm(105, 5, 8) - L.e1rm(100, 5, 8)) * 10) / 10, false]]);
+  assert.deepEqual([w.min, w.rpe, w.rpeAvg, w.feel], [135, [7, 8], 7.5, 3.5]);
+  assert.deepEqual(w.pain, { place: 'kolano', v: 3, date: '2026-10-20' });
+  assert.deepEqual(w.ready, { ok: 1, warn: 1, bad: 0 });
+  assert.deepEqual(w.skips, [{ name: 'Face pull', why: 'brak czasu', unit: 'T2' }]);
+  assert.deepEqual([w.fails, w.notes, w.empty], [1, 1, false]);                  // spalone rwanie to nie „nieudana seria”
+  const e = L.weekSummary('2026-11-02', { units, plan, sets, sessions, logs, ready, notes });
+  assert.deepEqual([e.empty, e.units.plan, e.tonAvg, e.pain, e.feel, e.records], [true, 0, Math.round((2040 + 500 + 500) / 3), null, null, []]);
+});
+
 test('ownWeek, ownNextDay, exSearch: własny trening klienta', () => {
   const plan = [{ week: 1, day: 'T1', date: '2026-10-05' }, { week: 1, day: 'T2', date: '2026-10-07' }, { week: 2, day: 'T1', date: '2026-10-12' },
     { week: 2, day: 'W1', date: '2026-10-20', own: true }, { week: 2, day: 'W3', date: '2026-10-21', own: true }];
