@@ -13,16 +13,18 @@ Stan na 2026-10-22, aplikacja v31.
 - Pomiar ładowania: `getData` zwraca `ms` z czasami etapów (16.10: skrypt 2,0–2,8 s, całość 3,3–4,8 s).
 - Skill trenera dla claude.ai leży poza repo (`Desktop\hgvtjv\skill-aplikacja-treningowa-klienta`, zawiera identyfikatory arkusza). Po zmianie SKILL.md przebuduj ZIP.
 
-## Priorytet (obiecane klientowi 22.10)
+## Ostatnio zrobione
 
-Klient widział tylko komentarze do filmów z poprzedniego tygodnia i pytał, czy trener obejrzał filmy z bieżącego. Damian obiecał dwie rzeczy:
+- 22.10 (v30–v31): zakładka Trener (wszystkie komentarze trenera), Przegląd `filmy_bez_kom_7dni`, Postęp → Tydzień. Klienci poinformowani.
 
-1. ~~**Wszystkie komentarze trenera w jednym miejscu.**~~ Zrobione 22.10 (v30): zakładka Trener w dolnym menu, w Przeglądzie `filmy_bez_kom_7dni`. Sprawdzone 22.10: „Pobierz komentarze” = 67 filmów, 0 zmian, 0 błędów, czyli synchronizacja działa. Komentarze rozwiązane na Dysku nie trafiają do aplikacji.
-2. ~~**Podsumowanie tygodnia w Postępie**~~ Zrobione 22.10 (v31): Postęp → Tydzień (domyślna zakładka), bez statusu obciążenia, z bólem.
+## Do zrobienia (uwagi z 22.10)
+
+- **Dyspozycja: skala snu odwrotna niż odczucie.** Ankieta Hoopera ma wszędzie 1 = dobrze (`HOOPER` w lib.js: Sen „1 = bardzo dobry”), ale sen kojarzy się z oceną jakości (wyżej = lepiej). Klienci się mylą. Do ustalenia: odwrócić tylko widok snu (zapis i `hooper_suma` bez zmian) albo zmienić opis/etykiety skrajnych przycisków.
+- **Własny trening: brak kompleksów i serii obiegowych.** Klient składa tylko pojedyncze ćwiczenia (`openOwn` / `applyOwn`). Do zaprojektowania: kompleks „A + B” jako jedno ćwiczenie i obwód/superseria (grupa ćwiczeń robionych na zmianę).
+- **Własny trening: brak „Jak wykonać”.** Jednostka złożona w telefonie ma `infos: []` (`applyOwn`), a linki dokłada dopiero `getData` przy następnym wczytaniu. Sprawdzić, czy pojawiają się po odświeżeniu; jeśli nie, dopasowanie nazwy z bazy (`exInfo_`) nie łapie nazw wybranych w wyszukiwarce.
 
 ## Czeka na Damiana
 
-- Wysłanie klientom wiadomości o zmianach (tekst w rozmowie z 16.10; dopisać trening bez planu).
 - Próba własnego treningu; wgranie nowego ZIP-a skilla na claude.ai.
 - Test kolejki filmów na telefonie (wyjście z aplikacji w trakcie wysyłki).
 - Test ścieżki sztangi z nagrywaniem i 5–10 filmów testowych do strojenia analizy.
@@ -30,6 +32,7 @@ Klient widział tylko komentarze do filmów z poprzedniego tygodnia i pytał, cz
 ## Do obserwacji
 
 - Czas ładowania przy rosnącym Logu (pole `ms`).
+- Reakcje klientów na zakładkę Trener i Postęp → Tydzień (czy czegoś brakuje, czy coś myli).
 - Zakładka Błędy i kolumna `bledy_7dni` w Przeglądzie: po kilku dniach zdecydować, czy dać sygnał.
 
 ## Propozycje (do wyboru)
@@ -48,4 +51,5 @@ Klient widział tylko komentarze do filmów z poprzedniego tygodnia i pytał, cz
 - Plan klienta z procentami bez kg: dopisać kg po poznaniu maksów.
 - Dopisywanie ćwiczeń do jednostek trenera (odłożone).
 - Flaga klienta dla Dyspozycji/Postępu; `masters = TAK` tam, gdzie trzeba.
-- Wersja do sklepów (Android) z przypomnieniami i wysyłką filmów przy zamkniętej aplikacji.
+- Wersja do sklepów (Android) z przypomnieniami, wysyłką filmów przy zamkniętej aplikacji i sygnałem końca przerwy w tle (lokalne powiadomienie planowane przy ✓).
+- Sygnał przerwy, gdy klient jest w innej aplikacji: przeglądarka wstrzymuje stronę w tle, więc dźwięk i powiadomienie nie przychodzą. Decyzja 22.10: na razie bez zmian. Odrzucone obejścia: nagranie „cisza + sygnał” (przerywa muzykę klienta), Web Push (wymaga własnego serwera).
