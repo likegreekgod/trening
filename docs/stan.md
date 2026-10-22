@@ -17,6 +17,12 @@ Stan na 2026-10-22, aplikacja v31.
 
 - 22.10 (v30–v31): zakładka Trener (wszystkie komentarze trenera), Przegląd `filmy_bez_kom_7dni`, Postęp → Tydzień. Klienci poinformowani.
 
+## Do zrobienia (uwagi z 22.10)
+
+- **Dyspozycja: skala snu odwrotna niż odczucie.** Ankieta Hoopera ma wszędzie 1 = dobrze (`HOOPER` w lib.js: Sen „1 = bardzo dobry”), ale sen kojarzy się z oceną jakości (wyżej = lepiej). Klienci się mylą. Do ustalenia: odwrócić tylko widok snu (zapis i `hooper_suma` bez zmian) albo zmienić opis/etykiety skrajnych przycisków.
+- **Własny trening: brak kompleksów i serii obiegowych.** Klient składa tylko pojedyncze ćwiczenia (`openOwn` / `applyOwn`). Do zaprojektowania: kompleks „A + B” jako jedno ćwiczenie i obwód/superseria (grupa ćwiczeń robionych na zmianę).
+- **Własny trening: brak „Jak wykonać”.** Jednostka złożona w telefonie ma `infos: []` (`applyOwn`), a linki dokłada dopiero `getData` przy następnym wczytaniu. Sprawdzić, czy pojawiają się po odświeżeniu; jeśli nie, dopasowanie nazwy z bazy (`exInfo_`) nie łapie nazw wybranych w wyszukiwarce.
+
 ## Czeka na Damiana
 
 - Próba własnego treningu; wgranie nowego ZIP-a skilla na claude.ai.
