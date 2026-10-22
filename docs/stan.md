@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-10-22, aplikacja v29.
+Stan na 2026-10-22, aplikacja v30.
 
 ## Jak pracujemy
 
@@ -17,7 +17,7 @@ Stan na 2026-10-22, aplikacja v29.
 
 Klient widział tylko komentarze do filmów z poprzedniego tygodnia i pytał, czy trener obejrzał filmy z bieżącego. Damian obiecał dwie rzeczy:
 
-1. **Wszystkie komentarze trenera w jednym miejscu.** Zakładka z pełną listą, pogrupowaną tygodniami i jednostkami, z oznaczeniem nowych. Dziś na Treningu jest tylko karta z nowymi komentarzami i mały przycisk „Komentarze trenera (n)” (maks. 40). Najpierw sprawdzić, czy komentarze z bieżącego tygodnia doszły do Logu (`syncComments_`: filmy z 30 dni, maks. 150 plików, co 30 min z wyzwalacza).
+1. ~~**Wszystkie komentarze trenera w jednym miejscu.**~~ Zrobione 22.10 (v30): zakładka Trener w dolnym menu, w Przeglądzie `filmy_bez_kom_7dni`. Do sprawdzenia przez Damiana: czy komentarze z bieżącego tygodnia są w Logu (`komentarz_dysk`); rozwiązane na Dysku nie trafiają do aplikacji.
 2. **Podsumowanie tygodnia w Postępie**, które zmienia się z tygodnia na tydzień. Szkic z 22.10: zakładka „Tydzień” z przełączaniem tygodni; karty z wykonaniem (jednostki, serie, tonaż w porównaniu ze średnią z 4 tyg.), rekordami tygodnia, odczuciami (RPE, samopoczucie, ból, dyspozycja), pominiętymi ćwiczeniami i komentarzami trenera; czysta funkcja `weekSummary` w lib.js. Czeka na decyzje: zakładka czy karta, bez statusu obciążenia z arkusza, ból tak czy nie.
 
 ## Czeka na Damiana

@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-22 · Zakładka Trener: wszystkie komentarze
+
+- Klient widział tylko nowe komentarze (karta na Treningu) i pytał, czy trener obejrzał filmy z bieżącego tygodnia. Teraz piąty przycisk dolnego menu „Trener” pokazuje wszystkie komentarze: tydzień = karta (najnowszy otwarty, starsze zwinięte), w nim jednostki wg faktycznego dnia, najpierw komentarz do treningu, potem serie. Nowe mają „NOWE” do wyjścia z zakładki; kropka na przycisku, gdy są nieprzeczytane. Karta na Treningu zostaje („Przeczytane” / „Wszystkie komentarze”).
+- Odrzucone: pokazywanie klientowi „skomentowane 3 z 5” i „film czeka na komentarz”. Klient oczekiwałby komentarza do każdego filmu. Zamiast tego trener ma w Przeglądzie kolumnę `filmy_bez_kom_7dni` (bez sygnału; liczona z Przeglądem, rano i z menu).
+- Komentarz „rozwiązany” na Dysku nie trafia do aplikacji (`commentLines_` pomija rozwiązane).
+
 ## 2026-10-21 · Klient bez planu
 
 - Klient z dostępem, ale bez planu nie widzi już samego „Brak planu”: Trening pokazuje kartę „Jeszcze nie masz planu” z przyciskiem „+ Własny trening”, a dolne menu jest dostępne. Własna jednostka trafia do tygodnia 1. Gdy Klienci M `wlasne` = NIE, zostaje „Brak planu”.
