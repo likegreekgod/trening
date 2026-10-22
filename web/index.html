@@ -83,9 +83,9 @@
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
   /* dolne menu: zakładka aktywna = pasek akcentu u góry */
-  .nav{position:fixed;left:0;right:0;bottom:0;z-index:8;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:8;display:flex;
        background:var(--bar);border-top:0;padding-bottom:env(safe-area-inset-bottom,0px)}
-  .nav button{position:relative;border:0;background:transparent;min-height:58px;display:grid;place-items:center;gap:2px;padding:6px 0;
+  .nav button{flex:1 1 auto;position:relative;border:0;background:transparent;min-height:58px;display:grid;place-items:center;gap:2px;padding:6px 2px;
               font:600 12px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--bar-muted)}
   .nav svg{width:22px;height:22px;box-sizing:content-box;padding:3px 16px;border-radius:999px;transition:background-color .15s}
   .nav button[aria-current="page"]{color:var(--bar-ink);font-weight:700}
@@ -440,6 +440,21 @@
   .cn-l p{margin:2px 0 0;font-size:16px;line-height:1.4}
   .cn-t{font-family:var(--f-mono);font-weight:600}
   .cn-s{font-size:14px;color:var(--ink-2);margin:0 0 10px}
+  .cnote .row{display:flex;gap:8px;flex-wrap:wrap}
+  .cnote .row .btn{flex:1 1 140px}
+  /* zakładka Trener: tydzień = karta, starsze zwinięte; nowy komentarz z paskiem akcentu */
+  details.cw > summary{list-style:none;cursor:pointer;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  details.cw > summary::-webkit-details-marker{display:none}
+  details.cw > summary::after{content:'';width:9px;height:9px;border:solid var(--ink-2);border-width:0 2px 2px 0;transform:rotate(45deg);margin:-4px 4px 0 0;flex:0 0 auto}
+  details.cw[open] > summary::after{transform:rotate(225deg);margin-top:4px}
+  .cw .cn{display:block}
+  .cw .sub{margin:0}
+  .cw-u{margin:14px 0 0;padding-top:10px;border-top:1px solid var(--line);font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+  .cw .cn-l{margin:6px 0 0}
+  .cw .cn-l li{padding:6px 0 6px 12px;margin:0;box-shadow:inset 3px 0 0 var(--line)}
+  .cw .cn-l li.new{box-shadow:inset 3px 0 0 var(--accent)}
+  .cw-new{font:600 12px/1 var(--f-mono);letter-spacing:.04em;background:var(--accent);color:var(--on-accent);border-radius:var(--r);padding:3px 6px;margin-left:6px;vertical-align:1px}
+  .nav i.nd{position:absolute;top:6px;left:calc(50% + 12px);width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bar)}
   #cn-all{margin:12px 0 0}
   a.btn{text-decoration:none}
   /* serie twarde na partię: jedna seria danych, kreska = średnia z 4 tygodni */
@@ -562,11 +577,13 @@
 <main id="dysp" hidden></main>
 <main id="plan" hidden></main>
 <main id="postep" hidden></main>
+<main id="trener" hidden></main>
 <nav class="nav" id="nav" hidden>
   <button type="button" data-tab="trening"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6M6 6v12M18 6v12M21 9v6M6 12h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>Trening</button>
   <button type="button" data-tab="dysp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 13h5l2-6 4 12 3-9 1 3h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter"/></svg>Dyspozycja</button>
   <button type="button" data-tab="plan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM4 10h16M9 3v4M15 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>Plan</button>
   <button type="button" data-tab="postep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V4M4 20h16M8 16l4-5 3 3 5-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter"/></svg>Postęp</button>
+  <button type="button" data-tab="trener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H10l-5 4v-4H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter"/></svg>Trener</button>
 </nav>
 <div id="rest" hidden role="timer" aria-live="off">
   <div class="rtop"><span class="rlbl" id="rlbl">Przerwa</span><b class="rtime" id="rtime">0:00</b></div>
@@ -602,7 +619,7 @@ function applyCfg(c){
   SWAP = c.swap === true ? 'TRENER' : c.swap === 'TRENER' || c.swap === 'DOWOLNA' ? c.swap : '';
 }
 let DATA = null, PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
-let TAB = 'trening';   // ekran z dolnego menu: trening | dysp | plan | postep
+let TAB = 'trening';   // ekran z dolnego menu: trening | dysp | plan | postep | trener
 let PT = 'sila', PEX = '';   // zakładka i ćwiczenie na ekranie Postęp
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const RPE = ['', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10'];
@@ -616,7 +633,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, ownWeek, ownNextDay, exSearch,
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, ownWeek, ownNextDay, exSearch,
   isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit } = window.TL;
 
 /* ---------- kolejka offline ---------- */
@@ -1001,10 +1018,11 @@ function render(){
   $('#nav').hidden = !PLAN.length && !ownOn();                  // bez planu, ale z własnymi treningami: menu jest
   document.querySelectorAll('#nav [data-tab]').forEach(b => {
     b.setAttribute('aria-current', b.dataset.tab === TAB ? 'page' : 'false');
-    b.onclick = () => { TAB = b.dataset.tab; WK = null; render(); window.scrollTo(0, 0); };
+    b.onclick = () => { if (b.dataset.tab === 'trener' && TAB !== 'trener') CNEW = new Set(); TAB = b.dataset.tab; WK = null; render(); window.scrollTo(0, 0); };
   });
-  $('#main').hidden = TAB !== 'trening'; $('#plan').hidden = TAB !== 'plan'; $('#dysp').hidden = TAB !== 'dysp'; $('#postep').hidden = TAB !== 'postep';
-  if (TAB === 'plan') renderPlan(); else if (TAB === 'dysp') renderDysp(); else if (TAB === 'postep') renderPostep(); else renderTrening();
+  $('#main').hidden = TAB !== 'trening'; $('#plan').hidden = TAB !== 'plan'; $('#dysp').hidden = TAB !== 'dysp'; $('#postep').hidden = TAB !== 'postep'; $('#trener').hidden = TAB !== 'trener';
+  if (TAB === 'plan') renderPlan(); else if (TAB === 'dysp') renderDysp(); else if (TAB === 'postep') renderPostep(); else if (TAB === 'trener') renderTrener(); else renderTrening();
+  navDot();
 }
 function head(eyebrow, title, stats, extra){
   $('#eyebrow').textContent = eyebrow; $('#title').textContent = title; $('#stats').innerHTML = stats || ''; $('#hx').innerHTML = extra || '';
@@ -1234,9 +1252,14 @@ function chartBars(ws, o){
 const tableOf = (heads, rows) => `<details class="tbl"><summary>Dane w tabeli</summary><table class="reps"><thead><tr>${heads.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>` +
   rows.map(r => '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>').join('') + '</tbody></table></details>';
 const TIP0 = 'Dotknij wykresu, żeby zobaczyć wartość.';
-function renderPostep(){
-  const logs = (DATA && DATA.logs) || [], dates = {};
+/** faktyczny dzień jednostki z Sesje.start: {tydzień|jednostka → RRRR-MM-DD} */
+function unitDays(){
+  const dates = {};
   ((DATA && DATA.sessions) || []).forEach(s => { if (/T/.test(String(s.start || ''))) dates[s.tydzien + '|' + s.jednostka] = localDate(new Date(s.start)); });
+  return dates;
+}
+function renderPostep(){
+  const logs = (DATA && DATA.logs) || [], dates = unitDays();
   const sets = doneSets(logs, PLAN, dates), today = localDate();
   head(NAME ? 'Cała historia · ' + NAME : 'Cała historia', 'Postęp', '');
   let body = '';
@@ -1497,21 +1520,46 @@ const CNK = 'cn_' + KEY;
 function cnSeen(){ try { return JSON.parse(localStorage.getItem(CNK) || '[]'); } catch (e) { return []; } }
 function cnMark(keys){ try { localStorage.setItem(CNK, JSON.stringify(cnSeen().concat(keys).slice(-400))); } catch (e) {} }
 const cnAll = () => coachNotes((DATA && DATA.logs) || [], (DATA && DATA.sessions) || []);
-const cnList = notes => '<ul class="cn-l">' + notes.map(n => `<li><span class="cn-h">${esc(n.title)}${n.date ? ' · ' + ddmm(n.date) : ''}</span>` +
+const cnList = (notes, isNew, withDate = true) => '<ul class="cn-l">' + notes.map(n => `<li class="${isNew && isNew(n) ? 'new' : ''}"><span class="cn-h">${esc(n.title)}${withDate && n.date ? ' · ' + ddmm(n.date) : ''}${isNew && isNew(n) ? '<span class="cw-new">NOWE</span>' : ''}</span>` +
   n.lines.map(l => `<p>${l.t ? `<b class="cn-t">${esc(l.t)}</b> ` : ''}${esc(l.txt)}</p>`).join('') + '</li>').join('') + '</ul>';
-/** nowe komentarze = karta na górze Treningu; przeczytane zostają pod przyciskiem */
+const cnFresh = () => { const seen = cnSeen(); return cnAll().filter(n => seen.indexOf(n.key) < 0); };
+/** kropka na „Trener” w dolnym menu, gdy są nieprzeczytane komentarze */
+function navDot(){
+  const b = document.querySelector('#nav [data-tab="trener"]'); if (!b) return;
+  const n = TAB === 'trener' ? 0 : cnFresh().length, d = b.querySelector('.nd');
+  b.setAttribute('aria-label', n ? 'Trener, nowe komentarze: ' + n : 'Trener');
+  if (n && !d) b.insertAdjacentHTML('beforeend', '<i class="nd" aria-hidden="true"></i>'); else if (!n && d) d.remove();
+}
+/** nowe komentarze = karta na górze Treningu; wszystkie są w zakładce Trener */
 function notesCard(){
-  const all = cnAll(); if (!all.length) return '';
-  const seen = cnSeen(), fresh = all.filter(n => seen.indexOf(n.key) < 0);
-  if (!fresh.length) return `<button type="button" class="btn sm" id="cn-all">Komentarze trenera (${all.length})</button>`;
+  const fresh = cnFresh(); if (!fresh.length) return '';
   return `<section class="cnote" aria-label="Nowe komentarze trenera"><h3>Trener skomentował</h3>${cnList(fresh)}
     <p class="cn-s">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>
-    <button type="button" class="btn" id="cn-ok">Przeczytane</button></section>`;
+    <div class="row"><button type="button" class="btn" id="cn-ok">Przeczytane</button><button type="button" class="btn" id="cn-all">Wszystkie komentarze</button></div></section>`;
 }
 function bindNotes(){
   const ok = $('#cn-ok'), all = $('#cn-all');
-  if (ok) ok.onclick = () => { cnMark(cnAll().map(n => n.key)); renderTrening(); };
-  if (all) all.onclick = () => openSheet(`<h2 id="sheet-t">Komentarze trenera</h2><p class="sub">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>${cnList(cnAll().slice(0, 40))}<button type="button" class="btn" data-close="1">Zamknij</button>`);
+  if (ok) ok.onclick = () => { cnMark(cnAll().map(n => n.key)); renderTrening(); navDot(); };
+  if (all) all.onclick = () => { CNEW = new Set(); TAB = 'trener'; render(); window.scrollTo(0, 0); };
+}
+/* ---------- zakładka Trener: wszystkie komentarze trenera, tygodniami ---------- */
+let CNEW = new Set();                               // nowe w chwili wejścia do zakładki: zostają oznaczone do jej opuszczenia
+function renderTrener(){
+  const all = cnAll(), seen = cnSeen();
+  all.forEach(n => { if (seen.indexOf(n.key) < 0) CNEW.add(n.key); });
+  const isNew = n => CNEW.has(n.key), weeks = notesByWeek(all, unitDays()), fresh = all.filter(isNew).length;
+  head(NAME ? 'Komentarze trenera · ' + NAME : 'Komentarze trenera', 'Trener', fresh ? `<span><b>${fresh}</b> ${fresh === 1 ? 'nowy' : 'nowe'}</span>` : '');
+  const range = w => w.from ? ddmm(w.from) + (w.to && w.to !== w.from ? '–' + ddmm(w.to) : '') : '';
+  const unitHead = (w, u) => esc((PLAN.find(r => String(r.week) === w.week && String(r.day) === u.unit && r.title) || {}).title || 'Trening ' + u.unit) + (u.date ? ' · ' + weekday(u.date) + ' ' + ddmm(u.date) : '');
+  $('#trener').innerHTML = !all.length
+    ? '<p class="empty">Tu pojawią się komentarze trenera do Twoich filmów i treningów.</p>'
+    : weeks.map((w, i) => {
+        const n = w.units.reduce((s, u) => s + u.notes.length, 0), nw = w.units.reduce((s, u) => s + u.notes.filter(isNew).length, 0);
+        return `<details class="card cw ${i ? '' : 'first'}" ${!i || nw ? 'open' : ''}><summary><span><span class="cn">${esc(weekLabel(+w.week || w.week))}</span>
+          <span class="sub">${range(w)}${range(w) ? ' · ' : ''}${n} ${n === 1 ? 'komentarz' : n < 5 ? 'komentarze' : 'komentarzy'}${nw ? ' · ' + nw + ' ' + (nw === 1 ? 'nowy' : 'nowe') : ''}</span></span></summary>
+          ${w.units.map(u => `<div class="cw-u">${unitHead(w, u)}</div>${cnList(u.notes, isNew, false)}`).join('')}</details>`;
+      }).join('') + '<p class="cn-s" style="margin-top:12px">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>';
+  cnMark(all.filter(n => seen.indexOf(n.key) < 0).map(n => n.key));
 }
 /* ---------- własny trening klienta: składanie z ćwiczeń z bazy, zapis do Planu jako W1, W2… ---------- */
 const ownOn = () => !!(DATA && DATA.cfg && DATA.cfg.own !== false);

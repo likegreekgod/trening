@@ -232,6 +232,9 @@ test('computeOverview_: przegląd klientów – sygnały, zaległe, koniec planu
     'zamiana (ból): Wiosłowanie → Wiosłowanie hantlem; zaległe: T2 08.10; plan kończy się za 4 dni');
   assert.deepEqual([v(a, 'ostatni_trening'), v(a, 'dni_temu'), v(a, 'ten_tydzien'), v(a, 'zalegle'), v(a, 'filmy_7dni'), v(a, 'koniec_planu_dni')],
     ['2026-10-06', 6, '0/2', 1, 1, 4]);                                          // faktyczny dzień z Sesje.start, nie data z planu
+  assert.equal(v(a, 'filmy_bez_kom_7dni'), 1);                                // film bez komentarza trenera
+  const log2 = log.map(l => l.film_link ? Object.assign({}, l, { komentarz_dysk: '0:03 łokcie' }) : l);
+  assert.equal(v(C.computeOverview_(plan, log2, ses, klienci, dys, sum, { today })[0], 'filmy_bez_kom_7dni'), '');
   assert.equal(v(a, 'status_tygodnia'), '🟠 uwaga (tydz. od 05.10)');
   assert.equal(v(a, 'uwagi_klienta'), '06.10: Kolano boli po schodach.');
   assert.equal(v(rows[1], 'do_reakcji'), '2× spalone < 85%: Rwanie; dyspozycja: Uwaga (12.10); zaległe: T1 10.10');   // serie bez zamkniętej sesji: dzień z „zapisano”
@@ -482,7 +485,7 @@ test('errRow_, errRecent_: błędy z aplikacji w zakładce Błędy i w Przegląd
   assert.equal(C.errRecent_(errs, 'anna', '2026-10-16', 7), '1× film, 2× zapis');
   assert.equal(C.errRecent_([], 'anna', '2026-10-16', 7), '');
   assert.ok(C.API_FNS.getExNames && C.API_FNS.logError && typeof C.onEdit === 'function');
-  assert.equal(C.PRZ_HEADERS[C.PRZ_HEADERS.length - 1], 'bledy_7dni');
+  assert.ok(C.PRZ_HEADERS.includes('bledy_7dni'));
 });
 
 // --- 17.10: pominięte ćwiczenia, komentarze do ćwiczeń, EMOM i cięcie w planie ---

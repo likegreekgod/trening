@@ -889,7 +889,7 @@ test('PWA: manifest i service worker', async () => {
 });
 
 // --- v4: komentarze trenera ---
-test('Komentarze trenera: karta z nowymi, „Przeczytane”, lista pod przyciskiem, zmieniony komentarz wraca', async () => {
+test('Komentarze trenera: karta z nowymi, „Przeczytane”, zakładka Trener z wszystkimi, kropka w menu, zmieniony komentarz wraca', async () => {
   const mk = txt => Object.assign({}, PROG, { logs: PROG.logs.map((l, i) => i === 0 ? Object.assign({}, l, { komentarz_dysk: txt }) : l),
     sessions: PROG.sessions.map((s, i) => i === 0 ? Object.assign({}, s, { komentarz_trenera: 'Dobry trening <b>!</b>' }) : s) });
   const { ctx, p } = await page([], false, { data: mk('0:15 Łokcie wyżej\nOgólnie dobrze') });
@@ -898,24 +898,42 @@ test('Komentarze trenera: karta z nowymi, „Przeczytane”, lista pod przyciski
   const items = await p.$$eval('.cnote .cn-l li', li => li.map(x => [x.querySelector('.cn-h').textContent.replace(/ · \d\d\.\d\d$/, ''), [...x.querySelectorAll('p')].map(q => q.textContent)]));
   assert.deepEqual(items.sort(), [['Przysiad tylny · seria 1', ['0:15 Łokcie wyżej', 'Ogólnie dobrze']], ['Trening T1', ['Dobry trening <b>!</b>']]]);   // treść jako tekst, nie HTML
   assert.equal(await p.$eval('.cnote .cn-t', e => e.textContent), '0:15');
-  assert.equal(await p.$('#cn-all'), null);
+  assert.ok(await p.$('#nav [data-tab="trener"] .nd'));                         // kropka: są nieprzeczytane
   assert.deepEqual(await a11y(p), []);
   if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'komentarze.png') }); }
   await p.click('#cn-ok');
   assert.equal(await p.$('.cnote'), null);
-  assert.equal((await p.$eval('#cn-all', e => e.textContent)).trim(), 'Komentarze trenera (2)');
-  await p.click('#cn-all');
-  assert.equal(await p.$eval('#sheet-t', e => e.textContent), 'Komentarze trenera');
-  assert.equal((await p.$$('#sheet .cn-l li')).length, 2);
+  assert.equal(await p.$('#nav [data-tab="trener"] .nd'), null);
+  await p.click('#nav [data-tab="trener"]');
+  assert.equal(await p.$eval('#title', e => e.textContent), 'Trener');
+  assert.equal((await p.$$('#trener .cn-l li')).length, 2);
+  assert.equal(await p.$('#trener .cw-new'), null);                              // przeczytane wcześniej: bez „NOWE”
+  // komentarz do całego treningu na początku jednostki, potem serie
+  assert.deepEqual(await p.$$eval('#trener .cn-l li .cn-h', h => h.map(x => x.textContent)), ['Trening T1', 'Przysiad tylny · seria 1']);
   assert.deepEqual(await a11y(p), []);
-  await p.click('#sheet [data-close]');
-  await p.reload(); await p.waitForSelector('#cn-all');                          // przeczytane zostają przeczytane
-  assert.equal(await p.$('.cnote'), null);
-  assert.deepEqual(p.external, []); assert.deepEqual(p.errors, []);
   await ctx.close();
+  // nowy komentarz: kropka, wejście w zakładkę = „NOWE” do wyjścia, potem przeczytane
+  const t3 = await page([], false, { data: mk('0:20 Kolana na zewnątrz') });
+  await t3.p.goto(base + '?k=kabc'); await t3.p.waitForSelector('.cnote');
+  await t3.p.click('#cn-all');
+  assert.equal(await t3.p.$eval('#title', e => e.textContent), 'Trener');
+  assert.equal((await t3.p.$$('#trener .cw-new')).length, 2);
+  assert.equal(await t3.p.$('#nav [data-tab="trener"] .nd'), null);
+  for (const dark of [false, true]) {
+    await t3.p.emulateMedia({ colorScheme: dark ? 'dark' : 'light' });
+    if (process.env.SCREENS !== '0') await t3.p.screenshot({ path: path.join(SCREENS, 'trener-' + (dark ? 'ciemny' : 'jasny') + '.png') });
+  }
+  await t3.p.click('#nav [data-tab="trening"]'); await t3.p.click('#nav [data-tab="trener"]');
+  assert.equal(await t3.p.$('#trener .cw-new'), null);
+  await t3.p.reload(); await t3.p.waitForSelector('.set');                      // przeczytane zostają przeczytane
+  assert.equal(await t3.p.$('.cnote'), null);
+  assert.deepEqual(t3.p.external, []); assert.deepEqual(t3.p.errors, []);
+  await t3.ctx.close();
   const t2 = await page([], false, { data: PROG });                             // bez komentarzy: nic się nie pojawia
   await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.set');
-  assert.deepEqual([await t2.p.$('.cnote'), await t2.p.$('#cn-all')], [null, null]);
+  assert.deepEqual([await t2.p.$('.cnote'), await t2.p.$('#nav [data-tab="trener"] .nd')], [null, null]);
+  await t2.p.click('#nav [data-tab="trener"]');
+  assert.match(await t2.p.$eval('#trener', e => e.textContent), /Tu pojawią się komentarze/);
   await t2.ctx.close();
 });
 

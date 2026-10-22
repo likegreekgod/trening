@@ -1360,9 +1360,10 @@ function computeParts_(plan, log, ses, dictRows, opts) {
  * Czerwone (ostatnie 7 dni): ból > 3/10, ≥ 2 FAIL w ćwiczeniu poza bojami w jednej jednostce, dyspozycja „Zmęczenie” (3 dni).
  * Pomarańczowe: samopoczucie ≤ 2, ≥ 2 spalone boje < 85% w jednostce, zamiana z powodu bólu, dyspozycja „Uwaga”,
  * jednostka zaległa (≥ 2 dni po dacie z planu, do 28 dni wstecz), brak treningu ≥ 7 dni, plan kończy się za ≤ 7 dni albo brak planu.
+ * filmy_bez_kom_7dni: filmy z 7 dni bez komentarza trenera (komentarz_dysk i komentarz_trenera puste); bez sygnału, klient tego nie widzi.
  */
 const PRZ_HEADERS = ['klient', 'imie', 'pilnosc', 'do_reakcji', 'ostatni_trening', 'dni_temu', 'ten_tydzien', 'zalegle', 'status_tygodnia',
-  'uwagi_klienta', 'filmy_7dni', 'koniec_planu_dni', 'czerwone', 'wlasne_7dni', 'bledy_7dni'];
+  'uwagi_klienta', 'filmy_7dni', 'koniec_planu_dni', 'czerwone', 'wlasne_7dni', 'bledy_7dni', 'filmy_bez_kom_7dni'];
 const PRZ = { late: 2, lateMax: 28, window: 7, readyDays: 3, idle: 7, planEnd: 7 };
 
 function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
@@ -1436,11 +1437,13 @@ function computeOverview_(plan, log, ses, klienci, dys, sumRows, opts) {
 
     const sr = (sumRows || []).filter(r => r[0] === c).sort((a, b) => String(a[1]).localeCompare(String(b[1])));
     const st = sr.filter(r => r[1] === ws).pop() || sr.pop();
+    const films = logs.filter(x => !blank_(x.l.film_link) && recent(x.day));
     const note = mine.filter(m => !blank_(m.s.uwagi) && m.act).sort((a, b) => a.act.localeCompare(b.act)).pop();
     return [c, String(k.imie || ''), 3 * red.length + amb.length, red.concat(amb).join('; '), last, ago,
       wk.filter(u => u.done).length + '/' + wk.length, late.length || '', st ? st[SI] + (st[1] === ws ? '' : ' (tydz. od ' + dm(st[1]) + ')') : '',
       note ? dm(note.act) + ': ' + String(note.s.uwagi).replace(/\s+/g, ' ').slice(0, 300) : '',
-      logs.filter(x => !blank_(x.l.film_link) && recent(x.day)).length || '', left, red.length || '', ownRecent_(plan, ses, c, today, PRZ.window, opts && opts.localDay), errRecent_(opts && opts.errs, c, today, PRZ.window)];
+      films.length || '', left, red.length || '', ownRecent_(plan, ses, c, today, PRZ.window, opts && opts.localDay), errRecent_(opts && opts.errs, c, today, PRZ.window),
+      films.filter(x => blank_(x.l.komentarz_dysk) && blank_(x.l.komentarz_trenera)).length || ''];
   }).sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0]));
 }
 

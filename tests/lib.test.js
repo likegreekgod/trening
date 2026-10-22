@@ -315,6 +315,21 @@ test('coachNotes: komentarze trenera do serii, filmu i treningu', () => {
   assert.deepEqual(L.coachNotes([], []), []); assert.deepEqual(L.coachNotes(undefined, undefined), []);
 });
 
+test('notesByWeek: komentarze trenera tygodniami i jednostkami', () => {
+  const logs = [{ id: 'a|7|T2|2|1', tydzien: 7, jednostka: 'T2', data: '2026-10-23', nr_cw: 2, cwiczenie: 'Podrzut', seria: 1, komentarz_dysk: '0:04 łokcie' },
+    { id: 'a|7|T1|2|3', tydzien: 7, jednostka: 'T1', data: '2026-10-21', nr_cw: 2, cwiczenie: 'Przysiad', seria: 3, komentarz_dysk: 'ok' },
+    { id: 'a|7|T1|1|10', tydzien: 7, jednostka: 'T1', data: '2026-10-21', nr_cw: 1, cwiczenie: 'Rwanie', seria: 10, komentarz_dysk: 'x' },
+    { id: 'a|7|T1|1|2', tydzien: 7, jednostka: 'T1', data: '2026-10-21', nr_cw: 1, cwiczenie: 'Rwanie', seria: 2, komentarz_dysk: 'y' },
+    { id: 'a|7|T1|1|D1', tydzien: 7, jednostka: 'T1', data: '2026-10-21', nr_cw: 1, cwiczenie: 'Rwanie', seria: 'D1', komentarz_dysk: 'z' },
+    { id: 'a|6|T1|1|1', tydzien: 6, jednostka: 'T1', data: '2026-10-14', nr_cw: 1, cwiczenie: 'Rwanie', seria: 1, komentarz_dysk: 'stary' }];
+  const ses = [{ id: 'a|7|T1', tydzien: 7, jednostka: 'T1', data: '2026-10-21', komentarz_trenera: 'Dobra sesja' }];
+  const w = L.notesByWeek(L.coachNotes(logs, ses), { '7|T1': '2026-10-22', '7|T2': '2026-10-20' });   // faktyczny dzień z Sesje.start
+  assert.deepEqual(w.map(x => [x.week, x.from, x.to]), [['7', '2026-10-20', '2026-10-22'], ['6', '2026-10-14', '2026-10-14']]);
+  assert.deepEqual(w[0].units.map(u => [u.unit, u.date]), [['T2', '2026-10-20'], ['T1', '2026-10-22']]);
+  assert.deepEqual(w[0].units[1].notes.map(n => n.title), ['Trening T1', 'Rwanie · seria 2', 'Rwanie · seria 10', 'Rwanie · seria D1', 'Przysiad · seria 3']);
+  assert.deepEqual(L.notesByWeek([], {}), []);
+});
+
 test('ownWeek, ownNextDay, exSearch: własny trening klienta', () => {
   const plan = [{ week: 1, day: 'T1', date: '2026-10-05' }, { week: 1, day: 'T2', date: '2026-10-07' }, { week: 2, day: 'T1', date: '2026-10-12' },
     { week: 2, day: 'W1', date: '2026-10-20', own: true }, { week: 2, day: 'W3', date: '2026-10-21', own: true }];

@@ -482,10 +482,32 @@
     const t = v => String(v === undefined || v === null ? '' : v).trim(), out = [];
     const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };
     const lines = txt => txt.split(/\n+/).map(x => x.trim()).filter(Boolean).map(x => { const m = /^(\d{1,3}:\d{2})\s+(.*)$/.exec(x); return m ? { t: m[1], txt: m[2] } : { t: '', txt: x }; });
-    const add = (kind, r, title, txt) => { if (txt) out.push({ key: kind + '|' + r.id + '|' + hash(txt), date: String(r.data || '').slice(0, 10), title, lines: lines(txt) }); };
-    (logs || []).forEach(l => add('L', l, t(l.cwiczenie) + ' · seria ' + t(l.seria), [t(l.komentarz_trenera), t(l.komentarz_dysk)].filter(Boolean).join('\n')));
-    (sessions || []).forEach(s => add('S', s, 'Trening ' + t(s.jednostka), t(s.komentarz_trenera)));
+    const add = (kind, r, title, txt, ord) => { if (txt) out.push({ key: kind + '|' + r.id + '|' + hash(txt), date: String(r.data || '').slice(0, 10), title, lines: lines(txt),
+      week: t(r.tydzien), unit: t(r.jednostka), ord }); };
+    (logs || []).forEach(l => add('L', l, t(l.cwiczenie) + ' · seria ' + t(l.seria), [t(l.komentarz_trenera), t(l.komentarz_dysk)].filter(Boolean).join('\n'), [nf(l.nr_cw) || 0, t(l.seria)]));
+    (sessions || []).forEach(s => add('S', s, 'Trening ' + t(s.jednostka), t(s.komentarz_trenera), [-1, '']));
     return out.sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title, 'pl'));
+  };
+  /**
+   * komentarze trenera pogrupowane do zakładki Trener: tydzień (najnowszy na górze) → jednostka (wg dnia) → komentarze
+   * (najpierw do całego treningu, potem wg kolejności ćwiczeń i serii). dates: {tydzień|jednostka → faktyczny dzień}.
+   * → [{week, from, to, units: [{unit, date, notes}]}]
+   */
+  L.notesByWeek = (notes, dates = {}) => {
+    const W = {}, sn = v => { const n = parseFloat(String(v).replace(/^\D+/, '')); return isNaN(n) ? 0 : n; };
+    (notes || []).forEach(n => {
+      const w = W[n.week] || (W[n.week] = { week: n.week, units: {} }), d = dates[n.week + '|' + n.unit] || n.date;
+      const u = w.units[n.unit] || (w.units[n.unit] = { unit: n.unit, date: d, notes: [] });
+      if (d && (!u.date || d < u.date)) u.date = d;
+      u.notes.push(n);
+    });
+    const ord = (a, b) => a.ord[0] - b.ord[0] || /^\d/.test(b.ord[1]) - /^\d/.test(a.ord[1]) || sn(a.ord[1]) - sn(b.ord[1]) || String(a.ord[1]).localeCompare(String(b.ord[1]));
+    return Object.values(W).map(w => {
+      const units = Object.values(w.units).sort((a, b) => String(a.date).localeCompare(String(b.date)) || a.unit.localeCompare(b.unit, 'pl'));
+      units.forEach(u => u.notes.sort(ord));
+      const ds = units.map(u => u.date).filter(Boolean).sort();
+      return { week: w.week, from: ds[0] || '', to: ds[ds.length - 1] || '', units };
+    }).sort((a, b) => (nf(b.week) || 0) - (nf(a.week) || 0) || String(b.from).localeCompare(String(a.from)));
   };
   /** pomiary dyspozycji w czasie: [{date, v}] dla klucza (cmj_sr, vbt_test) */
   L.readySeries = (rows, key) => (rows || []).map(r => ({ date: String(r.data || '').slice(0, 10), v: nf(r[key]) }))
