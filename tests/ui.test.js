@@ -749,7 +749,7 @@ const PROG = (() => {
 for (const scheme of ['light', 'dark']) test(`Postęp ${scheme}: siła z rekordami, objętość ze strefami i kalendarzem, dyspozycja`, async () => {
   const { ctx, p } = await page([], false, { data: PROG, scheme });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
-  await p.click('#nav [data-tab="postep"]'); await p.waitForSelector('#postep svg.chart');
+  await p.click('#nav [data-tab="postep"]'); await p.click('[data-pt="sila"]'); await p.waitForSelector('#postep svg.chart');
   const shot = async n => { if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `postep-${n}-${scheme}.png`), fullPage: true }); } };
   // Siła: 7 punktów, rekordy = każdy nowy szczyt (tydz. 5 słabszy → nie rekord), blok B2 zaznaczony
   assert.deepEqual(await p.$$eval('#p-ex option', o => o.map(x => x.textContent)), ['Przysiad tylny', 'Rwanie']);
@@ -783,10 +783,40 @@ for (const scheme of ['light', 'dark']) test(`Postęp ${scheme}: siła z rekorda
   await ctx.close();
 });
 
+for (const scheme of ['light', 'dark']) test(`Postęp → Tydzień ${scheme}: wykonanie, rekordy, odczucia, przełączanie tygodni`, async () => {
+  // każdy tydzień kalendarzowy ma dokładnie jedną jednostkę PROG (co 7 dni); poprzedni tydzień jest zawsze w przeszłości
+  const data = Object.assign({}, PROG, { sessions: PROG.sessions.map(x => Object.assign({}, x, { bol: 'kolano:2' })),
+    logs: PROG.logs.concat(PROG.sessions.map(x => ({ id: x.id.replace('|T1', '|T1') + '|3|0', tydzien: x.tydzien, jednostka: 'T1', data: x.data, nr_cw: 3, cwiczenie: 'Face pull', seria: 0, typ: 'SKIP', uwagi: 'brak czasu', wykonane: '' }))) });
+  const { ctx, p } = await page([], false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('#nav [data-tab="postep"]');
+  assert.equal(await p.$eval('[data-pt="tyd"]', b => b.getAttribute('aria-selected')), 'true');
+  assert.equal(await p.$eval('[data-pw="1"]', b => b.disabled), true);              // dalej niż bieżący tydzień się nie da
+  await p.click('[data-pw="-1"]');
+  const t = (await p.$$eval('#postep .kv', r => r.map(x => x.querySelector('span').textContent + ' = ' + x.querySelector('b').textContent))).join('\n');
+  assert.match(t, /^Jednostki z planu · T1 ✓ = 1 z 1$/m);
+  assert.match(t, /^Serie · w planie = 6 z 6$/m);
+  assert.match(t, /^Tonaż · ▲ \d+% wobec śr\. 4 tyg\. = [\d\s]+ kg$/m);
+  assert.match(t, /^Czas = 1 h 0 min$/m);
+  assert.deepEqual(await p.$$eval('#postep .card', c => c.map(x => x.querySelector('.cn').textContent)), ['Wykonanie', 'Rekordy tygodnia', 'Jak było', 'Do zauważenia']);
+  assert.match(t, / Przysiad tylny · e1RM, \+[\d,]+ kg = [\d,]+ kg$/m); assert.match(t, / Rwanie · zaliczone, \+2,5 kg = 7\d,5 kg$/m);
+  assert.match(t, /^RPE sesji · 6 = śr\. 6$/m); assert.match(t, /^Ból · kolano = max 2\/10$/m); assert.match(t, /^Dyspozycja = 1× dobra$/m);
+  assert.match(t, /^Pominięte: Face pull · brak czasu = T1$/m);
+  assert.equal(await p.$eval('[data-pw="0"]', b => b.getAttribute('aria-pressed')), null);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, `postep-tydzien-${scheme}.png`), fullPage: true });
+  await p.click('[data-pw="0"]');
+  assert.equal(await p.$eval('[data-pw="0"]', b => b.getAttribute('aria-pressed')), 'true');
+  assert.deepEqual(p.external, []); assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('Postęp: bez historii czytelne komunikaty zamiast pustych wykresów', async () => {
   const { ctx, p } = await page([], false, { data: PRO });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
   await p.click('#nav [data-tab="postep"]');
+  assert.match(await p.textContent('#postep'), /W tym tygodniu jeszcze nic/);              // domyślnie Tydzień
+  await p.click('[data-pt="sila"]');
   assert.match(await p.textContent('#postep'), /Wykres pojawi się po pierwszych treningach/);
   await p.click('[data-pt="obj"]'); assert.match(await p.textContent('#postep'), /Objętość pojawi się/);
   await p.click('[data-pt="dys"]'); assert.match(await p.textContent('#postep'), /po pierwszych zapisach na ekranie Dyspozycja/);

@@ -99,6 +99,8 @@
   .wk-t b{font:700 17px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .wk-t small{font:500 12px/1.2 var(--f-mono);color:var(--muted)}
   .wk-now{flex:none;padding:6px 8px}
+  .wk-a:disabled{opacity:.35}
+  #pw-cn{width:100%;margin-top:var(--gap)}
   .wk-now[aria-pressed="true"]{border-color:var(--line);color:var(--muted)}
   .wk-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;padding:4px 0 0;touch-action:pan-y}
   .wk-d{min-width:0;min-height:76px;border:1px solid transparent;border-radius:var(--r);background:transparent;color:var(--ink);padding:4px 0;
@@ -620,7 +622,7 @@ function applyCfg(c){
 }
 let DATA = null, PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
 let TAB = 'trening';   // ekran z dolnego menu: trening | dysp | plan | postep | trener
-let PT = 'sila', PEX = '';   // zakładka i ćwiczenie na ekranie Postęp
+let PT = 'tyd', PEX = '', PWK = null;   // zakładka, ćwiczenie i tydzień (poniedziałek; null = bieżący) na ekranie Postęp
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const RPE = ['', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10'];
 // tryb prosty: słowa zamiast RPE; w arkuszu nadal zapisuje się liczba RPE
@@ -633,7 +635,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, ownWeek, ownNextDay, exSearch,
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, ownWeek, ownNextDay, exSearch,
   isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit } = window.TL;
 
 /* ---------- kolejka offline ---------- */
@@ -1258,12 +1260,47 @@ function unitDays(){
   ((DATA && DATA.sessions) || []).forEach(s => { if (/T/.test(String(s.start || ''))) dates[s.tydzien + '|' + s.jednostka] = localDate(new Date(s.start)); });
   return dates;
 }
+/** Postęp → Tydzień: wykonanie, rekordy, odczucia, pominięte, komentarze trenera; tydzień kalendarzowy z ◀ ▶ */
+function weekCards(sets, dates, today){
+  const now = mondayOf(today), mon = PWK || now, list = unitList(), t = wkTitle(mon, list);
+  const w = weekSummary(mon, { units: list, plan: PLAN, sets, sessions: (DATA && DATA.sessions) || [], ready: readyRows(), logs: (DATA && DATA.logs) || [], notes: cnAll(), dates });
+  const nav = `<section class="wk" aria-label="Tydzień ${t.range}"><div class="wk-h"><button type="button" class="wk-a" data-pw="-1" aria-label="Poprzedni tydzień">◀</button>
+      <div class="wk-t"><b>${esc(t.t)}</b><small>${t.range}</small></div>
+      <button type="button" class="wk-a" data-pw="1" aria-label="Następny tydzień" ${mon >= now ? 'disabled' : ''}>▶</button>
+      <button type="button" class="btn sm wk-now" data-pw="0" ${mon === now ? 'aria-pressed="true"' : ''}>Dziś</button></div></section>`;
+  const kv = (k, v, sm) => `<div class="kv"><span>${k}${sm ? `<small> · ${sm}</small>` : ''}</span><b>${v}</b></div>`;
+  const ulist = w.units.list.map(u => esc(u.day) + (u.done ? ' ✓' : '')).join(' · ');
+  if (w.empty) return nav + `<section class="card"><div class="cn">${mon > now ? 'Ten tydzień przed Tobą' : mon === now ? 'W tym tygodniu jeszcze nic' : 'Tydzień bez zapisów'}</div>
+    ${w.units.list.length ? `<div class="sub">W planie: ${w.units.list.map(u => esc(u.day) + ' · ' + weekday(u.date) + ' ' + ddmm(u.date)).join(', ')}.</div>` : '<div class="sub">Brak jednostek w planie na ten tydzień.</div>'}</section>`;
+  const h = Math.floor(w.min / 60), m = Math.round(w.min % 60);
+  const diff = w.tonAvg ? Math.round(100 * (w.ton / w.tonAvg - 1)) : null;
+  let out = nav + `<section class="card"><div class="cn">Wykonanie</div>
+    ${w.units.plan ? kv('Jednostki z planu', w.units.done + ' z ' + w.units.plan, ulist) : ''}
+    ${w.units.own ? kv('Własne treningi', w.units.own) : ''}
+    ${kv('Serie', w.sets.plan ? w.sets.done + ' z ' + w.sets.plan : w.sets.done, w.sets.plan ? 'w planie' : '')}
+    ${kv('Tonaż', kgTxt(w.ton) + ' kg', diff === null ? '' : (diff >= 0 ? '▲ ' : '▼ ') + Math.abs(diff) + '% wobec śr. 4 tyg.' + (mon === now ? ' (tydzień trwa)' : ''))}
+    ${w.min ? kv('Czas', (h ? h + ' h ' : '') + m + ' min') : ''}</section>`;
+  if (w.records.length) out += `<section class="card"><div class="cn">Rekordy tygodnia</div>
+    ${w.records.map(r => kv('<i class="key pr"></i> ' + esc(r.name), kgTxt(r.v) + ' kg', (r.oly ? 'zaliczone' : 'e1RM') + ', +' + kgTxt(r.delta) + ' kg')).join('')}</section>`;
+  const rd = [['ok', 'dobra'], ['warn', 'uwaga'], ['bad', 'zmęczenie']].filter(q => w.ready[q[0]]).map(q => w.ready[q[0]] + '× ' + q[1]).join(' · ');
+  if (w.rpe.length || w.feel !== null || w.pain || rd) out += `<section class="card"><div class="cn">Jak było</div>
+    ${w.rpe.length ? kv('RPE sesji', 'śr. ' + kgTxt(w.rpeAvg), w.rpe.map(kgTxt).join(' · ')) : ''}
+    ${w.feel !== null ? kv('Samopoczucie', kgTxt(w.feel) + '/5', 'średnio') : ''}
+    ${w.pain ? kv('Ból', w.pain.v ? 'max ' + kgTxt(w.pain.v) + '/10' : 'bez bólu', w.pain.v && w.pain.place ? esc(w.pain.place) : '') : ''}
+    ${rd ? kv('Dyspozycja', rd) : ''}</section>`;
+  if (w.skips.length || w.fails) out += `<section class="card"><div class="cn">Do zauważenia</div>
+    ${w.skips.map(x => kv('Pominięte: ' + esc(x.name), esc(x.unit), x.why ? esc(x.why) : '')).join('')}
+    ${w.fails ? kv('Nieudane serie', w.fails, 'bez bojów') : ''}</section>`;
+  if (w.notes) out += `<button type="button" class="btn" id="pw-cn">Komentarze trenera z tego tygodnia: ${w.notes}</button>`;
+  return out;
+}
 function renderPostep(){
   const logs = (DATA && DATA.logs) || [], dates = unitDays();
   const sets = doneSets(logs, PLAN, dates), today = localDate();
   head(NAME ? 'Cała historia · ' + NAME : 'Cała historia', 'Postęp', '');
   let body = '';
-  if (PT === 'sila') {
+  if (PT === 'tyd') body = weekCards(sets, dates, today);
+  else if (PT === 'sila') {
     const recs = records(sets);
     if (!recs.some(r => r.name === PEX)) PEX = recs.length ? recs[0].name : '';
     const r = recs.find(x => x.name === PEX), ser = r ? strengthSeries(sets, PEX) : [];
@@ -1303,10 +1340,15 @@ function renderPostep(){
       : one(cmj, 'Skok CMJ', 'cm', cmj.length ? { mid: mean(cmj.map(p => p.v)), pct: 0.05 } : null, 'Średnia z 3 skoków w dniu. Szary pas: Twoja średnia ±5%.', 1) +
         one(vb, 'Prędkość na rozgrzewce', 'm/s', null, 'To samo ćwiczenie i ciężar, najlepsza próba.', 2);
   }
-  $('#postep').innerHTML = `<div class="row tabs" role="tablist">${[['sila', 'Siła'], ['obj', 'Objętość'], ['dys', 'Dyspozycja']].map(([k, n]) =>
+  $('#postep').innerHTML = `<div class="row tabs" role="tablist">${[['tyd', 'Tydzień'], ['sila', 'Siła'], ['obj', 'Objętość'], ['dys', 'Dyspozycja']].map(([k, n]) =>
     `<button class="chip ${PT === k ? 'on' : ''}" data-pt="${k}" role="tab" aria-selected="${PT === k}">${n}</button>`).join('')}</div>` + body;
   document.querySelectorAll('[data-pt]').forEach(b => b.onclick = () => { PT = b.dataset.pt; renderPostep(); });
   const sel = $('#p-ex'); if (sel) sel.onchange = () => { PEX = sel.value; renderPostep(); };
+  document.querySelectorAll('#postep [data-pw]').forEach(b => b.onclick = () => {
+    const d = +b.dataset.pw, now = mondayOf(localDate()), m = d ? addDays(PWK || now, 7 * d) : now;
+    PWK = m >= now ? null : m; renderPostep();
+  });
+  const gt = $('#pw-cn'); if (gt) gt.onclick = () => { CNEW = new Set(); TAB = 'trener'; render(); window.scrollTo(0, 0); };
   // wartość pod wykresem po dotknięciu albo najechaniu
   const tip = e => { const t = e.target.closest('[data-tip]'); if (!t) return; const p = t.closest('section, #postep').querySelector('.tip'); if (p) p.textContent = t.dataset.tip; };
   $('#postep').onclick = tip; $('#postep').onmouseover = tip;
