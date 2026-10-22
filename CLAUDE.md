@@ -195,6 +195,7 @@ Przy zmianie reguł dopisz scenariusz testowy (syntetyczne tygodnie) i sprawdź,
 | CORS / „Failed to fetch” | Zapytanie musi być POST text/plain (bez własnych nagłówków), a wdrożenie ustawione na „Każdy” (ANYONE_ANONYMOUS). |
 | Kompleks „1+1” liczony jako 1 | `repsDefault` (web) / `repsOf_` (Code) sumują części. |
 | ACWR puste | Potrzeba ≥ 3 tygodni z wypełnionym rpe_sesji. |
+| „Usłudze Arkusze kalkulacyjne nie udało się uzyskać dostępu do dokumentu” przy menu lub skrypcie | Błąd po stronie Google, nie kodu: kilka kont w przeglądarce (incognito tylko z kontem trenera) albo chwilowa awaria (odczekać kilka minut). 22.10 minął sam. |
 
 ## RODO
 
