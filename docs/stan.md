@@ -13,16 +13,12 @@ Stan na 2026-10-22, aplikacja v31.
 - Pomiar ładowania: `getData` zwraca `ms` z czasami etapów (16.10: skrypt 2,0–2,8 s, całość 3,3–4,8 s).
 - Skill trenera dla claude.ai leży poza repo (`Desktop\hgvtjv\skill-aplikacja-treningowa-klienta`, zawiera identyfikatory arkusza). Po zmianie SKILL.md przebuduj ZIP.
 
-## Priorytet (obiecane klientowi 22.10)
+## Ostatnio zrobione
 
-Klient widział tylko komentarze do filmów z poprzedniego tygodnia i pytał, czy trener obejrzał filmy z bieżącego. Damian obiecał dwie rzeczy:
-
-1. ~~**Wszystkie komentarze trenera w jednym miejscu.**~~ Zrobione 22.10 (v30): zakładka Trener w dolnym menu, w Przeglądzie `filmy_bez_kom_7dni`. Sprawdzone 22.10: „Pobierz komentarze” = 67 filmów, 0 zmian, 0 błędów, czyli synchronizacja działa. Komentarze rozwiązane na Dysku nie trafiają do aplikacji.
-2. ~~**Podsumowanie tygodnia w Postępie**~~ Zrobione 22.10 (v31): Postęp → Tydzień (domyślna zakładka), bez statusu obciążenia, z bólem.
+- 22.10 (v30–v31): zakładka Trener (wszystkie komentarze trenera), Przegląd `filmy_bez_kom_7dni`, Postęp → Tydzień. Klienci poinformowani.
 
 ## Czeka na Damiana
 
-- Wysłanie klientom wiadomości o zmianach (tekst w rozmowie z 16.10; dopisać trening bez planu).
 - Próba własnego treningu; wgranie nowego ZIP-a skilla na claude.ai.
 - Test kolejki filmów na telefonie (wyjście z aplikacji w trakcie wysyłki).
 - Test ścieżki sztangi z nagrywaniem i 5–10 filmów testowych do strojenia analizy.
@@ -30,6 +26,7 @@ Klient widział tylko komentarze do filmów z poprzedniego tygodnia i pytał, cz
 ## Do obserwacji
 
 - Czas ładowania przy rosnącym Logu (pole `ms`).
+- Reakcje klientów na zakładkę Trener i Postęp → Tydzień (czy czegoś brakuje, czy coś myli).
 - Zakładka Błędy i kolumna `bledy_7dni` w Przeglądzie: po kilku dniach zdecydować, czy dać sygnał.
 
 ## Propozycje (do wyboru)
