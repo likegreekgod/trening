@@ -51,4 +51,5 @@ Stan na 2026-10-22, aplikacja v31.
 - Plan klienta z procentami bez kg: dopisać kg po poznaniu maksów.
 - Dopisywanie ćwiczeń do jednostek trenera (odłożone).
 - Flaga klienta dla Dyspozycji/Postępu; `masters = TAK` tam, gdzie trzeba.
-- Wersja do sklepów (Android) z przypomnieniami i wysyłką filmów przy zamkniętej aplikacji.
+- Wersja do sklepów (Android) z przypomnieniami, wysyłką filmów przy zamkniętej aplikacji i sygnałem końca przerwy w tle (lokalne powiadomienie planowane przy ✓).
+- Sygnał przerwy, gdy klient jest w innej aplikacji: przeglądarka wstrzymuje stronę w tle, więc dźwięk i powiadomienie nie przychodzą. Decyzja 22.10: na razie bez zmian. Odrzucone obejścia: nagranie „cisza + sygnał” (przerywa muzykę klienta), Web Push (wymaga własnego serwera).
