@@ -25,7 +25,8 @@ Stan na 2026-10-22, aplikacja v31.
 
 ## Czeka na Damiana
 
-- Próba własnego treningu; wgranie nowego ZIP-a skilla na claude.ai.
+- Próba własnego treningu.
+- Wgranie ZIP-a skilla z 24.10 na claude.ai (skill zaktualizowany pod v31: nowe pola planu `tryb`, `ciecie`, `serie_min`, serie do 40, W… zarezerwowane, Klienci J/M, komentarze trenera, SKIP, nowe kolumny Przeglądu, menu, co widzi klient). Kopię SKILL.md trzymaj w `Desktop\hgvtjv\skill-aplikacja-treningowa-klienta`.
 - Test kolejki filmów na telefonie (wyjście z aplikacji w trakcie wysyłki).
 - Test ścieżki sztangi z nagrywaniem i 5–10 filmów testowych do strojenia analizy.
 
