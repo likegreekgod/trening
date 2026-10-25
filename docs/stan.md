@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-10-22, aplikacja v31.
+Stan na 2026-10-25, aplikacja v32.
 
 ## Jak pracujemy
 
@@ -15,6 +15,7 @@ Stan na 2026-10-22, aplikacja v31.
 
 ## Ostatnio zrobione
 
+- 25.10 (v32): start bez klucza (iOS: aplikacja z ekranu głównego ma osobną pamięć i nie dostaje `?k=`) pokazuje pole „Wklej link od trenera lub kod” (`askKey`, lib `keyFrom`) zamiast komunikatu.
 - 22.10 (v30–v31): zakładka Trener (wszystkie komentarze trenera), Przegląd `filmy_bez_kom_7dni`, Postęp → Tydzień. Klienci poinformowani.
 
 ## Do zrobienia (uwagi z 22.10)
@@ -25,6 +26,7 @@ Stan na 2026-10-22, aplikacja v31.
 
 ## Czeka na Damiana
 
+- Sprawdzenie na iPhonie: aplikacja z ekranu głównego → wklejenie linku → plan.
 - Próba własnego treningu.
 - Wgranie ZIP-a skilla z 24.10 na claude.ai (skill zaktualizowany pod v31: nowe pola planu `tryb`, `ciecie`, `serie_min`, serie do 40, W… zarezerwowane, Klienci J/M, komentarze trenera, SKIP, nowe kolumny Przeglądu, menu, co widzi klient). Kopię SKILL.md trzymaj w `Desktop\hgvtjv\skill-aplikacja-treningowa-klienta`.
 - Test kolejki filmów na telefonie (wyjście z aplikacji w trakcie wysyłki).

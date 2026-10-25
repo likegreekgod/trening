@@ -448,3 +448,13 @@ test('skipText / parseSkip i cutPlan: kolejność cięcia, serie_min, domyślnie
   assert.deepEqual(L.cutPlan(plan, 3).cuts.map(c => c.order + '→' + c.to), ['4→0', '1→1']);   // B bez „ciecie” zostaje
   assert.deepEqual(L.cutPlan(plan, 999).cuts, []);
 });
+
+test('keyFrom: klucz z linku albo samego kodu', () => {
+  assert.equal(L.keyFrom('https://x.github.io/trening/?k=k0123456789a'), 'k0123456789a');
+  assert.equal(L.keyFrom('  https://x/exec?a=1&k=kabc&b=2 '), 'kabc');
+  assert.equal(L.keyFrom('k0123456789a'), 'k0123456789a');
+  assert.equal(L.keyFrom('Twój kod: kABCDEF01234.'), 'kABCDEF01234');
+  assert.equal(L.keyFrom('k0123'), '');
+  assert.equal(L.keyFrom('https://x/trening/'), '');
+  assert.equal(L.keyFrom(''), '');
+});
