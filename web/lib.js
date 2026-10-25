@@ -678,6 +678,15 @@
     return { need: Math.ceil(start / 60), left: Math.ceil(need / 60), cuts, fits: need <= goal };
   };
 
+  /** klucz klienta z wklejonego linku (…?k=k…) albo samego kodu „k” + 11 znaków hex; '' gdy nie rozpoznano */
+  L.keyFrom = v => {
+    const t = String(v || '').trim();
+    const m = t.match(/[?&#]k=([^&#\s]+)/);
+    if (m) return decodeURIComponent(m[1]);
+    const c = t.match(/(?:^|[^0-9a-z])(k[0-9a-f]{11})(?![0-9a-z])/i);
+    return c ? c[1] : '';
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);

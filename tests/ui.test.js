@@ -43,10 +43,31 @@ async function page(calls, offline, opt = {}) {
 const fval = (p, sel) => p.$eval(sel, i => i.value || i.dataset.ph || '');
 const PRO = Object.assign({}, DATA, { cfg: Object.assign({}, DATA.cfg, { simple: false }) });
 
-test('bez klucza: komunikat o linku od trenera', async () => {
-  const { ctx, p } = await page([]);
-  await p.goto(base); await p.waitForTimeout(300);
-  assert.match(await p.textContent('#main'), /linku od trenera/);
+test('bez klucza (iOS z ekranu głównego): wklejenie linku od trenera → klucz zapamiętany, plan wczytany', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls);
+  await p.goto(base); await p.waitForSelector('#key-in');
+  assert.match(await p.textContent('#main'), /Wklej link od trenera lub kod/);
+  assert.equal(calls.length, 0);                                  // bez klucza nic nie idzie do API
+  await p.fill('#key-in', 'zły tekst'); await p.click('#key-go');
+  assert.match(await p.textContent('#key-err'), /Nie rozpoznaję/);
+  await p.fill('#key-in', '  https://trener.example/trening/?k=k0123456789a  ');
+  await p.click('#key-go'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await p.evaluate(() => localStorage.getItem('key')), 'k0123456789a');
+  assert.equal(calls.find(c => c.fn === 'getData').key, 'k0123456789a');
+  assert.equal(await p.textContent('#title'), 'FBW A');
+  await p.goto(base); await p.waitForSelector('.set[data-o="1"]');      // kolejne uruchomienie bez ?k=
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('bez klucza: sam kod też działa', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls);
+  await p.goto(base); await p.waitForSelector('#key-in');
+  await p.fill('#key-in', 'kABCDEF01234'); await p.press('#key-in', 'Enter');
+  await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(calls.find(c => c.fn === 'getData').key, 'kABCDEF01234');
   await ctx.close();
 });
 

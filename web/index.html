@@ -344,6 +344,7 @@
   .prow .plbl,.q .plbl{font:700 18px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;color:var(--ink-2)}
   .prow .plbl small,.q .plbl small{font:400 13px var(--f-body);text-transform:none;letter-spacing:0;color:var(--muted)}
   .empty{color:var(--muted);text-align:center;padding:40px 0}
+  .askkey{margin-top:24px}.askkey .btn{width:100%;margin-top:6px}
 
   /* postęp: wykresy (jedna seria, siatka z cienkich linii, wartości tekstem w kolorze tekstu) */
   svg.chart{width:100%;height:auto;display:block;margin-top:8px}
@@ -964,7 +965,7 @@ function applyMoves(moves, save){
   if (save && DATA) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
 }
 function load(){
-  if (!KEY) { $('#main').innerHTML = '<div class="empty">Otwórz aplikację z linku od trenera (zawiera Twój kod).</div>'; setSync(''); return; }
+  if (!KEY) { askKey(); setSync(''); return; }
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(DK) || 'null'); } catch (e) {}
   if (cached) { useData(cached); pickDefault(); render(); setSync('offline – ostatnie dane'); }
@@ -978,6 +979,20 @@ function load(){
     if (!cached) { $('#main').innerHTML = '<div class="empty">Błąd: ' + esc(e.message) + '</div>'; setSync('błąd'); }
     else setSync('offline – ostatnie dane');
   });
+}
+/** brak klucza (np. iOS: aplikacja z ekranu głównego ma osobną pamięć i startuje bez ?k=) → wklejenie linku albo kodu */
+function askKey(){
+  $('#main').innerHTML = `<section class="card askkey"><label class="fl">Wklej link od trenera lub kod<input id="key-in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…?k=… albo k…"></label>
+    <div class="hint" id="key-err" role="alert"></div>
+    <button type="button" class="btn p" id="key-go">Otwórz plan</button></section>`;
+  const go = () => {
+    const k = TL.keyFrom($('#key-in').value);
+    if (!k) { $('#key-err').textContent = 'Nie rozpoznaję linku ani kodu. Skopiuj cały link od trenera.'; return; }
+    try { localStorage.setItem('key', k); } catch (e) {}
+    location.replace(location.pathname + '?k=' + encodeURIComponent(k));
+  };
+  $('#key-go').onclick = go;
+  $('#key-in').onkeydown = e => { if (e.key === 'Enter') go(); };
 }
 function pickDefault(){
   const s = pickUnit(unitList(), localDate());       // dzisiejsza niezrobiona, potem najbliższa następna (strefa telefonu)
