@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-26 · Podgląd ostatnich sesji dla Claude
+
+- Agent Claude z konektorem Google Drive nie czyta arkusza z danymi (za duży, kilkanaście zakładek). Zamiast nowej zakładki w tym arkuszu powstał osobny plik „Trening – podgląd dla Claude” z jedną płaską zakładką „Ostatnie sesje” (10 jednostek). Nowa zakładka byłaby bezpieczna dla kodu (wszystkie odwołania po nazwie, `getSheets()[0]` tylko jako zapas w `planTextCols_`), ale nie rozwiązałaby problemu, bo konektor dalej otwierałby cały duży plik.
+- Odświeżanie z wyzwalacza co 10 min, nie z `logSet` / `logSession`: bez zmian w istniejących funkcjach i bez spowalniania zapisu serii w telefonie.
+- W podglądzie imię klienta; bez bólu i komentarzy trenera (dane o zdrowiu w pliku czytanym przez konektor). Sesje trenera wchodzą, bo trener zapisuje je w aplikacji jak klient.
+
 ## 2026-10-22 · Postęp → Tydzień
 
 - Podsumowanie tygodnia to pierwsza (domyślna) zakładka w Postępie, nie przycisk w dolnym menu (pięć wystarczy). Tydzień kalendarzowy z ◀ ▶ i „Dziś”; liczy się faktyczny dzień treningu. Karty pokazują się tylko z danymi.
