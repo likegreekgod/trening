@@ -15,6 +15,7 @@ Stan na 2026-10-25, aplikacja v32.
 
 ## Ostatnio zrobione
 
+- 26.10: podgląd „Trening – podgląd dla Claude” / zakładka „Ostatnie sesje” (`apps-script/Podglad.gs`) dla agenta z konektorem Drive. Po scaleniu: w edytorze Apps Script uruchom raz `instalujPodglad`.
 - 25.10 (v32): start bez klucza (iOS: aplikacja z ekranu głównego ma osobną pamięć i nie dostaje `?k=`) pokazuje pole „Wklej link od trenera lub kod” (`askKey`, lib `keyFrom`) zamiast komunikatu.
 - 22.10 (v30–v31): zakładka Trener (wszystkie komentarze trenera), Przegląd `filmy_bez_kom_7dni`, Postęp → Tydzień. Klienci poinformowani.
 
@@ -26,6 +27,7 @@ Stan na 2026-10-25, aplikacja v32.
 
 ## Czeka na Damiana
 
+- Po scaleniu zmiany z 26.10: edytor Apps Script → `instalujPodglad` → Uruchom (jeśli Google poprosi o zgodę, zaakceptuj od razu). Sprawdź plik „Trening – podgląd dla Claude” w folderze „Trening – Klienci”.
 - Sprawdzenie na iPhonie: aplikacja z ekranu głównego → wklejenie linku → plan.
 - Próba własnego treningu.
 - Wgranie ZIP-a skilla z 24.10 na claude.ai (skill zaktualizowany pod v31: nowe pola planu `tryb`, `ciecie`, `serie_min`, serie do 40, W… zarezerwowane, Klienci J/M, komentarze trenera, SKIP, nowe kolumny Przeglądu, menu, co widzi klient). Kopię SKILL.md trzymaj w `Desktop\hgvtjv\skill-aplikacja-treningowa-klienta`.
@@ -34,6 +36,7 @@ Stan na 2026-10-25, aplikacja v32.
 
 ## Do obserwacji
 
+- Testy UI „Postęp → Tydzień” (light/dark) nie przechodzą od 26.10 także na czystym `main`: prawdopodobnie zależą od bieżącej daty. Do naprawy osobno.
 - Czas ładowania przy rosnącym Logu (pole `ms`).
 - Reakcje klientów na zakładkę Trener i Postęp → Tydzień (czy czegoś brakuje, czy coś myli).
 - Zakładka Błędy i kolumna `bledy_7dni` w Przeglądzie: po kilku dniach zdecydować, czy dać sygnał.
