@@ -2,6 +2,10 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-26 · Podgląd: 5 sesji na osobę
+
+- 10 najnowszych sesji globalnie wypychało sesje trenera (trenuje rzadziej niż klienci łącznie). Teraz 5 ostatnich sesji każdej osoby, osoby alfabetycznie po imieniu (sortowanie polskie), w obrębie osoby od najnowszej. Klienci z `aktywny` = NIE pominięci. Trener występuje pod imieniem z Klientów („Damian”).
+
 ## 2026-10-26 · Podgląd ostatnich sesji dla Claude
 
 - Agent Claude z konektorem Google Drive nie czyta arkusza z danymi (za duży, kilkanaście zakładek). Zamiast nowej zakładki w tym arkuszu powstał osobny plik „Trening – podgląd dla Claude” z jedną płaską zakładką „Ostatnie sesje” (10 jednostek). Nowa zakładka byłaby bezpieczna dla kodu (wszystkie odwołania po nazwie, `getSheets()[0]` tylko jako zapas w `planTextCols_`), ale nie rozwiązałaby problemu, bo konektor dalej otwierałby cały duży plik.
