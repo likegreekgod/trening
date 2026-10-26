@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-10-26 · Import planu: pole `zastepuje`
+
+- Opcjonalne pole wiersza planu `zastepuje` (nazwa bloku): przy imporcie znikają z Planu niezrobione jednostki tego bloku klienta z datą od najwcześniejszej daty klienta w pliku. Zrobione (wpis w Sesjach) i własne (`zrodlo` = klient) zostają; Log i Sesje bez zmian. Jedna wartość na klienta (walidacja), nie jest kolumną Planu.
+- Wynik w zakładce Import („zamknięto n jedn. bloku B1”); blok, którego klient nie ma = uwaga, nie błąd, żeby literówka nie blokowała nowego planu.
+- Import i tak podmienia wszystkie niezrobione wiersze klientów z pliku, więc dziś `zastepuje` głównie jawnie nazywa i raportuje zamknięcie starego bloku; usuwanie jest jednak liczone osobno i zadziała też, gdyby import kiedyś przestał podmieniać cały plan klienta.
+
 ## 2026-10-26 · Podgląd: 5 sesji na osobę
 
 - 10 najnowszych sesji globalnie wypychało sesje trenera (trenuje rzadziej niż klienci łącznie). Teraz 5 ostatnich sesji każdej osoby, osoby alfabetycznie po imieniu (sortowanie polskie), w obrębie osoby od najnowszej. Klienci z `aktywny` = NIE pominięci. Trener występuje pod imieniem z Klientów („Damian”).

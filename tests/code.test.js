@@ -154,6 +154,37 @@ test('mergePlan_: zrobione jednostki zostają, kolizja bloków = błąd', () => 
   assert.deepEqual([m.errors.length, m.rows.length], [0, 2]);
 });
 
+test('mergePlan_: zastepuje zamyka niezrobione jednostki bloku od pierwszej daty z pliku', () => {
+  const R = (k, w, j, data, blok, x) => Object.assign({ klient: k, tydzien: w, jednostka: j, data, nr: 1, cwiczenie: 'X', serie: 3, powt: '5', blok }, x);
+  const existing = [
+    R('robert', 1, 'T1', '2026-10-05', 'B1'),                    // zrobiona → zostaje
+    R('robert', 1, 'T2', '2026-10-07', 'B1'),                    // przed datą z pliku, niezrobiona
+    R('robert', 2, 'T1', '2026-10-12', 'B1'),                    // zamknięta
+    R('robert', 2, 'T2', '2026-10-14', 'B1'),                    // zamknięta
+    R('robert', 2, 'W1', '2026-10-13', 'B1', { zrodlo: 'klient' }), // własny trening → zostaje
+    R('ewa', 1, 'T1', '2026-10-12', 'B1')                        // inny klient → zostaje
+  ];
+  const ses = [{ klient: 'robert', tydzien: 1, jednostka: 'T1' }];
+  const inc = [R('robert', 3, 'T1', '2026-10-12', 'B2', { zastepuje: 'B1' }), R('robert', 3, 'T2', '2026-10-14', 'B2')];
+  let m = C.mergePlan_(existing, inc, ses);
+  assert.equal(m.errors.length, 0);
+  assert.deepEqual(Array.from(m.notes), ['robert: zamknięto 2 jedn. bloku B1']);
+  assert.deepEqual(m.rows.map(r => r.klient + r.tydzien + r.jednostka), ['ewa1T1', 'robert1T1', 'robert2W1', 'robert3T1', 'robert3T2']);
+  // nieistniejący blok = uwaga, nie błąd
+  m = C.mergePlan_(existing, [R('robert', 3, 'T1', '2026-10-12', 'B2', { zastepuje: 'B9' })], ses);
+  assert.deepEqual([m.errors.length, m.notes.length], [0, 0]);
+  assert.match(m.warnings.join(), /B9.*nie ma takiego bloku/);
+  // bez zastepuje: bez notatek
+  assert.equal(C.mergePlan_(existing, [R('robert', 3, 'T1', '2026-10-12', 'B2')], ses).notes.length, 0);
+});
+
+test('validatePlan_: zastepuje tekstem, jeden blok na klienta', () => {
+  const row = { klient: 'robert', tydzien: 7, jednostka: 'T1', nr: 1, cwiczenie: 'Przysiad', serie: 3, powt: '5', blok: 'B2', zastepuje: 'B1' };
+  assert.deepEqual(Array.from(C.validatePlan_([row, Object.assign({}, row, { nr: 2, zastepuje: '' })])), []);
+  assert.match(C.validatePlan_([Object.assign({}, row, { zastepuje: 1 })]).join(), /zastepuje/);
+  assert.match(C.validatePlan_([row, Object.assign({}, row, { nr: 2, zastepuje: 'B0' })]).join(), /jeden blok/);
+});
+
 test('computeSummary_: tydzień wg faktycznej daty treningu (Sesje.start)', () => {
   const plan = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', data: '2026-10-05', nr: 1, cwiczenie: 'Przysiad', prio: 'A', serie: 1, powt: '5', kg: 100 }];
   const log = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', data: '2026-10-05', nr_cw: 1, cwiczenie: 'Przysiad', seria: 1, kg: 100, powt: 5, rpe: 8, wykonane: 'TAK' }];

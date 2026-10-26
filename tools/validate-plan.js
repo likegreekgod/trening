@@ -10,4 +10,7 @@ const errs = C.validatePlan_(rows);
 if (errs.length) { console.error('BŁĘDY (' + errs.length + '):\n- ' + Array.from(errs).join('\n- ')); process.exit(1); }
 const by = {};
 rows.forEach(r => { const k = String(r.klient).toLowerCase(); by[k] = by[k] || new Set(); by[k].add(r.tydzien + '|' + r.jednostka); });
+const zast = {};
+rows.forEach(r => { if (r.zastepuje) zast[String(r.klient).toLowerCase()] = String(r.zastepuje).trim(); });
+Object.entries(zast).forEach(([k, b]) => console.log(k + ': zamknie niezrobione jednostki bloku ' + b + ' od pierwszej daty klienta w pliku'));
 console.log('OK: ' + rows.length + ' wierszy; ' + Object.entries(by).map(([k, s]) => k + ' – ' + s.size + ' jednostek').join('; '));

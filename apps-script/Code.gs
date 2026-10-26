@@ -1795,7 +1795,8 @@ function przeglad() {
 
 /* ================== WCZYTYWANIE PLANÓW Z DRIVE ==================
  * Plik JSON w „Trening – Klienci/_plany/”: lista wierszy planu (klucze = PLAN_HEADERS; data, dod_serie, drop, grupa,
- * zamienniki, blok opcjonalne). Poprawny plik → podmiana wierszy klientów z pliku w zakładce Plan, plik przeniesiony
+ * zamienniki, blok opcjonalne; opcjonalne `zastepuje` = blok, którego niezrobione jednostki od pierwszej daty
+ * klienta w pliku zostają zamknięte, patrz mergePlan_). Poprawny plik → podmiana wierszy klientów z pliku w zakładce Plan, plik przeniesiony
  * do „_plany/wczytane”. Jednostki już zrobione (wpis w Sesjach) zostają z dotychczasowego planu; plik, który
  * nadpisałby zrobioną jednostkę innego bloku (ten sam tydzień i jednostka), trafia do „_plany/bledy”.
  * Każdy import zapisuje wiersz w zakładce „Import”.
@@ -1833,7 +1834,7 @@ function wczytajPlany(e) {
       }
       writePlanRows_(m.rows);
       f.moveTo(ok);
-      importLog_(f.getName(), m.warnings.length ? 'OK (uwagi)' : 'OK', rows.length, m.clients.join(', '), m.warnings.slice(0, 10).join(' | '));
+      importLog_(f.getName(), m.warnings.length ? 'OK (uwagi)' : 'OK', rows.length, m.clients.join(', '), m.notes.concat(m.warnings.slice(0, 10)).join(' | '));
     }
   } finally { lock.releaseLock(); }
 }
@@ -1842,7 +1843,7 @@ function wczytajPlany(e) {
 function validatePlan_(rows) {
   const e = [];
   if (!Array.isArray(rows) || !rows.length) return ['Plik nie zawiera listy wierszy planu'];
-  const seen = {};
+  const seen = {}, zast = {};
   rows.forEach((r, i) => {
     const w = 'wiersz ' + (i + 1) + ': ';
     PLAN_REQUIRED.forEach(k => { if (r[k] === undefined || r[k] === null || r[k] === '') e.push(w + 'brak „' + k + '”'); });
@@ -1855,6 +1856,12 @@ function validatePlan_(rows) {
     if (r.prio && ['A', 'B', 'K'].indexOf(String(r.prio)) < 0) e.push(w + 'prio tylko A/B/K');
     if (r.procent !== undefined && r.procent !== '' && !(Number(r.procent) > 0 && Number(r.procent) <= 1.3)) e.push(w + 'procent jako ułamek (np. 0.75)');
     if (r.grupa && GROUPS.indexOf(String(r.grupa).toUpperCase()) < 0) e.push(w + 'grupa tylko R/P/CR/CP/PS/I');
+    if (r.zastepuje !== undefined && r.zastepuje !== null && typeof r.zastepuje !== 'string') e.push(w + 'zastepuje jako nazwa bloku (tekst, np. "B1")');
+    else if (!blank_(r.zastepuje)) {
+      const k = String(r.klient).toLowerCase(), z = String(r.zastepuje).trim();
+      if (zast[k] === undefined) zast[k] = z;
+      else if (zast[k] !== z) e.push(w + 'zastepuje „' + z + '” ≠ „' + zast[k] + '” — jeden blok do zamknięcia na klienta');
+    }
     const id = [String(r.klient).toLowerCase(), r.tydzien, r.jednostka, r.nr].join('|');
     if (seen[id]) e.push(w + 'powtórzony nr ' + r.nr + ' w ' + r.jednostka + ' tyg. ' + r.tydzien);
     seen[id] = 1;
@@ -1866,6 +1873,9 @@ function validatePlan_(rows) {
  * Czysta funkcja: nowy plan klientów z pliku + reszta zakładki Plan.
  * Zrobione jednostki (Sesje) klientów z pliku zostają z dotychczasowego planu; wiersze pliku dla nich są pomijane
  * (uwaga), a gdy blok w pliku i w planie się różni — błąd (tygodnie trzeba numerować ciągle).
+ * Pole wiersza `zastepuje` (nazwa bloku, np. „B1”; nie trafia do Planu): usuwa niezrobione wiersze tego bloku
+ * klienta z datą ≥ najwcześniejszej daty klienta w pliku (bez własnych); wynik w `notes` („zamknięto n jedn. bloku B1”),
+ * blok, którego klient nie ma = uwaga.
  */
 function mergePlan_(existing, incoming, ses) {
   const lc = v => String(v === undefined || v === null ? '' : v).toLowerCase();
@@ -1874,14 +1884,31 @@ function mergePlan_(existing, incoming, ses) {
   const clients = [...new Set(incoming.map(r => lc(r.klient)))];
   const done = {};
   ses.forEach(s => { done[unit(s)] = 1; });
-  const others = [], kept = [], keptBlock = {}, keptOwn = {};
+  const day = v => v instanceof Date ? fmtDate_(v) : String(v === undefined || v === null ? '' : v).slice(0, 10);
+  const zast = {}, from = {};                                               // klient → blok do zamknięcia, od daty
+  incoming.forEach(r => {
+    const k = lc(r.klient), d = day(r.data);
+    if (!blank_(r.zastepuje) && zast[k] === undefined) zast[k] = String(r.zastepuje).trim();
+    if (d && (!from[k] || d < from[k])) from[k] = d;
+  });
+  const others = [], kept = [], keptBlock = {}, keptOwn = {}, closed = {}, hasBlock = {};
   existing.forEach(r => {
     if (r.klient === '' || r.klient === undefined) return;
-    if (clients.indexOf(lc(r.klient)) < 0) others.push(r);
-    else if (own_(r)) { kept.push(r); keptOwn[unit(r)] = 1; }                // własny trening klienta zostaje
-    else if (done[unit(r)]) { kept.push(r); keptBlock[unit(r)] = blk(r); }
+    const k = lc(r.klient);
+    if (clients.indexOf(k) < 0) { others.push(r); return; }
+    if (own_(r)) { kept.push(r); keptOwn[unit(r)] = 1; return; }            // własny trening klienta zostaje
+    if (zast[k] !== undefined && blk(r) === zast[k]) hasBlock[k] = 1;
+    if (done[unit(r)]) { kept.push(r); keptBlock[unit(r)] = blk(r); return; }
+    if (zast[k] !== undefined && blk(r) === zast[k] && from[k] && day(r.data) >= from[k]) {
+      (closed[k] = closed[k] || {})[unit(r)] = 1;                           // zamknięty: nie wraca do Planu
+    }
   });
-  const errors = [], warnings = [], fresh = [], skipped = {};
+  const errors = [], warnings = [], notes = [], fresh = [], skipped = {};
+  Object.keys(zast).forEach(k => {
+    if (!hasBlock[k]) warnings.push(k + ': zastepuje „' + zast[k] + '”, ale w Planie nie ma takiego bloku');
+    else if (!from[k]) warnings.push(k + ': zastepuje „' + zast[k] + '” bez dat w pliku — nic nie zamknięto');
+    else notes.push(k + ': zamknięto ' + Object.keys(closed[k] || {}).length + ' jedn. bloku ' + zast[k]);
+  });
   incoming.forEach(r => {
     const u = unit(r);
     if (keptOwn[u]) { if (!skipped[u]) warnings.push(lc(r.klient) + ' tyg. ' + r.tydzien + ' ' + r.jednostka + ': to własny trening klienta, wiersze z pliku pominięte'); skipped[u] = 1; return; }
@@ -1893,7 +1920,7 @@ function mergePlan_(existing, incoming, ses) {
     } else if (!skipped[u]) warnings.push(lc(r.klient) + ' tyg. ' + r.tydzien + ' ' + r.jednostka + ': zrobiona, zostaje bez zmian');
     skipped[u] = 1;
   });
-  return { rows: others.concat(kept, fresh), clients, errors, warnings };
+  return { rows: others.concat(kept, fresh), clients, errors, warnings, notes };
 }
 
 /** Zapisuje całą zakładkę Plan (wiersze z mergePlan_); kolumny układane wg PLAN_HEADERS (starsze arkusze też). */
