@@ -537,7 +537,7 @@ test('swapMode_ i cmjExcl_: tryb zamiany z Klienci J, wykluczone skoki CMJ', () 
   assert.ok(C.API_FNS.logNote && C.API_FNS.logReadyVideo);
 });
 
-test('podglad_: 10 ostatnich sesji, plan vs wykonanie, notatki', () => {
+test('podglad_: 5 ostatnich sesji każdej osoby, plan vs wykonanie, notatki', () => {
   const klienci = [{ klient_id: 'anna', imie: 'Anna' }, { klient_id: 'bob', imie: 'Bob' }];
   const plan = [
     { klient: 'anna', tydzien: 1, jednostka: 'T1', tytul: 'Siła', blok: 'B1', data: '2026-10-05', nr: 1, cwiczenie: 'Przysiad', serie: 3, powt: '5', kg: 100, rpe_max: 8, uwagi: '' },
@@ -559,11 +559,12 @@ test('podglad_: 10 ostatnich sesji, plan vs wykonanie, notatki', () => {
   const rows = C.podglad_(plan, log, ses, klienci, {});
   assert.ok(rows.every(r => r.length === C.PODGLAD_HEADERS.length));
   const H = k => C.PODGLAD_HEADERS.indexOf(k);
-  // najnowsza: Bob 07.10 (bez Sesji), potem Anna 06.10 (dzień z Sesje.start, nie z planu)
-  assert.deepEqual([rows[0][H('data')], rows[0][H('klient')], rows[0][H('cwiczenie')]], ['2026-10-07', 'Bob', '— sesja —']);
-  assert.match(rows[0][H('notatki')], /niezakończona/);
-  assert.equal(rows[1][H('plan_kg')], '75%');
-  const a = rows.slice(2);
+  // osoby alfabetycznie: Anna (dzień z Sesje.start, nie z planu), potem Bob (bez Sesji)
+  assert.deepEqual(rows.map(r => r[H('klient')]), ['Anna', 'Anna', 'Anna', 'Anna', 'Bob', 'Bob']);
+  const a = rows.slice(0, 4), b = rows.slice(4);
+  assert.deepEqual([b[0][H('data')], b[0][H('cwiczenie')]], ['2026-10-07', '— sesja —']);
+  assert.match(b[0][H('notatki')], /niezakończona/);
+  assert.equal(b[1][H('plan_kg')], '75%');
   assert.deepEqual([a[0][H('data')], a[0][H('sesja')]], ['2026-10-06', 'B1 · tydz. 1 · T1 · Siła']);
   assert.equal(a[0][H('notatki')], 'RPE sesji 7 · samopoczucie 4/5 · 60 min · uwagi: dobrze');
   assert.doesNotMatch(JSON.stringify(rows), /kolano:5/);   // bez bólu
@@ -575,11 +576,17 @@ test('podglad_: 10 ostatnich sesji, plan vs wykonanie, notatki', () => {
   assert.deepEqual([a[2][H('cwiczenie')], a[2][H('wyk_serie_x_powt')]], ['Wiosłowanie hantlem', '1×10']);
   assert.match(a[2][H('notatki')], /zamiana: Wiosłowanie → Wiosłowanie hantlem \| zajęte · plan: wolno/);
   assert.deepEqual([a[3][H('plan_kg')], a[3][H('wyk_kg')], a[3][H('notatki')]], ['60%', '', 'pominięte: brak czasu']);
-  // limit sesji
+  // 5 sesji na osobę: trener z dawnymi sesjami nie znika za klientami z nowszymi; nieaktywni pominięci
+  const kl = [{ klient_id: 'anna', imie: 'Anna' }, { klient_id: 'trener', imie: 'Damian' }, { klient_id: 'ola', imie: 'Łucja' },
+    { klient_id: 'zenon', imie: 'Zenon' }, { klient_id: 'stary', imie: 'Adam', aktywny: 'NIE' }];
   const many = [];
-  for (let w = 1; w <= 12; w++) many.push(L('anna', w, 'T1', 1, 'Przysiad', 1, 100, 5, 8, { data: '2026-09-' + String(w + 10).padStart(2, '0') }));
-  const r2 = C.podglad_([], many, [], klienci, {}).filter(r => r[H('cwiczenie')] === '— sesja —');
-  assert.equal(r2.length, 10);
-  assert.equal(r2[0][H('data')], '2026-09-22');
-  assert.equal(C.podglad_([], many, [], klienci, { limit: 3 }).filter(r => r[H('cwiczenie')] === '— sesja —').length, 3);
+  for (let w = 1; w <= 12; w++) for (const k of ['anna', 'ola', 'zenon']) many.push(L(k, w, 'T1', 1, 'Przysiad', 1, 100, 5, 8, { data: '2026-10-' + String(w + 10).padStart(2, '0') }));
+  for (let w = 1; w <= 7; w++) many.push(L('trener', w, 'T1', 1, 'Przysiad', 1, 100, 5, 8, { data: '2026-09-' + String(w + 10).padStart(2, '0') }));
+  many.push(L('stary', 1, 'T1', 1, 'Przysiad', 1, 100, 5, 8, { data: '2026-10-25' }));
+  const r2 = C.podglad_([], many, [], kl, {}).filter(r => r[H('cwiczenie')] === '— sesja —');
+  assert.deepEqual(r2.map(r => r[H('klient')]).filter((x, i, A) => A.indexOf(x) === i), ['Anna', 'Damian', 'Łucja', 'Zenon']);
+  for (const who of ['Anna', 'Damian', 'Łucja', 'Zenon']) assert.equal(r2.filter(r => r[H('klient')] === who).length, 5, who);
+  assert.deepEqual(r2.filter(r => r[H('klient')] === 'Damian').map(r => r[H('data')]), ['2026-09-17', '2026-09-16', '2026-09-15', '2026-09-14', '2026-09-13']);
+  assert.equal(r2.filter(r => r[H('klient')] === 'Anna')[0][H('data')], '2026-10-22');
+  assert.equal(C.podglad_([], many, [], kl, { limit: 2 }).filter(r => r[H('cwiczenie')] === '— sesja —').length, 8);
 });
