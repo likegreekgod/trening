@@ -1,6 +1,7 @@
 /**
  * Podgląd dla Claude: osobny, mały plik „Trening – podgląd dla Claude” (folder „Trening – Klienci”)
- * z jedną zakładką „Ostatnie sesje”: 10 ostatnich jednostek wszystkich klientów, od najnowszej.
+ * z jedną zakładką „Ostatnie sesje”: 5 ostatnich jednostek każdej osoby (aktywni klienci i trener),
+ * osoby alfabetycznie po imieniu, w obrębie osoby od najnowszej. Nieaktywni (Klienci D = NIE) pominięci.
  * Jedna sesja = wiersz „— sesja —” (RPE sesji, samopoczucie, czas, uwagi) + wiersz na każde ćwiczenie
  * (plan: kg, serie×powt., RPE; wykonanie: kg, serie×powt., RPE, serie; notatki).
  * Bez bólu i komentarzy trenera (dane o zdrowiu w pliku czytanym przez konektor).
@@ -12,13 +13,13 @@
 
 const PODGLAD_NAZWA = 'Trening – podgląd dla Claude';
 const PODGLAD_ZAKLADKA = 'Ostatnie sesje';
-const PODGLAD_SESJE = 10;
+const PODGLAD_SESJE = 5;   // na osobę
 const PODGLAD_HEADERS = ['data', 'klient', 'sesja', 'cwiczenie', 'plan_kg', 'plan_serie_x_powt', 'plan_rpe',
   'wyk_kg', 'wyk_serie_x_powt', 'wyk_rpe', 'wyk_serie', 'notatki'];
 const PG_LOG_COLS = ['zapisano', 'klient', 'tydzien', 'jednostka', 'data', 'nr_cw', 'cwiczenie', 'seria', 'kg', 'powt',
   'rpe', 'wykonane', 'uwagi', 'typ', 'zamiana'];   // bez „sciezka” (duży JSON)
 
-/** Czysta funkcja: wiersze widoku (bez nagłówka). opts: { localDay, limit }. */
+/** Czysta funkcja: wiersze widoku (bez nagłówka). opts: { localDay, limit (sesji na osobę) }. */
 function podglad_(plan, log, ses, klienci, opts) {
   opts = opts || {};
   const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
@@ -27,8 +28,12 @@ function podglad_(plan, log, ses, klienci, opts) {
   const ts = v => { const t = v instanceof Date ? v.getTime() : Date.parse(String(v || '')); return isFinite(t) ? t : 0; };
   const dayOf = v => { if (blank_(v)) return ''; const d = day_(v); return isNaN(d) ? '' : iso_(d); };
   const key = r => [lc(r.klient), s_(r.tydzien), s_(r.jednostka)].join('|');
-  const imie = {};
-  (klienci || []).forEach(k => { if (!blank_(k.klient_id)) imie[lc(k.klient_id)] = s_(k.imie) || s_(k.klient_id); });
+  const imie = {}, off = {};
+  (klienci || []).forEach(k => {
+    if (blank_(k.klient_id)) return;
+    imie[lc(k.klient_id)] = s_(k.imie) || s_(k.klient_id);
+    if (String(k.aktywny).trim().toUpperCase() === 'NIE') off[lc(k.klient_id)] = true;
+  });
   const AD = unitDates_(ses || [], opts.localDay);
 
   const U = {};   // sesja: klient|tydzien|jednostka
@@ -42,15 +47,18 @@ function podglad_(plan, log, ses, klienci, opts) {
   (ses || []).forEach(s => { if (!lc(s.klient)) return; const u = unit(s); u.ses = s; u.last = Math.max(u.last, ts(s.zapisano)); });
   (plan || []).forEach(p => { const u = U[key(p)]; if (u) u.plan.push(p); });
 
-  const units = Object.keys(U).map(k => U[k]);
+  const units = Object.keys(U).map(k => U[k]).filter(u => !off[u.klient]);
   units.forEach(u => { u.date = AD[u.k] || u.logDay || (u.ses ? dayOf(u.ses.data) : '') || (u.plan[0] ? dayOf(u.plan[0].data) : ''); });
-  units.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : b.last - a.last));
+  const who = u => imie[u.klient] || u.klient;
+  units.sort((a, b) => who(a).localeCompare(who(b), 'pl') || a.klient.localeCompare(b.klient)
+    || (b.date > a.date ? 1 : b.date < a.date ? -1 : b.last - a.last));
+  const per = {}, lim = opts.limit || PODGLAD_SESJE;
 
   const out = [];
-  units.slice(0, opts.limit || PODGLAD_SESJE).forEach(u => {
+  units.filter(u => (per[u.klient] = (per[u.klient] || 0) + 1) <= lim).forEach(u => {
     const p0 = u.plan[0] || {};
     const name = [s_(p0.blok), 'tydz. ' + u.tydzien, u.jednostka, s_(p0.tytul)].filter(Boolean).join(' · ') + (own_(p0) ? ' (własny)' : '');
-    const head = [u.date, imie[u.klient] || u.klient, name];
+    const head = [u.date, who(u), name];
     const s = u.ses, sn = [];
     if (s) {
       if (!blank_(s.rpe_sesji)) sn.push('RPE sesji ' + num(s.rpe_sesji));
