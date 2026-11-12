@@ -466,3 +466,18 @@ test('keyFrom: klucz z linku albo samego kodu', () => {
   assert.equal(L.keyFrom('https://x/trening/'), '');
   assert.equal(L.keyFrom(''), '');
 });
+
+test('ownJoin, ownSplit, complexRepsOk: kompleks we własnym treningu', () => {
+  const a = { name: 'Hang Clean', sets: 4, reps: '10', kg: '50' }, b = { name: 'Push Press', sets: 3, reps: '8', kg: '' };
+  const k = L.ownJoin(a, b);
+  assert.deepEqual(k, { name: 'Hang Clean + Push Press', sets: 4, reps: '1+1', kg: '50', t: false });     // serie i kg z pierwszego, części po 1 powt.
+  assert.deepEqual(L.ownJoin(Object.assign({}, k, { reps: '1 + 2' }), { name: 'Jerk', sets: 1, reps: '5', kg: '40' }),
+    { name: 'Hang Clean + Push Press + Jerk', sets: 4, reps: '1+2+1', kg: '50', t: false });              // kompleks zachowuje swoje powtórzenia
+  assert.equal(L.ownJoin({ name: 'A', sets: 2, reps: '5', kg: '' }, { name: 'B', sets: 2, reps: '5', kg: '20' }).kg, '20');
+  assert.deepEqual(L.ownSplit(Object.assign({}, k, { reps: '1+2' })).map(e => [e.name, e.sets, e.reps, e.kg]), [['Hang Clean', 4, '1', '50'], ['Push Press', 4, '2', '50']]);
+  assert.deepEqual(L.ownSplit(Object.assign({}, k, { reps: '6-8' })).map(e => e.reps), ['1', '1']);
+  assert.equal(L.ownSplit(a), null);
+  assert.deepEqual(['Hang Clean + Jerk', 'A+B', 'Przysiad', '+ nowe', ''].map(L.isComplex), [true, false, false, false, false]);
+  assert.deepEqual([['A + B', '1+2'], ['A + B', '1 + 2'], ['A + B', '3'], ['A + B', '1+1+1'], ['A + B + C', '1+1+1'], ['A + B', '6-8'], ['A + B', '']].map(x => L.complexRepsOk(x[0], x[1])),
+    [true, true, false, false, true, false, false]);
+});

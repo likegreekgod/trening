@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-12, aplikacja v35.
+Stan na 2026-11-12, aplikacja v36.
 
 ## Jak pracujemy
 
@@ -15,6 +15,7 @@ Stan na 2026-11-12, aplikacja v35.
 
 ## Ostatnio zrobione
 
+- 12.11 (v36): własny trening: kompleks „A + B” z kreatora („⛓ Kompleks z poprzednim”, „Rozłącz”), film każdej części od razu.
 - 12.11: arkusz: ćwiczenia na czas nie wchodzą do tonażu, e1RM ani NL (Podsumowanie, Podsumowanie_cw, partie, Bloki); serie liczą się jak dotąd. Bez zmian w aplikacji.
 - 12.11 (v35): Dyspozycja: sen w odwróconym widoku (7 = bardzo dobry), zapis i suma ankiety bez zmian. Testy „Postęp → Tydzień” naprawione (nie przechodziły w poniedziałki).
 - 12.11 (v34): górny pasek chowa się przy przewijaniu w dół i wraca przy przewijaniu w górę (wszystkie zakładki).
@@ -27,7 +28,7 @@ Stan na 2026-11-12, aplikacja v35.
 
 ## Do zrobienia (uwagi z 22.10)
 
-- **Własny trening: brak kompleksów i serii obiegowych.** Klient składa tylko pojedyncze ćwiczenia (`openOwn` / `applyOwn`). Do zaprojektowania: kompleks „A + B” jako jedno ćwiczenie i obwód/superseria (grupa ćwiczeń robionych na zmianę).
+- **Obwód / superseria** (szkic zaakceptowany 12.11, ustalenia w `docs/decyzje.md`): kolumna Planu `obwod`, także dla planów trenera; kreator własnego treningu; ramka i kolejność na Treningu; przerwa po rundzie.
 
 ## Czeka na Damiana
 

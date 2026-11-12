@@ -281,7 +281,9 @@
   .ow-parts::-webkit-scrollbar{display:none}
   .ow-pt{flex:none;min-height:44px;padding:0 12px;border:1px solid var(--ink-2);border-radius:var(--r);background:transparent;color:var(--ink-2);font-size:14px;white-space:nowrap}
   .ow-pt[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
-  .ow-it .ow-tm{grid-column:1;justify-self:start;min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--ink-2);font-size:13px}
+  .ow-it .ow-row{grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  .ow-it .ow-tag{font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 8px}
+  .ow-it .ow-tm{min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--ink-2);font-size:13px}
   .ow-it .ow-tm[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
   .ow-it{display:grid;grid-template-columns:1fr 54px 64px 64px 44px;gap:6px;align-items:end;padding:8px 0;border-bottom:1px solid var(--line)}
   .ow-it b{grid-column:1 / -1;font-weight:600}
@@ -645,7 +647,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, ownWeek, ownNextDay, exSearch, exParts, timeUnit, repsLabel,
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, ownWeek, ownNextDay, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
   isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit } = window.TL;
 
 /* ---------- kolejka offline ---------- */
@@ -1657,6 +1659,10 @@ function applyOwn(u, save){
   // film „Jak wykonać” i partie od razu: z wcześniejszego wiersza planu o tej nazwie albo z bazy (getExNames)
   const lc = s => String(s).toLowerCase(), dx = n => {
     const p = PLAN.find(r => lc(r.name) === lc(n) && (r.infos || []).length), b = EXN.list.find(x => lc(x[0]) === lc(n));
+    if (!p && !b && isComplex(n)) {                                              // kompleks bez własnego wiersza w bazie: film każdej części, partie razem
+      const ps = String(n).split(/\s+\+\s+/).map(dx);
+      return { infos: [].concat(...ps.map(x => x.infos)), parts: [...new Set([].concat(...ps.map(x => x.parts)))] };
+    }
     return { infos: p ? p.infos : b && /^https?:\/\//i.test(String(b[1])) ? [{ n: b[0], u: b[1] }] : [],
       parts: p ? p.parts || [] : b && b[2] ? String(b[2]).split(';').map(s => s.trim()).filter(Boolean) : [] };
   };
@@ -1714,20 +1720,26 @@ function ownRes(q){
 }
 function ownList(){
   const box = $('#ow-list');
+  // kompleks z poprzednim: oba nowe (niezapisane), żadne na czas, nazwa mieści się w 80 znakach (limit Planu)
+  const canJoin = i => { const a = OWN.list[i - 1], b = OWN.list[i]; return !!a && !a.old && !b.old && !a.t && !b.t && (a.name + ' + ' + b.name).length <= 80; };
   box.innerHTML = !OWN.list.length ? '<p class="sub">Jeszcze nic. Wyszukaj ćwiczenie powyżej i dotknij, żeby dodać.</p>'
     : OWN.list.map((e, i) => e.old ? `<div class="ow-it old"><b>${esc(e.name)}</b><span>${esc(String(e.sets))} × ${esc(e.reps)}${e.kg ? ' · ' + esc(e.kg) + ' kg' : ''}</span></div>`
       : `<div class="ow-it"><b>${esc(e.name)}</b>
-        <button type="button" class="ow-tm" data-tm="${i}" aria-pressed="${!!e.t}" aria-label="${esc(e.name)}: ćwiczenie na czas">⏱ na czas</button>
+        <div class="ow-row">${isComplex(e.name) ? `<span class="ow-tag">kompleks</span><button type="button" class="ow-tm" data-split="${i}" aria-label="Rozłącz kompleks ${esc(e.name)}">Rozłącz</button>`
+          : `<button type="button" class="ow-tm" data-tm="${i}" aria-pressed="${!!e.t}" aria-label="${esc(e.name)}: ćwiczenie na czas">⏱ na czas</button>`}
+          ${canJoin(i) ? `<button type="button" class="ow-tm" data-join="${i}" aria-label="Połącz ${esc(e.name)} w kompleks z: ${esc(OWN.list[i - 1].name)}">⛓ Kompleks z poprzednim</button>` : ''}</div><span></span>
         <label>serie<input inputmode="numeric" data-i="${i}" data-f="sets" value="${esc(String(e.sets))}"></label>
-        <label>${e.t ? 'sek.' : 'powt.'}<input ${e.t ? 'inputmode="numeric" ' : ''}data-i="${i}" data-f="reps" value="${esc(e.reps)}"></label>
+        <label>${e.t ? 'sek.' : 'powt.'}<input ${e.t ? 'inputmode="numeric" ' : ''}${isComplex(e.name) ? 'placeholder="1+1" ' : ''}data-i="${i}" data-f="reps" value="${esc(e.reps)}"></label>
         <label>kg<input inputmode="decimal" data-i="${i}" data-f="kg" value="${esc(e.kg)}" placeholder="—"></label>
         <button type="button" class="ow-rm" data-rm="${i}" aria-label="Usuń ${esc(e.name)}">✕</button></div>`).join('');
-  box.querySelectorAll('input[data-i]').forEach(inp => inp.oninput = () => { OWN.list[+inp.dataset.i][inp.dataset.f] = inp.value; });
+  box.querySelectorAll('input[data-i]').forEach(inp => inp.oninput = () => { OWN.list[+inp.dataset.i][inp.dataset.f] = inp.value; $('#ow-err').hidden = true; });
   box.querySelectorAll('[data-tm]').forEach(b => b.onclick = () => {             // powtórzenia ⇄ czas: domyślnie 30 s / 10 powt.
     const e = OWN.list[+b.dataset.tm]; e.t = !e.t;
     if (e.t && (e.reps === '10' || !/^\d+$/.test(String(e.reps).trim()))) e.reps = '30'; else if (!e.t && e.reps === '30') e.reps = '10';
     ownList();
   });
+  box.querySelectorAll('[data-join]').forEach(b => b.onclick = () => { const i = +b.dataset.join; OWN.list.splice(i - 1, 2, ownJoin(OWN.list[i - 1], OWN.list[i])); ownList(); });
+  box.querySelectorAll('[data-split]').forEach(b => b.onclick = () => { const i = +b.dataset.split; OWN.list.splice(i, 1, ...ownSplit(OWN.list[i])); ownList(); });
   box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { OWN.list.splice(+b.dataset.rm, 1); ownList(); });
 }
 function ownSave(){
@@ -1735,6 +1747,7 @@ function ownSave(){
   if (!OWN.list.length) return err('Dodaj co najmniej jedno ćwiczenie.');
   if (OWN.list.some(e => !(+e.sets >= 1 && +e.sets <= SETS_MAX) || !String(e.reps).trim())) return err('Przy każdym ćwiczeniu wpisz serie (1–' + SETS_MAX + ') i powtórzenia albo czas.');
   if (OWN.list.some(e => e.t && !e.old && !(parseInt(e.reps) > 0))) return err('Przy ćwiczeniu na czas wpisz liczbę sekund.');
+  if (OWN.list.some(e => !e.old && !e.t && isComplex(e.name) && !complexRepsOk(e.name, e.reps))) return err('W kompleksie wpisz powtórzenia każdej części, np. 1+2.');
   if (!OWN.edit) {
     const d = $('#ow-date').value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return err('Wybierz dzień.');

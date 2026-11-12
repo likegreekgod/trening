@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-12 · Własny trening: kompleks; obwód w następnym kroku
+
+- Szkic zaakceptowany 12.11. Kompleks we własnym treningu to jedno ćwiczenie „A + B” z powt. „1+2”, czyli dokładnie to, co w planach trenera: bez zmian w arkuszu, Code.gs i na ekranie Trening (film każdej części, suma powtórzeń, boje po nazwie).
+- Kreator: przy ćwiczeniu od drugiego „⛓ Kompleks z poprzednim” (lib `ownJoin`: serie i kg z pierwszego, każda część 1 powt.), przy kompleksie znacznik i „Rozłącz” (`ownSplit`). Nie łączymy ćwiczeń na czas, już zapisanych ani gdy nazwa przekroczyłaby 80 znaków. Powtórzenia kompleksu muszą mieć liczbę na każdą część (`complexRepsOk`).
+- Film „Jak wykonać” i partie kompleksu aplikacja składa od razu z części (`applyOwn`), bez czekania na serwer.
+- Przyciski pozycji kreatora („⏱ na czas”, kompleks) są w osobnym wierszu nad polami, żeby mieściły się przy 360 px.
+- Ustalone na następny PR (obwód / superseria): nowa kolumna Planu `obwod` (litera A, B…) na końcu nagłówków, działająca też w planach trenera z JSON; wspólna liczba rund; na Treningu ramka z kartami A1, A2…, wskazanie „Teraz / Potem”, przerwa dopiero po całej rundzie (stała 1:30 z −15 / +15); zapis serii bez zmian. Po połączeniu obu funkcji przycisk w kreatorze zmieni się w „⛓ Połącz z poprzednim” z wyborem Kompleks / Obwód.
+
 ## 2026-11-12 · Ćwiczenia na czas poza tonażem w arkuszu
 
 - Ćwiczenie z `Plan.powt` w czasie („30 s”, „2 min”; `timed_` w Code.gs, ten sam wzorzec co `timeUnit` w lib.js) nie wchodzi do tonażu w Podsumowaniu, Podsumowanie_cw, Podsumowanie_partie i Blokach ani do tonażu planowanego, e1RM i NL. Seria dalej liczy się do wykonania, serii roboczych i twardych.
