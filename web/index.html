@@ -1146,9 +1146,9 @@ function renderDysp(){
   }
   const odd = sp.out.filter(i => !rd.excl[i]);
   $('#dysp').innerHTML = verdictCard + `
-    <section class="card"><div class="cn">1 · Ankieta</div><div class="sub">Skala 1–7, wyżej = gorzej.${isFinite(v.hs) ? ' Suma dziś: <b>' + v.hs + '</b>' + (isFinite(base.hooper) && !collecting ? ', średnio ' + Math.round(base.hooper) : '') + '.' : ''}</div>
-      ${HOOPER.map(([k, nm, hint]) => `<div class="q"><div class="plbl">${nm} <small>${hint}</small></div><div class="scale s7" data-q="${k}" role="group" aria-label="${nm}">` +
-        [1, 2, 3, 4, 5, 6, 7].map(i => `<button type="button" class="pv n ${rd.hooper[k] === i ? 'on' : ''}" data-v="${i}" aria-pressed="${rd.hooper[k] === i}">${i}</button>`).join('') + '</div></div>').join('')}</section>
+    <section class="card"><div class="cn">1 · Ankieta</div><div class="sub">Skala 1–7. Sen: wyżej = lepiej. Pozostałe: wyżej = gorzej.${isFinite(v.hs) ? ' Suma dziś: <b>' + v.hs + '</b>' + (isFinite(base.hooper) && !collecting ? ', średnio ' + Math.round(base.hooper) : '') + '.' : ''}</div>
+      ${HOOPER.map(([k, nm, hint, rev]) => `<div class="q"><div class="plbl">${nm} <small>${hint}</small></div><div class="scale s7" data-q="${k}" role="group" aria-label="${nm}">` +
+        [1, 2, 3, 4, 5, 6, 7].map(n => { const i = rev ? 8 - n : n; return `<button type="button" class="pv n ${rd.hooper[k] === i ? 'on' : ''}" data-v="${i}" aria-pressed="${rd.hooper[k] === i}">${n}</button>`; }).join('') + '</div></div>').join('')}</section>
     <section class="card"><div class="cn">2 · Skok CMJ</div><div class="sub">3 skoki, ręce na biodrach, 30 s przerwy. Wpisz cm albo zmierz z filmu slow-mo.</div>
       <div class="jumps">${rd.cmj.map((c, i) => `<div class="jmp ${rd.excl[i] ? 'ex' : ''} ${sp.out.includes(i) ? 'odd' : ''}"><label class="fl">Skok ${i + 1}<input inputmode="decimal" data-j="${i}" value="${esc(fmtKg(c))}" placeholder="cm"></label>
         ${isNum(num(c)) ? `<button type="button" class="btn sm tg" data-ex="${i}" aria-pressed="${!!rd.excl[i]}">${rd.excl[i] ? 'Wykluczony' : 'Wyklucz'}</button>` : ''}</div>`).join('')}</div>

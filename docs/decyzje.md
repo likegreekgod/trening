@@ -2,6 +2,13 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-12 · Dyspozycja: sen w odwróconym widoku
+
+- Klienci mylili skalę snu (wszędzie 1 = dobrze, a sen ocenia się odruchowo „wyżej = lepiej”). Sen pokazujemy odwrotnie: 1 = bardzo zły, 7 = bardzo dobry. Stres, zmęczenie i bolesność bez zmian (1 = brak).
+- Zmienia się tylko widok: przycisk „7” zapisuje `sen = 1`. Arkusz, `hooper_suma`, średnie i werdykt liczą się jak dotąd, więc historia pozostaje porównywalna. Flaga odwrócenia to czwarty element wpisu w `HOOPER` (lib.js).
+- Odrzucone: sama zmiana etykiet przy niezmienionej skali (sen dalej wbrew intuicji).
+- Testy „Postęp → Tydzień” nie przechodziły w poniedziałki: ostatnia zrobiona jednostka danych testowych jest sprzed 8 dni, czyli w poniedziałek dwa tygodnie kalendarzowe wstecz. Test liczy teraz, o ile tygodni się cofnąć; `PROG_SHIFT=3 npm test` sprawdza to w dowolny dzień.
+
 ## 2026-11-12 · Górny pasek chowa się przy przewijaniu
 
 - Nagłówek (tydzień · jednostka, tytuł, czas / serie / tonaż) chowa się przy przewijaniu w dół i wraca przy każdym ruchu w górę oraz na samej górze strony; tak samo we wszystkich zakładkach. Dolne menu i timer przerwy zostają na miejscu.

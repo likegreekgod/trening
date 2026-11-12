@@ -347,7 +347,8 @@
   /** jak nagrano film ze skokiem: [id, opis, krok klatki s, mnożnik czasu pliku → czas rzeczywisty] */
   L.CMJ_PRESETS = [['s240', 'Slow-mo 240 kl/s', 1 / 240, 1], ['s120', 'Slow-mo 120 kl/s', 1 / 120, 1],
     ['x8', 'Slow-mo zapisane ×8 (plik 30 kl/s)', 1 / 30, 1 / 8], ['x4', 'Slow-mo zapisane ×4 (plik 30 kl/s)', 1 / 30, 1 / 4], ['n60', 'Zwykły film 60 kl/s', 1 / 60, 1]];
-  L.HOOPER = [['sen', 'Sen', '1 = bardzo dobry'], ['stres', 'Stres', '1 = brak'], ['zmeczenie', 'Zmęczenie', '1 = brak'], ['bolesnosc', 'Bolesność mięśni', '1 = brak']];
+  /** ankieta Hoopera: [pole, nazwa, opis, odwrócony widok]; zapis zawsze 1 = dobrze, sen pokazujemy odwrotnie (7 = bardzo dobry) */
+  L.HOOPER = [['sen', 'Sen', '1 = bardzo zły, 7 = bardzo dobry', true], ['stres', 'Stres', '1 = brak'], ['zmeczenie', 'Zmęczenie', '1 = brak'], ['bolesnosc', 'Bolesność mięśni', '1 = brak']];
   /** średnie z historii (zakładka Dyspozycja) bez dzisiejszego wpisu: Hooper z 7 ostatnich, CMJ i prędkość z 5 */
   L.readyBase = (rows, today) => {
     const day = r => String(r.data instanceof Date ? r.data.toISOString() : r.data || '').slice(0, 10);
