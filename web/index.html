@@ -54,6 +54,10 @@
 
   /* nagłówek: tydzień · jednostka · data, tytuł, statystyki (czas, serie, tonaż) */
   header{position:sticky;top:0;z-index:5;background:var(--bar);color:var(--bar-ink);border-bottom:3px solid var(--accent);padding:10px 16px 12px}
+  /* przewijanie w dół chowa nagłówek, w górę przywraca (skrypt: klasa .hid) */
+  header{transition:transform .2s ease-out}
+  header.hid{transform:translateY(-100%)}
+  @media (prefers-reduced-motion:reduce){header{transition:none}}
   header .eyebrow,header #sync,header .stats span{color:var(--bar-muted)}
   header h1,header .stats b{color:var(--bar-ink)}
   header .stats span{border-left-color:var(--bar-line)}
@@ -906,6 +910,19 @@ async function wake(on){
 }
 // system zwalnia blokadę po schowaniu aplikacji → po powrocie prosimy ponownie
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && WAKE_ON) wake(true); });
+
+// Nagłówek chowa się przy przewijaniu w dół i wraca przy przewijaniu w górę (albo na samej górze).
+// Pozycja przycięta do zakresu strony, żeby odbicie na iOS nie przełączało; ruchy < 8 px pomijane.
+(() => {
+  const h = document.querySelector('header'); let last = 0;
+  window.addEventListener('scroll', () => {
+    const y = Math.max(0, Math.min(window.scrollY, document.documentElement.scrollHeight - window.innerHeight));
+    const d = y - last;
+    if (Math.abs(d) < 8 && y > 0) return;
+    last = y;
+    h.classList.toggle('hid', d > 0 && y > h.offsetHeight);
+  }, { passive: true });
+})();
 
 /* ---------- okno (arkusz od dołu) i kalkulator talerzy ---------- */
 function openSheet(html){

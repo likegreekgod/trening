@@ -92,6 +92,24 @@ test('z kluczem: plan, tryb prosty, kompleks 1+1 = 2, zapis serii przez API', as
   await ctx.close();
 });
 
+test('Nagłówek: chowa się przy przewijaniu w dół, wraca przy przewijaniu w górę i po zmianie zakładki', async () => {
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=k0123456789a'); await p.waitForSelector('.set[data-o="1"]');
+  await p.evaluate(() => { document.querySelector('#main').style.minHeight = '3000px'; });
+  const hid = () => p.evaluate(() => document.querySelector('header').classList.contains('hid'));
+  const to = async (y, want) => { await p.evaluate(v => window.scrollTo(0, v), y); await p.waitForFunction(w => document.querySelector('header').classList.contains('hid') === w, want); };
+  assert.equal(await hid(), false);
+  await to(600, true);                                            // w dół → schowany
+  await p.waitForTimeout(300);
+  assert.ok(await p.evaluate(() => document.querySelector('header').getBoundingClientRect().bottom <= 0));
+  await to(560, false);                                           // trochę w górę → wraca
+  await to(900, true);
+  await p.click('#nav [data-tab="plan"]');                        // zmiana zakładki przewija na górę
+  await p.waitForFunction(() => !document.querySelector('header').classList.contains('hid'));
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('offline: po wcześniejszym otwarciu plan z pamięci telefonu', async () => {
   const { ctx, p } = await page([]);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');

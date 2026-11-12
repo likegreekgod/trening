@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-12, aplikacja v33.
+Stan na 2026-11-12, aplikacja v34.
 
 ## Jak pracujemy
 
@@ -15,6 +15,7 @@ Stan na 2026-11-12, aplikacja v33.
 
 ## Ostatnio zrobione
 
+- 12.11 (v34): górny pasek chowa się przy przewijaniu w dół i wraca przy przewijaniu w górę (wszystkie zakładki).
 - 12.11 (v33): własny trening: film „Jak wykonać” od razu po dodaniu ćwiczenia, ćwiczenia na czas („⏱ na czas”, sekundy zamiast powtórzeń), szukanie po partii mięśniowej. Filmy i partie w wyszukiwarce wymagają też scalenia `apps-script/` (wdroży się samo).
 - 26.10: import planu: opcjonalne pole `zastepuje` (blok do zamknięcia od pierwszej daty z pliku), wynik w Import. Do dopisania w SKILL.md skilla trenera (przebuduj ZIP).
 - 26.10: podgląd dla Claude: 5 ostatnich sesji każdej osoby (alfabetycznie, nieaktywni pominięci) zamiast 10 globalnie. Wyzwalacz bez zmian, plik odświeży się sam po wdrożeniu.
