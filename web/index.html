@@ -273,10 +273,15 @@
   .ow-f{font:500 12px/1 var(--f-mono);color:var(--ok);border:1px solid var(--ok);border-radius:999px;padding:2px 7px}
   .ow-new{border-style:dashed;color:var(--accent)}
   .ow-h{margin-top:6px}
+  .ow-parts{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:8px -2px 2px;padding:0 2px 4px}
+  .ow-parts::-webkit-scrollbar{display:none}
+  .ow-pt{flex:none;min-height:44px;padding:0 12px;border:1px solid var(--ink-2);border-radius:var(--r);background:transparent;color:var(--ink-2);font-size:14px;white-space:nowrap}
+  .ow-pt[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
+  .ow-it .ow-tm{grid-column:1;justify-self:start;min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--ink-2);font-size:13px}
+  .ow-it .ow-tm[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
   .ow-it{display:grid;grid-template-columns:1fr 54px 64px 64px 44px;gap:6px;align-items:end;padding:8px 0;border-bottom:1px solid var(--line)}
   .ow-it b{grid-column:1 / -1;font-weight:600}
   .ow-it label{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:grid;gap:3px}
-  .ow-it label:first-of-type{grid-column:2}
   .ow-it input{height:44px;text-align:center;padding:0 4px}
   .ow-it .ow-rm{width:44px;height:44px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--muted)}
   .ow-it.old{display:flex;justify-content:space-between;gap:8px;color:var(--muted)}
@@ -636,7 +641,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, ownWeek, ownNextDay, exSearch,
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, ownWeek, ownNextDay, exSearch, exParts, timeUnit, repsLabel,
   isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit } = window.TL;
 
 /* ---------- kolejka offline ---------- */
@@ -1622,7 +1627,7 @@ function renderTrener(){
 const ownOn = () => !!(DATA && DATA.cfg && DATA.cfg.own !== false);
 let OWN = null;
 /* lista nazw z bazy: pobierana dopiero przy własnym treningu, trzymana w telefonie na dobę */
-const EXK = 'exn_' + KEY;
+const EXK = 'exn2_' + KEY;                         // exn2: lista z linkami do filmów i partiami
 let EXN = (() => { try { return JSON.parse(localStorage.getItem(EXK) || 'null') || { t: 0, list: [] }; } catch (e) { return { t: 0, list: [] }; } })();
 function exnLoad(done){
   if (EXN.list.length && Date.now() - EXN.t < 864e5) return;
@@ -1632,9 +1637,15 @@ function exnLoad(done){
 function applyOwn(u, save){
   const same = PLAN.filter(r => r.week === u.week && !r.own), block = (same[0] || PLAN[PLAN.length - 1] || {}).block || '';
   const kgOf = v => String(v === undefined || v === null ? '' : v).trim() === '' ? '' : isNum(num(v)) ? num(v) : String(v);
+  // film „Jak wykonać” i partie od razu: z wcześniejszego wiersza planu o tej nazwie albo z bazy (getExNames)
+  const lc = s => String(s).toLowerCase(), dx = n => {
+    const p = PLAN.find(r => lc(r.name) === lc(n) && (r.infos || []).length), b = EXN.list.find(x => lc(x[0]) === lc(n));
+    return { infos: p ? p.infos : b && /^https?:\/\//i.test(String(b[1])) ? [{ n: b[0], u: b[1] }] : [],
+      parts: p ? p.parts || [] : b && b[2] ? String(b[2]).split(';').map(s => s.trim()).filter(Boolean) : [] };
+  };
   const rows = u.exercises.map((e, i) => ({ week: u.week, day: u.day, title: 'Własny' + (u.title ? ' · ' + u.title : ''), date: u.date, order: i + 1,
     name: e.name, prio: 'A', sets: +e.sets, reps: String(e.reps), pct: null, kg: kgOf(e.kg), rpe: '', note: '', extra: null, drop: 0,
-    group: '', block, swaps: [], infos: [], parts: [], own: true }));
+    group: '', block, swaps: [], infos: dx(e.name).infos, parts: dx(e.name).parts, own: true }));
   DATA.plan = DATA.plan.filter(r => !(r.week === u.week && r.day === u.day)).concat(rows); PLAN = DATA.plan;
   if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
 }
@@ -1642,11 +1653,13 @@ function openOwn(unit){
   OWN = unit ? { week: unit.week, day: unit.day, date: unit.date, title: String(unit.title || '').replace(/^Własny( · )?/, ''), edit: true,
       list: unit.rows.slice().sort((a, b) => a.order - b.order).map(r => ({ name: r.name, sets: r.sets, reps: String(r.reps), kg: r.kg === '' ? '' : String(fmtKg(r.kg)), old: true })) }
     : { date: localDate(), title: '', list: [], edit: false };
+  OWN.part = '';
   openSheet(`<h2 id="sheet-t">${OWN.edit ? 'Dodaj ćwiczenie' : 'Własny trening'}</h2>
     <p class="sub">${OWN.edit ? 'Dopisz ćwiczenia do tego treningu.' : 'Poza planem trenera. Trener zobaczy go w arkuszu.'}</p>
     ${OWN.edit ? '' : `<label class="fl">Dzień<input type="date" id="ow-date" value="${OWN.date}"></label>
     <label class="fl">Tytuł (opcjonalnie)<input id="ow-title" maxlength="40" placeholder="np. Ramiona" value=""></label>`}
     <label class="fl">Szukaj ćwiczenia<input id="ow-q" autocomplete="off" placeholder="np. curl, przysiad, plank"></label>
+    <div id="ow-parts" class="ow-parts" role="group" aria-label="Partia mięśniowa"></div>
     <div id="ow-res" class="ow-res"></div>
     <div class="lbl ow-h">Wybrane ćwiczenia</div><div id="ow-list"></div>
     <p class="hint" id="ow-err" role="alert" hidden></p>
@@ -1654,19 +1667,31 @@ function openOwn(unit){
     <button type="button" class="btn" data-close>Anuluj</button>`);
   const q = $('#ow-q');
   q.oninput = () => ownRes(q.value);
-  ownRes(''); ownList(); exnLoad(() => { const qq = $('#ow-q'); if (qq) ownRes(qq.value); });
+  ownParts(); ownRes(''); ownList(); exnLoad(() => { const qq = $('#ow-q'); if (qq) { ownParts(); ownRes(qq.value); } });
   $('#ow-save').onclick = ownSave;
 }
+/** filtr po partii mięśniowej (partie z bazy): dotknięcie pokazuje ćwiczenia tej partii, ponowne zdejmuje filtr */
+function ownParts(){
+  const box = $('#ow-parts'), ps = exParts(EXN.list);
+  box.hidden = !ps.length;
+  box.innerHTML = ps.map(p => `<button type="button" class="ow-pt" data-pt="${esc(p)}" aria-pressed="${OWN.part === p}">${esc(p)}</button>`).join('');
+  box.querySelectorAll('[data-pt]').forEach(b => b.onclick = () => {
+    OWN.part = OWN.part === b.dataset.pt ? '' : b.dataset.pt;
+    box.querySelectorAll('[data-pt]').forEach(x => x.setAttribute('aria-pressed', x.dataset.pt === OWN.part));
+    ownRes($('#ow-q').value);
+  });
+}
 function ownRes(q){
-  const mine = [...new Set(PLAN.slice().reverse().map(r => r.name))], res = exSearch(mine, EXN.list, q);
+  const mine = [...new Set(PLAN.slice().reverse().map(r => r.name))], part = OWN.part || '', res = exSearch(mine, EXN.list, q, part ? 60 : 12, part);
   const exact = res.some(r => r.name.toLowerCase() === String(q).trim().toLowerCase());
-  $('#ow-res').innerHTML = (q.trim() ? '' : '<div class="lbl">Twoje ćwiczenia</div>') +
+  $('#ow-res').innerHTML = (q.trim() ? '' : part ? `<div class="lbl">${esc(part)} · ${res.length}${res.length === 60 ? '+' : ''}</div>` : '<div class="lbl">Twoje ćwiczenia</div>') +
     res.map(r => `<button type="button" class="opt ow-add" data-n="${esc(r.name)}">${esc(r.name)}${r.film ? '<small class="ow-f">film</small>' : ''}</button>`).join('') +
     (q.trim() && !exact ? `<button type="button" class="opt ow-add ow-new" data-n="${esc(q.trim().replace(/\s+/g, ' ').slice(0, 80))}">+ Dodaj „${esc(q.trim().slice(0, 80))}” jako nowe ćwiczenie</button>` : '') +
-    (q.trim() && !res.length ? '<p class="sub">Nie ma takiego ćwiczenia w bazie. Możesz dodać je pod własną nazwą — trener podepnie film.</p>' : '');
+    (q.trim() && !res.length ? '<p class="sub">Nie ma takiego ćwiczenia w bazie' + (part ? ' w tej partii' : '') + '. Możesz dodać je pod własną nazwą — trener podepnie film.</p>' : '');
   document.querySelectorAll('.ow-add').forEach(b => b.onclick = () => {
     const n = b.dataset.n, last = PLAN.slice().reverse().find(r => r.name === n);
-    OWN.list.push({ name: n, sets: last ? last.sets : 3, reps: last ? String(last.reps) : '10', kg: last && last.kg !== '' ? String(fmtKg(last.kg)) : '' });
+    const t = !!last && timeUnit(last.reps) === 's';                             // ostatnio na czas („30 s”) → od razu sekundy
+    OWN.list.push({ name: n, sets: last ? last.sets : 3, reps: last ? (t ? String(parseInt(last.reps)) : String(last.reps)) : '10', kg: last && last.kg !== '' ? String(fmtKg(last.kg)) : '', t });
     $('#ow-q').value = ''; ownRes(''); ownList(); toast('Dodano: ' + n + '.');
   });
 }
@@ -1675,24 +1700,31 @@ function ownList(){
   box.innerHTML = !OWN.list.length ? '<p class="sub">Jeszcze nic. Wyszukaj ćwiczenie powyżej i dotknij, żeby dodać.</p>'
     : OWN.list.map((e, i) => e.old ? `<div class="ow-it old"><b>${esc(e.name)}</b><span>${esc(String(e.sets))} × ${esc(e.reps)}${e.kg ? ' · ' + esc(e.kg) + ' kg' : ''}</span></div>`
       : `<div class="ow-it"><b>${esc(e.name)}</b>
+        <button type="button" class="ow-tm" data-tm="${i}" aria-pressed="${!!e.t}" aria-label="${esc(e.name)}: ćwiczenie na czas">⏱ na czas</button>
         <label>serie<input inputmode="numeric" data-i="${i}" data-f="sets" value="${esc(String(e.sets))}"></label>
-        <label>powt.<input data-i="${i}" data-f="reps" value="${esc(e.reps)}"></label>
+        <label>${e.t ? 'sek.' : 'powt.'}<input ${e.t ? 'inputmode="numeric" ' : ''}data-i="${i}" data-f="reps" value="${esc(e.reps)}"></label>
         <label>kg<input inputmode="decimal" data-i="${i}" data-f="kg" value="${esc(e.kg)}" placeholder="—"></label>
         <button type="button" class="ow-rm" data-rm="${i}" aria-label="Usuń ${esc(e.name)}">✕</button></div>`).join('');
   box.querySelectorAll('input[data-i]').forEach(inp => inp.oninput = () => { OWN.list[+inp.dataset.i][inp.dataset.f] = inp.value; });
+  box.querySelectorAll('[data-tm]').forEach(b => b.onclick = () => {             // powtórzenia ⇄ czas: domyślnie 30 s / 10 powt.
+    const e = OWN.list[+b.dataset.tm]; e.t = !e.t;
+    if (e.t && (e.reps === '10' || !/^\d+$/.test(String(e.reps).trim()))) e.reps = '30'; else if (!e.t && e.reps === '30') e.reps = '10';
+    ownList();
+  });
   box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { OWN.list.splice(+b.dataset.rm, 1); ownList(); });
 }
 function ownSave(){
   const err = t => { const e = $('#ow-err'); e.textContent = t; e.hidden = false; };
   if (!OWN.list.length) return err('Dodaj co najmniej jedno ćwiczenie.');
-  if (OWN.list.some(e => !(+e.sets >= 1 && +e.sets <= SETS_MAX) || !String(e.reps).trim())) return err('Przy każdym ćwiczeniu wpisz serie (1–' + SETS_MAX + ') i powtórzenia.');
+  if (OWN.list.some(e => !(+e.sets >= 1 && +e.sets <= SETS_MAX) || !String(e.reps).trim())) return err('Przy każdym ćwiczeniu wpisz serie (1–' + SETS_MAX + ') i powtórzenia albo czas.');
+  if (OWN.list.some(e => e.t && !e.old && !(parseInt(e.reps) > 0))) return err('Przy ćwiczeniu na czas wpisz liczbę sekund.');
   if (!OWN.edit) {
     const d = $('#ow-date').value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return err('Wybierz dzień.');
     OWN.date = d; OWN.title = $('#ow-title').value.trim(); OWN.week = ownWeek(PLAN, d); OWN.day = ownNextDay(PLAN, OWN.week);
   }
   const u = { week: OWN.week, day: OWN.day, date: OWN.date, title: OWN.title,
-    exercises: OWN.list.map(e => ({ name: e.name, sets: +e.sets, reps: String(e.reps).trim(), kg: String(e.kg || '').trim() })) };
+    exercises: OWN.list.map(e => ({ name: e.name, sets: +e.sets, reps: e.t && !e.old ? parseInt(e.reps) + ' s' : String(e.reps).trim(), kg: String(e.kg || '').trim() })) };
   applyOwn(u, true);
   send('addOwnUnit', u).catch(() => {});
   closeSheet();
@@ -1959,7 +1991,8 @@ function rowHtml(ex, set, kind, def){
   const drop = (kind === 'p' || kind === 'x') && /DROP/.test(l.typ || '');
   const phAttr = (v, lbl) => blank(v) ? ` placeholder="${lbl}" data-ph=""` : ` placeholder="${esc(fmtKg(v))}" data-ph="${esc(fmtKg(v))}"`;
   const kgIn = `<input inputmode="decimal" class="kg${blank(kgP) ? '' : ' ph'}" value="${esc(fmtKg(kg))}"${phAttr(kgP, 'kg')} aria-label="kg">`;
-  const repsIn = `<input inputmode="decimal" class="reps${blank(repsP) ? '' : ' ph'}" value="${esc(fmtKg(reps))}"${phAttr(repsP, 'powt.')} aria-label="powtórzenia">`;
+  const rl = repsLabel(ex.reps);                                               // ćwiczenie na czas („30 s”): w polu sekundy zamiast powtórzeń
+  const repsIn = `<input inputmode="decimal" class="reps${blank(repsP) ? '' : ' ph'}" value="${esc(fmtKg(reps))}"${phAttr(repsP, rl)} data-u="${rl}" aria-label="${rl === 'powt.' ? 'powtórzenia' : rl === 'min' ? 'minuty' : 'sekundy'}">`;
   const rpeCell = kind === 'w' ? `<div class="lbl">${SIMPLE ? 'rozgrzewka' : 'rozgrz.'}</div>` : effortSel(l);
   const oly = isOly(ex) && kind !== 'w', q = oly ? rateOf(l) : '';
   // kamera przy serii roboczej, dodatkowej i drop (nie przy rozgrzewce); wypełniona = jest film albo prędkość
@@ -1988,7 +2021,7 @@ function rowHtml(ex, set, kind, def){
 }
 /** pole serii: wartość wpisana, a gdy puste — propozycja z placeholdera (z planu albo z poprzedniej serii) */
 const fv = el => !el ? '' : el.value.trim() !== '' ? el.value : (el.dataset.ph || '');
-const setPh = (el, v) => { v = v === undefined || v === null ? '' : String(v); el.dataset.ph = v; el.placeholder = v || (el.classList.contains('kg') ? 'kg' : 'powt.'); el.classList.toggle('ph', !!v); };
+const setPh = (el, v) => { v = v === undefined || v === null ? '' : String(v); el.dataset.ph = v; el.placeholder = v || (el.classList.contains('kg') ? 'kg' : el.dataset.u || 'powt.'); el.classList.toggle('ph', !!v); };
 const setLabel = (set, kind) => (kind === 'w' || kind === 'd' || SIMPLE) ? set : 'S' + set;
 const dropDefault = (ex, fromKg) => window.TL.dropDefault(ex.kg, fromKg);   // ~80% ostatniego ciężaru, w dół do 2,5 kg
 function card(ex){
@@ -1998,12 +2031,12 @@ function card(ex){
   for (let i = 1; i <= ex.sets; i++) { rows += rowHtml(ex, i, 'p'); const l = getLog(ex, i); if (!l || l.wykonane !== 'TAK') allDone = false; }
   for (let i = ex.sets + 1; i <= ex.sets + extra; i++) rows += rowHtml(ex, i, 'x');
   for (let i = 1; i <= nd; i++) rows += rowHtml(ex, 'D' + i, 'd', dropDefault(ex));
-  const oly = isOly(ex);
+  const oly = isOly(ex), rl = repsLabel(ex.reps);
   const head = oly
     ? `<div class="set-head set ${SIMPLE ? 'simple' : ''}"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl hl2">ocena</div><div></div></div>`
     : SIMPLE
-    ? `<div class="set-head set simple"><div class="lbl">#</div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">jak ciężko?</div><div></div><div></div></div>`
-    : `<div class="set-head set"><div></div><div class="lbl">kg</div><div class="lbl">powt.</div><div class="lbl">${SCALE}</div><div></div><div></div></div>`;
+    ? `<div class="set-head set simple"><div class="lbl">#</div><div class="lbl">kg</div><div class="lbl">${rl}</div><div class="lbl">jak ciężko?</div><div></div><div></div></div>`
+    : `<div class="set-head set"><div></div><div class="lbl">kg</div><div class="lbl">${rl}</div><div class="lbl">${SCALE}</div><div></div><div></div></div>`;
   const tools = `<div class="ghosts">
       ${allowX > 0 ? `<button type="button" class="ghost" data-extra="${ex.order}" ${extra >= allowX ? 'hidden' : ''}>+ seria <small>zostało ${Math.max(0, allowX - extra)}</small></button>` : ''}
       <button type="button" class="ghost d" data-drop="${ex.order}">+ drop set</button>
@@ -2163,7 +2196,7 @@ const cardDone = o => { const c = document.querySelector(`.card[data-card="${o}"
 function foldSum(o){
   const s = document.querySelector(`.card[data-card="${o}"] .fsum`); if (!s) return;
   if (s.closest('.card').classList.contains('skip')) { s.textContent = 'pominięte'; return; }
-  const w = work(o), done = w.filter(r => r.dataset.st), ton = done.reduce((a, r) => { const kg = num(fv(r.querySelector('.kg'))), n = num(fv(r.querySelector('.reps'))); return a + (r.dataset.st === 'ok' && isNum(kg) && isNum(n) ? kg * n : 0); }, 0);
+  const w = work(o), done = w.filter(r => r.dataset.st), ton = done.reduce((a, r) => { const kg = num(fv(r.querySelector('.kg'))), n = num(fv(r.querySelector('.reps'))); return a + (r.dataset.st === 'ok' && isNum(kg) && isNum(n) && !(r.querySelector('.reps').dataset.u || '').match(/sek|min/) ? kg * n : 0); }, 0);
   s.textContent = done.length + ' z ' + w.length + ' ' + plural(w.length, 'serii', 'serii', 'serii') + (ton ? ' · ' + fmtKg(Math.round(ton)) + ' kg' : '') + (cardDone(o) ? ' · ✓' : '');
 }
 function setFold(o, on, keep = true){

@@ -1212,10 +1212,10 @@ function exIndex_(rows) {
   return ix;
 }
 
-/** Czysta funkcja: nazwy do wyszukiwarki własnego treningu [[nazwa, 1 = ma film]], bez wierszy-aliasów i zaślepek. */
+/** Czysta funkcja: nazwy do wyszukiwarki własnego treningu [[nazwa, link do filmu albo '', partie „a; b”]], bez wierszy-aliasów i zaślepek. */
 function exNames_(rows) {
   const seen = {}, out = [];
-  (rows || []).forEach(r => { const n = exStr_(r.cwiczenie).trim().replace(/\s+/g, ' '), k = exKey_(n); if (!n || seen[k] || cwEmpty_(r) || exStr_(r.glowna).trim()) return; seen[k] = 1; out.push([n, /^https?:\/\//i.test(exStr_(r.instruktaz).trim()) ? 1 : 0]); });
+  (rows || []).forEach(r => { const n = exStr_(r.cwiczenie).trim().replace(/\s+/g, ' '), k = exKey_(n); if (!n || seen[k] || cwEmpty_(r) || exStr_(r.glowna).trim()) return; seen[k] = 1; const u = exStr_(r.instruktaz).trim(); out.push([n, /^https?:\/\/\S+$/i.test(u) ? u : '', exStr_(r.partia).split(/[;,]/).map(s => s.trim().toLowerCase()).filter(Boolean).join('; ')]); });
   return out;
 }
 

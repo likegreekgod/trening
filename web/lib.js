@@ -19,6 +19,9 @@
     const t = String(v).trim();
     return /^\d+(\s*\+\s*\d+)+$/.test(t) ? t.split('+').reduce((a, b) => a + (parseInt(b) || 0), 0) : parseInt(t);
   };
+  /** ćwiczenie na czas: „30 s”, „45 sek” → 's', „2 min” → 'min', inaczej '' (wtedy w polu serii zamiast powtórzeń wpisuje się czas) */
+  L.timeUnit = v => { const m = /^\s*\d+(?:[.,]\d+)?\s*(sekund|sek|sec|s|min)(?![a-ząćęłńóśźż])/i.exec(String(v === undefined || v === null ? '' : v)); return !m ? '' : /^min/i.test(m[1]) ? 'min' : 's'; };
+  L.repsLabel = v => ({ s: 'sek.', min: 'min' }[L.timeUnit(v)] || 'powt.');
   /** drop set: ~80% ostatniego ciężaru (albo z planu), w dół do 2,5 kg */
   L.dropDefault = (planKg, fromKg) => {
     const base = L.isNum(fromKg) ? fromKg : (L.isNum(planKg) ? planKg : null);
@@ -107,15 +110,18 @@
   /**
    * wyszukiwarka ćwiczeń: najpierw ćwiczenia z planu klienta, potem baza [[nazwa, film]]; wszystkie słowa zapytania muszą
    * wystąpić w nazwie (bez wielkości liter i polskich znaków). → [{name, film, mine}]
+   * part = partia mięśniowa (baza [[nazwa, film, „partia; partia”]]): tylko ćwiczenia z tą partią, także bez wpisanego zapytania.
    */
-  L.exSearch = (planNames, base, q, limit = 12) => {
+  L.exSearch = (planNames, base, q, limit = 12, part = '') => {
     const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
-    const words = fold(q).split(/\s+/).filter(Boolean), hit = n => words.every(w => fold(n).includes(w)), seen = {}, out = [];
-    const film = {}; (base || []).forEach(b => { film[fold(b[0])] = !!b[1]; });
+    const film = {}, pt = {}, P = fold(part).trim(); (base || []).forEach(b => { film[fold(b[0])] = !!b[1]; pt[fold(b[0])] = fold(b[2] || '').split(';').map(s => s.trim()); });
+    const words = fold(q).split(/\s+/).filter(Boolean), hit = n => words.every(w => fold(n).includes(w)) && (!P || (pt[fold(n)] || []).includes(P)), seen = {}, out = [];
     (planNames || []).forEach(n => { const k = fold(n); if (!seen[k] && hit(n)) { seen[k] = 1; out.push({ name: n, film: !!film[k], mine: true }); } });
-    if (words.length) (base || []).forEach(b => { const k = fold(b[0]); if (!seen[k] && hit(b[0])) { seen[k] = 1; out.push({ name: b[0], film: !!b[1], mine: false }); } });
+    if (words.length || P) (base || []).forEach(b => { const k = fold(b[0]); if (!seen[k] && hit(b[0])) { seen[k] = 1; out.push({ name: b[0], film: !!b[1], mine: false }); } });
     return out.slice(0, limit);
   };
+  /** partie mięśniowe z bazy [[nazwa, film, „partia; partia”]], alfabetycznie */
+  L.exParts = base => [...new Set([].concat(...(base || []).map(b => String(b[2] || '').split(';').map(s => s.trim()).filter(Boolean))))].sort((a, b) => a.localeCompare(b, 'pl'));
   L.blockInfo = (plan, week) => {
     const r = plan.find(x => x.week === week && x.block);
     if (!r) return null;
@@ -134,7 +140,7 @@
         if (l.wykonane !== 'TAK' || /^R/i.test(s)) return;
         if (/^\d+$/.test(s) && +s <= ex.sets) done++;
         const kg = parseFloat(String(l.kg).replace(',', '.')), reps = parseFloat(String(l.powt).replace(',', '.'));
-        if (kg > 0 && reps > 0) ton += kg * reps;
+        if (kg > 0 && reps > 0 && !L.timeUnit(ex.reps)) ton += kg * reps;     // ćwiczenie na czas: sekundy to nie powtórzenia
       });
     });
     return { done, all, ton: Math.round(ton) };

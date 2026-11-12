@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-10-25, aplikacja v32.
+Stan na 2026-11-12, aplikacja v33.
 
 ## Jak pracujemy
 
@@ -15,6 +15,7 @@ Stan na 2026-10-25, aplikacja v32.
 
 ## Ostatnio zrobione
 
+- 12.11 (v33): własny trening: film „Jak wykonać” od razu po dodaniu ćwiczenia, ćwiczenia na czas („⏱ na czas”, sekundy zamiast powtórzeń), szukanie po partii mięśniowej. Filmy i partie w wyszukiwarce wymagają też scalenia `apps-script/` (wdroży się samo).
 - 26.10: import planu: opcjonalne pole `zastepuje` (blok do zamknięcia od pierwszej daty z pliku), wynik w Import. Do dopisania w SKILL.md skilla trenera (przebuduj ZIP).
 - 26.10: podgląd dla Claude: 5 ostatnich sesji każdej osoby (alfabetycznie, nieaktywni pominięci) zamiast 10 globalnie. Wyzwalacz bez zmian, plik odświeży się sam po wdrożeniu.
 - 26.10: podgląd „Trening – podgląd dla Claude” / zakładka „Ostatnie sesje” (`apps-script/Podglad.gs`) dla agenta z konektorem Drive. Po scaleniu: w edytorze Apps Script uruchom raz `instalujPodglad`.
@@ -25,7 +26,7 @@ Stan na 2026-10-25, aplikacja v32.
 
 - **Dyspozycja: skala snu odwrotna niż odczucie.** Ankieta Hoopera ma wszędzie 1 = dobrze (`HOOPER` w lib.js: Sen „1 = bardzo dobry”), ale sen kojarzy się z oceną jakości (wyżej = lepiej). Klienci się mylą. Do ustalenia: odwrócić tylko widok snu (zapis i `hooper_suma` bez zmian) albo zmienić opis/etykiety skrajnych przycisków.
 - **Własny trening: brak kompleksów i serii obiegowych.** Klient składa tylko pojedyncze ćwiczenia (`openOwn` / `applyOwn`). Do zaprojektowania: kompleks „A + B” jako jedno ćwiczenie i obwód/superseria (grupa ćwiczeń robionych na zmianę).
-- **Własny trening: brak „Jak wykonać”.** Jednostka złożona w telefonie ma `infos: []` (`applyOwn`), a linki dokłada dopiero `getData` przy następnym wczytaniu. Sprawdzić, czy pojawiają się po odświeżeniu; jeśli nie, dopasowanie nazwy z bazy (`exInfo_`) nie łapie nazw wybranych w wyszukiwarce.
+- **Ćwiczenia na czas w arkuszu.** Podsumowanie i Bloki liczą tonaż jako kg × powt., więc ćwiczenie na czas z ciężarem (np. spacer farmera 30 s) zawyża tonaż. Aplikacja już je pomija.
 
 ## Czeka na Damiana
 

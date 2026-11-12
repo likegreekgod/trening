@@ -2,6 +2,13 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-12 · Własny trening: filmy, ćwiczenia na czas, szukanie po partii
+
+- `getExNames` zwraca `[nazwa, link do filmu albo '', partie „a; b”]` (wcześniej `[nazwa, 1/0]`). Aplikacja dokłada „Jak wykonać” i partie do własnej jednostki od razu (`applyOwn`), bez czekania na następne `getData`; dopisanie ćwiczenia nie gubi filmów wcześniejszych. Lista w telefonie pod nowym kluczem `exn2_<klucz>`. Nowa aplikacja ze starym skryptem działa (bez filmów i partii), stara z nowym też.
+- Ćwiczenie na czas = `powt` w Planie jako tekst „30 s” (albo „2 min”), bez nowej kolumny; lib `timeUnit` / `repsLabel`. W kreatorze własnego treningu przycisk „⏱ na czas” zamienia pole „powt.” na „sek.”. W wierszu serii nagłówek i podpowiedź to „sek.”, a liczba sekund trafia do `Log.powt`. Działa też w planach trenera z „30 s”.
+- Ćwiczenia na czas nie liczą się do tonażu w aplikacji (nagłówek, zwinięta karta). **Arkusz (Podsumowanie, Bloki) dalej liczy kg × powt. z Logu**, więc ćwiczenie na czas z ciężarem zawyża tam tonaż; do poprawy osobno, jeśli zacznie przeszkadzać.
+- Szukanie po partii: rząd przycisków z partiami z bazy pod polem szukania; partia działa razem z wpisanym tekstem, bez tekstu pokazuje do 60 ćwiczeń tej partii (najpierw własne z planu).
+
 ## 2026-10-26 · Import planu: pole `zastepuje`
 
 - Opcjonalne pole wiersza planu `zastepuje` (nazwa bloku): przy imporcie znikają z Planu niezrobione jednostki tego bloku klienta z datą od najwcześniejszej daty klienta w pliku. Zrobione (wpis w Sesjach) i własne (`zrodlo` = klient) zostają; Log i Sesje bez zmian. Jedna wartość na klienta (walidacja), nie jest kolumną Planu.

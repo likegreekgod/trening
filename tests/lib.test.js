@@ -370,6 +370,14 @@ test('ownWeek, ownNextDay, exSearch: własny trening klienta', () => {
   assert.deepEqual(L.exSearch(['Uginanie młotkowe'], base, '').map(r => r.name), ['Uginanie młotkowe']);   // pusto = tylko swoje
   assert.deepEqual(L.exSearch([], base, 'lancuch').map(r => r.name), ['Łańcuch – wiosłowanie']);           // bez polskich znaków
   assert.deepEqual(L.exSearch([], base, 'curl hammer').map(r => r.name), ['Hammer Curl']);
+  const bp = [['Hammer Curl', 'https://example.test/hc', 'biceps; przedramiona'], ['Pull-up', '', 'plecy; biceps'], ['Back Squat', '', 'czworogłowe']];
+  assert.deepEqual(L.exParts(bp), ['biceps', 'czworogłowe', 'plecy', 'przedramiona']);
+  assert.deepEqual(L.exSearch(['Back Squat', 'Pull-up'], bp, '', 12, 'biceps').map(r => r.name), ['Pull-up', 'Hammer Curl']);   // partia bez zapytania: swoje, potem baza
+  assert.deepEqual(L.exSearch([], bp, 'curl', 12, 'plecy').map(r => r.name), []);
+  assert.deepEqual(L.exSearch([], bp, 'squat', 12, 'Czworogłowe').map(r => r.name), ['Back Squat']);
+  assert.deepEqual(['30 s', '45sek', '30 sek.', '2 min', '10', '8/str', '10 m', '6-8', '5 serii', ''].map(L.timeUnit), ['s', 's', 's', 'min', '', '', '', '', '', '']);
+  assert.deepEqual(['30 s', '2 min', '8'].map(L.repsLabel), ['sek.', 'min', 'powt.']);
+  assert.equal(L.unitStats([{ sets: 1, reps: '30 s' }, { sets: 1, reps: '5' }], () => ({ 1: { wykonane: 'TAK', kg: 20, powt: 30 } })).ton, 600);   // czas nie liczy się do tonażu
   assert.equal(L.exSearch([], base.concat(Array.from({ length: 30 }, (_, i) => ['Curl ' + i, 0])), 'curl').length, 12);
   assert.deepEqual([...L.lightWeeks([{ week: 1, sets: 3, reps: '5', kg: 100 }, { week: 2, sets: 3, reps: '5', kg: 100 }, { week: 2, sets: 9, reps: '10', kg: 50, own: true }])], []);
 });
