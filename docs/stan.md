@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-12, aplikacja v34.
+Stan na 2026-11-12, aplikacja v35.
 
 ## Jak pracujemy
 
@@ -15,6 +15,7 @@ Stan na 2026-11-12, aplikacja v34.
 
 ## Ostatnio zrobione
 
+- 12.11 (v35): Dyspozycja: sen w odwróconym widoku (7 = bardzo dobry), zapis i suma ankiety bez zmian. Testy „Postęp → Tydzień” naprawione (nie przechodziły w poniedziałki).
 - 12.11 (v34): górny pasek chowa się przy przewijaniu w dół i wraca przy przewijaniu w górę (wszystkie zakładki).
 - 12.11 (v33): własny trening: film „Jak wykonać” od razu po dodaniu ćwiczenia, ćwiczenia na czas („⏱ na czas”, sekundy zamiast powtórzeń), szukanie po partii mięśniowej. Filmy i partie w wyszukiwarce wymagają też scalenia `apps-script/` (wdroży się samo).
 - 26.10: import planu: opcjonalne pole `zastepuje` (blok do zamknięcia od pierwszej daty z pliku), wynik w Import. Do dopisania w SKILL.md skilla trenera (przebuduj ZIP).
@@ -25,12 +26,12 @@ Stan na 2026-11-12, aplikacja v34.
 
 ## Do zrobienia (uwagi z 22.10)
 
-- **Dyspozycja: skala snu odwrotna niż odczucie.** Ankieta Hoopera ma wszędzie 1 = dobrze (`HOOPER` w lib.js: Sen „1 = bardzo dobry”), ale sen kojarzy się z oceną jakości (wyżej = lepiej). Klienci się mylą. Do ustalenia: odwrócić tylko widok snu (zapis i `hooper_suma` bez zmian) albo zmienić opis/etykiety skrajnych przycisków.
 - **Własny trening: brak kompleksów i serii obiegowych.** Klient składa tylko pojedyncze ćwiczenia (`openOwn` / `applyOwn`). Do zaprojektowania: kompleks „A + B” jako jedno ćwiczenie i obwód/superseria (grupa ćwiczeń robionych na zmianę).
 - **Ćwiczenia na czas w arkuszu.** Podsumowanie i Bloki liczą tonaż jako kg × powt., więc ćwiczenie na czas z ciężarem (np. spacer farmera 30 s) zawyża tonaż. Aplikacja już je pomija.
 
 ## Czeka na Damiana
 
+- Uprzedzenie klientów, że od v35 sen ocenia się odwrotnie niż dotąd (7 = bardzo dobry).
 - Sprawdzenie na iPhonie: aplikacja z ekranu głównego → wklejenie linku → plan.
 - Próba własnego treningu.
 - Wgranie ZIP-a skilla z 24.10 na claude.ai (skill zaktualizowany pod v31: nowe pola planu `tryb`, `ciecie`, `serie_min`, serie do 40, W… zarezerwowane, Klienci J/M, komentarze trenera, SKIP, nowe kolumny Przeglądu, menu, co widzi klient). Kopię SKILL.md trzymaj w `Desktop\hgvtjv\skill-aplikacja-treningowa-klienta`.
@@ -39,7 +40,6 @@ Stan na 2026-11-12, aplikacja v34.
 
 ## Do obserwacji
 
-- Testy UI „Postęp → Tydzień” (light/dark) nie przechodzą od 26.10 także na czystym `main`: prawdopodobnie zależą od bieżącej daty. Do naprawy osobno.
 - Czas ładowania przy rosnącym Logu (pole `ms`).
 - Reakcje klientów na zakładkę Trener i Postęp → Tydzień (czy czegoś brakuje, czy coś myli).
 - Zakładka Błędy i kolumna `bledy_7dni` w Przeglądzie: po kilku dniach zdecydować, czy dać sygnał.

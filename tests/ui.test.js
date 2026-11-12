@@ -651,6 +651,13 @@ test('Dyspozycja: ankieta, skoki i prędkość → werdykt wg progów, zapis, ba
   // historia: ostatnie zapisane dni pod formularzem (najnowszy na górze)
   assert.equal(await p.$$eval('#dysp .rhist .kv', k => k.length), 6);
   assert.match(await p.$eval('#dysp .rhist .kv', k => k.textContent), /06\.09 · Dobra dyspozycja.*ankieta 12 · CMJ 40 cm · 1 m\/s/);
+  // sen ma odwrócony widok (7 = bardzo dobry), zapis bez zmian (1 = dobrze): przycisk „7” zapisuje 1; pozostałe pytania wprost
+  const scale = q => p.$$eval(`#dysp .scale[data-q="${q}"] button`, b => b.map(x => x.textContent + '→' + x.dataset.v).join(' '));
+  assert.equal(await scale('sen'), '1→7 2→6 3→5 4→4 5→3 6→2 7→1');
+  assert.equal(await scale('stres'), '1→1 2→2 3→3 4→4 5→5 6→6 7→7');
+  assert.match(await p.textContent('#dysp'), /Sen: wyżej = lepiej/);
+  await p.click('#dysp .scale[data-q="sen"] button:text-is("7")');
+  assert.equal(await p.getAttribute('#dysp .scale[data-q="sen"] [data-v="1"]', 'aria-pressed'), 'true');
   await hooper(p, 4);                                                           // suma 16 = średnia 12 + 4 → uwaga
   assert.equal(await p.textContent('.verdict h2'), 'Uwaga');
   for (const i of [0, 1, 2]) { await p.fill(`#dysp input[data-j="${i}"]`, '38'); await p.press(`#dysp input[data-j="${i}"]`, 'Tab'); }
@@ -767,8 +774,10 @@ test('CMJ z filmu: instrukcja, odbicie i lądowanie → czas lotu → wysokość
 
 // --- PR 11: postęp ---
 // 8 tygodni historii syntetycznej do dziś: przysiad (e1RM rośnie, tydz. 5 słabszy), rwanie, sesje z faktyczną datą, dyspozycja
+// PROG_SHIFT=3 przesuwa historię o 3 dni wstecz: sprawdzenie w dowolny dzień, że testy nie zależą od dnia tygodnia
+const PROG_SHIFT = +process.env.PROG_SHIFT || 0;
 const PROG = (() => {
-  const day = n => { const d = new Date(); d.setDate(d.getDate() + n); const z = x => String(x).padStart(2, '0'); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); };
+  const day = n => { const d = new Date(); d.setDate(d.getDate() + n - PROG_SHIFT); const z = x => String(x).padStart(2, '0'); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); };
   const plan = [], logs = [], sessions = [], readiness = [];
   for (let w = 1; w <= 8; w++) {
     const date = day(-7 * (8 - w) - 1), block = w <= 4 ? 'B1' : 'B2', sq = 100 + 2.5 * w - (w === 5 ? 7.5 : 0), sn = 60 + 2.5 * w;
@@ -823,7 +832,10 @@ for (const scheme of ['light', 'dark']) test(`Postęp ${scheme}: siła z rekorda
 });
 
 for (const scheme of ['light', 'dark']) test(`Postęp → Tydzień ${scheme}: wykonanie, rekordy, odczucia, przełączanie tygodni`, async () => {
-  // każdy tydzień kalendarzowy ma dokładnie jedną jednostkę PROG (co 7 dni); poprzedni tydzień jest zawsze w przeszłości
+  // każdy tydzień kalendarzowy ma dokładnie jedną jednostkę PROG (co 7 dni); ostatnia zrobiona (tydz. 7) jest sprzed 8 dni,
+  // czyli zwykle w poprzednim tygodniu kalendarzowym, a w poniedziałek dwa tygodnie wstecz (26.10 test przez to nie przechodził)
+  const mon = d => { const x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
+  const back = Math.round((mon(new Date()) - mon(PROG.sessions[6].data + 'T12:00:00')) / (7 * 864e5));
   const data = Object.assign({}, PROG, { sessions: PROG.sessions.map(x => Object.assign({}, x, { bol: 'kolano:2' })),
     logs: PROG.logs.concat(PROG.sessions.map(x => ({ id: x.id.replace('|T1', '|T1') + '|3|0', tydzien: x.tydzien, jednostka: 'T1', data: x.data, nr_cw: 3, cwiczenie: 'Face pull', seria: 0, typ: 'SKIP', uwagi: 'brak czasu', wykonane: '' }))) });
   const { ctx, p } = await page([], false, { data, scheme });
@@ -831,7 +843,7 @@ for (const scheme of ['light', 'dark']) test(`Postęp → Tydzień ${scheme}: wy
   await p.click('#nav [data-tab="postep"]');
   assert.equal(await p.$eval('[data-pt="tyd"]', b => b.getAttribute('aria-selected')), 'true');
   assert.equal(await p.$eval('[data-pw="1"]', b => b.disabled), true);              // dalej niż bieżący tydzień się nie da
-  await p.click('[data-pw="-1"]');
+  for (let i = 0; i < back; i++) await p.click('[data-pw="-1"]');
   const t = (await p.$$eval('#postep .kv', r => r.map(x => x.querySelector('span').textContent + ' = ' + x.querySelector('b').textContent))).join('\n');
   assert.match(t, /^Jednostki z planu · T1 ✓ = 1 z 1$/m);
   assert.match(t, /^Serie · w planie = 6 z 6$/m);
