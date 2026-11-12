@@ -2,6 +2,11 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-12 · Górny pasek chowa się przy przewijaniu
+
+- Nagłówek (tydzień · jednostka, tytuł, czas / serie / tonaż) chowa się przy przewijaniu w dół i wraca przy każdym ruchu w górę oraz na samej górze strony; tak samo we wszystkich zakładkach. Dolne menu i timer przerwy zostają na miejscu.
+- Klasa `header.hid` (transform), nasłuch `scroll` w `web/index.html`: ruchy < 8 px pomijane, pozycja przycięta do zakresu strony (odbicie na iOS nie przełącza), bez animacji przy `prefers-reduced-motion`.
+
 ## 2026-11-12 · Własny trening: filmy, ćwiczenia na czas, szukanie po partii
 
 - `getExNames` zwraca `[nazwa, link do filmu albo '', partie „a; b”]` (wcześniej `[nazwa, 1/0]`). Aplikacja dokłada „Jak wykonać” i partie do własnej jednostki od razu (`applyOwn`), bez czekania na następne `getData`; dopisanie ćwiczenia nie gubi filmów wcześniejszych. Lista w telefonie pod nowym kluczem `exn2_<klucz>`. Nowa aplikacja ze starym skryptem działa (bez filmów i partii), stara z nowym też.
