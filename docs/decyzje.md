@@ -2,6 +2,16 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-12 · Obwód / superseria (v37)
+
+- Nowa kolumna Planu `obwod` na końcu nagłówków: jedna litera A–Z. Sąsiednie ćwiczenia jednostki z tą samą literą to obwód (2 ćwiczenia = „Superseria”). Działa w planach trenera z JSON i we własnym treningu klienta. Liczba rund = `serie` (ćwiczenie z mniejszą liczbą serii odpada wcześniej).
+- Import (`validatePlan_`): litera A–Z, co najmniej 2 ćwiczenia jednostki pod tą samą literą, kolejne po sobie wg `nr`, bez `tryb` EMOM. Litera liczy się w obrębie jednostki.
+- Trening: ramka z kartami A1, A2…, linijka „Teraz: … Potem …”, obwiedziony wiersz serii do zrobienia. Po ✓ w środku rundy nie ma przerwy, aplikacja przewija do następnego ćwiczenia; po zamknięciu rundy przerwa stała 1:30 (`CIRCUIT_REST`, −15 / +15 jak dotąd). Stan liczony z odhaczonych serii (lib `circuitGroups`, `circuitState`), więc działa też przy odhaczaniu nie po kolei i po cofnięciu ✓.
+- Zapis serii, id, filmy, kolejka offline i arkuszowe podsumowania bez zmian: obwód to tylko sposób wyświetlania i moment przerwy.
+- Kreator własnego treningu: „⛓ Połącz z poprzednim” → wybór Kompleks / Obwód; w obwodzie jedno pole „rundy”, „Rozłącz” przywraca osobne ćwiczenia; kolejne ćwiczenie dołącza do obwodu poprzedniego. `addOwnUnit` przyjmuje `circuit` przy ćwiczeniu; samotna litera jest czyszczona (aplikacja `circuitTidy`, serwer `ownRows_`).
+- Stara wersja (`apps-script/Index.html`) ignoruje kolumnę: ćwiczenia widać jako zwykłe.
+- Poza zakresem: własna długość przerwy po rundzie, obwód na czas (AMRAP), oznaczenie obwodu w zakładce Plan i w „Podglądzie dla Claude”.
+
 ## 2026-11-12 · Własny trening: kompleks; obwód w następnym kroku
 
 - Szkic zaakceptowany 12.11. Kompleks we własnym treningu to jedno ćwiczenie „A + B” z powt. „1+2”, czyli dokładnie to, co w planach trenera: bez zmian w arkuszu, Code.gs i na ekranie Trening (film każdej części, suma powtórzeń, boje po nazwie).

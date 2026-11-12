@@ -481,3 +481,24 @@ test('ownJoin, ownSplit, complexRepsOk: kompleks we własnym treningu', () => {
   assert.deepEqual([['A + B', '1+2'], ['A + B', '1 + 2'], ['A + B', '3'], ['A + B', '1+1+1'], ['A + B + C', '1+1+1'], ['A + B', '6-8'], ['A + B', '']].map(x => L.complexRepsOk(x[0], x[1])),
     [true, true, false, false, true, false, false]);
 });
+
+test('circuitGroups, circuitState, circuitLetter, circuitTidy: obwód / superseria', () => {
+  const E = (order, circuit, mode) => ({ order, circuit, mode });
+  assert.deepEqual(L.circuitGroups([E(1), E(2, 'A'), E(3, 'A'), E(4, 'A'), E(5), E(6, 'B'), E(7, 'B')]), [{ id: 'A', orders: [2, 3, 4] }, { id: 'B', orders: [6, 7] }]);
+  assert.deepEqual(L.circuitGroups([E(1, 'A'), E(2), E(3, 'A')]), []);            // nie po sobie = zwykłe ćwiczenia
+  assert.deepEqual(L.circuitGroups([E(1, 'A'), E(2, 'A', 'EMOM'), E(3, 'A')]), []);   // EMOM przerywa obwód
+  assert.deepEqual(L.circuitGroups([E(1, 'A'), E(2, 'A'), E(3), E(4, 'A'), E(5, 'A')]).map(g => g.orders), [[1, 2], [4, 5]]);
+  const S = (...d) => L.circuitState(d.map((x, i) => ({ order: i + 1, sets: x[1], done: x[0] })));
+  assert.deepEqual(S([0, 3], [0, 3], [0, 3]), { round: 1, rounds: 3, next: 1, after: 2, fresh: true, done: false });
+  assert.deepEqual(S([1, 3], [0, 3], [0, 3]), { round: 1, rounds: 3, next: 2, after: 3, fresh: false, done: false });
+  assert.deepEqual(S([1, 3], [1, 3], [0, 3]), { round: 1, rounds: 3, next: 3, after: null, fresh: false, done: false });
+  assert.deepEqual(S([1, 3], [1, 3], [1, 3]), { round: 2, rounds: 3, next: 1, after: 2, fresh: true, done: false });   // runda zamknięta → przerwa
+  assert.deepEqual(S([0, 3], [1, 3], [0, 3]), { round: 1, rounds: 3, next: 1, after: 3, fresh: false, done: false });  // zrobione nie po kolei
+  assert.deepEqual(S([2, 2], [2, 3], [2, 3]), { round: 3, rounds: 3, next: 2, after: 3, fresh: true, done: false });   // ćwiczenie z mniejszą liczbą serii odpada
+  assert.deepEqual(S([1, 3], [0, 0], [1, 3]), { round: 2, rounds: 3, next: 1, after: 3, fresh: true, done: false });   // pominięte ćwiczenie (0 serii)
+  assert.deepEqual(S([3, 3], [3, 3]), { round: 3, rounds: 3, next: null, after: null, fresh: true, done: true });
+  assert.equal(L.circuitLetter([]), 'A'); assert.equal(L.circuitLetter([{ c: 'A' }, { c: 'A' }, { c: '' }, { c: 'C' }]), 'B');
+  const T = (c, sets, old) => ({ c, sets, old });
+  assert.deepEqual(L.circuitTidy([T('A', 3), T('A', 5), T('', 2), T('B', 4), T('', 1), T('C', 2, true), T('C', 2, true)]).map(e => e.c + e.sets), ['A3', 'A3', '2', '4', '1', 'C2', 'C2']);
+  assert.equal(L.CIRCUIT_REST, 90);
+});

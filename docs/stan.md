@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-12, aplikacja v36.
+Stan na 2026-11-12, aplikacja v37.
 
 ## Jak pracujemy
 
@@ -15,6 +15,7 @@ Stan na 2026-11-12, aplikacja v36.
 
 ## Ostatnio zrobione
 
+- 12.11 (v37): obwód / superseria: kolumna Planu `obwod` (litera), ramka A1–A3 i przerwa po rundzie na Treningu, „Połącz z poprzednim” (Kompleks / Obwód) w kreatorze własnego treningu. Wymaga też scalenia `apps-script/` (wdroży się samo).
 - 12.11 (v36): własny trening: kompleks „A + B” z kreatora („⛓ Kompleks z poprzednim”, „Rozłącz”), film każdej części od razu.
 - 12.11: arkusz: ćwiczenia na czas nie wchodzą do tonażu, e1RM ani NL (Podsumowanie, Podsumowanie_cw, partie, Bloki); serie liczą się jak dotąd. Bez zmian w aplikacji.
 - 12.11 (v35): Dyspozycja: sen w odwróconym widoku (7 = bardzo dobry), zapis i suma ankiety bez zmian. Testy „Postęp → Tydzień” naprawione (nie przechodziły w poniedziałki).
@@ -28,10 +29,12 @@ Stan na 2026-11-12, aplikacja v36.
 
 ## Do zrobienia (uwagi z 22.10)
 
-- **Obwód / superseria** (szkic zaakceptowany 12.11, ustalenia w `docs/decyzje.md`): kolumna Planu `obwod`, także dla planów trenera; kreator własnego treningu; ramka i kolejność na Treningu; przerwa po rundzie.
+- Brak otwartych uwag z 22.10 (kompleks i obwód zrobione 12.11).
 
 ## Czeka na Damiana
 
+- Próba obwodu na telefonie (własny trening z obwodem albo plan z kolumną `obwod`): czy przewijanie do następnego ćwiczenia i przerwa 1:30 po rundzie pasują.
+- Dopisanie do SKILL.md skilla trenera pola planu `obwod` (litera A–Z, min. 2 ćwiczenia po sobie w jednostce, bez EMOM) i przebudowanie ZIP-a.
 - Uprzedzenie klientów, że od v35 sen ocenia się odwrotnie niż dotąd (7 = bardzo dobry).
 - Sprawdzenie na iPhonie: aplikacja z ekranu głównego → wklejenie linku → plan.
 - Próba własnego treningu.

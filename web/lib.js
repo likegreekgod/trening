@@ -117,6 +117,38 @@
   };
   /** powtórzenia kompleksu: liczba na każdą część („1+2” dla dwóch części) */
   L.complexRepsOk = (name, reps) => { const t = String(reps).trim(); return /^\d+(\s*\+\s*\d+)+$/.test(t) && t.split('+').length === String(name).split(/\s+\+\s+/).length; };
+  /* ---------- obwód / superseria: sąsiednie ćwiczenia z tą samą literą (Plan.obwod), robione na zmianę ---------- */
+  L.CIRCUIT_REST = 90;                                                           // przerwa po całej rundzie [s]
+  /** grupy obwodów w jednostce: [{id: 'A', orders: [2, 3, 4]}]; sama litera przy jednym ćwiczeniu albo EMOM = zwykłe ćwiczenie */
+  L.circuitGroups = exs => {
+    const out = []; let g = null;
+    (exs || []).forEach(ex => {
+      const c = /^EMOM$/i.test(String(ex.mode || '')) ? '' : String(ex.circuit || '');
+      if (c && g && g.id === c) g.orders.push(ex.order); else { g = c ? { id: c, orders: [ex.order] } : null; if (g) out.push(g); }
+    });
+    return out.filter(x => x.orders.length > 1);
+  };
+  /**
+   * Stan obwodu z liczby zrobionych serii: members [{order, sets, done}] w kolejności ćwiczeń.
+   * → {round, rounds, next, after, fresh, done}: next = ćwiczenie do zrobienia teraz, after = następne w tej rundzie,
+   * fresh = wszyscy na tym samym etapie (runda właśnie się zamknęła albo jeszcze się nie zaczęła) → pora na przerwę.
+   */
+  L.circuitState = members => {
+    const rounds = Math.max(0, ...members.map(m => m.sets)), act = members.filter(m => m.done < m.sets);
+    if (!act.length) return { round: rounds, rounds, next: null, after: null, fresh: true, done: true };
+    const min = Math.min(...act.map(m => m.done)), now = act.filter(m => m.done === min);
+    return { round: min + 1, rounds, next: now[0].order, after: now[1] ? now[1].order : null, fresh: now.length === act.length, done: false };
+  };
+  /** kreator: następna wolna litera obwodu */
+  L.circuitLetter = list => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').find(c => !(list || []).some(e => e.c === c)) || 'Z';
+  /** kreator: litera zostaje tylko przy sąsiadach z tą samą literą; rundy (serie) wspólne = z pierwszego ćwiczenia obwodu */
+  L.circuitTidy = list => (list || []).map((e, i, a) => {
+    if (!e.c) return e;
+    const same = j => !!a[j] && a[j].c === e.c;
+    if (!same(i - 1) && !same(i + 1)) return Object.assign({}, e, { c: '' });
+    let j = i; while (same(j - 1)) j--;
+    return e.old ? e : Object.assign({}, e, { sets: a[j].sets });
+  });
   /** następna wolna nazwa własnej jednostki w tygodniu: W1, W2… */
   L.ownNextDay = (plan, week) => {
     const n = plan.filter(r => r.week === week && /^W\d+$/.test(r.day)).map(r => +r.day.slice(1));

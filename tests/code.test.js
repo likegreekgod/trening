@@ -469,7 +469,7 @@ test('ownRows_: walidacja i wiersze Planu własnej jednostki', () => {
   assert.equal(C.ownRows_('anna', Object.assign({}, u, { day: 'W1' }), [{ klient: 'anna', tydzien: 2, jednostka: 'W1' }]).error, 'Ta jednostka jest w planie trenera.');
   assert.equal(C.ownRows_('anna', Object.assign({}, u, { exercises: Array(21).fill({ name: 'X', sets: 1, reps: 1 }) }), plan).error, 'Najwyżej 20 ćwiczeń.');
   assert.ok(C.API_FNS.addOwnUnit);
-  assert.deepEqual(Array.from(C.PLAN_HEADERS.slice(-4)), ['zrodlo', 'tryb', 'ciecie', 'serie_min']);   // nowe kolumny na końcu
+  assert.deepEqual(Array.from(C.PLAN_HEADERS.slice(-5)), ['zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod']);   // nowe kolumny na końcu
 });
 
 test('mergePlan_ zostawia własne treningi; podsumowanie i bloki liczą ich objętość, ale nie wykonanie planu', () => {
@@ -639,4 +639,19 @@ test('ćwiczenie na czas („30 s”): seria się liczy, sekundy nie wchodzą do
   assert.equal(b[0][BH.indexOf('tonaz_kg')], 1000); assert.equal(b[0][BH.indexOf('wykonanie_%')], 100);
   const parts = C.computeParts_([R(1), R(2, { powt: '30 s' })], log.map(l => Object.assign({}, l, { cwiczenie: 'Przysiad tylny' })), [], CW);
   assert.deepEqual(plain(parts).map(r => r.slice(2)), [['czworogłowe', 4, 4, 1000], ['pośladki', 4, 4, 1000]]);
+});
+
+test('obwod: walidacja planu (litera, ≥ 2 ćwiczenia po sobie, bez EMOM) i własny trening', () => {
+  const R = (nr, x) => Object.assign({ klient: 'robert', tydzien: 1, jednostka: 'T1', tytul: 'A', data: d(1, 0), nr, cwiczenie: 'Ćw ' + nr, prio: 'B', serie: 3, powt: '10' }, x || {});
+  assert.deepEqual(Array.from(C.validatePlan_([R(1), R(2, { obwod: 'A' }), R(3, { obwod: 'a' }), R(4, { obwod: 'B' }), R(5, { obwod: 'B' })])), []);
+  assert.match(C.validatePlan_([R(1, { obwod: 'A' }), R(2)])[0], /obwod A ma jedno ćwiczenie/);
+  assert.match(C.validatePlan_([R(1, { obwod: 'A' }), R(2), R(3, { obwod: 'A' })])[0], /muszą iść po sobie/);
+  assert.match(C.validatePlan_([R(1, { obwod: 'AB' }), R(2, { obwod: 'AB' })])[0], /jedna litera/);
+  assert.match(C.validatePlan_([R(1, { obwod: 'A', tryb: 'EMOM' }), R(2, { obwod: 'A' })])[0], /EMOM/);
+  assert.deepEqual(Array.from(C.validatePlan_([R(1, { obwod: 'A' }), R(2, { obwod: 'A' }), R(1, { jednostka: 'T2', obwod: 'A' }), R(2, { jednostka: 'T2', obwod: 'A' })])), []);   // litera liczy się w obrębie jednostki
+  assert.equal(C.PLAN_HEADERS[C.PLAN_HEADERS.length - 1], 'obwod');                // nowa kolumna na końcu
+  assert.deepEqual(['a', 'B ', 'AB', '', null, 1].map(C.circuit_), ['A', 'B', '', '', '', '']);
+  const E = (name, circuit) => ({ name, sets: 3, reps: '10', kg: '', circuit });
+  const own = C.ownRows_('robert', { week: 1, day: 'W1', date: d(1, 0), exercises: [E('Pompki', 'A'), E('Wiosłowanie', 'a'), E('Plank', 'B'), E('Curl'), E('Dipy', 'x1')] }, []);
+  assert.deepEqual(own.rows.map(r => r.obwod), ['A', 'A', '', '', '']);            // samotna litera i zła wartość = zwykłe ćwiczenie
 });
