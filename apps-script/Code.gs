@@ -1796,10 +1796,11 @@ function przeglad() {
 /* ================== WCZYTYWANIE PLANÓW Z DRIVE ==================
  * Plik JSON w „Trening – Klienci/_plany/”: lista wierszy planu (klucze = PLAN_HEADERS; data, dod_serie, drop, grupa,
  * zamienniki, blok opcjonalne; opcjonalne `zastepuje` = blok, którego niezrobione jednostki od pierwszej daty
- * klienta w pliku zostają zamknięte, patrz mergePlan_). Poprawny plik → podmiana wierszy klientów z pliku w zakładce Plan, plik przeniesiony
- * do „_plany/wczytane”. Jednostki już zrobione (wpis w Sesjach) zostają z dotychczasowego planu; plik, który
+ * klienta w pliku zostają zamknięte, patrz mergePlan_). Poprawny plik → podmiana niezrobionych jednostek klientów z pliku,
+ * ale tylko w blokach obecnych w pliku (inne bloki bez zmian); plik przeniesiony do „_plany/wczytane”.
+ * Jednostki zrobione (wpis w Sesjach albo seria w Logu) zostają z dotychczasowego planu; plik, który
  * nadpisałby zrobioną jednostkę innego bloku (ten sam tydzień i jednostka), trafia do „_plany/bledy”.
- * Każdy import zapisuje wiersz w zakładce „Import”.
+ * Każdy import zapisuje wiersz w zakładce „Import”, w tym każdą usuniętą jednostkę („usunięto: …”, status „OK (uwagi)”).
  */
 const PLAN_HEADERS = ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'nr', 'cwiczenie', 'prio', 'serie', 'powt',
   'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok', 'zrodlo', 'tryb', 'ciecie', 'serie_min'];
@@ -1826,7 +1827,7 @@ function wczytajPlany(e) {
         importLog_(f.getName(), 'BŁĄD', 0, '', errs.slice(0, 10).join(' | '));
         continue;
       }
-      const m = mergePlan_(tableOf_('Plan'), rows, tableOf_('Sesje'));
+      const m = mergePlan_(tableOf_('Plan'), rows, tableOf_('Sesje'), tableOf_('Log'));
       if (m.errors.length) {
         f.moveTo(bad);
         importLog_(f.getName(), 'BŁĄD', 0, m.clients.join(', '), m.errors.slice(0, 10).join(' | '));
@@ -1834,7 +1835,8 @@ function wczytajPlany(e) {
       }
       writePlanRows_(m.rows);
       f.moveTo(ok);
-      importLog_(f.getName(), m.warnings.length ? 'OK (uwagi)' : 'OK', rows.length, m.clients.join(', '), m.notes.concat(m.warnings.slice(0, 10)).join(' | '));
+      importLog_(f.getName(), m.warnings.length || m.removed.length ? 'OK (uwagi)' : 'OK', rows.length, m.clients.join(', '),
+        m.notes.concat(m.removed, m.warnings.slice(0, 10)).join(' | '));   // usunięcia zawsze w całości
     }
   } finally { lock.releaseLock(); }
 }
@@ -1871,43 +1873,65 @@ function validatePlan_(rows) {
 
 /**
  * Czysta funkcja: nowy plan klientów z pliku + reszta zakładki Plan.
- * Zrobione jednostki (Sesje) klientów z pliku zostają z dotychczasowego planu; wiersze pliku dla nich są pomijane
- * (uwaga), a gdy blok w pliku i w planie się różni — błąd (tygodnie trzeba numerować ciągle).
+ * Zakres podmiany: tylko bloki klienta obecne w pliku (wiersze bez bloku = osobny blok). Niezrobiona jednostka
+ * takiego bloku, której w pliku nie ma, znika z Planu i trafia do `removed` („usunięto: tyg. N jednostka J (blok X)”).
+ * Jednostki innych bloków zostają; wyjątek: ta sama jednostka (klient|tydzien|jednostka) w pliku z innym blokiem
+ * zastępuje niezrobioną (uwaga), bo id serii nie zawiera bloku.
+ * Zrobiona = wpis w Sesjach LUB choć jedna seria w Logu: zostaje z dotychczasowego planu, wiersze pliku dla niej są
+ * pomijane (uwaga), a gdy blok w pliku i w planie się różni — błąd (tygodnie trzeba numerować ciągle).
  * Pole wiersza `zastepuje` (nazwa bloku, np. „B1”; nie trafia do Planu): usuwa niezrobione wiersze tego bloku
- * klienta z datą ≥ najwcześniejszej daty klienta w pliku (bez własnych); wynik w `notes` („zamknięto n jedn. bloku B1”),
+ * klienta z datą ≥ najwcześniejszej daty klienta w pliku (bez własnych); wynik w `notes` („zamknięto n jedn. bloku B1 (…)”),
  * blok, którego klient nie ma = uwaga.
  */
-function mergePlan_(existing, incoming, ses) {
+function mergePlan_(existing, incoming, ses, log) {
   const lc = v => String(v === undefined || v === null ? '' : v).toLowerCase();
   const blk = r => String(r.blok === undefined || r.blok === null ? '' : r.blok).trim();
   const unit = r => [lc(r.klient), r.tydzien, r.jednostka].join('|');
+  const name = r => 'tyg. ' + r.tydzien + ' jednostka ' + r.jednostka;
   const clients = [...new Set(incoming.map(r => lc(r.klient)))];
-  const done = {};
-  ses.forEach(s => { done[unit(s)] = 1; });
+  const done = {}, closedSes = {};
+  (ses || []).forEach(s => { done[unit(s)] = 1; closedSes[unit(s)] = 1; });
+  (log || []).forEach(l => { if (!blank_(l.klient) && !blank_(l.jednostka)) done[unit(l)] = 1; });
   const day = v => v instanceof Date ? fmtDate_(v) : String(v === undefined || v === null ? '' : v).slice(0, 10);
   const zast = {}, from = {};                                               // klient → blok do zamknięcia, od daty
+  const fileBlocks = {}, inFile = {};                                       // klient → bloki z pliku; jednostka → blok w pliku
   incoming.forEach(r => {
-    const k = lc(r.klient), d = day(r.data);
+    const k = lc(r.klient), d = day(r.data), u = unit(r);
     if (!blank_(r.zastepuje) && zast[k] === undefined) zast[k] = String(r.zastepuje).trim();
     if (d && (!from[k] || d < from[k])) from[k] = d;
+    (fileBlocks[k] = fileBlocks[k] || {})[blk(r)] = 1;
+    if (!(u in inFile)) inFile[u] = blk(r);
   });
   const others = [], kept = [], keptBlock = {}, keptOwn = {}, closed = {}, hasBlock = {};
+  const errors = [], warnings = [], notes = [], removed = [], fresh = [], skipped = {}, said = {};
+  const once = (u, list, msg) => { if (!said[u]) list.push(msg); said[u] = 1; };
   existing.forEach(r => {
     if (r.klient === '' || r.klient === undefined) return;
-    const k = lc(r.klient);
+    const k = lc(r.klient), u = unit(r), b = blk(r);
     if (clients.indexOf(k) < 0) { others.push(r); return; }
-    if (own_(r)) { kept.push(r); keptOwn[unit(r)] = 1; return; }            // własny trening klienta zostaje
-    if (zast[k] !== undefined && blk(r) === zast[k]) hasBlock[k] = 1;
-    if (done[unit(r)]) { kept.push(r); keptBlock[unit(r)] = blk(r); return; }
-    if (zast[k] !== undefined && blk(r) === zast[k] && from[k] && day(r.data) >= from[k]) {
-      (closed[k] = closed[k] || {})[unit(r)] = 1;                           // zamknięty: nie wraca do Planu
+    if (own_(r)) { kept.push(r); keptOwn[u] = 1; return; }                  // własny trening klienta zostaje
+    if (zast[k] !== undefined && b === zast[k]) hasBlock[k] = 1;
+    if (done[u]) {
+      kept.push(r); keptBlock[u] = b;
+      if (!closedSes[u] && fileBlocks[k][b] && !(u in inFile)) once(u, warnings, k + ' ' + name(r) + ': serie w Logu bez zamkniętej sesji, zostaje bez zmian');
+      return;
     }
+    if (zast[k] !== undefined && b === zast[k] && from[k] && day(r.data) >= from[k]) {
+      (closed[k] = closed[k] || {})[u] = 'tyg. ' + r.tydzien + ' ' + r.jednostka;   // zamknięty: nie wraca do Planu
+      return;
+    }
+    if (u in inFile) {                                                      // niezrobiona, plik ma tę samą jednostkę
+      if (inFile[u] !== b) once(u, warnings, k + ' ' + name(r) + ': niezrobiona w bloku ' + (b || NO_BLOCK) + ' zastąpiona wierszami bloku ' + (inFile[u] || NO_BLOCK));
+      return;
+    }
+    if (fileBlocks[k][b]) { once(u, removed, k + ': usunięto: ' + name(r) + ' (blok ' + (b || NO_BLOCK) + ')'); return; }
+    kept.push(r);                                                           // inny blok niż w pliku: bez zmian
   });
-  const errors = [], warnings = [], notes = [], fresh = [], skipped = {};
   Object.keys(zast).forEach(k => {
+    const c = Object.keys(closed[k] || {}).map(u => closed[k][u]);
     if (!hasBlock[k]) warnings.push(k + ': zastepuje „' + zast[k] + '”, ale w Planie nie ma takiego bloku');
     else if (!from[k]) warnings.push(k + ': zastepuje „' + zast[k] + '” bez dat w pliku — nic nie zamknięto');
-    else notes.push(k + ': zamknięto ' + Object.keys(closed[k] || {}).length + ' jedn. bloku ' + zast[k]);
+    else notes.push(k + ': zamknięto ' + c.length + ' jedn. bloku ' + zast[k] + (c.length ? ' (' + c.join(', ') + ')' : ''));
   });
   incoming.forEach(r => {
     const u = unit(r);
@@ -1920,7 +1944,7 @@ function mergePlan_(existing, incoming, ses) {
     } else if (!skipped[u]) warnings.push(lc(r.klient) + ' tyg. ' + r.tydzien + ' ' + r.jednostka + ': zrobiona, zostaje bez zmian');
     skipped[u] = 1;
   });
-  return { rows: others.concat(kept, fresh), clients, errors, warnings, notes };
+  return { rows: others.concat(kept, fresh), clients, errors, warnings, notes, removed };
 }
 
 /** Zapisuje całą zakładkę Plan (wiersze z mergePlan_); kolumny układane wg PLAN_HEADERS (starsze arkusze też). */

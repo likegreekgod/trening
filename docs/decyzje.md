@@ -2,6 +2,15 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-12 · Import planu: zakres podmiany tylko blok z pliku
+
+- Błąd: import usuwał wszystkie wiersze klienta bez wpisu w Sesjach, niezależnie od bloku, i nic nie zgłaszał. Plik B2 (tyg. 7–14) skasował niezrobione jednostki B1, w tym dwie z seriami w Logu (klient nie zamknął sesji).
+- Teraz plik podmienia tylko niezrobione jednostki bloków, które sam zawiera (wiersze bez bloku to osobny blok; kilka bloków w pliku działa niezależnie). Inne bloki zostają.
+- „Zrobiona” = wpis w Sesjach LUB co najmniej jedna seria w Logu. Takiej jednostki import nie usuwa ani nie nadpisuje; jednostka z samym Logiem, której nie ma w pliku jej bloku, daje uwagę.
+- Każda usunięta jednostka jest w zakładce Import: „usunięto: tyg. N jednostka J (blok X)”, status „OK (uwagi)”; lista usunięć nie jest przycinana. `zastepuje` wypisuje zamknięte jednostki w nawiasie.
+- Ta sama niezrobiona jednostka (klient, tydzień, jednostka) w pliku z innym blokiem zastępuje dotychczasową z uwagą: id serii nie zawiera bloku, więc dwie takie jednostki w Planie by się zlały. Zrobiona z innym blokiem to nadal błąd.
+- Zamknięcie starego bloku wymaga teraz `zastepuje` (albo pliku tego bloku bez tych jednostek); punkt 3 ustalenia z 26.10 („import i tak podmienia wszystko”) nieaktualny.
+
 ## 2026-10-26 · Import planu: pole `zastepuje`
 
 - Opcjonalne pole wiersza planu `zastepuje` (nazwa bloku): przy imporcie znikają z Planu niezrobione jednostki tego bloku klienta z datą od najwcześniejszej daty klienta w pliku. Zrobione (wpis w Sesjach) i własne (`zrodlo` = klient) zostają; Log i Sesje bez zmian. Jedna wartość na klienta (walidacja), nie jest kolumną Planu.

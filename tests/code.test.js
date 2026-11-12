@@ -154,6 +154,44 @@ test('mergePlan_: zrobione jednostki zostają, kolizja bloków = błąd', () => 
   assert.deepEqual([m.errors.length, m.rows.length], [0, 2]);
 });
 
+test('mergePlan_: plik podmienia tylko swoje bloki; zrobiona = Sesje lub Log; usunięcia raportowane', () => {
+  const R = (w, j, blok, x) => Object.assign({ klient: 'robert', tydzien: w, jednostka: j, nr: 1, cwiczenie: 'X', serie: 3, powt: '5', blok: blok || '' }, x);
+  const ids = m => m.rows.map(r => r.tydzien + r.jednostka + (r.blok || '-') + (r.kg || ''));
+  const b1 = []; for (let w = 1; w <= 6; w++) b1.push(R(w, 'T1', 'B1'), R(w, 'T2', 'B1'));
+  const ses = []; for (let w = 1; w <= 4; w++) ses.push({ klient: 'robert', tydzien: w, jednostka: 'T1' }, { klient: 'robert', tydzien: w, jednostka: 'T2' });
+  const b2 = []; for (let w = 7; w <= 14; w++) b2.push(R(w, 'T1', 'B2'));
+  // B1 tyg. 1–6 (5–6 niezrobione) + plik B2 tyg. 7–14 → B1 w całości zostaje, bez uwag
+  let m = C.mergePlan_(b1.concat(R(1, 'T9', '')), b2, ses, []);
+  assert.deepEqual([m.errors.length, m.warnings.length, m.removed.length, m.rows.length], [0, 0, 0, 12 + 1 + 8]);
+  assert.ok(ids(m).includes('5T1B1') && ids(m).includes('6T2B1') && ids(m).includes('1T9-'));   // wiersz bez bloku też nietykalny
+  // serie w Logu bez wpisu w Sesjach + plik B1 bez tej jednostki → zostaje, uwaga
+  const log = [{ klient: 'robert', tydzien: 5, jednostka: 'T1', seria: 1 }];
+  const fileB1 = b1.filter(r => !(r.tydzien === 5 && r.jednostka === 'T1') && !(r.tydzien === 6 && r.jednostka === 'T2')).map(r => Object.assign({}, r, { kg: 50 }));
+  m = C.mergePlan_(b1, fileB1, ses, log);
+  assert.equal(m.errors.length, 0);
+  assert.ok(ids(m).includes('5T1B1'));
+  assert.match(m.warnings.join(' | '), /robert tyg\. 5 jednostka T1: serie w Logu bez zamkniętej sesji/);
+  // …a niezrobiona 6 T2, której w pliku B1 nie ma, znika i jest zgłoszona
+  assert.ok(!ids(m).some(x => x.startsWith('6T2')));
+  assert.deepEqual(Array.from(m.removed), ['robert: usunięto: tyg. 6 jednostka T2 (blok B1)']);
+  // regresja: zrobione bez zmian (bez kg), niezrobione z pliku (kg 50)
+  assert.ok(ids(m).includes('1T1B1') && ids(m).includes('5T2B150') && ids(m).includes('6T1B150'));
+  assert.equal(m.rows.length, 11);
+  // jednostka z Logu obecna w pliku: zostaje stara, uwaga „zrobiona”
+  m = C.mergePlan_(b1, b1.map(r => Object.assign({}, r, { kg: 50 })), ses, log);
+  assert.ok(ids(m).includes('5T1B1') && !ids(m).includes('5T1B150'));
+  assert.match(m.warnings.join(' | '), /tyg\. 5 T1: zrobiona/);
+  assert.equal(m.removed.length, 0);
+  // plik B1 + B2 naraz: oba bloki wczytane, bez uwag
+  m = C.mergePlan_(b1, b1.slice(8).map(r => Object.assign({}, r, { kg: 50 })).concat(b2), ses, []);
+  assert.deepEqual([m.errors.length, m.warnings.length, m.removed.length, m.rows.length], [0, 0, 0, 8 + 4 + 8]);
+  assert.ok(ids(m).includes('5T1B150') && ids(m).includes('14T1B2'));
+  // ta sama niezrobiona jednostka w pliku z innym blokiem: zastąpiona, uwaga
+  m = C.mergePlan_(b1, [R(6, 'T2', 'B2')], ses, []);
+  assert.ok(ids(m).includes('6T2B2') && !ids(m).includes('6T2B1') && ids(m).includes('6T1B1'));
+  assert.match(m.warnings.join(), /niezrobiona w bloku B1 zastąpiona wierszami bloku B2/);
+});
+
 test('mergePlan_: zastepuje zamyka niezrobione jednostki bloku od pierwszej daty z pliku', () => {
   const R = (k, w, j, data, blok, x) => Object.assign({ klient: k, tydzien: w, jednostka: j, data, nr: 1, cwiczenie: 'X', serie: 3, powt: '5', blok }, x);
   const existing = [
@@ -168,8 +206,10 @@ test('mergePlan_: zastepuje zamyka niezrobione jednostki bloku od pierwszej daty
   const inc = [R('robert', 3, 'T1', '2026-10-12', 'B2', { zastepuje: 'B1' }), R('robert', 3, 'T2', '2026-10-14', 'B2')];
   let m = C.mergePlan_(existing, inc, ses);
   assert.equal(m.errors.length, 0);
-  assert.deepEqual(Array.from(m.notes), ['robert: zamknięto 2 jedn. bloku B1']);
-  assert.deepEqual(m.rows.map(r => r.klient + r.tydzien + r.jednostka), ['ewa1T1', 'robert1T1', 'robert2W1', 'robert3T1', 'robert3T2']);
+  assert.deepEqual(Array.from(m.notes), ['robert: zamknięto 2 jedn. bloku B1 (tyg. 2 T1, tyg. 2 T2)']);
+  assert.equal(m.removed.length, 0);
+  // niezrobiona B1 sprzed pierwszej daty z pliku zostaje: plik B2 nie rusza innych bloków
+  assert.deepEqual(m.rows.map(r => r.klient + r.tydzien + r.jednostka), ['ewa1T1', 'robert1T1', 'robert1T2', 'robert2W1', 'robert3T1', 'robert3T2']);
   // nieistniejący blok = uwaga, nie błąd
   m = C.mergePlan_(existing, [R('robert', 3, 'T1', '2026-10-12', 'B2', { zastepuje: 'B9' })], ses);
   assert.deepEqual([m.errors.length, m.notes.length], [0, 0]);
