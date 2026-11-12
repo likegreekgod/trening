@@ -102,6 +102,21 @@
     if (!ws.length) return Math.max(1, ...plan.map(r => Number(r.week) || 1));
     return ws.filter(w => first[w] <= date).pop() || ws[0];
   };
+  /** kompleks we własnym treningu = jedno ćwiczenie „A + B” z powt. „1+1” (tak samo jak w planach trenera) */
+  L.isComplex = name => /\S\s+\+\s+\S/.test(String(name || ''));
+  /** połączenie dwóch pozycji kreatora: serie i kg z pierwszej, każda nowa część 1 powt. (część będąca już kompleksem zachowuje swoje) */
+  L.ownJoin = (a, b) => {
+    const r = e => L.isComplex(e.name) && /^\d+(\s*\+\s*\d+)+$/.test(String(e.reps).trim()) ? String(e.reps).replace(/\s/g, '') : '1';
+    return { name: a.name + ' + ' + b.name, sets: a.sets, reps: r(a) + '+' + r(b), kg: a.kg || b.kg || '', t: false };
+  };
+  /** rozłączenie kompleksu na osobne ćwiczenia (serie i kg wspólne, powt. z części); null, gdy to nie kompleks */
+  L.ownSplit = e => {
+    if (!L.isComplex(e.name)) return null;
+    const n = String(e.name).split(/\s+\+\s+/), r = String(e.reps).split('+').map(x => x.trim());
+    return n.map((name, i) => ({ name, sets: e.sets, reps: n.length === r.length && /^\d+$/.test(r[i]) ? r[i] : '1', kg: e.kg, t: false }));
+  };
+  /** powtórzenia kompleksu: liczba na każdą część („1+2” dla dwóch części) */
+  L.complexRepsOk = (name, reps) => { const t = String(reps).trim(); return /^\d+(\s*\+\s*\d+)+$/.test(t) && t.split('+').length === String(name).split(/\s+\+\s+/).length; };
   /** następna wolna nazwa własnej jednostki w tygodniu: W1, W2… */
   L.ownNextDay = (plan, week) => {
     const n = plan.filter(r => r.week === week && /^W\d+$/.test(r.day)).map(r => +r.day.slice(1));

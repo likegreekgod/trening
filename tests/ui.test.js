@@ -1393,3 +1393,37 @@ test('Bez planu: klient z dostępem robi własny trening, menu i zakładki dzia�
   assert.equal(await t2.p.isVisible('#nav'), false);
   await t2.ctx.close();
 });
+
+test('Własny trening: kompleks z dwóch ćwiczeń (jedno „A + B”, powt. „1+2”), rozłączenie, filmy obu części', async () => {
+  const calls = [], api = b => b.fn === 'getExNames' ? [['Hammer Curl', 'https://example.test/hc', 'biceps'], ['Pull-up', 'https://example.test/pu', 'plecy; biceps'], ['Plank', '', 'brzuch']] : null;
+  const { ctx, p } = await page(calls, false, { data: Object.assign({}, PRO, { cfg: Object.assign({}, PRO.cfg, { own: true }) }), api });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('#nav [data-tab="plan"]'); await p.click('#own-new'); await p.waitForFunction(() => EXN.list.length > 0);
+  const add = async n => { await p.fill('#ow-q', n); await p.dispatchEvent('#ow-q', 'input'); await p.click(`#ow-res .ow-add[data-n="${n}"]`); };
+  const type = async (sel, v) => { await p.fill(sel, v); await p.dispatchEvent(sel, 'input'); };
+  await add('Hammer Curl'); await add('Pull-up'); await add('Plank');
+  assert.equal((await p.$$('#ow-list [data-join]')).length, 2);                    // pierwsze nie ma poprzedniego
+  await p.click('#ow-list [data-tm="2"]'); assert.equal((await p.$$('#ow-list [data-join]')).length, 1);   // ćwiczenia na czas nie łączymy
+  await type('#ow-list [data-i="0"][data-f="kg"]', '20');
+  await p.click('#ow-list [data-join="1"]');
+  assert.deepEqual(await p.$$eval('#ow-list .ow-it b', b => b.map(x => x.textContent)), ['Hammer Curl + Pull-up', 'Plank']);
+  assert.match(await p.textContent('#ow-list .ow-it'), /kompleks/);
+  assert.equal(await p.inputValue('#ow-list [data-i="0"][data-f="reps"]'), '1+1');
+  assert.equal(await p.inputValue('#ow-list [data-i="0"][data-f="kg"]'), '20');
+  await p.click('#ow-list [data-split="0"]');                                    // rozłącz i połącz ponownie
+  assert.deepEqual(await p.$$eval('#ow-list .ow-it b', b => b.map(x => x.textContent)), ['Hammer Curl', 'Pull-up', 'Plank']);
+  await p.click('#ow-list [data-join="1"]');
+  await type('#ow-list [data-i="0"][data-f="reps"]', '3');
+  await p.click('#ow-save'); assert.match(await p.textContent('#ow-err'), /powtórzenia każdej części/);
+  await type('#ow-list [data-i="0"][data-f="reps"]', '1+2');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'wlasny-kompleks.png') }); }
+  await p.click('#ow-save'); await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.deepEqual(calls.find(c => c.fn === 'addOwnUnit').args[0].exercises, [{ name: 'Hammer Curl + Pull-up', sets: 3, reps: '1+2', kg: '20' }, { name: 'Plank', sets: 3, reps: '30 s', kg: '' }]);
+  assert.deepEqual(await p.$$eval('.card[data-card="1"] a.inf', a => a.map(x => x.getAttribute('href'))), ['https://example.test/hc', 'https://example.test/pu']);
+  assert.equal(await p.getAttribute('.set[data-o="1"][data-s="1"] .reps', 'placeholder'), '3');     // 1+2 = 3 powtórzenia w serii
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(80);
+  assert.deepEqual((({ order, set, name, kg, reps }) => ({ order, set, name, kg, reps }))(lastSet(calls)), { order: 1, set: 1, name: 'Hammer Curl + Pull-up', kg: 20, reps: 3 });
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
