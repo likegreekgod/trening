@@ -15,6 +15,7 @@ Stan na 2026-11-12, aplikacja v35.
 
 ## Ostatnio zrobione
 
+- 12.11: arkusz: ćwiczenia na czas nie wchodzą do tonażu, e1RM ani NL (Podsumowanie, Podsumowanie_cw, partie, Bloki); serie liczą się jak dotąd. Bez zmian w aplikacji.
 - 12.11 (v35): Dyspozycja: sen w odwróconym widoku (7 = bardzo dobry), zapis i suma ankiety bez zmian. Testy „Postęp → Tydzień” naprawione (nie przechodziły w poniedziałki).
 - 12.11 (v34): górny pasek chowa się przy przewijaniu w dół i wraca przy przewijaniu w górę (wszystkie zakładki).
 - 12.11 (v33): własny trening: film „Jak wykonać” od razu po dodaniu ćwiczenia, ćwiczenia na czas („⏱ na czas”, sekundy zamiast powtórzeń), szukanie po partii mięśniowej. Filmy i partie w wyszukiwarce wymagają też scalenia `apps-script/` (wdroży się samo).
@@ -27,7 +28,6 @@ Stan na 2026-11-12, aplikacja v35.
 ## Do zrobienia (uwagi z 22.10)
 
 - **Własny trening: brak kompleksów i serii obiegowych.** Klient składa tylko pojedyncze ćwiczenia (`openOwn` / `applyOwn`). Do zaprojektowania: kompleks „A + B” jako jedno ćwiczenie i obwód/superseria (grupa ćwiczeń robionych na zmianę).
-- **Ćwiczenia na czas w arkuszu.** Podsumowanie i Bloki liczą tonaż jako kg × powt., więc ćwiczenie na czas z ciężarem (np. spacer farmera 30 s) zawyża tonaż. Aplikacja już je pomija.
 
 ## Czeka na Damiana
 
