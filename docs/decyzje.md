@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-12 · Lżejsza karta ćwiczenia (v38, plan v4 PR 1)
+
+- Nagłówek karty podzielony: nazwa z etykietą priorytetu (pod nazwą) po lewej, stała kolumna ikon po prawej: ▶ „Jak wykonać”, „⋯”, strzałka zwijania. Ikony są zawsze w tym samym miejscu, niezależnie od długości nazwy; ćwiczenie bez filmu ma puste miejsce po ▶. Kompleks z kilkoma filmami: ▶ otwiera listę.
+- Pod „⋯”: Komentarz do ćwiczenia, Zamień ćwiczenie, Pomiń. Wpisany komentarz jest widoczny w karcie („Twój komentarz”), pusty nie zajmuje miejsca. „Cofnij zamianę” i „Przywróć” zostają w karcie.
+- Dodawanie wierszy w jednym rzędzie pod seriami: „+ rozgrzewka”, „+ seria (n)”, „+ drop set”, tekst w jednej linii; po zużyciu limitu „+ seria (0)” zostaje wyszarzona (wcześniej znikała).
+- Odrzucone na szkicach: „Jak wykonać” pod „⋯” (klient potrzebuje go przed pierwszą serią nowego ćwiczenia), ikony przy nazwie bez stałej kolumny (skakały zależnie od długości nazwy), „+ rozgrzewka” w linii nagłówków kolumn (ciasno przy „RPE”, wyższa karta).
+- Zapis serii, pominięcia, zamiany i komentarza bez zmian.
+
 ## 2026-11-12 · Obwód / superseria (v37)
 
 - Nowa kolumna Planu `obwod` na końcu nagłówków: jedna litera A–Z. Sąsiednie ćwiczenia jednostki z tą samą literą to obwód (2 ćwiczenia = „Superseria”). Działa w planach trenera z JSON i we własnym treningu klienta. Liczba rund = `serie` (ćwiczenie z mniejszą liczbą serii odpada wcześniej).

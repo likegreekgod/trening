@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-12, aplikacja v37.
+Stan na 2026-11-12, aplikacja v38.
 
 ## Jak pracujemy
 
@@ -15,6 +15,7 @@ Stan na 2026-11-12, aplikacja v37.
 
 ## Ostatnio zrobione
 
+- 12.11 (v38): plan v4 PR 1, lżejsza karta ćwiczenia: ikony ▶ / „⋯” / strzałka w stałej kolumnie nagłówka, Komentarz, Zamień i Pomiń pod „⋯”, jeden rząd „+ rozgrzewka / + seria (n) / + drop set” pod seriami.
 - 12.11 (v37): obwód / superseria: kolumna Planu `obwod` (litera), ramka A1–A3 i przerwa po rundzie na Treningu, „Połącz z poprzednim” (Kompleks / Obwód) w kreatorze własnego treningu. Wymaga też scalenia `apps-script/` (wdroży się samo).
 - 12.11 (v36): własny trening: kompleks „A + B” z kreatora („⛓ Kompleks z poprzednim”, „Rozłącz”), film każdej części od razu.
 - 12.11: arkusz: ćwiczenia na czas nie wchodzą do tonażu, e1RM ani NL (Podsumowanie, Podsumowanie_cw, partie, Bloki); serie liczą się jak dotąd. Bez zmian w aplikacji.
@@ -29,10 +30,11 @@ Stan na 2026-11-12, aplikacja v37.
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** Zacznij od PR 1 (lżejsza karta ćwiczenia): najpierw szkic do akceptacji. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 zrobiony (v38). Następny: PR 2 (podsumowanie po treningu): najpierw szkic do akceptacji i pytanie 2 z planu. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
+- Scalenie PR 1 v4 (v38) i próba nowej karty na telefonie: czy ikony w nagłówku są czytelne, czy „⋯” nie chowa czegoś używanego na co dzień.
 - Próba obwodu na telefonie (własny trening z obwodem albo plan z kolumną `obwod`): czy przewijanie do następnego ćwiczenia i przerwa 1:30 po rundzie pasują.
 - Dopisanie do SKILL.md skilla trenera pola planu `obwod` (litera A–Z, min. 2 ćwiczenia po sobie w jednostce, bez EMOM) i przebudowanie ZIP-a.
 - Uprzedzenie klientów, że od v35 sen ocenia się odwrotnie niż dotąd (7 = bardzo dobry).

@@ -250,20 +250,30 @@
   .ghost{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;border:1px dashed var(--line);border-radius:var(--r);background:transparent;
          color:var(--muted);font:600 13px/1.2 var(--f-body);letter-spacing:.04em;padding:0 12px;text-align:left}
   .ghost small{font:500 12px/1 var(--f-mono);letter-spacing:0;color:var(--muted)}
-  .ghost.w{margin:6px 0 2px}
   .ghost.d{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
-  .ghosts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
-  .ghosts .ghost:only-child,.ghosts .ghost[hidden] + .ghost{grid-column:1 / -1}
+  /* v4: dodawanie wierszy w jednym rzędzie pod seriami; zużyty limit „+ seria” = wyszarzony */
+  .adds{display:flex;gap:6px;margin-top:6px}
+  .adds .ghost{flex:1 1 auto;width:auto;justify-content:center;padding:0 6px;white-space:nowrap;text-align:center}
+  .ghost:disabled{opacity:.45}
   .kgb{display:inline-flex;align-items:center;min-height:44px;border:0;border-radius:0;background:transparent;padding:0 2px;margin:-10px 0;
        font:500 16px var(--f-mono);color:var(--ink);text-decoration:underline dotted 1.5px;text-underline-offset:4px}
-  .ch{align-items:center}
+  /* v4: nazwa po lewej, stała kolumna ikon po prawej (film, więcej, zwiń) – zawsze w tym samym miejscu */
+  .ch{align-items:flex-start;gap:4px}
+  .ft .badge{justify-self:start;margin-top:3px}
+  .acts{flex:none;display:flex;margin:-4px -12px 0 0}
+  .infb,.more,.fold-c{flex:none;width:44px;height:44px;border:0;background:transparent;color:var(--ink-2);display:grid;place-items:center;padding:0;border-radius:var(--r)}
+  .infb svg,.more svg{width:22px;height:22px;display:block}
+  .fold-c{width:44px;margin-left:-6px}
+  .opts.act .opt{display:flex;align-items:center;gap:12px;min-height:52px;font-size:16px;text-decoration:none}
+  .opts.act .opt i{flex:none;width:24px;text-align:center;font-style:normal;color:var(--muted)}
+  .opts.act .opt small{margin-left:auto;color:var(--muted);font-size:13px}
   .fold-b{flex:1;min-width:0;min-height:44px;border:0;background:transparent;padding:0;text-align:left;display:flex;align-items:flex-start;gap:10px;color:inherit}
   .ft{flex:1;min-width:0;display:grid;gap:3px}
-  .chev{flex:none;width:10px;height:10px;margin:8px 4px 0 2px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-135deg);transition:transform .2s}
+  .chev{flex:none;width:10px;height:10px;margin:5px 0 0;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-135deg);transition:transform .2s}
   .fsum{font:500 13px/1.2 var(--f-mono);color:var(--muted);display:none}
   .card.fold .cbody{display:none}
   .card.fold .fsum{display:block}
-  .card.fold .chev{transform:rotate(45deg);margin-top:4px}
+  .card.fold .chev{transform:rotate(45deg);margin-top:-5px}
   .card.fold{padding-top:10px;padding-bottom:10px}
   /* propozycja z planu albo z poprzedniej serii = szary placeholder; wpisana wartość = pełny kolor (do Logu idzie faktyczna) */
   .set input.ph::placeholder{font:700 23px/1 var(--f-display);letter-spacing:.01em;text-transform:none;color:var(--muted);opacity:1}
@@ -463,7 +473,6 @@
   .fl select{min-height:48px;font:400 16px var(--f-body);text-transform:none;letter-spacing:0}
 
   /* zamiana ćwiczenia */
-  .swb,.inf{margin:6px 6px 0 0}
   .cnote{background:var(--surface);border:1px solid var(--accent);border-radius:var(--rc);box-shadow:inset 5px 0 0 var(--accent),var(--shadow);padding:14px 16px 16px 20px;margin-top:var(--gap)}
   .cnote h3{margin:0 0 6px;font:800 22px/1.1 var(--f-display);text-transform:uppercase;color:var(--ink-2)}
   .cn-l{list-style:none;margin:0 0 10px;padding:0}
@@ -568,16 +577,11 @@
   .pl-txt{margin:0;font:500 16px var(--f-mono)}
 
   /* 17.10: narzędzia karty, pominięcie, komentarz, EMOM, skracanie, sygnał */
-  .ctools{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-  .ctools:empty{display:none}
-  .ctools .swb,.ctools .inf{margin:0}
-  .ctools .swapped{flex-basis:100%}
-  .btn.skb{border-color:var(--line);color:var(--muted)}
   .skipped{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:8px;font-size:14px;color:var(--ink-2);border-left:4px solid var(--muted);padding:2px 0 2px 10px}
   .card.skip{box-shadow:inset 4px 0 0 var(--muted),var(--shadow)}
   .card.skip .cn{color:var(--muted);text-decoration:line-through;text-decoration-thickness:2px}
-  details.exn{margin-top:8px;border-top:1px dashed var(--line);padding-top:2px}
-  details.exn summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+  .exn{margin-top:8px;border-top:1px dashed var(--line);padding-top:10px}
+  .exn label{display:block;margin:0 0 6px;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
   .exn-t{font:400 16px/1.35 var(--f-body);resize:vertical;min-height:44px}
   .emom{margin:10px 0 4px;background:var(--panel);color:var(--light-white);border-radius:var(--r);padding:10px 12px;display:grid;gap:8px}
   .em-top{display:flex;align-items:baseline;gap:6px}
@@ -1061,12 +1065,12 @@ function helpCard(){
     <li>Szare liczby w polach to ciężar i powtórzenia z planu. Zrobiłeś tak samo? Po prostu dotknij <b>✓</b>. Inaczej? Wpisz swoją liczbę, nie trzeba nic kasować.</li>
     <li>Po każdej serii wybierz, jak było ciężko, i dotknij <b>✓</b>. Zielony = zapisane.</li>
     <li>Całe ćwiczenie poszło zgodnie z planem? Dotknij <b>„✓ Wszystko jak w planie”</b>.</li>
-    <li>Rozgrzewkę dopiszesz wierszem <b>„+ rozgrzewka”</b> nad seriami. Po ✓ kolejne serie same przejmują ciężar i powtórzenia (szare liczby = propozycja). Pasek −5 / −2,5 / +2,5 / +5 pod bieżącą serią zmienia ją i kolejne; przytrzymanie ±2,5 daje ±1 kg. Dotknięcie podkreślonego ciężaru pokazuje talerze.</li>
-    <li>Seria się nie udała? Dotknij <b>✓</b> jeszcze raz: zmieni się w czerwony <b>✕</b> (nieudana). Trzecie dotknięcie czyści pole. Drop set (od razu lżej, do zmęczenia) dodajesz wierszem <b>„+ drop set”</b> pod seriami. Zrobione ćwiczenie samo się zwija; dotknij nazwy, żeby je otworzyć.</li>
+    <li>Rozgrzewkę dopiszesz przyciskiem <b>„+ rozgrzewka”</b> pod seriami. Po ✓ kolejne serie same przejmują ciężar i powtórzenia (szare liczby = propozycja). Pasek −5 / −2,5 / +2,5 / +5 pod bieżącą serią zmienia ją i kolejne; przytrzymanie ±2,5 daje ±1 kg. Dotknięcie podkreślonego ciężaru pokazuje talerze.</li>
+    <li>Seria się nie udała? Dotknij <b>✓</b> jeszcze raz: zmieni się w czerwony <b>✕</b> (nieudana). Trzecie dotknięcie czyści pole. Drop set (od razu lżej, do zmęczenia) dodajesz przyciskiem <b>„+ drop set”</b> pod seriami. Zrobione ćwiczenie samo się zwija; dotknij nazwy, żeby je otworzyć.</li>
     <li>Żółte pole = seria czeka na wysłanie (brak zasięgu). Wyśle się sama.</li>
     <li>Rwanie i podrzut: dotknij świateł i oceń podejście (Łatwo, Średnio, Walka, Spalone). Pod spodem pojawi się propozycja ciężaru na kolejne serie.</li>
     <li>Dodałeś wiersz przez pomyłkę? Dotknij <b>✕</b> przy jego numerze, a potem <b>„usuń?”</b>.</li>
-    <li>Ćwiczenie opcjonalne możesz <b>„Pomiń”</b>. Brakuje czasu? <b>„Skróć trening”</b> na górze zaproponuje, co pominąć. Zmiana w ćwiczeniu (inny sprzęt, inna liczba serii)? Wpisz ją w <b>„Komentarz do ćwiczenia”</b>.</li>
+    <li>Pod <b>„⋯”</b> przy nazwie ćwiczenia są: komentarz, zamiana i <b>„Pomiń”</b>; <b>▶</b> obok to film „Jak wykonać”. Brakuje czasu? <b>„Skróć trening”</b> na górze zaproponuje, co pominąć. Zmiana w ćwiczeniu (inny sprzęt, inna liczba serii)? Wpisz ją w <b>„⋯” → „Komentarz do ćwiczenia”</b>.</li>
     <li>Film jest opcjonalny: ikona kamery przy serii. Najlepiej krótki, nagrany w 720p. Potrzebny jest zasięg.</li>
     <li>Na koniec przewiń w dół i dotknij <b>„Zakończ i zapisz trening”</b>. Czas liczy się sam od pierwszego wpisu. Włączyłeś za wcześnie? Na dole jest <b>„Licz czas od teraz”</b> i pole do poprawienia minut.</li>
   </ol></details>`;
@@ -2127,6 +2131,33 @@ const fv = el => !el ? '' : el.value.trim() !== '' ? el.value : (el.dataset.ph |
 const setPh = (el, v) => { v = v === undefined || v === null ? '' : String(v); el.dataset.ph = v; el.placeholder = v || (el.classList.contains('kg') ? 'kg' : el.dataset.u || 'powt.'); el.classList.toggle('ph', !!v); };
 const setLabel = (set, kind) => (kind === 'w' || kind === 'd' || SIMPLE) ? set : 'S' + set;
 const dropDefault = (ex, fromKg) => window.TL.dropDefault(ex.kg, fromKg);   // ~80% ostatniego ciężaru, w dół do 2,5 kg
+const PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 8l6 4-6 4z" fill="currentColor"/></svg>';
+const MORE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>';
+/** „⋯” w nagłówku karty: rzadkie akcje (komentarz, zamiana, pominięcie) */
+function openMore(ex){
+  const sk = ex.skip, gone = sk && !ex.sets;
+  openSheet(`<h2 id="sheet-t">${esc(ex.name)}</h2><p class="sub">Więcej akcji</p>
+    <div class="opts act">
+      <button type="button" class="opt" data-mnote="${ex.order}"><i aria-hidden="true">✎</i>Komentarz do ćwiczenia</button>
+      ${SWAP && !gone && !ex.swap ? `<button type="button" class="opt" data-swap="${ex.order}"><i aria-hidden="true">⇄</i>Zamień ćwiczenie</button>` : ''}
+      ${sk ? '' : `<button type="button" class="opt" data-skip="${ex.order}"><i aria-hidden="true">✕</i>${ex.prio === 'B' ? 'Pomiń' : 'Pomiń…<small>z powodem dla trenera</small>'}</button>`}
+    </div>
+    <button type="button" class="btn" data-close>Zamknij</button>`);
+  const on = (sel, f) => { const b = $('#sheet ' + sel); if (b) b.onclick = () => { closeSheet(); f(); }; };
+  on('[data-swap]', () => openSwap(ex));
+  on('[data-skip]', () => openSkip(ex));
+  on('[data-mnote]', () => {
+    setFold(ex.order, false);
+    const box = document.querySelector(`.card[data-card="${ex.order}"] .exn`); if (!box) return;
+    box.hidden = false; box.scrollIntoView({ block: 'center' }); box.querySelector('textarea').focus();
+  });
+}
+/** kompleks z kilkoma filmami: lista „Jak wykonać” */
+function openInf(ex){
+  openSheet(`<h2 id="sheet-t">Jak wykonać</h2><p class="sub">${esc(ex.name)}</p>
+    <div class="opts act">${(ex.infos || []).map(i => `<a class="opt inf" href="${esc(i.u)}" target="_blank" rel="noopener"><i aria-hidden="true">▶</i>${esc(i.n)}</a>`).join('')}</div>
+    <button type="button" class="btn" data-close>Zamknij</button>`);
+}
 function card(ex, tag){
   const { warm, extra, drop } = loggedSets(ex), allowX = allowedExtra(ex), nd = Math.max(drop, plannedDrops(ex));
   let rows = '', allDone = true;
@@ -2140,26 +2171,27 @@ function card(ex, tag){
     : SIMPLE
     ? `<div class="set-head set simple"><div class="lbl">#</div><div class="lbl">kg</div><div class="lbl">${rl}</div><div class="lbl">jak ciężko?</div><div></div><div></div></div>`
     : `<div class="set-head set"><div></div><div class="lbl">kg</div><div class="lbl">${rl}</div><div class="lbl">${SCALE}</div><div></div><div></div></div>`;
-  const tools = `<div class="ghosts">
-      ${allowX > 0 ? `<button type="button" class="ghost" data-extra="${ex.order}" ${extra >= allowX ? 'hidden' : ''}>+ seria <small>zostało ${Math.max(0, allowX - extra)}</small></button>` : ''}
+  const tools = `<div class="adds">
+      <button type="button" class="ghost w" data-warm="${ex.order}">+ rozgrzewka</button>
+      ${allowX > 0 ? `<button type="button" class="ghost" data-extra="${ex.order}" ${extra >= allowX ? 'disabled' : ''}>+ seria (${Math.max(0, allowX - extra)})</button>` : ''}
       <button type="button" class="ghost d" data-drop="${ex.order}">+ drop set</button>
     </div>`;
-  const warmRow = `<button type="button" class="ghost w" data-warm="${ex.order}">+ rozgrzewka</button>`;
   const dropInfo = plannedDrops(ex) ? `<div class="hint">+ ${plannedDrops(ex)} × drop set po ostatniej serii (ok. −20% ciężaru, do upadku technicznego).</div>` : '';
   const sk = ex.skip, gone = sk && !ex.sets, emom = isEmom(ex) && !gone;
   const note = exNote(ex);
-  const noteBox = `<details class="exn" ${note ? 'open' : ''}><summary>Komentarz do ćwiczenia${note ? '' : ' (opcjonalnie)'}</summary>
-      <textarea class="exn-t" data-note="${ex.order}" rows="${Math.min(5, Math.max(1, note.split('\n').length))}" maxlength="500" placeholder="np. 3×10 na TRX zamiast wyciągu" aria-label="Komentarz do ćwiczenia ${esc(ex.name)}">${esc(note)}</textarea></details>`;
+  // komentarz: pusty schowany (otwiera go „⋯”), wpisany widoczny w karcie
+  const noteBox = `<div class="exn" ${note ? '' : 'hidden'}><label for="exn-${ex.order}">Twój komentarz</label>
+      <textarea class="exn-t" id="exn-${ex.order}" data-note="${ex.order}" rows="${Math.min(5, Math.max(1, note.split('\n').length))}" maxlength="500" placeholder="np. 3×10 na TRX zamiast wyciągu" aria-label="Komentarz do ćwiczenia ${esc(ex.name)}">${esc(note)}</textarea></div>`;
   const skipLine = sk ? `<div class="skipped"><span>${gone ? 'Pominięte' : 'Skrócone do ' + ex.sets + ' z ' + ex.planSets + ' ' + plural(ex.planSets, 'serii', 'serii', 'serii')}${sk.why ? ' · ' + esc(sk.why) : ''}</span><button type="button" class="btn sm" data-unskip="${ex.order}">Przywróć</button></div>` : '';
+  // film „Jak wykonać”: ikona w nagłówku (jeden film = link, kilka = lista); bez filmu puste miejsce, żeby „⋯” i strzałka stały w miejscu
+  const infs = ex.swap ? [] : (ex.infos || []);
+  const infBtn = infs.length === 1 ? `<a class="infb inf" href="${esc(infs[0].u)}" target="_blank" rel="noopener" aria-label="Jak wykonać: ${esc(ex.name)}">${PLAY_SVG}</a>`
+    : infs.length ? `<button type="button" class="infb" data-inf="${ex.order}" aria-label="Jak wykonać: ${esc(ex.name)} (${infs.length} filmy)">${PLAY_SVG}</button>` : '<span class="infb" aria-hidden="true"></span>';
   const top = `<div class="card ${ex.prio === 'K' ? 'k' : ''} ${oly ? 'oly' : ''} ${gone ? 'skip' : ''}" data-card="${ex.order}">
-    <div class="ch"><button type="button" class="fold-b" data-fold="${ex.order}" aria-expanded="true">${tag ? `<span class="gl">${tag}</span>` : ''}<span class="ft"><span class="cn">${esc(ex.name)}</span><span class="fsum"></span></span><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span><i class="chev" aria-hidden="true"></i></button></div>
+    <div class="ch"><button type="button" class="fold-b" data-fold="${ex.order}" aria-expanded="true">${tag ? `<span class="gl">${tag}</span>` : ''}<span class="ft"><span class="cn">${esc(ex.name)}</span><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span><span class="fsum"></span></span></button>
+      <div class="acts">${infBtn}<button type="button" class="more" data-more="${ex.order}" aria-label="Więcej akcji: ${esc(ex.name)}">${MORE_SVG}</button><button type="button" class="fold-c" data-fold="${ex.order}" aria-expanded="true" aria-label="Zwiń albo rozwiń: ${esc(ex.name)}"><i class="chev" aria-hidden="true"></i></button></div></div>
     <div class="cbody">
-    <div class="ctools">
-    ${ex.swap ? `<div class="swapped"><span>Zamiast: ${esc(ex.swap.from)} · ${esc(ex.swap.why)}</span><button type="button" class="btn sm" data-unswap="${ex.order}">Cofnij zamianę</button></div>`
-      : SWAP && !gone ? `<button type="button" class="btn sm swb" data-swap="${ex.order}">⇄ Zamień ćwiczenie</button>` : ''}
-    ${!ex.swap ? (ex.infos || []).map((i, n, a) => `<a class="btn sm inf" href="${esc(i.u)}" target="_blank" rel="noopener">▶ ${a.length > 1 ? esc(i.n) : 'Jak wykonać'}</a>`).join('') : ''}
-    ${sk ? '' : `<button type="button" class="btn sm skb" data-skip="${ex.order}">${ex.prio === 'B' ? 'Pomiń' : 'Pomiń…'}</button>`}
-    </div>
+    ${ex.swap ? `<div class="swapped"><span>Zamiast: ${esc(ex.swap.from)} · ${esc(ex.swap.why)}</span><button type="button" class="btn sm" data-unswap="${ex.order}">Cofnij zamianę</button></div>` : ''}
     ${skipLine}`;
   if (gone) return top + noteBox + '</div></div>';
   return top + `
@@ -2170,7 +2202,6 @@ function card(ex, tag){
     ${ex.note ? `<div class="note">${esc(ex.note)}</div>` : ''}
     ${emom ? emomBox(ex) : ''}
     ${head}
-    ${warmRow}
     <div class="sets">${rows}</div>
     ${tools}
     ${SIMPLE && !oly ? `<button class="btn all" data-all="${ex.order}" ${allDone ? 'hidden' : ''}>✓ Wszystko jak w planie</button>` : ''}
@@ -2304,7 +2335,7 @@ function foldSum(o){
 }
 function setFold(o, on, keep = true){
   const c = document.querySelector(`.card[data-card="${o}"]`); if (!c) return;
-  c.classList.toggle('fold', on); c.querySelector('.fold-b').setAttribute('aria-expanded', String(!on));
+  c.classList.toggle('fold', on); c.querySelectorAll('[data-fold]').forEach(b => b.setAttribute('aria-expanded', String(!on)));
   if (keep) { const m = foldGet(); m[foldKey(o)] = on ? 1 : 0; try { localStorage.setItem(FK, JSON.stringify(m)); } catch (e) {} }
 }
 function bindFold(exs){
@@ -2406,7 +2437,7 @@ function bind(exs, s0){
       last.querySelector('.n').insertAdjacentHTML('beforeend', '<button class="del" aria-label="usuń serię">✕</button>');
     });
     const b = document.querySelector(`[data-extra="${o}"]`);
-    if (b) { const left = allowedExtra(ex) - rowsOf(o, 'x').length; b.hidden = left <= 0; b.innerHTML = '+ seria <small>zostało ' + Math.max(0, left) + '</small>'; }
+    if (b) { const left = allowedExtra(ex) - rowsOf(o, 'x').length; b.disabled = left <= 0; b.textContent = '+ seria (' + Math.max(0, left) + ')'; }
   };
   const addRow = (o, html, after, before) => {
     if (after) after.insertAdjacentHTML('afterend', html); else before.insertAdjacentHTML('beforebegin', html);
@@ -2415,9 +2446,9 @@ function bind(exs, s0){
   exs.forEach(ex => refreshDel(ex.order));
   document.querySelectorAll('[data-plates]').forEach(b => b.onclick = () => openPlates(exOf(b.dataset.plates)));
   exs.forEach(updateSug);
-  document.querySelectorAll('[data-swap]').forEach(b => b.onclick = () => openSwap(exOf(b.dataset.swap)));
+  document.querySelectorAll('[data-more]').forEach(b => b.onclick = () => openMore(exOf(b.dataset.more)));
+  document.querySelectorAll('[data-inf]').forEach(b => b.onclick = () => openInf(exOf(b.dataset.inf)));
   document.querySelectorAll('[data-unswap]').forEach(b => b.onclick = () => { setSwap(exOf(b.dataset.unswap), null); toast('Wrócono do ćwiczenia z planu.'); renderTrening(); });
-  document.querySelectorAll('[data-skip]').forEach(b => b.onclick = () => openSkip(exOf(b.dataset.skip)));
   document.querySelectorAll('[data-unskip]').forEach(b => b.onclick = () => { unSkip(exOf(b.dataset.unskip)); toast('Przywrócono ćwiczenie.'); renderTrening(); });
   // komentarz do ćwiczenia: 1 linia, rośnie z treścią; zapis po wyjściu z pola
   document.querySelectorAll('[data-note]').forEach(t => {
