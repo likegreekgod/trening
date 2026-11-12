@@ -1,0 +1,110 @@
+# Plan v4: odświeżenie wyglądu i nowe funkcje
+
+Plan uzgodniony z Damianem 12.11.2026 (rozmowa „czy możemy usprawnić wygląd i funkcje”). Ten plik wystarcza, żeby zacząć pracę w nowej rozmowie: przeczytaj go razem z `docs/stan.md`, nie trzeba odtwarzać wcześniejszych ustaleń.
+
+Stan wyjściowy: aplikacja v37, `main` po PR #60 (obwód / superseria). `npm test` = 142 testy, wszystkie zielone.
+
+## Zasady (obowiązują w każdym PR)
+
+- Styl Pomost zostaje: karty, tokeny kolorów z `:root`, oba motywy, cele dotyku ≥ 44 px, etykiety ≥ 12 px. To odświeżenie, nie nowy wygląd.
+- **Każda zmiana wyglądu: najpierw szkic do akceptacji, potem kod.** Szkic to zrzut 390×844 zrobiony na prawdziwych stylach aplikacji (Playwright, atrapa API, podmieniony fragment DOM), wysłany Damianowi jako obraz. Bez akceptacji nie koduj.
+- Nie zmieniaj logiki zapisu: id serii, typy serii, `payloadOf`, kolejka offline, wysyłka filmów, tryby PROSTY i PRO.
+- Bez nowych zależności w `web/`, wszystko inline; czyste funkcje do `web/lib.js` z testem w `tests/lib.test.js`.
+- Każdy PR: gałąź → `npm test` → podbicie `VERSION` w `web/sw.js` (gdy rusza `web/`) → push → link `compare/main...gałąź?expand=1&title=…&body=…`. Damian scala sam i pisze „ok”.
+- Po każdym PR zaktualizuj tabelę „Stan” na dole tego pliku, `docs/stan.md` i (gdy doszło ustalenie) `docs/decyzje.md` na górze.
+- Różnice między klientami tylko flagami z `cfg`, nigdy po imieniu.
+- Animacje wyłączane przy `prefers-reduced-motion`.
+
+## Kolejność
+
+Polecany pakiet (PR 1–4) Damian zaakceptował co do kierunku. PR 5–9 to dalsze kroki; przed każdym z nich zapytaj, czy dalej chce.
+
+### PR 1 · Lżejsza karta ćwiczenia
+
+Cel: w karcie widać przede wszystkim serie; rzadkie akcje nie zajmują miejsca.
+
+- Dziś w karcie (`card(ex, tag)`, web/index.html ok. linii 2130) stale widoczne są: „Pomiń / Pomiń…”, „Zamień ćwiczenie”, „+ rozgrzewka”, „+ seria”, „+ drop set”, „Jak 1. seria”, komentarz do ćwiczenia.
+- Propozycja do szkicu: jeden przycisk „⋯” w nagłówku karty otwiera `#sheet` (`openSheet`) z akcjami rzadkimi: Pomiń, Zamień, + rozgrzewka, + drop set, Komentarz. W karcie zostają: recepta, „Ostatnio”, serie, „+ seria”, „Jak wykonać”.
+- Uwaga na testy: wiele testów UI klika `[data-skip]`, `[data-warm]`, `.exn-t`, „+ drop set” wprost w karcie. Albo zachowaj te same atrybuty na przyciskach w oknie i dopisz w testach otwarcie „⋯”, albo zostaw w DOM ukryte odpowiedniki. Wybierz jedno i trzymaj się go.
+- Komentarz, który już jest wpisany, musi być widoczny w karcie bez otwierania okna (dziś `details.exn` jest wtedy otwarte).
+- Do decyzji Damiana na szkicu: co dokładnie chowamy (np. czy „+ rozgrzewka” zostaje na wierzchu).
+
+### PR 2 · Podsumowanie po treningu
+
+Cel: po „Zakończ i zapisz jednostkę” klient widzi wynik, a nie tylko toast.
+
+- Dziś: `sessCard(s0)` (ok. 2201) i `$('#saveSess').onclick` (ok. 2480) zapisują `logSession` i zostają na ekranie.
+- Propozycja: po zapisie okno albo karta „Trening zrobiony”: czas, serie zrobione / plan, tonaż (bez ćwiczeń na czas), rekordy z tej jednostki, porównanie tonażu i czasu do poprzedniego razu tej samej jednostki (ten sam `day` w poprzednim tygodniu) albo do średniej.
+- Dane są w telefonie: `doneSets`, `records`, `weekSummary` w lib.js. Nowa czysta funkcja np. `unitSummary(sets, plan, week, day)` z testem.
+- Bez sieci działa tak samo (zapis idzie do kolejki).
+- Przyciski: „Zobacz postęp” (zakładka Postęp → Tydzień), „Zamknij”.
+
+### PR 3 · Historia ćwiczenia w karcie
+
+Cel: dotknięcie „Ostatnio: kg × powt. · RPE” pokazuje, jak szło wcześniej.
+
+- Dziś „Ostatnio” liczy `lastTop(logs, name, week, day)` (lib.js ok. 200, użycie ok. 1933).
+- Propozycja: „Ostatnio” jako przycisk → `#sheet` z ostatnimi 5 jednostkami tego ćwiczenia (data, najlepsza seria, wszystkie serie w skrócie, RPE), mały wykres `chartLine` (e1RM albo najlepsze kg w bojach, jak w Postęp → Siła: `strengthSeries`).
+- Nowa czysta funkcja np. `exHistory(sets, name, n)` z testem. Zamienione ćwiczenie liczy się pod nazwą wykonaną.
+
+### PR 4 · Rekord w chwili zapisu
+
+Cel: gdy zapisana seria bije dotychczasowy wynik, klient widzi to od razu.
+
+- Miejsce: `save` w `bindRow` (ok. 2346), po `putLocal`.
+- Rekord liczony jak w Postępie (`records` w lib.js): e1RM poza bojami, najlepsze zaliczone kg w bojach; tylko seria zaliczona (✓), nie rozgrzewka, nie FAIL, nie ćwiczenie na czas.
+- Forma do szkicu: krótki znacznik przy wierszu serii („rekord”) + toast; bez dźwięku, żeby nie mylić z sygnałem przerwy.
+- Uwaga: pierwsza w historii seria ćwiczenia nie jest rekordem (brak punktu odniesienia), tak jak w „Rekordy tygodnia”.
+
+### PR 5 · Ekran „dziś”
+
+- Na górze Treningu jedna karta: tytuł jednostki, liczba ćwiczeń, szacowany czas (`SET_SEC` + `restSec`, jak w `cutPlan`), przycisk „Zacznij” (przewija do pierwszego niezrobionego ćwiczenia). Dzień bez jednostki: „Dziś wolne” + najbliższa jednostka.
+- Pasek tygodnia (`weekBar`), `notesCard`, `readyBanner`, `helpCard` zostają pod spodem; do szkicu, czy mniejsze.
+
+### PR 6 · Dopracowanie ruchu i timera
+
+- Płynne zwijanie kart (dziś klasa `fold` bez animacji), krótka animacja ✓, kołowy albo wyraźniejszy timer przerwy (`#rest`, `restTick`), lepsze puste stany (brak planu, brak historii).
+- Tylko CSS i drobny JS; nic w zapisie.
+
+### PR 7 · Podpowiedzi przy pierwszym użyciu
+
+- Krótkie dymki zamiast długiej pomocy (`helpCard`, ok. 1055): pierwsza seria (✓ / ✕), kamera, przytrzymanie dnia w pasku tygodnia, „⋯” w karcie.
+- Każda pokazana raz, stan w localStorage (np. `tip_<klucz>`), z „Rozumiem”.
+
+### PR 8 · Tryb skupienia (największa zmiana, osobna decyzja)
+
+- Jedno ćwiczenie na ekranie, przesunięcie palcem do następnego, pasek postępu jednostki, obwód jako A1 → A2 → A3.
+- Najpierw szkic do porównania z obecnym widokiem. Proponowane jako **przełącznik** (lista / skupienie, zapamiętany w localStorage), a nie zamiana, żeby nie zmieniać nawyków klientom z dnia na dzień.
+- Ryzyko: prawie wszystkie testy UI zakładają, że wszystkie karty są w DOM. W trybie skupienia zostaw wszystkie karty w DOM i pokazuj jedną (CSS), wtedy logika i testy listy zostają.
+
+### PR 9 · Funkcje wymagające arkusza
+
+- **Raport po bloku dla klienta:** karta w Postępie z danych `computeBlocks_` (wykonanie, tonaż, zmiana e1RM, najlepsze boje). `getData` musiałby zwracać wiersze Bloków klienta; bez „wniosków” trenera, chyba że Damian zdecyduje inaczej.
+- **Notatka trenera do jednostki:** nowa kolumna Planu na końcu nagłówków (np. `uwagi_jedn`, wypełniana w pierwszym wierszu jednostki), pokazana na górze Treningu. Wymaga wpisu w SKILL.md skilla trenera.
+
+## Otwarte pytania do Damiana (zadaj przy odpowiednim PR)
+
+1. PR 1: które akcje zostają na wierzchu karty, a które idą pod „⋯”.
+2. PR 2: porównanie do poprzedniej takiej samej jednostki czy do średniej z 4 tygodni.
+3. PR 4: czy rekord pokazywać też w trybie PROSTY (propozycja: tak).
+4. PR 8: przełącznik czy nowy domyślny widok.
+5. PR 9: czy klient ma widzieć „wnioski” trenera z zakładki Bloki.
+6. Czy przed szkicami zrobić krótki przegląd kilku popularnych aplikacji treningowych (propozycje wyżej są z doświadczenia, nie z aktualnego przeglądu rynku).
+
+## Odrzucone wcześniej (nie proponuj ponownie)
+
+Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od zera, pokazywanie klientowi „film czeka na komentarz”. Pełna lista: `docs/decyzje.md`, „Odrzucone i dlaczego”.
+
+## Stan
+
+| PR | Zakres | Stan |
+|---|---|---|
+| 1 | Lżejsza karta ćwiczenia | do zrobienia (szkic) |
+| 2 | Podsumowanie po treningu | do zrobienia (szkic) |
+| 3 | Historia ćwiczenia w karcie | do zrobienia (szkic) |
+| 4 | Rekord w chwili zapisu | do zrobienia (szkic) |
+| 5 | Ekran „dziś” | po decyzji |
+| 6 | Ruch i timer | po decyzji |
+| 7 | Podpowiedzi przy pierwszym użyciu | po decyzji |
+| 8 | Tryb skupienia | po decyzji, osobny szkic |
+| 9 | Raport po bloku, notatka do jednostki | po decyzji |

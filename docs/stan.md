@@ -27,9 +27,9 @@ Stan na 2026-11-12, aplikacja v37.
 - 25.10 (v32): start bez klucza (iOS: aplikacja z ekranu głównego ma osobną pamięć i nie dostaje `?k=`) pokazuje pole „Wklej link od trenera lub kod” (`askKey`, lib `keyFrom`) zamiast komunikatu.
 - 22.10 (v30–v31): zakładka Trener (wszystkie komentarze trenera), Przegląd `filmy_bez_kom_7dni`, Postęp → Tydzień. Klienci poinformowani.
 
-## Do zrobienia (uwagi z 22.10)
+## Do zrobienia
 
-- Brak otwartych uwag z 22.10 (kompleks i obwód zrobione 12.11).
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** Zacznij od PR 1 (lżejsza karta ćwiczenia): najpierw szkic do akceptacji. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 

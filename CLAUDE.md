@@ -12,6 +12,7 @@ Rozmawiaj z Damianem po polsku, zwięźle. Interfejs aplikacji jest po polsku.
 - `docs/ui-v2-prototyp.html`: prototyp v2 na danych przykładowych, wzorzec wyglądu i kod komponentów (`track()`, `analyse()`, `sugOly`, `verdict`). Docelowy styl: **Pomost**; wariant „Obecny” służy tylko do porównania.
 - `docs/ui-v2-plan.md`: kolizje `web/` ze specyfikacją i podział v2 na PR-y. Pracuj w tej kolejności; po każdym PR zaktualizuj plik.
 - `docs/plan-v3.md`: plan v3 (przegląd dla trenera, menu Trening, zakładka Ćwiczenia, alert mailowy) ze stanem PR-ów.
+- `docs/plan-v4.md`: plan v4 (odświeżenie wyglądu i nowe funkcje: lżejsza karta, podsumowanie po treningu, historia ćwiczenia, rekord przy zapisie, dalej ekran „dziś” i tryb skupienia) ze stanem PR-ów. **Bieżąca praca.**
 
 ## Architektura
 
