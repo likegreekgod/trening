@@ -2,6 +2,11 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-12 · Ćwiczenia na czas poza tonażem w arkuszu
+
+- Ćwiczenie z `Plan.powt` w czasie („30 s”, „2 min”; `timed_` w Code.gs, ten sam wzorzec co `timeUnit` w lib.js) nie wchodzi do tonażu w Podsumowaniu, Podsumowanie_cw, Podsumowanie_partie i Blokach ani do tonażu planowanego, e1RM i NL. Seria dalej liczy się do wykonania, serii roboczych i twardych.
+- Rozpoznanie idzie po wierszu Planu (w Logu `powt` to sama liczba sekund). Zakładki przeliczają się w całości przy każdym `podsumowanie`, więc wcześniejsze tygodnie poprawią się same po wdrożeniu.
+
 ## 2026-11-12 · Dyspozycja: sen w odwróconym widoku
 
 - Klienci mylili skalę snu (wszędzie 1 = dobrze, a sen ocenia się odruchowo „wyżej = lepiej”). Sen pokazujemy odwrotnie: 1 = bardzo zły, 7 = bardzo dobry. Stres, zmęczenie i bolesność bez zmian (1 = brak).

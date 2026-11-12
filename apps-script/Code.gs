@@ -828,6 +828,8 @@ function repsOf_(v) {
   if (/^\d+(\s*\+\s*\d+)+$/.test(t)) return t.split('+').reduce((a, b) => a + (parseInt(b, 10) || 0), 0);
   return parseInt(t, 10) || 0;
 }
+/** ćwiczenie na czas: Plan.powt „30 s”, „45 sek”, „2 min” (jak timeUnit w web/lib.js); wtedy Log.powt to sekundy, nie powtórzenia */
+const timed_ = v => /^\s*\d+(?:[.,]\d+)?\s*(sekund|sek|sec|s|min)(?![a-ząćęłńóśźż])/i.test(String(v === undefined || v === null ? '' : v));
 function groupOf_(g, name) {
   const G = String(g || '').trim().toUpperCase();
   if (GROUPS.indexOf(G) >= 0) return G;
@@ -898,7 +900,7 @@ function computeSummary_(plan, log, ses, klienci, opts) {
     const a = acc(c, w), k = key(c, r.tydzien, r.jednostka, r.nr); a.planW[r.tydzien] = 1;
     if (optB_(r)) a.optPlan++;
     if (!(optB_(r) && k in SK)) a.planned += n_(r.serie) || 0;              // pominięte / skrócone opcjonalne poza wykonaniem
-    const pk = n_(r.kg), pr = repsOf_(r.powt);
+    const pk = n_(r.kg), pr = timed_(r.powt) ? 0 : repsOf_(r.powt);       // na czas: bez tonażu
     if (pk > 0 && pr > 0) a.planTon += (n_(r.serie) || 0) * pr * pk;
   });
 
@@ -921,7 +923,8 @@ function computeSummary_(plan, log, ses, klienci, opts) {
     const x = exOf(a, name);
     if (optB_(pr) && !own_(pr)) a.optDone[pk] = 1;
     const typ = String(l.typ || ''), fail = /FAIL/.test(typ), drop = /DROP/.test(typ) || /^D/i.test(s);
-    const kg = n_(l.kg), reps = n_(l.powt), rpe = n_(l.rpe);
+    // ćwiczenie na czas: seria się liczy (wykonanie, twarde), ale sekundy nie wchodzą do tonażu, NL ani e1RM
+    const kg = n_(l.kg), reps = timed_(pr.powt) ? 0 : n_(l.powt), rpe = n_(l.rpe);
     a.work++; x.sets++;
     if (own_(pr) || (optB_(pr) && pk in SK)) { /* własny trening, skrócone opcjonalne: objętość tak, wykonanie planu nie */ }
     else if (/^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) a.donePlanned++; else a.addDrop++;
@@ -1105,7 +1108,7 @@ function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
     const c = String(l.klient).toLowerCase(), s = String(l.seria), x = U[key(c, l.tydzien, l.jednostka)];
     if (!x || /^R/i.test(s)) return;
     const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
-    const fail = /FAIL/.test(String(l.typ || '')), kg = n_(l.kg), reps = n_(l.powt), rpe = n_(l.rpe);
+    const fail = /FAIL/.test(String(l.typ || '')), kg = n_(l.kg), reps = timed_(pr.powt) ? 0 : n_(l.powt), rpe = n_(l.rpe);
     if (!own_(pr) && !(optB_(pr) && key(c, l.tydzien, l.jednostka, l.nr_cw) in SK) && /^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) x.donePlanned++;
     if (kg > 0 && reps > 0) x.ton += kg * reps;
     const name = String(l.cwiczenie), grp = groupOf_(pr.grupa, name);
@@ -1342,7 +1345,7 @@ function computeParts_(plan, log, ses, dictRows, opts) {
     if (!c || !w || /^R/i.test(s)) return;
     const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
     let parts = partsOf(l.cwiczenie); if (!parts.length) parts = partsOf(pr.cwiczenie);
-    const typ = String(l.typ || ''), kg = n_(l.kg), reps = n_(l.powt), rpe = n_(l.rpe);
+    const typ = String(l.typ || ''), kg = n_(l.kg), reps = timed_(pr.powt) ? 0 : n_(l.powt), rpe = n_(l.rpe);
     parts.forEach(part => {
       const b = B[key(c, w, part)] || (B[key(c, w, part)] = [c, w, part, 0, 0, 0]);
       b[3]++;

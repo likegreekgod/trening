@@ -621,3 +621,22 @@ test('podglad_: 5 ostatnich sesji każdej osoby, plan vs wykonanie, notatki', ()
   assert.equal(r2.filter(r => r[H('klient')] === 'Anna')[0][H('data')], '2026-10-22');
   assert.equal(C.podglad_([], many, [], kl, { limit: 2 }).filter(r => r[H('cwiczenie')] === '— sesja —').length, 8);
 });
+
+test('ćwiczenie na czas („30 s”): seria się liczy, sekundy nie wchodzą do tonażu, e1RM ani NL', () => {
+  for (const [v, t] of [['30 s', true], ['45 sek', true], ['2 min', true], ['30s/str', true], ['8', false], ['6-8', false], ['8/str', false], ['10 m', false], ['1+1', false], ['', false], [null, false]])
+    assert.equal(C.timed_(v), t, String(v));
+  const R = (nr, x) => Object.assign({ klient: 'robert', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr, cwiczenie: 'Przysiad tylny', prio: 'A', serie: 2, powt: '5', kg: 100, procent: 0.8, blok: 'B1' }, x || {});
+  const plan = [R(1), R(2, { cwiczenie: 'Spacer farmera', powt: '30 s', kg: 40, procent: 0.5 })];
+  const L = (nr, s, kg, powt, cw) => ({ klient: 'robert', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr_cw: nr, cwiczenie: cw, seria: s, kg, powt, rpe: 8, wykonane: 'TAK', typ: '' });
+  const log = [L(1, 1, 100, 5, 'Przysiad tylny'), L(1, 2, 100, 5, 'Przysiad tylny'), L(2, 1, 40, 30, 'Spacer farmera'), L(2, 2, 40, 30, 'Spacer farmera')];
+  const sum = C.computeSummary_(plan, log, [], []), H = C.SUM_HEADERS, row = sum.rows[0], col = h => row[H.indexOf(h)];
+  assert.equal(col('tonaz_kg'), 1000);                                             // bez 2 × 40 kg × 30 s
+  assert.equal(col('serie_rob'), 4); assert.equal(col('serie_twarde'), 4); assert.equal(col('wykonanie_%'), 100);
+  const XH = C.SUMX_HEADERS, far = sum.exRows.find(r => r[XH.indexOf('cwiczenie')] === 'Spacer farmera');
+  assert.deepEqual([far[XH.indexOf('serie')], far[XH.indexOf('tonaz_kg')], far[XH.indexOf('e1RM_max')], far[XH.indexOf('NL')]], [2, 0, '', '']);
+  const ses = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', start: d(1, 0) + 'T17:00:00Z' }];
+  const b = C.computeBlocks_(plan, log, ses, [], [], {}), BH = C.BLOK_HEADERS;
+  assert.equal(b[0][BH.indexOf('tonaz_kg')], 1000); assert.equal(b[0][BH.indexOf('wykonanie_%')], 100);
+  const parts = C.computeParts_([R(1), R(2, { powt: '30 s' })], log.map(l => Object.assign({}, l, { cwiczenie: 'Przysiad tylny' })), [], CW);
+  assert.deepEqual(plain(parts).map(r => r.slice(2)), [['czworogłowe', 4, 4, 1000], ['pośladki', 4, 4, 1000]]);
+});
