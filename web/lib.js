@@ -106,15 +106,31 @@
   };
   /**
    * wyszukiwarka ćwiczeń: najpierw ćwiczenia z planu klienta, potem baza [[nazwa, film]]; wszystkie słowa zapytania muszą
-   * wystąpić w nazwie (bez wielkości liter i polskich znaków). → [{name, film, mine}]
+   * wystąpić w nazwie (bez wielkości liter i polskich znaków). Kolejność w obu częściach wg trafności: dokładna nazwa,
+   * nazwa zaczynająca się od zapytania, słowa nazwy zaczynające się od słów zapytania, reszta; przy remisie krótsza nazwa.
+   * → [{name, film, mine}]
    */
   L.exSearch = (planNames, base, q, limit = 12) => {
-    const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
-    const words = fold(q).split(/\s+/).filter(Boolean), hit = n => words.every(w => fold(n).includes(w)), seen = {}, out = [];
+    const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l');
+    const words = fold(q).split(/\s+/).filter(Boolean), phrase = words.join(' '), seen = {};
     const film = {}; (base || []).forEach(b => { film[fold(b[0])] = !!b[1]; });
-    (planNames || []).forEach(n => { const k = fold(n); if (!seen[k] && hit(n)) { seen[k] = 1; out.push({ name: n, film: !!film[k], mine: true }); } });
-    if (words.length) (base || []).forEach(b => { const k = fold(b[0]); if (!seen[k] && hit(b[0])) { seen[k] = 1; out.push({ name: b[0], film: !!b[1], mine: false }); } });
-    return out.slice(0, limit);
+    const rank = k => {
+      if (k === phrase) return 0;
+      if (k.startsWith(phrase)) return 1;
+      const t = k.split(/[^a-z0-9]+/);
+      return words.every(w => t.some(x => x.startsWith(w))) ? 2 : 3;
+    };
+    const pick = (names, mine) => {
+      const r = [];
+      names.forEach((n, i) => {
+        const k = fold(n);
+        if (seen[k] || !words.every(w => k.includes(w))) return;
+        seen[k] = 1; r.push({ name: n, film: !!film[k], mine, _r: words.length ? rank(k) : 0, _l: words.length ? k.length : 0, _i: i });
+      });
+      return r.sort((x, y) => x._r - y._r || x._l - y._l || x._i - y._i).map(x => ({ name: x.name, film: x.film, mine: x.mine }));
+    };
+    const out = pick(planNames || [], true);
+    return (words.length ? out.concat(pick((base || []).map(b => b[0]), false)) : out).slice(0, limit);
   };
   L.blockInfo = (plan, week) => {
     const r = plan.find(x => x.week === week && x.block);

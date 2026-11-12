@@ -1113,7 +1113,7 @@ test('Własny trening: Plan → wyszukiwarka z bazy, własna nazwa, zapis W1, tr
   assert.match(await p.textContent('#ow-res'), /Twoje ćwiczenia/);                // pusto: ćwiczenia z planu
   await p.waitForFunction(() => EXN.list.length > 0);                          // nazwy z bazy pobrane dopiero teraz
   await p.fill('#ow-q', 'curl'); await p.dispatchEvent('#ow-q', 'input');
-  assert.deepEqual(await p.$$eval('#ow-res .ow-add', b => b.map(x => x.textContent.trim())), ['Hammer Curlfilm', 'EZ-Curlfilm', 'Barbell Curl', '+ Dodaj „curl” jako nowe ćwiczenie']);
+  assert.deepEqual(await p.$$eval('#ow-res .ow-add', b => b.map(x => x.textContent.trim())), ['EZ-Curlfilm', 'Hammer Curlfilm', 'Barbell Curl', '+ Dodaj „curl” jako nowe ćwiczenie']);
   await p.click('#ow-res .ow-add[data-n="Hammer Curl"]');
   await p.fill('#ow-q', 'Wznosy z gumą'); await p.dispatchEvent('#ow-q', 'input');
   await p.click('#ow-res .ow-new');
