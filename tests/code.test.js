@@ -499,7 +499,7 @@ test('Ćwiczenia: kolumna „glowna” robi z nazwy klienta alias; exNames_ do w
     { cwiczenie: 'zaślepka' }, { cwiczenie: 'Pull-up', aliasy: 'podciąganie', partia: 'plecy' }, { cwiczenie: 'drążek', glowna: 'podciąganie' }, { cwiczenie: 'coś', glowna: 'Nie ma takiego' }];
   const ix = C.exIndex_(rows);
   assert.deepEqual(['młotki', 'Młotki', 'drążek', 'coś', 'zaślepka'].map(n => (C.exFind_(ix, n) || {}).name || null), ['Hammer Curl', 'Hammer Curl', 'Pull-up', null, null]);
-  assert.deepEqual(plain(C.exNames_(rows)), [['Hammer Curl', 1], ['Pull-up', 0]]);
+  assert.deepEqual(plain(C.exNames_(rows)), [['Hammer Curl', 'https://example.test/hc', 'biceps'], ['Pull-up', '', 'plecy']]);
   assert.deepEqual(plain(C.cwMerge_(rows)), { aliases: [{ i: 0, value: 'młotki' }, { i: 3, value: 'podciąganie; drążek' }], drop: [1, 4] });
   assert.deepEqual(Array.from(C.missingExercises_([{ cwiczenie: 'młotki' }, { cwiczenie: 'coś' }], rows)), ['coś']);
   assert.equal(C.CW_HEADERS[C.CW_HEADERS.length - 1], 'glowna');

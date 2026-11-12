@@ -1097,7 +1097,7 @@ test('Pasek przerwy leży na menu, nie nachodzi na nie', async () => {
 
 // --- własny trening klienta ---
 test('Własny trening: Plan → wyszukiwarka z bazy, własna nazwa, zapis W1, trening jak każdy, „+ ćwiczenie”, ponowne otwarcie', async () => {
-  const calls = [], data = Object.assign({}, DATA, { plan: DATA.plan.slice(), exNames: [['Hammer Curl', 1], ['EZ-Curl', 1], ['Barbell Curl', 0], ['Pull-up', 1]] });
+  const calls = [], data = Object.assign({}, DATA, { plan: DATA.plan.slice(), exNames: [['Hammer Curl', 'https://example.test/hc', 'biceps'], ['EZ-Curl', 'https://example.test/ez', 'biceps'], ['Barbell Curl', '', 'biceps'], ['Pull-up', 'https://example.test/pu', 'plecy; biceps'], ['Plank', '', 'brzuch']] });
   const api = b => {                                                             // serwer: zapis jednostki do Planu
     if (b.fn === 'getExNames') return data.exNames;
     if (b.fn !== 'addOwnUnit') return null;
@@ -1130,17 +1130,35 @@ test('Własny trening: Plan → wyszukiwarka z bazy, własna nazwa, zapis W1, tr
   assert.equal(await p.textContent('#title'), 'Własny · Ramiona');
   assert.deepEqual(await p.$$eval('.card .fold-b .cn', e => e.map(x => x.textContent)), ['Hammer Curl', 'Wznosy z gumą']);
   assert.equal(await fval(p, '.set[data-o="1"][data-s="1"] .kg'), '12,5');
+  assert.equal(await p.getAttribute('.card[data-card="1"] a.inf', 'href'), 'https://example.test/hc');   // film „Jak wykonać” od razu, bez czekania na serwer
+  assert.equal((await p.$$('.card[data-card="2"] a.inf')).length, 0);
   await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(80);
   assert.deepEqual((({ day, order, set, name }) => ({ day, order, set, name }))(lastSet(calls)), { day: 'W1', order: 1, set: 1, name: 'Hammer Curl' });
   await p.click('#own-add');
   assert.equal(await p.textContent('#sheet-t'), 'Dodaj ćwiczenie');
   assert.equal((await p.$$('#ow-list .ow-it.old')).length, 2);                   // istniejących nie da się usunąć
   await p.fill('#ow-q', 'pull'); await p.dispatchEvent('#ow-q', 'input'); await p.click('#ow-res .ow-add[data-n="Pull-up"]');
+  // szukanie po partii mięśniowej i ćwiczenie na czas
+  assert.deepEqual(await p.$$eval('#ow-parts .ow-pt', b => b.map(x => x.textContent)), ['biceps', 'brzuch', 'plecy']);
+  await p.click('#ow-parts [data-pt="biceps"]');
+  assert.deepEqual(await p.$$eval('#ow-res .ow-add', b => b.map(x => x.dataset.n)), ['Hammer Curl', 'EZ-Curl', 'Barbell Curl', 'Pull-up']);
+  await p.click('#ow-parts [data-pt="brzuch"]'); await p.click('#ow-res .ow-add[data-n="Plank"]');
+  await p.click('#ow-list [data-tm="3"]');
+  assert.equal(await p.inputValue('#ow-list [data-i="3"][data-f="reps"]'), '30');
+  assert.match(await p.textContent('#ow-list .ow-it:last-child'), /sek\./);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, 'wlasny-partie-czas.png') });
   await p.click('#ow-save'); await p.waitForSelector('#sheet', { state: 'hidden' });
-  assert.equal((await p.$$('.card[data-card]')).length, 3);
+  assert.equal((await p.$$('.card[data-card]')).length, 4);
+  assert.equal(calls.filter(c => c.fn === 'addOwnUnit').pop().args[0].exercises[3].reps, '30 s');
+  assert.match(await p.textContent('.card[data-card="4"] .set-head'), /sek\./);
+  assert.equal(await p.getAttribute('.set[data-o="4"][data-s="1"] .reps', 'placeholder'), '30');
+  assert.equal(await p.getAttribute('.card[data-card="3"] a.inf', 'href'), 'https://example.test/pu');
+  assert.equal(await p.getAttribute('.card[data-card="1"] a.inf', 'href'), 'https://example.test/hc');   // dopisanie ćwiczenia nie gubi filmu wcześniejszych
+  if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, 'wlasny-czas-trening.png'), fullPage: true });
   await p.reload(); await p.waitForSelector('.set');                            // po ponownym otwarciu trening jest (z serwera)
   await p.click('#nav [data-tab="plan"]');
-  assert.match(await p.textContent('#plan'), /W1.*Własny · Ramiona.*własny.*3 ćwiczenia/s);
+  assert.match(await p.textContent('#plan'), /W1.*Własny · Ramiona.*własny.*4 ćwiczenia/s);
   assert.deepEqual(await a11y(p), []);
   // zapis, który nie doszedł (brak sieci), czeka w kolejce i jest widoczny po ponownym otwarciu, zanim serwer go dostanie
   await p.evaluate(() => { const q = qGet(); q.push({ fn: 'addOwnUnit', payload: { week: 1, day: 'W2', date: '2026-10-08', title: '', exercises: [{ name: 'Plank', sets: 3, reps: '30 s', kg: '' }] } }); qSet(q); });
