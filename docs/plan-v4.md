@@ -28,6 +28,7 @@ Cel: w karcie widać przede wszystkim serie; rzadkie akcje nie zajmują miejsca.
 - Uwaga na testy: wiele testów UI klika `[data-skip]`, `[data-warm]`, `.exn-t`, „+ drop set” wprost w karcie. Albo zachowaj te same atrybuty na przyciskach w oknie i dopisz w testach otwarcie „⋯”, albo zostaw w DOM ukryte odpowiedniki. Wybierz jedno i trzymaj się go.
 - Komentarz, który już jest wpisany, musi być widoczny w karcie bez otwierania okna (dziś `details.exn` jest wtedy otwarte).
 - Do decyzji Damiana na szkicu: co dokładnie chowamy (np. czy „+ rozgrzewka” zostaje na wierzchu).
+- **Ustalone 12.11 (wariant A):** nagłówek = nazwa i etykieta po lewej, stała kolumna ikon po prawej (▶ film, „⋯”, strzałka); pod „⋯” Komentarz, Zamień, Pomiń; pod seriami jeden rząd „+ rozgrzewka”, „+ seria (n)”, „+ drop set”; zużyta „+ seria” wyszarzona. Testy otwierają „⋯” i klikają te same atrybuty (`data-swap`, `data-skip`) w oknie.
 
 ### PR 2 · Podsumowanie po treningu
 
@@ -99,7 +100,7 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 
 | PR | Zakres | Stan |
 |---|---|---|
-| 1 | Lżejsza karta ćwiczenia | do zrobienia (szkic) |
+| 1 | Lżejsza karta ćwiczenia | zrobione (v38), czeka na scalenie |
 | 2 | Podsumowanie po treningu | do zrobienia (szkic) |
 | 3 | Historia ćwiczenia w karcie | do zrobienia (szkic) |
 | 4 | Rekord w chwili zapisu | do zrobienia (szkic) |

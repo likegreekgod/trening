@@ -442,13 +442,14 @@ const SWAPD = Object.assign({}, PRO, {
 test('Zamiana: tylko z flagą klienta; zamiennik + powód → nazwa i kolumna „zamiana”, cofnięcie', async () => {
   const off = await page([], false, { data: PRO });
   await off.p.goto(base + '?k=kabc'); await off.p.waitForSelector('.set');
+  await off.p.click('[data-more="1"]'); await off.p.waitForSelector('#sheet [data-mnote]');
   assert.equal(await off.p.$('[data-swap]'), null);                               // zamiana = NIE
   await off.ctx.close();
 
   const calls = [];
   const { ctx, p } = await page(calls, false, { data: SWAPD });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
-  await p.click('[data-swap="1"]');
+  await p.click('[data-more="1"]'); await p.click('#sheet [data-swap="1"]');
   assert.deepEqual(await p.$$eval('#sheet [data-to]', b => b.map(x => x.textContent)), ['Leg press', 'Hack']);   // z kolumny planu
   assert.equal(await p.isDisabled('#sw-ok'), true);
   await p.click('#sheet [data-to="Leg press"]'); await p.click('#sheet [data-why="Ból"]');
@@ -476,7 +477,7 @@ test('Zamiana DOWOLNA: cała baza i własna nazwa; TRENER bez własnej nazwy; na
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
   assert.equal(await p.textContent('.cn'), 'Goblet squat');
   assert.match(await p.textContent('.swapped'), /Brak sprzętu/);
-  await p.click('[data-unswap="1"]'); await p.click('[data-swap="1"]');
+  await p.click('[data-unswap="1"]'); await p.click('[data-more="1"]'); await p.click('#sheet [data-swap="1"]');
   await p.fill('#sw-q', 'bulgar'); await p.waitForSelector('#sw-res [data-to="Bulgarian Split Squat"]');   // baza z getExNames
   await p.fill('#sw-q', 'Przysiad na skrzynię'); await p.click('#sw-res .ow-new'); await p.click('#sheet [data-why="Inny powód"]'); await p.click('#sw-ok');
   assert.equal(await p.textContent('.cn'), 'Przysiad na skrzynię');
@@ -484,7 +485,7 @@ test('Zamiana DOWOLNA: cała baza i własna nazwa; TRENER bez własnej nazwy; na
   await ctx.close();
   // TRENER (dawne TAK): tylko zamienniki z planu, bez wyszukiwarki i własnej nazwy
   const t = await page([], false, { data: SWAPD });
-  await t.p.goto(base + '?k=kabc'); await t.p.waitForSelector('[data-swap="1"]'); await t.p.click('[data-swap="1"]');
+  await t.p.goto(base + '?k=kabc'); await t.p.waitForSelector('[data-more="1"]'); await t.p.click('[data-more="1"]'); await t.p.click('#sheet [data-swap="1"]');
   assert.equal(await t.p.$('#sw-q'), null);
   assert.deepEqual(await t.p.$$eval('#sheet [data-to]', b => b.map(x => x.dataset.to)), ['Leg press', 'Hack']);
   await t.ctx.close();
@@ -934,11 +935,16 @@ test('Ćwiczenia: „Jak wykonać” z linkiem z bazy, kompleks z filmem każdej
       : { infos: [{ n: 'Hang Snatch', u: 'https://example.test/hs' }, { n: 'Overhead Squat', u: 'https://example.test/ohs' }], parts: ['całe ciało'] })) });
   const { ctx, p } = await page([], false, { data });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
-  const links = await p.$$eval('a.inf', a => a.map(x => [x.getAttribute('href'), x.target, x.rel, x.textContent.trim(), Math.round(x.getBoundingClientRect().height) >= 44]));
-  assert.deepEqual(links, [['https://example.test/przysiad', '_blank', 'noopener', '▶ Jak wykonać', true],
-    ['https://example.test/hs', '_blank', 'noopener', '▶ Hang Snatch', true], ['https://example.test/ohs', '_blank', 'noopener', '▶ Overhead Squat', true]]);   // kompleks: film każdej części
-  await p.click('[data-swap="1"]'); await p.click('#sheet [data-to]'); await p.click('#sheet [data-why="Brak sprzętu"]'); await p.click('#sw-ok');
-  assert.equal((await p.$$('a.inf')).length, 2);                                 // po zamianie instruktaż oryginału znika
+  const inf = () => p.$$eval('a.inf', a => a.map(x => [x.getAttribute('href'), x.target, x.rel, x.textContent.trim() || x.getAttribute('aria-label'), Math.round(x.getBoundingClientRect().height) >= 44]));
+  assert.deepEqual(await inf(), [['https://example.test/przysiad', '_blank', 'noopener', 'Jak wykonać: Przysiad tylny', true]]);   // jeden film = ikona-link w nagłówku
+  await p.click('[data-inf]');                                                    // kompleks: lista z filmem każdej części
+  assert.deepEqual((await inf()).slice(1), [['https://example.test/hs', '_blank', 'noopener', '▶Hang Snatch', true], ['https://example.test/ohs', '_blank', 'noopener', '▶Overhead Squat', true]]);
+  await p.click('#sheet [data-close]');
+  // ikony nagłówka w tym samym miejscu w każdej karcie, niezależnie od długości nazwy i od tego, czy jest film
+  const xs = await p.$$eval('.card[data-card] .more', b => b.map(x => Math.round(x.getBoundingClientRect().left)));
+  assert.equal(new Set(xs).size, 1);
+  await p.click('[data-more="1"]'); await p.click('#sheet [data-swap="1"]'); await p.click('#sheet [data-to]'); await p.click('#sheet [data-why="Brak sprzętu"]'); await p.click('#sw-ok');
+  assert.equal((await p.$$('a.inf')).length, 0); assert.equal((await p.$$('[data-inf]')).length, 1);                                 // po zamianie instruktaż oryginału znika
   await p.click('[data-unswap="1"]');
   await p.click('#nav [data-tab="postep"]'); await p.click('[data-pt="obj"]');
   const hp = await p.$$eval('.hp', r => r.map(x => [x.querySelector('span').textContent, x.querySelector('.hpb').getAttribute('aria-label')]));
@@ -1058,7 +1064,7 @@ test('Karta ćwiczenia: wiersze „+”, kg → talerze, zmiana na kolejne serie
   const { ctx, p } = await page(calls);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
   assert.equal(await p.$('[data-copy]'), null);                                   // „Jak 1. seria” zastąpione
-  assert.deepEqual(await p.$$eval('.card[data-card="1"] .ghost', b => b.map(x => x.textContent.trim().replace(/\s+/g, ' '))), ['+ rozgrzewka', '+ seria zostało 1', '+ drop set']);
+  assert.deepEqual(await p.$$eval('.card[data-card="1"] .ghost', b => b.map(x => x.textContent.trim().replace(/\s+/g, ' '))), ['+ rozgrzewka', '+ seria (1)', '+ drop set']);
   await p.click('.card[data-card="1"] .kgb'); assert.equal(await p.textContent('#sheet-t'), 'Talerze'); await p.click('#sheet [data-close]');
   await p.fill('.set[data-o="1"][data-s="1"] .kg', '55'); await p.dispatchEvent('.set[data-o="1"][data-s="1"] .kg', 'change');
   assert.deepEqual(await p.$$eval('.set[data-o="1"][data-k="p"] .kg', i => i.map(x => x.value || x.dataset.ph)), ['55', '55', '55']);
@@ -1246,7 +1252,7 @@ test('Komentarz do ćwiczenia: zapis z serią (uwagi) i poprawka wszystkich seri
   const calls = [];
   const { ctx, p } = await page(calls, false, { data: D17 });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="2"]');
-  await p.click('.card[data-card="2"] details.exn summary');
+  await p.click('[data-more="2"]'); await p.click('#sheet [data-mnote]');
   await p.fill('[data-note="2"]', 'face pull 3×10 na TRX'); await p.dispatchEvent('[data-note="2"]', 'change');
   assert.equal(calls.filter(c => c.fn === 'logNote').length, 0);                 // bez zapisanej serii: pójdzie z pierwszą
   await p.click('.set[data-o="2"][data-s="1"] .ok'); await p.waitForTimeout(80);
@@ -1257,7 +1263,7 @@ test('Komentarz do ćwiczenia: zapis z serią (uwagi) i poprawka wszystkich seri
   const t = await page([], false, { data: again });
   await t.p.goto(base + '?k=kabc'); await t.p.waitForSelector('[data-note="2"]');
   assert.equal(await t.p.inputValue('[data-note="2"]'), 'z Logu');
-  assert.equal(await t.p.$eval('.card[data-card="2"] details.exn', d => d.open), true);
+  assert.equal(await t.p.$eval('.card[data-card="2"] .exn', d => !d.hidden), true);
   await t.ctx.close();
   assert.deepEqual(p.errors, []);
   await ctx.close();
@@ -1286,14 +1292,17 @@ test('EMOM: zegar minut z sygnałem, „+ runda” kopiuje kg/powt., rund więce
 test('Pominięcie: B bez powodu, A/K z powodem; „Skróć trening” wg ciecie i serie_min; przywrócenie; zwijanie A/B/K', async () => {
   const calls = [];
   const { ctx, p } = await page(calls, false, { data: D17 });
-  await p.goto(base + '?k=kabc'); await p.waitForSelector('[data-skip="2"]');
-  assert.equal(await p.textContent('[data-skip="2"]'), 'Pomiń');
-  assert.equal(await p.textContent('[data-skip="4"]'), 'Pomiń…');
-  await p.click('[data-skip="2"]'); await p.waitForTimeout(80);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('[data-more="2"]');
+  assert.equal(await p.$('.card [data-skip]'), null);                             // v4: rzadkie akcje pod „⋯”, nie w karcie
+  await p.click('[data-more="2"]');
+  assert.equal(await p.textContent('#sheet [data-skip="2"]'), '✕Pomiń');
+  await p.click('#sheet [data-skip="2"]'); await p.waitForTimeout(80);
+  assert.equal(await p.isHidden('#sheet'), true);
   assert.deepEqual((({ set, typ, done, note }) => ({ set, typ, done, note }))(lastSet(calls)), { set: 0, typ: 'SKIP', done: false, note: '' });
   assert.equal(await p.$eval('.card[data-card="2"]', c => c.className.includes('skip') && c.className.includes('fold')), true);
   assert.equal(await p.textContent('.card[data-card="2"] .fsum'), 'pominięte');
-  await p.click('[data-skip="4"]'); assert.equal(await p.isDisabled('#sk-ok'), true);
+  await p.click('[data-more="4"]'); assert.match(await p.textContent('#sheet [data-skip="4"]'), /Pomiń…/);
+  await p.click('#sheet [data-skip="4"]'); assert.equal(await p.isDisabled('#sk-ok'), true);
   await p.click('#sheet [data-why="ból"]'); await p.fill('#sk-txt', 'kolano'); await p.click('#sk-ok'); await p.waitForTimeout(80);
   assert.equal(lastSet(calls).note, 'ból: kolano');
   // Skróć: Plank (ciecie 1) cały, Przysiad (ciecie 2) do serie_min 1
@@ -1422,7 +1431,10 @@ test('Własny trening: kompleks z dwóch ćwiczeń (jedno „A + B”, powt. „
   if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'wlasny-kompleks.png') }); }
   await p.click('#ow-save'); await p.waitForSelector('#sheet', { state: 'hidden' });
   assert.deepEqual(calls.find(c => c.fn === 'addOwnUnit').args[0].exercises, [{ name: 'Hammer Curl + Pull-up', sets: 3, reps: '1+2', kg: '20' }, { name: 'Plank', sets: 3, reps: '30 s', kg: '' }]);
-  assert.deepEqual(await p.$$eval('.card[data-card="1"] a.inf', a => a.map(x => x.getAttribute('href'))), ['https://example.test/hc', 'https://example.test/pu']);
+  assert.deepEqual(await p.$$eval('.card[data-card="1"] a.inf', a => a.length), 0);
+  await p.click('[data-inf="1"]');                                                // kompleks: filmy części w oknie
+  assert.deepEqual(await p.$$eval('#sheet a.inf', a => a.map(x => x.getAttribute('href'))), ['https://example.test/hc', 'https://example.test/pu']);
+  await p.click('#sheet [data-close]');
   assert.equal(await p.getAttribute('.set[data-o="1"][data-s="1"] .reps', 'placeholder'), '3');     // 1+2 = 3 powtórzenia w serii
   await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(80);
   assert.deepEqual((({ order, set, name, kg, reps }) => ({ order, set, name, kg, reps }))(lastSet(calls)), { order: 1, set: 1, name: 'Hammer Curl + Pull-up', kg: 20, reps: 3 });
@@ -1527,6 +1539,34 @@ test('Własny trening: obwód z kreatora (wspólne rundy, A1–A3, rozłączenie
   assert.match(await p.textContent('#ow-list'), /Obwód A · na zmianę.*4 rundy.*A1 · Pompki/s);
   await add('Hammer Curl'); await p.click('#ow-save'); await p.waitForSelector('#sheet', { state: 'hidden' });
   assert.deepEqual(calls.filter(c => c.fn === 'addOwnUnit').pop().args[0].exercises.map(e => e.circuit || ''), ['', 'A', 'A', 'A', '']);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Karta v4: „+ seria (n)” wyszarza się po zużyciu limitu, pusty komentarz schowany do „⋯”, „⋯” i strzałka zwijają i otwierają', async () => {
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal((await p.textContent('[data-extra="1"]')).trim(), '+ seria (1)');
+  assert.equal(await p.isDisabled('[data-extra="1"]'), false);
+  await p.click('[data-extra="1"]');
+  assert.equal(await p.textContent('[data-extra="1"]'), '+ seria (0)');
+  assert.equal(await p.isVisible('[data-extra="1"]'), true);                      // zostaje w miejscu, tylko wyszarzony
+  assert.equal(await p.isDisabled('[data-extra="1"]'), true);
+  await p.click('.set[data-o="1"][data-s="4"] .del'); await p.click('.set[data-o="1"][data-s="4"] .del');
+  assert.equal(await p.isDisabled('[data-extra="1"]'), false);
+  // przyciski dodawania w jednym rzędzie, tekst w jednej linii
+  const tops = await p.$$eval('.card[data-card="1"] .adds .ghost', b => b.map(x => [Math.round(x.getBoundingClientRect().top), Math.round(x.getBoundingClientRect().height)]));
+  assert.equal(new Set(tops.map(t => t[0])).size, 1); assert.ok(tops.every(t => t[1] === 44));
+  // komentarz: pusty niewidoczny, „⋯” → Komentarz pokazuje pole w karcie
+  assert.equal(await p.isHidden('.card[data-card="1"] .exn'), true);
+  await p.click('[data-more="1"]'); await p.click('#sheet [data-mnote]');
+  assert.equal(await p.isHidden('#sheet'), true);
+  assert.equal(await p.evaluate(() => document.activeElement.dataset.note), '1');
+  // strzałka w kolumnie ikon zwija kartę tak samo jak nazwa
+  await p.click('.card[data-card="1"] .fold-c');
+  assert.equal(await p.getAttribute('.card[data-card="1"] .fold-c', 'aria-expanded'), 'false');
+  await p.click('.card[data-card="1"] .fold-b');
+  assert.equal(await p.getAttribute('.card[data-card="1"] .fold-b', 'aria-expanded'), 'true');
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
