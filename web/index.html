@@ -281,10 +281,28 @@
   .ow-parts::-webkit-scrollbar{display:none}
   .ow-pt{flex:none;min-height:44px;padding:0 12px;border:1px solid var(--ink-2);border-radius:var(--r);background:transparent;color:var(--ink-2);font-size:14px;white-space:nowrap}
   .ow-pt[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
+  .grp{border:2px solid var(--accent);border-radius:calc(var(--rc) + 6px);padding:8px 6px 6px;margin-top:var(--gap)}
+  .grp > .grp-now + .card{margin-top:0}
+  .grp-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:2px 8px 8px}
+  .grp-h b{font:700 20px/1 var(--f-display);letter-spacing:.04em;text-transform:uppercase;color:var(--accent)}
+  .grp-h span{font-size:13px;color:var(--ink-2);text-align:right}
+  .grp-now{margin:0 2px 8px;padding:10px 12px;border-radius:var(--r);background:var(--surface-2);font-size:14px;color:var(--ink)}
+  .grp-now b{font-weight:700}
+  .gl{flex:none;align-self:flex-start;font:700 25px/1.02 var(--f-display);color:var(--accent)}
+  .set.nowrow{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r)}
+  .ow-grp{border:2px solid var(--accent);border-radius:var(--rc);padding:4px 10px;margin:8px 0}
+  .ow-grp .ow-gh{display:flex;align-items:center;gap:8px;padding:4px 0 6px;border-bottom:1px solid var(--line)}
+  .ow-grp .ow-gh b{flex:1;color:var(--accent);font:700 14px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase}
+  .ow-grp .ow-gh label{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .ow-grp .ow-gh input{width:54px;height:44px;text-align:center;padding:0 4px}
+  .ow-grp .ow-it:last-child{border-bottom:0}
+  .ow-it.in{grid-template-columns:1fr 64px 64px 44px}
+  .ow-ch{grid-column:1 / -1;display:grid;gap:6px;padding:8px;border-radius:var(--r);background:var(--surface-2)}
+  .ow-ch .opt small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
   .ow-it .ow-row{grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
   .ow-it .ow-tag{font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 8px}
-  .ow-it .ow-tm{min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--ink-2);font-size:13px}
-  .ow-it .ow-tm[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+  .ow-tm{min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--ink-2);font-size:13px}
+  .ow-tm[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
   .ow-it{display:grid;grid-template-columns:1fr 54px 64px 64px 44px;gap:6px;align-items:end;padding:8px 0;border-bottom:1px solid var(--line)}
   .ow-it b{grid-column:1 / -1;font-weight:600}
   .ow-it label{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:grid;gap:3px}
@@ -647,7 +665,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, ownWeek, ownNextDay, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
   isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit } = window.TL;
 
 /* ---------- kolejka offline ---------- */
@@ -800,13 +818,13 @@ function restSignal(){ beep(3); vib(END_VIB); flash(); notifyBg('Koniec przerwy'
 
 /* ---------- przerwa po serii (A 2:00, B 1:30, K 1:00): czas liczony z różnicy zegara, nie z liczby taktów ---------- */
 let REST = null;   // {end, total, pre, to}
-function startRest(ex){
+function startRest(ex, sec, label){
   audioUnlock(); askNotify();
-  const total = restSec(ex.prio);
+  const total = sec || restSec(ex.prio);
   if (REST) clearTimeout(REST.to);
   REST = { end: Date.now() + total * 1000, total, pre: false };
   REST.to = setTimeout(restTick, total * 1000 + 30);                  // pojedynczy budzik: w tle mniej przycinany niż interwał
-  $("#rlbl").textContent = "Przerwa · " + ex.name;
+  $("#rlbl").textContent = "Przerwa · " + (label || ex.name);
   $("#rest").hidden = false; document.body.classList.add("resting");
   wake(true);
   restTick();
@@ -1668,15 +1686,15 @@ function applyOwn(u, save){
   };
   const rows = u.exercises.map((e, i) => ({ week: u.week, day: u.day, title: 'Własny' + (u.title ? ' · ' + u.title : ''), date: u.date, order: i + 1,
     name: e.name, prio: 'A', sets: +e.sets, reps: String(e.reps), pct: null, kg: kgOf(e.kg), rpe: '', note: '', extra: null, drop: 0,
-    group: '', block, swaps: [], infos: dx(e.name).infos, parts: dx(e.name).parts, own: true }));
+    group: '', block, swaps: [], infos: dx(e.name).infos, parts: dx(e.name).parts, own: true, circuit: e.circuit || '' }));
   DATA.plan = DATA.plan.filter(r => !(r.week === u.week && r.day === u.day)).concat(rows); PLAN = DATA.plan;
   if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
 }
 function openOwn(unit){
   OWN = unit ? { week: unit.week, day: unit.day, date: unit.date, title: String(unit.title || '').replace(/^Własny( · )?/, ''), edit: true,
-      list: unit.rows.slice().sort((a, b) => a.order - b.order).map(r => ({ name: r.name, sets: r.sets, reps: String(r.reps), kg: r.kg === '' ? '' : String(fmtKg(r.kg)), old: true })) }
+      list: unit.rows.slice().sort((a, b) => a.order - b.order).map(r => ({ name: r.name, sets: r.sets, reps: String(r.reps), kg: r.kg === '' ? '' : String(fmtKg(r.kg)), old: true, c: r.circuit || '' })) }
     : { date: localDate(), title: '', list: [], edit: false };
-  OWN.part = '';
+  OWN.part = ''; OWN.pick = -1;
   openSheet(`<h2 id="sheet-t">${OWN.edit ? 'Dodaj ćwiczenie' : 'Własny trening'}</h2>
     <p class="sub">${OWN.edit ? 'Dopisz ćwiczenia do tego treningu.' : 'Poza planem trenera. Trener zobaczy go w arkuszu.'}</p>
     ${OWN.edit ? '' : `<label class="fl">Dzień<input type="date" id="ow-date" value="${OWN.date}"></label>
@@ -1719,31 +1737,55 @@ function ownRes(q){
   });
 }
 function ownList(){
-  const box = $('#ow-list');
-  // kompleks z poprzednim: oba nowe (niezapisane), żadne na czas, nazwa mieści się w 80 znakach (limit Planu)
-  const canJoin = i => { const a = OWN.list[i - 1], b = OWN.list[i]; return !!a && !a.old && !b.old && !a.t && !b.t && (a.name + ' + ' + b.name).length <= 80; };
-  box.innerHTML = !OWN.list.length ? '<p class="sub">Jeszcze nic. Wyszukaj ćwiczenie powyżej i dotknij, żeby dodać.</p>'
-    : OWN.list.map((e, i) => e.old ? `<div class="ow-it old"><b>${esc(e.name)}</b><span>${esc(String(e.sets))} × ${esc(e.reps)}${e.kg ? ' · ' + esc(e.kg) + ' kg' : ''}</span></div>`
-      : `<div class="ow-it"><b>${esc(e.name)}</b>
-        <div class="ow-row">${isComplex(e.name) ? `<span class="ow-tag">kompleks</span><button type="button" class="ow-tm" data-split="${i}" aria-label="Rozłącz kompleks ${esc(e.name)}">Rozłącz</button>`
+  const box = $('#ow-list'), L = OWN.list;
+  // kompleks z poprzednim: oba nowe (niezapisane), żadne na czas ani w obwodzie, nazwa mieści się w 80 znakach (limit Planu)
+  const canJoin = i => { const a = L[i - 1], b = L[i]; return !!a && !a.old && !b.old && !a.t && !b.t && !a.c && !b.c && (a.name + ' + ' + b.name).length <= 80; };
+  // obwód z poprzednim: oba nowe, to ćwiczenie jeszcze bez obwodu
+  const canCirc = i => { const a = L[i - 1], b = L[i]; return !!a && !a.old && !b.old && !b.c; };
+  const first = i => L[i].c && !(L[i - 1] && L[i - 1].c === L[i].c), last = i => L[i].c && !(L[i + 1] && L[i + 1].c === L[i].c);
+  const tagOf = i => { let j = i; while (L[j - 1] && L[j - 1].c === L[i].c) j--; return L[i].c + (i - j + 1); };
+  const size = c => L.filter(e => e.c === c).length;
+  const item = (e, i) => {
+    const cx = isComplex(e.name), nm = (e.c ? tagOf(i) + ' · ' : '') + e.name;
+    if (e.old) return `<div class="ow-it old"><b>${esc(nm)}</b><span>${esc(String(e.sets))} × ${esc(e.reps)}${e.kg ? ' · ' + esc(e.kg) + ' kg' : ''}</span></div>`;
+    const link = canJoin(i) || canCirc(i);
+    return `<div class="ow-it ${e.c ? 'in' : ''}"><b>${esc(nm)}</b>
+        <div class="ow-row">${cx ? `<span class="ow-tag">kompleks</span><button type="button" class="ow-tm" data-split="${i}" aria-label="Rozłącz kompleks ${esc(e.name)}">Rozłącz</button>`
           : `<button type="button" class="ow-tm" data-tm="${i}" aria-pressed="${!!e.t}" aria-label="${esc(e.name)}: ćwiczenie na czas">⏱ na czas</button>`}
-          ${canJoin(i) ? `<button type="button" class="ow-tm" data-join="${i}" aria-label="Połącz ${esc(e.name)} w kompleks z: ${esc(OWN.list[i - 1].name)}">⛓ Kompleks z poprzednim</button>` : ''}</div><span></span>
-        <label>serie<input inputmode="numeric" data-i="${i}" data-f="sets" value="${esc(String(e.sets))}"></label>
-        <label>${e.t ? 'sek.' : 'powt.'}<input ${e.t ? 'inputmode="numeric" ' : ''}${isComplex(e.name) ? 'placeholder="1+1" ' : ''}data-i="${i}" data-f="reps" value="${esc(e.reps)}"></label>
+          ${link ? `<button type="button" class="ow-tm" data-link="${i}" aria-expanded="${OWN.pick === i}" aria-label="Połącz ${esc(e.name)} z poprzednim: ${esc(L[i - 1].name)}">⛓ Połącz z poprzednim</button>` : ''}</div>
+        ${link && OWN.pick === i ? `<div class="ow-ch">${canJoin(i) ? `<button type="button" class="opt" data-join="${i}"><b>Kompleks</b><small>Jedno po drugim bez odkładania ciężaru. Jedno ćwiczenie „A + B”, powt. „1+1”.</small></button>` : ''}
+          ${canCirc(i) ? `<button type="button" class="opt" data-circ="${i}"><b>Obwód / superseria</b><small>Na zmianę: po serii jednego od razu następne, przerwa po całej rundzie.</small></button>` : ''}</div>` : ''}<span></span>
+        ${e.c ? '' : `<label>serie<input inputmode="numeric" data-i="${i}" data-f="sets" value="${esc(String(e.sets))}"></label>`}
+        <label>${e.t ? 'sek.' : 'powt.'}<input ${e.t ? 'inputmode="numeric" ' : ''}${cx ? 'placeholder="1+1" ' : ''}data-i="${i}" data-f="reps" value="${esc(e.reps)}"></label>
         <label>kg<input inputmode="decimal" data-i="${i}" data-f="kg" value="${esc(e.kg)}" placeholder="—"></label>
-        <button type="button" class="ow-rm" data-rm="${i}" aria-label="Usuń ${esc(e.name)}">✕</button></div>`).join('');
-  box.querySelectorAll('input[data-i]').forEach(inp => inp.oninput = () => { OWN.list[+inp.dataset.i][inp.dataset.f] = inp.value; $('#ow-err').hidden = true; });
+        <button type="button" class="ow-rm" data-rm="${i}" aria-label="Usuń ${esc(e.name)}">✕</button></div>`;
+  };
+  box.innerHTML = !L.length ? '<p class="sub">Jeszcze nic. Wyszukaj ćwiczenie powyżej i dotknij, żeby dodać.</p>'
+    : L.map((e, i) => (first(i) && size(e.c) > 1 ? `<div class="ow-grp"><div class="ow-gh"><b>${size(e.c) === 2 ? 'Superseria' : 'Obwód'} ${esc(e.c)} · na zmianę</b>` +
+        (e.old ? `<span class="sub">${esc(String(e.sets))} rundy</span>` : `<label>rundy<input inputmode="numeric" data-rounds="${esc(e.c)}" value="${esc(String(e.sets))}" aria-label="Rundy obwodu ${esc(e.c)}"></label>
+        <button type="button" class="ow-tm" data-uncirc="${esc(e.c)}" aria-label="Rozłącz obwód ${esc(e.c)}">Rozłącz</button>`) + '</div>' : '') +
+      item(e, i) + (last(i) && size(e.c) > 1 ? '</div>' : '')).join('');
+  box.querySelectorAll('input[data-i]').forEach(inp => inp.oninput = () => { L[+inp.dataset.i][inp.dataset.f] = inp.value; $('#ow-err').hidden = true; });
+  box.querySelectorAll('input[data-rounds]').forEach(inp => inp.oninput = () => { L.forEach(e => { if (e.c === inp.dataset.rounds && !e.old) e.sets = inp.value; }); $('#ow-err').hidden = true; });
   box.querySelectorAll('[data-tm]').forEach(b => b.onclick = () => {             // powtórzenia ⇄ czas: domyślnie 30 s / 10 powt.
-    const e = OWN.list[+b.dataset.tm]; e.t = !e.t;
+    const e = L[+b.dataset.tm]; e.t = !e.t;
     if (e.t && (e.reps === '10' || !/^\d+$/.test(String(e.reps).trim()))) e.reps = '30'; else if (!e.t && e.reps === '30') e.reps = '10';
     ownList();
   });
-  box.querySelectorAll('[data-join]').forEach(b => b.onclick = () => { const i = +b.dataset.join; OWN.list.splice(i - 1, 2, ownJoin(OWN.list[i - 1], OWN.list[i])); ownList(); });
-  box.querySelectorAll('[data-split]').forEach(b => b.onclick = () => { const i = +b.dataset.split; OWN.list.splice(i, 1, ...ownSplit(OWN.list[i])); ownList(); });
-  box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { OWN.list.splice(+b.dataset.rm, 1); ownList(); });
+  const redo = () => { OWN.pick = -1; OWN.list = circuitTidy(OWN.list); ownList(); };
+  box.querySelectorAll('[data-link]').forEach(b => b.onclick = () => { OWN.pick = OWN.pick === +b.dataset.link ? -1 : +b.dataset.link; ownList(); });
+  box.querySelectorAll('[data-join]').forEach(b => b.onclick = () => { const i = +b.dataset.join; L.splice(i - 1, 2, ownJoin(L[i - 1], L[i])); redo(); });
+  box.querySelectorAll('[data-split]').forEach(b => b.onclick = () => { const i = +b.dataset.split, c = L[i].c || ''; L.splice(i, 1, ...ownSplit(L[i]).map(e => Object.assign(e, { c }))); redo(); });
+  box.querySelectorAll('[data-circ]').forEach(b => b.onclick = () => {           // dołącz do obwodu poprzedniego albo załóż nowy
+    const i = +b.dataset.circ, a = L[i - 1]; if (!a.c) a.c = circuitLetter(L);
+    L[i].c = a.c; redo();
+  });
+  box.querySelectorAll('[data-uncirc]').forEach(b => b.onclick = () => { L.forEach(e => { if (e.c === b.dataset.uncirc && !e.old) e.c = ''; }); redo(); });
+  box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { L.splice(+b.dataset.rm, 1); redo(); });
 }
 function ownSave(){
   const err = t => { const e = $('#ow-err'); e.textContent = t; e.hidden = false; };
+  OWN.list = circuitTidy(OWN.list);
   if (!OWN.list.length) return err('Dodaj co najmniej jedno ćwiczenie.');
   if (OWN.list.some(e => !(+e.sets >= 1 && +e.sets <= SETS_MAX) || !String(e.reps).trim())) return err('Przy każdym ćwiczeniu wpisz serie (1–' + SETS_MAX + ') i powtórzenia albo czas.');
   if (OWN.list.some(e => e.t && !e.old && !(parseInt(e.reps) > 0))) return err('Przy ćwiczeniu na czas wpisz liczbę sekund.');
@@ -1754,7 +1796,7 @@ function ownSave(){
     OWN.date = d; OWN.title = $('#ow-title').value.trim(); OWN.week = ownWeek(PLAN, d); OWN.day = ownNextDay(PLAN, OWN.week);
   }
   const u = { week: OWN.week, day: OWN.day, date: OWN.date, title: OWN.title,
-    exercises: OWN.list.map(e => ({ name: e.name, sets: +e.sets, reps: e.t && !e.old ? parseInt(e.reps) + ' s' : String(e.reps).trim(), kg: String(e.kg || '').trim() })) };
+    exercises: OWN.list.map(e => ({ name: e.name, sets: +e.sets, reps: e.t && !e.old ? parseInt(e.reps) + ' s' : String(e.reps).trim(), kg: String(e.kg || '').trim(), ...(e.c ? { circuit: e.c } : {}) })) };
   applyOwn(u, true);
   send('addOwnUnit', u).catch(() => {});
   closeSheet();
@@ -1771,6 +1813,30 @@ function sbNote(){
     <button type="button" class="btn sm" id="sb-ok">Rozumiem</button></section>`;
 }
 /** ćwiczenia bieżącej jednostki z naniesioną zamianą i pominięciem */
+/* ---------- obwód / superseria na Treningu: ramka, „Teraz / Potem”, przerwa po rundzie ---------- */
+let CIRC = [];                                                                // grupy bieżącej jednostki (circuitGroups)
+const grpOf = o => CIRC.find(g => g.orders.includes(+o));
+const grpState = g => circuitState(g.orders.map(o => { const w = work(o), c = document.querySelector(`.card[data-card="${o}"]`);
+  return { order: o, sets: c && c.classList.contains('skip') ? 0 : w.length, done: w.filter(r => r.dataset.st).length }; }));
+const grpTag = (g, o) => g.id + (g.orders.indexOf(o) + 1);
+function grpDraw(id){
+  const g = CIRC.find(x => x.id === id), box = document.querySelector(`.grp[data-grp="${id}"]`); if (!g || !box) return null;
+  const st = grpState(g), nm = o => { const c = document.querySelector(`.card[data-card="${o}"] .cn`); return grpTag(g, o) + ' · ' + (c ? c.textContent : ''); };
+  box.querySelector('.grp-r').textContent = st.done ? 'zrobione ✓' : 'runda ' + st.round + ' z ' + st.rounds + ' · przerwa po rundzie';
+  box.querySelector('.grp-now').innerHTML = st.done ? 'Wszystkie rundy zrobione.' : 'Teraz: <b>' + esc(nm(st.next)) + '</b>.' + (st.after ? ' Potem ' + esc(nm(st.after)) + '.' : ' Potem przerwa.');
+  document.querySelectorAll('.set.nowrow').forEach(r => { if (grpOf(r.dataset.o) === g) r.classList.remove('nowrow'); });
+  const row = st.next && work(st.next).find(r => !r.dataset.st); if (row) row.classList.add('nowrow');
+  return { st, row };
+}
+/** po zaliczonej serii w obwodzie: koniec rundy → przerwa, inaczej bez przerwy i przejście do następnego ćwiczenia */
+function grpAfter(ex){
+  const g = grpOf(ex.order), d = g && grpDraw(g.id); if (!d) return;
+  if (d.st.fresh) { startRest(ex, CIRCUIT_REST, (g.orders.length === 2 ? 'Superseria ' : 'Obwód ') + g.id + (d.st.done ? '' : ' · przed rundą ' + d.st.round)); return; }
+  if (d.row && +d.row.dataset.o !== ex.order) setTimeout(() => {
+    setFold(+d.row.dataset.o, false);
+    d.row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 350);
+}
 const curExs = () => PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order).map(withSwap).map(withSkip);
 function renderTrening(){
   if (!PLAN.some(r => r.week === cur.week && r.day === cur.day)) pickDefault();
@@ -1796,11 +1862,18 @@ function renderTrening(){
   const open = !sessDone(cur.week, cur.day);
   let h = sbNote() + weekBar('t') + notesCard() + readyBanner() + helpCard() +
     (exs.length > 1 ? `<div class="utools">${open ? '<button type="button" class="btn sm" id="cut">⏱ Skróć trening</button>' : ''}<button type="button" class="btn sm" id="fold-all">Zwiń zrobione</button></div>` : '');
-  exs.forEach(ex => h += card(ex));
+  const grps = circuitGroups(exs), gOf = o => grps.find(g => g.orders.includes(o));
+  exs.forEach(ex => {
+    const g = gOf(ex.order), i = g ? g.orders.indexOf(ex.order) : -1;
+    if (i === 0) h += `<section class="grp" data-grp="${g.id}" aria-label="Obwód ${g.id}"><div class="grp-h"><b>${g.orders.length === 2 ? 'Superseria' : 'Obwód'} ${g.id}</b><span class="grp-r"></span></div><div class="grp-now" aria-live="polite"></div>`;
+    h += card(ex, g ? g.id + (i + 1) : '');
+    if (g && i === g.orders.length - 1) h += '</section>';
+  });
   if (s0.own && ownOn() && !sessDone(cur.week, cur.day)) h += '<button type="button" class="ghost own-add" id="own-add">+ ćwiczenie</button>';
   h += sessCard(s0);
   $('#main').innerHTML = h;
-  bind(exs, s0);
+  CIRC = grps; bind(exs, s0);
+  grps.forEach(g => grpDraw(g.id));
   bindNotes();
   const oa = $('#own-add'); if (oa) oa.onclick = () => openOwn(units(PLAN).find(u => u.week === cur.week && u.day === cur.day));
   vqMarks();
@@ -2054,7 +2127,7 @@ const fv = el => !el ? '' : el.value.trim() !== '' ? el.value : (el.dataset.ph |
 const setPh = (el, v) => { v = v === undefined || v === null ? '' : String(v); el.dataset.ph = v; el.placeholder = v || (el.classList.contains('kg') ? 'kg' : el.dataset.u || 'powt.'); el.classList.toggle('ph', !!v); };
 const setLabel = (set, kind) => (kind === 'w' || kind === 'd' || SIMPLE) ? set : 'S' + set;
 const dropDefault = (ex, fromKg) => window.TL.dropDefault(ex.kg, fromKg);   // ~80% ostatniego ciężaru, w dół do 2,5 kg
-function card(ex){
+function card(ex, tag){
   const { warm, extra, drop } = loggedSets(ex), allowX = allowedExtra(ex), nd = Math.max(drop, plannedDrops(ex));
   let rows = '', allDone = true;
   for (let i = 1; i <= warm; i++) rows += rowHtml(ex, 'R' + i, 'w');
@@ -2079,7 +2152,7 @@ function card(ex){
       <textarea class="exn-t" data-note="${ex.order}" rows="${Math.min(5, Math.max(1, note.split('\n').length))}" maxlength="500" placeholder="np. 3×10 na TRX zamiast wyciągu" aria-label="Komentarz do ćwiczenia ${esc(ex.name)}">${esc(note)}</textarea></details>`;
   const skipLine = sk ? `<div class="skipped"><span>${gone ? 'Pominięte' : 'Skrócone do ' + ex.sets + ' z ' + ex.planSets + ' ' + plural(ex.planSets, 'serii', 'serii', 'serii')}${sk.why ? ' · ' + esc(sk.why) : ''}</span><button type="button" class="btn sm" data-unskip="${ex.order}">Przywróć</button></div>` : '';
   const top = `<div class="card ${ex.prio === 'K' ? 'k' : ''} ${oly ? 'oly' : ''} ${gone ? 'skip' : ''}" data-card="${ex.order}">
-    <div class="ch"><button type="button" class="fold-b" data-fold="${ex.order}" aria-expanded="true"><span class="ft"><span class="cn">${esc(ex.name)}</span><span class="fsum"></span></span><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span><i class="chev" aria-hidden="true"></i></button></div>
+    <div class="ch"><button type="button" class="fold-b" data-fold="${ex.order}" aria-expanded="true">${tag ? `<span class="gl">${tag}</span>` : ''}<span class="ft"><span class="cn">${esc(ex.name)}</span><span class="fsum"></span></span><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span><i class="chev" aria-hidden="true"></i></button></div>
     <div class="cbody">
     <div class="ctools">
     ${ex.swap ? `<div class="swapped"><span>Zamiast: ${esc(ex.swap.from)} · ${esc(ex.swap.why)}</span><button type="button" class="btn sm" data-unswap="${ex.order}">Cofnij zamianę</button></div>`
@@ -2285,10 +2358,12 @@ function bindRow(row, ex, s0){
     if (lt) row.dataset.rate = st ? oc || '' : '';
     setState(row, st, true);
     const p = payloadOf(row, ex, s0);
-    if (!was && st && kind !== 'w' && !isEmom(ex)) startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce; EMOM ma zegar minut
+    const inGrp = !!grpOf(ex.order);                                   // obwód: przerwa dopiero po całej rundzie (grpAfter)
+    if (!was && st && kind !== 'w' && !isEmom(ex) && !inGrp) startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce; EMOM ma zegar minut
     putLocal(ex, p);
     if (st) followRow(row);
     refreshStats(); updateSug(ex); refreshAll(ex.order, !!st && !wasDone);
+    if (inGrp) { if (!was && st && kind !== 'w') grpAfter(ex); else grpDraw(grpOf(ex.order).id); }
     send('logSet', p).then(() => { if (row.dataset.st === st) setState(row, st); }).catch(() => {});
     const em = document.querySelector(`.emom[data-emom="${ex.order}"]`); if (em && em._draw) em._draw();
     if (st && navigator.vibrate) navigator.vibrate(st === 'x' ? [30, 60, 30] : 30);

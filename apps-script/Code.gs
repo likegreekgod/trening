@@ -15,7 +15,8 @@
  * Log, seria: 1…n robocze, n+1… dodatkowe, R1… rozgrzewka, D1… drop set, 0 = ćwiczenie pominięte / skrócone (typ SKIP).
  * Log, typ: DROP, FAIL (nieudana) lub DROP+FAIL; SKIP = pominięte (uwagi = powód); puste = zwykła seria.
  * Log, uwagi: komentarz klienta do ćwiczenia (ten sam we wszystkich seriach ćwiczenia, logNote).
- * Plan, kolumny opcjonalne: „tryb” (EMOM), „ciecie” (1 = tnij jako pierwsze przy „Skróć trening”), „serie_min”.
+ * Plan, kolumny opcjonalne: „tryb” (EMOM), „ciecie” (1 = tnij jako pierwsze przy „Skróć trening”), „serie_min”,
+ * „obwod” (litera A–Z: sąsiednie ćwiczenia jednostki robione na zmianę, przerwa po rundzie; superseria = obwód z 2 ćwiczeń).
  * Plan bez dat (kolumna „data” pusta): jednostka zamknięta dostaje datę wykonania z Sesji, niezamknięta — dzisiejszą.
  *   Dzięki temu aplikacja otwiera pierwszą niezrobioną jednostkę, a Log/Sesje/podsumowanie mają faktyczne daty.
  * Klienci, kolumna J „zamiana”: TRENER (albo TAK) = zamienniki z planu i bazy; DOWOLNA = cała baza i własna nazwa; puste/NIE = bez zamiany.
@@ -104,7 +105,8 @@ function getData(key) {
       drop: idr < 0 ? 0 : (Number(r[idr]) || 0),
       group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
       swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts, own: opt(r, 'zrodlo').toLowerCase() === 'klient',
-      mode: opt(r, 'tryb').toUpperCase(), cut: Number(opt(r, 'ciecie')) || null, setsMin: opt(r, 'serie_min') === '' ? null : Number(opt(r, 'serie_min'))
+      mode: opt(r, 'tryb').toUpperCase(), cut: Number(opt(r, 'ciecie')) || null, setsMin: opt(r, 'serie_min') === '' ? null : Number(opt(r, 'serie_min')),
+      circuit: circuit_(opt(r, 'obwod'))
     }; });
   lap('wiersze');
   const sessions = readRows_('Sesje', SES_HEADERS, client.id), logs = readRows_('Log', LOG_HEADERS, client.id); lap('log');
@@ -1471,16 +1473,18 @@ function ownRows_(clientId, u, plan) {
   const mine = (plan || []).filter(r => String(r.klient).toLowerCase() === clientId);
   if (mine.some(r => Number(r.tydzien) === week && String(r.jednostka) === day && !own_(r))) return { error: 'Ta jednostka jest w planie trenera.' };
   const ex = [].concat(u.exercises || []).map(e => ({ name: String(e && e.name || '').trim().replace(/\s+/g, ' ').slice(0, 80),
-    sets: Math.round(Number(e && e.sets)), reps: String(e && e.reps === undefined ? '' : e.reps).trim().slice(0, 12), kg: e && e.kg })).filter(e => e.name);
+    sets: Math.round(Number(e && e.sets)), reps: String(e && e.reps === undefined ? '' : e.reps).trim().slice(0, 12), kg: e && e.kg, circuit: circuit_(e && e.circuit) })).filter(e => e.name);
   if (!ex.length) return { error: 'Dodaj co najmniej jedno ćwiczenie.' };
   if (ex.length > OWN_MAX) return { error: 'Najwyżej ' + OWN_MAX + ' ćwiczeń.' };
   if (ex.some(e => !(e.sets >= 1 && e.sets <= SETS_MAX) || !e.reps)) return { error: 'Serie 1–' + SETS_MAX + ' i powtórzenia przy każdym ćwiczeniu.' };
   const same = mine.filter(r => Number(r.tydzien) === week && !own_(r)), blok = same.length ? String(same[0].blok || '') : String((mine[mine.length - 1] || {}).blok || '');
   const title = 'Własny' + (String(u.title || '').trim() ? ' · ' + String(u.title).trim().slice(0, 40) : '');
+  // obwód tylko dla sąsiadów pod tą samą literą; pojedyncze ćwiczenie z literą = zwykłe
+  const solo = (e, i) => !(ex[i - 1] && ex[i - 1].circuit === e.circuit) && !(ex[i + 1] && ex[i + 1].circuit === e.circuit);
   return { rows: ex.map((e, i) => {
     const kg = e.kg === undefined || e.kg === null || String(e.kg).trim() === '' ? '' : (isFinite(Number(String(e.kg).replace(',', '.'))) ? Number(String(e.kg).replace(',', '.')) : String(e.kg).slice(0, 10));
     return { klient: clientId, tydzien: week, jednostka: day, tytul: title, data: date, nr: i + 1, cwiczenie: e.name, prio: 'A',
-      serie: e.sets, powt: e.reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: blok, zrodlo: 'klient' };
+      serie: e.sets, powt: e.reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: blok, zrodlo: 'klient', obwod: e.circuit && !solo(e, i) ? e.circuit : '' };
   }) };
 }
 
@@ -1805,7 +1809,9 @@ function przeglad() {
  * Każdy import zapisuje wiersz w zakładce „Import”.
  */
 const PLAN_HEADERS = ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'nr', 'cwiczenie', 'prio', 'serie', 'powt',
-  'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok', 'zrodlo', 'tryb', 'ciecie', 'serie_min'];
+  'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok', 'zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod'];
+/** obwód / superseria: jedna litera A–Z, inaczej brak */
+const circuit_ = v => { const t = String(v === undefined || v === null ? '' : v).trim().toUpperCase(); return /^[A-Z]$/.test(t) ? t : ''; };
 const PLAN_REQUIRED = ['klient', 'tydzien', 'jednostka', 'nr', 'cwiczenie', 'serie', 'powt'];
 
 function wczytajPlany(e) {
@@ -1846,9 +1852,13 @@ function wczytajPlany(e) {
 function validatePlan_(rows) {
   const e = [];
   if (!Array.isArray(rows) || !rows.length) return ['Plik nie zawiera listy wierszy planu'];
-  const seen = {}, zast = {};
+  const seen = {}, zast = {}, units = {};
   rows.forEach((r, i) => {
     const w = 'wiersz ' + (i + 1) + ': ';
+    const uk = [String(r.klient).toLowerCase(), r.tydzien, r.jednostka].join('|');
+    (units[uk] || (units[uk] = [])).push({ nr: Number(r.nr), c: blank_(r.obwod) ? '' : String(r.obwod).trim().toUpperCase(), i: i + 1 });
+    if (!blank_(r.obwod) && !circuit_(r.obwod)) e.push(w + 'obwod jako jedna litera A–Z (albo puste)');
+    if (!blank_(r.obwod) && !blank_(r.tryb)) e.push(w + 'obwod i tryb EMOM nie łączą się w jednym ćwiczeniu');
     PLAN_REQUIRED.forEach(k => { if (r[k] === undefined || r[k] === null || r[k] === '') e.push(w + 'brak „' + k + '”'); });
     if (r.data && !/^\d{4}-\d{2}-\d{2}$/.test(String(r.data))) e.push(w + 'data nie w formacie RRRR-MM-DD');
     if (r.serie !== undefined && !(Number(r.serie) >= 1 && Number(r.serie) <= SETS_MAX)) e.push(w + 'serie od 1 do ' + SETS_MAX);
@@ -1868,6 +1878,16 @@ function validatePlan_(rows) {
     const id = [String(r.klient).toLowerCase(), r.tydzien, r.jednostka, r.nr].join('|');
     if (seen[id]) e.push(w + 'powtórzony nr ' + r.nr + ' w ' + r.jednostka + ' tyg. ' + r.tydzien);
     seen[id] = 1;
+  });
+  // obwód: co najmniej 2 ćwiczenia jednostki pod tą samą literą, kolejne po sobie (wg nr)
+  Object.keys(units).forEach(uk => {
+    const u = units[uk].slice().sort((a, b) => a.nr - b.nr), by = {};
+    u.forEach((x, pos) => { if (circuit_(x.c)) (by[x.c] || (by[x.c] = [])).push(pos); });
+    Object.keys(by).forEach(c => {
+      const p = by[c], w = 'wiersz ' + u[p[0]].i + ': ';
+      if (p.length < 2) e.push(w + 'obwod ' + c + ' ma jedno ćwiczenie w jednostce (potrzeba co najmniej 2)');
+      else if (p[p.length - 1] - p[0] !== p.length - 1) e.push(w + 'ćwiczenia obwodu ' + c + ' muszą iść po sobie (kolejne nr)');
+    });
   });
   return e;
 }

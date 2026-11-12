@@ -1402,17 +1402,19 @@ test('Własny trening: kompleks z dwóch ćwiczeń (jedno „A + B”, powt. „
   const add = async n => { await p.fill('#ow-q', n); await p.dispatchEvent('#ow-q', 'input'); await p.click(`#ow-res .ow-add[data-n="${n}"]`); };
   const type = async (sel, v) => { await p.fill(sel, v); await p.dispatchEvent(sel, 'input'); };
   await add('Hammer Curl'); await add('Pull-up'); await add('Plank');
-  assert.equal((await p.$$('#ow-list [data-join]')).length, 2);                    // pierwsze nie ma poprzedniego
-  await p.click('#ow-list [data-tm="2"]'); assert.equal((await p.$$('#ow-list [data-join]')).length, 1);   // ćwiczenia na czas nie łączymy
+  assert.equal((await p.$$('#ow-list [data-link]')).length, 2);                    // pierwsze nie ma poprzedniego
+  await p.click('#ow-list [data-tm="2"]'); await p.click('#ow-list [data-link="2"]');
+  assert.deepEqual(await p.$$eval('#ow-list .ow-ch .opt b', b => b.map(x => x.textContent)), ['Obwód / superseria']);   // ćwiczenia na czas nie łączymy w kompleks
+  const join = async i => { await p.click(`#ow-list [data-link="${i}"]`); await p.click(`#ow-list [data-join="${i}"]`); };
   await type('#ow-list [data-i="0"][data-f="kg"]', '20');
-  await p.click('#ow-list [data-join="1"]');
+  await join(1);
   assert.deepEqual(await p.$$eval('#ow-list .ow-it b', b => b.map(x => x.textContent)), ['Hammer Curl + Pull-up', 'Plank']);
   assert.match(await p.textContent('#ow-list .ow-it'), /kompleks/);
   assert.equal(await p.inputValue('#ow-list [data-i="0"][data-f="reps"]'), '1+1');
   assert.equal(await p.inputValue('#ow-list [data-i="0"][data-f="kg"]'), '20');
   await p.click('#ow-list [data-split="0"]');                                    // rozłącz i połącz ponownie
   assert.deepEqual(await p.$$eval('#ow-list .ow-it b', b => b.map(x => x.textContent)), ['Hammer Curl', 'Pull-up', 'Plank']);
-  await p.click('#ow-list [data-join="1"]');
+  await join(1);
   await type('#ow-list [data-i="0"][data-f="reps"]', '3');
   await p.click('#ow-save'); assert.match(await p.textContent('#ow-err'), /powtórzenia każdej części/);
   await type('#ow-list [data-i="0"][data-f="reps"]', '1+2');
@@ -1424,6 +1426,107 @@ test('Własny trening: kompleks z dwóch ćwiczeń (jedno „A + B”, powt. „
   assert.equal(await p.getAttribute('.set[data-o="1"][data-s="1"] .reps', 'placeholder'), '3');     // 1+2 = 3 powtórzenia w serii
   await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(80);
   assert.deepEqual((({ order, set, name, kg, reps }) => ({ order, set, name, kg, reps }))(lastSet(calls)), { order: 1, set: 1, name: 'Hammer Curl + Pull-up', kg: 20, reps: 3 });
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+// --- obwód / superseria ---
+const CIRC = (() => {
+  const R = (o, name, x) => Object.assign({ week: 1, day: 'T1', title: 'FBW', date: '2026-10-06', order: o, name, prio: 'B', sets: 2, reps: '10', pct: null, kg: 20, rpe: 8, note: '', extra: 0, drop: 0, group: '', block: 'B1', swaps: [] }, x || {});
+  return Object.assign({}, PRO, { plan: [R(1, 'Przysiad', { prio: 'A' }), R(2, 'Pompki', { circuit: 'A', kg: '' }), R(3, 'Wiosłowanie hantlem', { circuit: 'A' }), R(4, 'Plank', { circuit: 'A', reps: '30 s', kg: '' }), R(5, 'Hammer Curl')] });
+})();
+
+for (const scheme of ['light', 'dark']) test(`Obwód ${scheme}: ramka A1–A3, „Teraz / Potem”, przerwa dopiero po rundzie, zapis serii bez zmian`, async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: CIRC, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.deepEqual(await p.$$eval('.grp .card', c => c.map(x => x.dataset.card + ':' + x.querySelector('.gl').textContent)), ['2:A1', '3:A2', '4:A3']);
+  assert.equal((await p.$$('.card[data-card="1"] .gl, .card[data-card="5"] .gl')).length, 0);
+  assert.equal(await p.textContent('.grp-h b'), 'Obwód A');
+  assert.equal(await p.textContent('.grp-r'), 'runda 1 z 2 · przerwa po rundzie');
+  assert.equal(await p.textContent('.grp-now'), 'Teraz: A1 · Pompki. Potem A2 · Wiosłowanie hantlem.');
+  const now = () => p.$$eval('.set.nowrow', r => r.map(x => x.dataset.o + '/' + x.dataset.s));
+  assert.deepEqual(await now(), ['2/1']);
+  await p.click('.set[data-o="2"][data-s="1"] .ok'); await p.waitForTimeout(80);
+  assert.equal(await p.isHidden('#rest'), true);                                 // w środku rundy bez przerwy
+  assert.equal(await p.textContent('.grp-now'), 'Teraz: A2 · Wiosłowanie hantlem. Potem A3 · Plank.');
+  assert.deepEqual(await now(), ['3/1']);
+  await p.click('.set[data-o="3"][data-s="1"] .ok'); await p.waitForTimeout(80);
+  assert.equal(await p.isHidden('#rest'), true);
+  assert.equal(await p.textContent('.grp-now'), 'Teraz: A3 · Plank. Potem przerwa.');
+  await p.click('.set[data-o="4"][data-s="1"] .ok'); await p.waitForTimeout(80);
+  assert.equal(await p.isVisible('#rest'), true);                                // koniec rundy → przerwa 1:30
+  assert.equal(await p.textContent('#rlbl'), 'Przerwa · Obwód A · przed rundą 2');
+  assert.match(await p.textContent('#rtime'), /^1:(30|29)$/);
+  assert.equal(await p.textContent('.grp-r'), 'runda 2 z 2 · przerwa po rundzie');
+  assert.deepEqual(await now(), ['2/2']);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.evaluate(() => document.querySelector('.grp').scrollIntoView()); await p.screenshot({ path: path.join(SCREENS, `obwod-${scheme}.png`), fullPage: true }); }
+  await p.click('#rest [data-r="0"]');
+  await p.click('.set[data-o="2"][data-s="1"] .ok'); await p.click('.set[data-o="2"][data-s="1"] .ok'); await p.waitForTimeout(80);   // ✓ → ✕ → puste: wraca do A1 w rundzie 1
+  assert.equal(await p.textContent('.grp-now'), 'Teraz: A1 · Pompki. Potem przerwa.');
+  await p.click('.set[data-o="2"][data-s="1"] .ok');
+  for (const o of [2, 3, 4]) { await p.click(`.set[data-o="${o}"][data-s="2"] .ok`); await p.waitForTimeout(60); }
+  assert.equal(await p.textContent('.grp-r'), 'zrobione ✓');
+  assert.equal(await p.textContent('#rlbl'), 'Przerwa · Obwód A');
+  await p.click('#rest [data-r="0"]');
+  await p.click('.set[data-o="5"][data-s="1"] .ok'); await p.waitForTimeout(80);   // poza obwodem jak dotąd: przerwa B 1:30 po każdej serii
+  assert.equal(await p.textContent('#rlbl'), 'Przerwa · Hammer Curl');
+  const sets = calls.filter(c => c.fn === 'logSet').map(c => c.args[0]);
+  assert.deepEqual((({ week, day, order, set, name, reps, kg, done }) => ({ week, day, order, set, name, reps, kg, done }))(sets.find(x => x.order === 4 && x.set === 1)),
+    { week: 1, day: 'T1', order: 4, set: 1, name: 'Plank', reps: 30, kg: '', done: true });       // payload serii jak w zwykłym ćwiczeniu
+  assert.deepEqual(p.external, []); assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Obwód: superseria z 2 ćwiczeń, tryb PROSTY i „Wszystko jak w planie”; litera przy jednym ćwiczeniu = zwykłe', async () => {
+  const calls = [], plan = CIRC.plan.filter(r => r.order !== 4).map(r => r.order === 5 ? Object.assign({}, r, { circuit: 'B' }) : r);
+  const { ctx, p } = await page(calls, false, { data: Object.assign({}, CIRC, { cfg: DATA.cfg, plan }) });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await p.textContent('.grp-h b'), 'Superseria A');
+  assert.equal((await p.$$('.grp')).length, 1); assert.equal((await p.$$('.card[data-card="5"] .gl')).length, 0);
+  await p.click('[data-all="2"]'); await p.waitForTimeout(100);
+  assert.equal(await p.textContent('.grp-now'), 'Teraz: A2 · Wiosłowanie hantlem. Potem przerwa.');
+  await p.click('[data-all="3"]'); await p.waitForTimeout(100);
+  assert.equal(await p.textContent('.grp-r'), 'zrobione ✓');
+  assert.equal(calls.filter(c => c.fn === 'logSet').length, 4);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Własny trening: obwód z kreatora (wspólne rundy, A1–A3, rozłączenie), zapis `circuit`, ramka na Treningu, „+ ćwiczenie” zachowuje obwód', async () => {
+  const calls = [], api = b => b.fn === 'getExNames' ? [['Pompki', '', 'klatka'], ['Wiosłowanie hantlem', '', 'plecy'], ['Plank', '', 'brzuch'], ['Hammer Curl', '', 'biceps']] : null;
+  const { ctx, p } = await page(calls, false, { data: Object.assign({}, PRO, { cfg: Object.assign({}, PRO.cfg, { own: true }) }), api });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('#nav [data-tab="plan"]'); await p.click('#own-new'); await p.waitForFunction(() => EXN.list.length > 0);
+  const add = async n => { await p.fill('#ow-q', n); await p.dispatchEvent('#ow-q', 'input'); await p.click(`#ow-res .ow-add[data-n="${n}"]`); };
+  const type = async (sel, v) => { await p.fill(sel, v); await p.dispatchEvent(sel, 'input'); };
+  const circ = async i => { await p.click(`#ow-list [data-link="${i}"]`); await p.click(`#ow-list [data-circ="${i}"]`); };
+  const names = () => p.$$eval('#ow-list .ow-it b', b => b.map(x => x.textContent));
+  for (const n of ['Hammer Curl', 'Pompki', 'Wiosłowanie hantlem', 'Plank']) await add(n);
+  await p.click('#ow-list [data-link="2"]');
+  assert.deepEqual(await p.$$eval('#ow-list .ow-ch .opt b', b => b.map(x => x.textContent)), ['Kompleks', 'Obwód / superseria']);
+  await p.click('#ow-list [data-circ="2"]');
+  assert.equal(await p.textContent('#ow-list .ow-gh b'), 'Superseria A · na zmianę');
+  await circ(3);                                                                 // trzecie dołącza do tego samego obwodu
+  assert.equal(await p.textContent('#ow-list .ow-gh b'), 'Obwód A · na zmianę');
+  assert.deepEqual(await names(), ['Hammer Curl', 'A1 · Pompki', 'A2 · Wiosłowanie hantlem', 'A3 · Plank']);
+  assert.equal((await p.$$('#ow-list .ow-grp [data-f="sets"]')).length, 0);        // w obwodzie jedno pole „rundy”
+  await p.click('#ow-list [data-uncirc="A"]'); assert.deepEqual(await names(), ['Hammer Curl', 'Pompki', 'Wiosłowanie hantlem', 'Plank']);
+  await circ(2); await circ(3);
+  await type('#ow-list [data-rounds="A"]', '4'); await p.click('#ow-list [data-tm="3"]');
+  await type('#ow-list [data-i="2"][data-f="kg"]', '20');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'wlasny-obwod.png') }); }
+  await p.click('#ow-save'); await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.deepEqual(calls.find(c => c.fn === 'addOwnUnit').args[0].exercises, [{ name: 'Hammer Curl', sets: 3, reps: '10', kg: '' },
+    { name: 'Pompki', sets: 4, reps: '10', kg: '', circuit: 'A' }, { name: 'Wiosłowanie hantlem', sets: 4, reps: '10', kg: '20', circuit: 'A' }, { name: 'Plank', sets: 4, reps: '30 s', kg: '', circuit: 'A' }]);
+  assert.deepEqual(await p.$$eval('.grp .card .gl', c => c.map(x => x.textContent)), ['A1', 'A2', 'A3']);
+  assert.equal(await p.textContent('.grp-r'), 'runda 1 z 4 · przerwa po rundzie');
+  await p.click('#own-add');                                                     // dopisanie ćwiczenia nie gubi obwodu
+  assert.match(await p.textContent('#ow-list'), /Obwód A · na zmianę.*4 rundy.*A1 · Pompki/s);
+  await add('Hammer Curl'); await p.click('#ow-save'); await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.deepEqual(calls.filter(c => c.fn === 'addOwnUnit').pop().args[0].exercises.map(e => e.circuit || ''), ['', 'A', 'A', 'A', '']);
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
