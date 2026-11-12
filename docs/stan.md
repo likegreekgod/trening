@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-10-25, aplikacja v32.
+Stan na 2026-11-12, aplikacja v33.
 
 ## Jak pracujemy
 
@@ -15,6 +15,7 @@ Stan na 2026-10-25, aplikacja v32.
 
 ## Ostatnio zrobione
 
+- 12.11 (v33): wyszukiwarka ćwiczeń (`exSearch`: własny trening, zamiana) układa wyniki wg trafności zamiast alfabetycznie: dokładna nazwa, nazwa zaczynająca się od zapytania, początki słów, reszta; przy remisie krótsza nazwa. „Clean” daje najpierw Clean, a nie „2-Position Clean”.
 - 26.10: import planu: opcjonalne pole `zastepuje` (blok do zamknięcia od pierwszej daty z pliku), wynik w Import. Do dopisania w SKILL.md skilla trenera (przebuduj ZIP).
 - 26.10: podgląd dla Claude: 5 ostatnich sesji każdej osoby (alfabetycznie, nieaktywni pominięci) zamiast 10 globalnie. Wyzwalacz bez zmian, plik odświeży się sam po wdrożeniu.
 - 26.10: podgląd „Trening – podgląd dla Claude” / zakładka „Ostatnie sesje” (`apps-script/Podglad.gs`) dla agenta z konektorem Drive. Po scaleniu: w edytorze Apps Script uruchom raz `instalujPodglad`.
@@ -37,7 +38,7 @@ Stan na 2026-10-25, aplikacja v32.
 
 ## Do obserwacji
 
-- Testy UI „Postęp → Tydzień” (light/dark) nie przechodzą od 26.10 także na czystym `main`: prawdopodobnie zależą od bieżącej daty. Do naprawy osobno.
+- Testy UI „Postęp → Tydzień” (light/dark) nie przechodziły 26.10 (zależą od bieżącej daty); 12.11 przechodzą. Do naprawy osobno, jeśli wrócą.
 - Czas ładowania przy rosnącym Logu (pole `ms`).
 - Reakcje klientów na zakładkę Trener i Postęp → Tydzień (czy czegoś brakuje, czy coś myli).
 - Zakładka Błędy i kolumna `bledy_7dni` w Przeglądzie: po kilku dniach zdecydować, czy dać sygnał.

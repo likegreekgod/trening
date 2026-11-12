@@ -370,6 +370,9 @@ test('ownWeek, ownNextDay, exSearch: własny trening klienta', () => {
   assert.deepEqual(L.exSearch(['Uginanie młotkowe'], base, '').map(r => r.name), ['Uginanie młotkowe']);   // pusto = tylko swoje
   assert.deepEqual(L.exSearch([], base, 'lancuch').map(r => r.name), ['Łańcuch – wiosłowanie']);           // bez polskich znaków
   assert.deepEqual(L.exSearch([], base, 'curl hammer').map(r => r.name), ['Hammer Curl']);
+  const oly = [['2-Position Clean', 1], ['Block Clean', 1], ['Clean', 1], ['Clean & Jerk', 1], ['Cleanse Stretch', 0], ['Power Clean', 1], ['Unclean Row', 0]];
+  assert.deepEqual(L.exSearch([], oly, 'Clean', 5).map(r => r.name), ['Clean', 'Clean & Jerk', 'Cleanse Stretch', 'Block Clean', 'Power Clean']);   // trafność przed alfabetem
+  assert.deepEqual(L.exSearch(['Power Clean'], oly, 'clean', 2).map(r => r.name), ['Power Clean', 'Clean']);
   assert.equal(L.exSearch([], base.concat(Array.from({ length: 30 }, (_, i) => ['Curl ' + i, 0])), 'curl').length, 12);
   assert.deepEqual([...L.lightWeeks([{ week: 1, sets: 3, reps: '5', kg: 100 }, { week: 2, sets: 3, reps: '5', kg: 100 }, { week: 2, sets: 9, reps: '10', kg: 50, own: true }])], []);
 });
