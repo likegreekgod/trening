@@ -7,7 +7,7 @@ Stan na 2026-11-13, aplikacja v40.
 ## Jak pracujemy
 
 - Repo: `C:\Users\dt\Desktop\trening-repo`. Sesję Claude Code otwieraj w tym folderze, wtedy `CLAUDE.md` wczytuje się sam.
-- Zmiana = gałąź → `npm test` (wszystko zielone) → commit i push gałęzi (kontener sesji jest tymczasowy). Brak `gh`; stan sprawdzaj przez publiczne API GitHuba.
+- Zmiana = gałąź → `npm test` (wszystko zielone) → commit i push gałęzi (kontener sesji jest tymczasowy; wysyłanie gałęzi bez pytania Damian potwierdził 13.11). Brak `gh`; stan sprawdzaj przez publiczne API GitHuba.
 - **PR (link `compare/main...gałąź?expand=1&title=…&body=…`) dopiero, gdy wszystko jest ustalone i Damian wyraźnie pozwoli** (ustalenie 13.11). Do tego czasu pokazuj zrzuty i opis, poprawki dokładaj na tę samą gałąź. Scala sam i pisze „ok”.
 - **Po zakończeniu zadania od razu oznacz je w plikach md jako zrobione** (ten plik, tabela „Stan” w planie, `decyzje.md` przy nowym ustaleniu), w tym samym commicie co kod, bez czekania na scalenie.
 - **Przy testach tłumacz Damianowi prostym językiem**: co test sprawdza, jak to robi i dlaczego, oraz co znaczył każdy błąd po drodze i jak został naprawiony. Chce rozumieć, co dzieje się w kodzie.
@@ -39,16 +39,10 @@ Stan na 2026-11-13, aplikacja v40.
 
 ## Czeka na Damiana
 
-- Scalenie v40 i próba na telefonie: czy okno „Trening zrobiony” po zapisie jednostki pokazuje sensowne liczby i porównanie.
-- Próba v39 na telefonie: czy karty mają dobrą wysokość, czy „⋯” w górnym pasku i w karcie nie chowa czegoś używanego na co dzień.
-- Próba obwodu na telefonie (własny trening z obwodem albo plan z kolumną `obwod`): czy przewijanie do następnego ćwiczenia i przerwa 1:30 po rundzie pasują.
-- Dopisanie do SKILL.md skilla trenera pola planu `obwod` (litera A–Z, min. 2 ćwiczenia po sobie w jednostce, bez EMOM) i przebudowanie ZIP-a.
-- Uprzedzenie klientów, że od v35 sen ocenia się odwrotnie niż dotąd (7 = bardzo dobry).
-- Sprawdzenie na iPhonie: aplikacja z ekranu głównego → wklejenie linku → plan.
-- Próba własnego treningu.
-- Wgranie ZIP-a skilla z 24.10 na claude.ai (skill zaktualizowany pod v31: nowe pola planu `tryb`, `ciecie`, `serie_min`, serie do 40, W… zarezerwowane, Klienci J/M, komentarze trenera, SKIP, nowe kolumny Przeglądu, menu, co widzi klient). Kopię SKILL.md trzymaj w `Desktop\hgvtjv\skill-aplikacja-treningowa-klienta`.
-- Test kolejki filmów na telefonie (wyjście z aplikacji w trakcie wysyłki).
-- Test ścieżki sztangi z nagrywaniem i 5–10 filmów testowych do strojenia analizy.
+- Decyzja o PR 2 (v40, gałąź wysłana, bez PR-a): czy okno „Trening zrobiony” jest gotowe; PR dopiero po zgodzie.
+- PR 3: wybór ze szkicu (wariant A z wykresem czy B sama lista; wygląd „Ostatnio” jako przycisku).
+
+Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPhone, własny trening, kolejka filmów, ścieżka sztangi) Damian potwierdził 13.11 jako zrobione.
 
 ## Do obserwacji
 
