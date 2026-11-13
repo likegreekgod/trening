@@ -36,8 +36,8 @@ Stan na 2026-11-13, aplikacja v41 (v40 i v41 na gałęzi, jeszcze bez PR-a).
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40) i PR 3 (v41) zrobione. Następny: PR 4 (rekord w chwili zapisu serii): najpierw szkic do akceptacji i pytanie, czy też w trybie PROSTY. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
-- **Zgłoszone 13.11 (plan v4, PR 10):** wybrane osoby (flaga w Klientach, np. sam Damian) mogą w jednostce z planu szybko dodać własne ćwiczenie, zamienić albo usunąć istniejące, gdy nie ma sprzętu. Opis, co już jest i czego brakuje, w `docs/plan-v4.md`. Kolejność względem PR 4 do ustalenia.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40) i PR 3 (v41) zrobione. Następny: PR 10 (zmiany w jednostce dla wybranych osób), potem PR 4 (rekord w chwili zapisu serii: szkic i pytanie, czy też w trybie PROSTY). Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Zgłoszone 13.11 (plan v4, PR 10):** wybrane osoby (flaga w Klientach, np. sam Damian) mogą w jednostce z planu szybko dodać własne ćwiczenie, zamienić albo usunąć istniejące, gdy nie ma sprzętu. Opis w `docs/plan-v4.md`. Ustalone: przed PR 4, przy każdej zmianie pytanie „Tylko dziś / Na stałe”. Szkic pokazany 13.11, czeka na akceptację.
 
 ## Czeka na Damiana
 

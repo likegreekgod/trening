@@ -96,7 +96,8 @@ Cel: wybrana osoba (np. sam Damian) może w trakcie treningu szybko dopasować j
 - Propozycja do szkicu: przycisk „+ ćwiczenie” pod ostatnią kartą jednostki (tylko z flagą) otwiera tę samą wyszukiwarkę co kreator własnego treningu (`exSearch`, filtr po partii, własna nazwa), z seriami i powtórzeniami; „Usuń” pod „⋯” karty dla ćwiczeń dodanych przez klienta, dla ćwiczeń z planu zostaje „Pomiń”.
 - Wymaga zmian w arkuszu (`apps-script/`): nowa akcja API dopisująca wiersz Planu do istniejącej jednostki z `zrodlo = klient` i kolejnym `nr`, oraz usuwająca taki wiersz. Do ustalenia: jak `mergePlan_` ma traktować dopisane wiersze przy ponownym wczytaniu planu (propozycja: zostają, jak własne treningi) i czy liczą się do wykonania planu w Podsumowaniu (propozycja: nie, jak `own_`).
 - Bez sieci: przez kolejkę, jak własny trening (`applyOwn`).
-- Pytania do Damiana przed szkicem: czy dodane ćwiczenie ma zostać tylko w tej jednostce, czy też wracać w kolejnych tygodniach; czy „usuń” ma dotyczyć także ćwiczeń z planu (dziś „Pomiń” zostawia ślad dla trenera).
+- **Ustalone 13.11:** robimy przed PR 4. Przy każdej zmianie (dodanie, zamiana, usunięcie) aplikacja pyta „Na jak długo?”: „Tylko dziś” albo „Na stałe” (= także kolejne tygodnie tej samej jednostki, do końca obecnego planu).
+- Szkic pokazany 13.11 (pliki poza repo, do odtworzenia skryptem z atrapą): przycisk „+ Ćwiczenie” pod ostatnią kartą; okno „Dodaj ćwiczenie” (szukaj, serie / powt. / kg, „Na jak długo?”); „Usuń z treningu…” pod „⋯” karty z tym samym pytaniem. Czeka na akceptację i decyzję, czy „Usuń” dotyczy też ćwiczeń z planu (rekomendacja: tak, ale wiersz Planu nie jest kasowany, zostaje ślad „usunięte przez klienta” i ćwiczenie nie liczy się do wykonania; „Pomiń” zostaje jako „dziś nie zrobiłem”).
 
 ## Otwarte pytania do Damiana (zadaj przy odpowiednim PR)
 
@@ -124,4 +125,4 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 7 | Podpowiedzi przy pierwszym użyciu | po decyzji |
 | 8 | Tryb skupienia | po decyzji, osobny szkic |
 | 9 | Raport po bloku, notatka do jednostki | po decyzji |
-| 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zgłoszone 13.11, do ustalenia (pytania, potem szkic); wymaga `apps-script/` |
+| 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zgłoszone 13.11, przed PR 4; szkic pokazany, czeka na akceptację; wymaga `apps-script/` |
