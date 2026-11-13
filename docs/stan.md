@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-13, aplikacja v43 (v40–v43 i zmiany w `apps-script/` na gałęzi, jeszcze bez PR-a).
+Stan na 2026-11-13, aplikacja v43 (v40–v43 i zmiany w `apps-script/` w PR #65, czeka na scalenie).
 
 ## Jak pracujemy
 
@@ -42,10 +42,9 @@ Stan na 2026-11-13, aplikacja v43 (v40–v43 i zmiany w `apps-script/` na gałę
 
 ## Czeka na Damiana
 
-- Decyzja o PR 2 (v40, gałąź wysłana, bez PR-a): czy okno „Trening zrobiony” jest gotowe; PR dopiero po zgodzie.
-- Decyzja o PR 3 (v41, ta sama gałąź, bez PR-a): czy okno „Historia” jest gotowe.
-- Decyzja o PR 10 (v42, ta sama gałąź). Po scaleniu: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
-- Decyzja o PR 11 (v43, ta sama gałąź): próba na telefonie, czy przypięta nazwa nie przeszkadza przy przewijaniu.
+- Scalenie PR #65 (v40–v43 + `apps-script/`: PR 2, 3, 10 i 11 planu v4), założonego 13.11 za zgodą Damiana.
+- Po scaleniu: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
+- Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
 
 Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPhone, własny trening, kolejka filmów, ścieżka sztangi) Damian potwierdził 13.11 jako zrobione.
 
