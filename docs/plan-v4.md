@@ -103,7 +103,7 @@ Cel: wybrana osoba (np. sam Damian) może w trakcie treningu szybko dopasować j
 
 - **Nazwa ćwiczenia przypięta u góry:** przy długiej karcie (rozgrzewki + serie) po przewinięciu nie widać, które to ćwiczenie. Nazwa ma zostać na górze ekranu, dopóki karta jest na ekranie, i zniknąć, gdy karta się kończy. Uwaga na chowany górny pasek (`header.hid`) i ramkę obwodu.
 - **Komentarz do ćwiczenia w osobnym oknie:** zamiast pola „Twój komentarz” w karcie okno `#sheet`; gdy komentarz już jest, okno go poprawia (aktualizuje), a nie dodaje kolejnego. Wpisany komentarz dalej widoczny w karcie jako tekst.
-- **Szkic pokazany 13.11** (pliki poza repo): nazwa przypięta w wariancie A (pełny nagłówek karty, nazwa w dwóch liniach) albo B (jedna linia z wielokropkiem, niższy pasek), w obu ▶ / „⋯” / strzałka zostają; komentarz w karcie jako tekst z ołówkiem, dotknięcie otwiera okno „Komentarz” z „Zapisz zmiany”, „Usuń komentarz”, „Anuluj”. Czeka na wybór.
+- **Szkic pokazany 13.11** (pliki poza repo): nazwa przypięta w wariancie A (pełny nagłówek karty, nazwa w dwóch liniach) albo B (jedna linia z wielokropkiem, niższy pasek), w obu ▶ / „⋯” / strzałka zostają; komentarz w karcie jako tekst z ołówkiem, dotknięcie otwiera okno „Komentarz” z „Zapisz zmiany”, „Usuń komentarz”, „Anuluj”. **Ustalone 13.11:** nazwa w wariancie B, komentarz jak na szkicu. Zrobione w v43.
 
 ## Otwarte pytania do Damiana (zadaj przy odpowiednim PR)
 
@@ -132,4 +132,4 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 8 | Tryb skupienia | po decyzji, osobny szkic |
 | 9 | Raport po bloku, notatka do jednostki | po decyzji |
 | 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zrobione (v42 + `apps-script/`): flaga Klienci N `edycja`, API `editPlan`, lib `planEdit`; szczegóły w `decyzje.md` |
-| 11 | Przypięta nazwa ćwiczenia przy przewijaniu; komentarz do ćwiczenia w osobnym oknie | odczyt potwierdzony, szkic pokazany 13.11, czeka na wybór wariantu |
+| 11 | Przypięta nazwa ćwiczenia przy przewijaniu; komentarz do ćwiczenia w osobnym oknie | zrobione (v43): nazwa przypięta w wariancie B (`stickDraw`, `.ch.stuck`), komentarz w oknie (`openNote`) |

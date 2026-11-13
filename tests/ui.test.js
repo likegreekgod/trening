@@ -935,6 +935,43 @@ test('Zmiany w jednostce bez sieci: kolejka, po ponownym otwarciu zmiana zostaje
   await ctx.close();
 });
 
+for (const scheme of ['light', 'dark']) test(`Przypięta nazwa ćwiczenia ${scheme}: przy przewijaniu długiej karty nazwa zostaje u góry w jednej linii i znika z końcem karty`, async () => {
+  const row = (order, name, sets) => ({ week: 1, day: 'T1', title: 'Siła', date: '2026-12-01', order, name, prio: 'A', sets, reps: '3', pct: null, kg: 60, rpe: 8, note: '', extra: null, drop: 0, group: '', swaps: [], infos: [], parts: [] });
+  const data = Object.assign({}, PRO, { plan: [row(1, 'Hang power snatch poniżej kolan z pauzą', 12), row(2, 'Przysiad', 12)] });
+  const { ctx, p } = await page([], false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const st = () => p.evaluate(() => [...document.querySelectorAll('.card[data-card] > .ch')].map(ch => { const r = ch.getBoundingClientRect(), n = ch.querySelector('.cn').getBoundingClientRect();
+    return { stuck: ch.classList.contains('stuck'), top: Math.round(r.top), h: Math.round(r.height), nameH: Math.round(n.height), head: Math.round(Math.max(0, document.querySelector('header').getBoundingClientRect().bottom)) }; }));
+  const cardTop = n => p.evaluate(o => Math.round(document.querySelector(`.card[data-card="${o}"]`).getBoundingClientRect().top + scrollY), n);
+  const to = async y => { await p.evaluate(v => window.scrollTo(0, v), y); await p.waitForTimeout(350); };
+  let s = await st();
+  assert.deepEqual(s.map(x => x.stuck), [false, false]);                            // na górze strony nic nie jest przypięte
+  assert.ok(s[0].nameH > 40);                                                       // długa nazwa w karcie w dwóch liniach
+  // przewinięcie w dół w środek pierwszej karty: górny pasek schowany, nazwa na samej górze, jedna linia
+  await to(await cardTop(1) + 400); s = await st();
+  assert.deepEqual([s[0].stuck, s[0].top, s[0].head, s[1].stuck], [true, 0, 0, false]);
+  assert.ok(s[0].nameH <= 24 && s[0].h <= 52, JSON.stringify(s[0]));
+  assert.ok(await p.evaluate(() => { const c = document.querySelector('.card[data-card="1"] .ch .cn'); return c.scrollWidth > c.clientWidth; }));   // przycięta wielokropkiem
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `przypieta-${scheme}.png`) }); }
+  // ikony w przypiętym pasku działają: „⋯” otwiera akcje tego ćwiczenia
+  await p.click('.card[data-card="1"] .ch [data-more]'); await p.waitForSelector('#sheet [data-mnote]');
+  assert.match(await p.textContent('#sheet-t'), /Hang power snatch/);
+  await p.click('#sheet [data-close]');
+  // lekko w górę: górny pasek wraca, nazwa siedzi tuż pod nim
+  await to(await cardTop(1) + 340); s = await st();
+  assert.ok(s[0].head > 40 && s[0].stuck && Math.abs(s[0].top - s[0].head) <= 1, JSON.stringify(s[0]));
+  // dalej w dół, do drugiej karty: pierwsza nazwa odjechała z kartą, przypięta jest druga
+  await to(await cardTop(2) + 300); s = await st();
+  assert.deepEqual([s[0].stuck, s[1].stuck, s[1].top], [false, true, 0]);
+  assert.ok(s[0].top < 0);
+  // zwinięta karta nie przypina nazwy
+  await p.click('.card[data-card="2"] .ch .fold-c'); await p.waitForTimeout(100);
+  assert.equal((await st())[1].stuck, false);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 for (const scheme of ['light', 'dark']) test(`Historia ćwiczenia ${scheme}: „Ostatnio” otwiera okno z wykresem i 5 ostatnimi treningami`, async () => {
   const { ctx, p } = await page([], false, { data: PROG, scheme });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
@@ -1449,17 +1486,40 @@ test('Komentarz do ćwiczenia: zapis z serią (uwagi) i poprawka wszystkich seri
   const calls = [];
   const { ctx, p } = await page(calls, false, { data: D17 });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="2"]');
-  await p.click('[data-more="2"]'); await p.click('#sheet [data-mnote]');
-  await p.fill('[data-note="2"]', 'face pull 3×10 na TRX'); await p.dispatchEvent('[data-note="2"]', 'change');
+  // pusty komentarz: „⋯” → Komentarz otwiera okno, w karcie nic nie ma
+  assert.equal(await p.isHidden('.card[data-card="2"] .exn'), true);
+  await p.click('[data-more="2"]'); await p.click('#sheet [data-mnote]'); await p.waitForSelector('#nt');
+  assert.equal(await p.textContent('#nt-ok'), 'Zapisz komentarz');
+  assert.equal(await p.$('#nt-del'), null);
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'nt');
+  await p.fill('.set[data-o="2"][data-s="2"] .kg', '22,5');                        // wpisana, niezapisana seria ma przetrwać zapis komentarza
+  await p.fill('#nt', 'face pull 3×10 na TRX'); await p.click('#nt-ok'); await p.waitForSelector('#sheet', { state: 'hidden' });
   assert.equal(calls.filter(c => c.fn === 'logNote').length, 0);                 // bez zapisanej serii: pójdzie z pierwszą
+  assert.equal(await p.textContent('.card[data-card="2"] .exn-x'), 'face pull 3×10 na TRX');
+  assert.equal(await p.inputValue('.set[data-o="2"][data-s="2"] .kg'), '22,5');
   await p.click('.set[data-o="2"][data-s="1"] .ok'); await p.waitForTimeout(80);
   assert.equal(lastSet(calls).note, 'face pull 3×10 na TRX');
-  await p.fill('[data-note="2"]', 'face pull 3×10 na TRX, guma'); await p.dispatchEvent('[data-note="2"]', 'change'); await p.waitForTimeout(80);
+  // komentarz już jest: dotknięcie tekstu w karcie otwiera okno z tym samym komentarzem i go poprawia (nie dodaje drugiego)
+  await p.click('.card[data-card="2"] .exn'); await p.waitForSelector('#nt');
+  assert.equal(await p.inputValue('#nt'), 'face pull 3×10 na TRX');
+  assert.equal(await p.textContent('#nt-ok'), 'Zapisz zmiany');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'komentarz-okno.png') }); }
+  await p.fill('#nt', 'face pull 3×10 na TRX, guma'); await p.click('#nt-ok'); await p.waitForTimeout(80);
   assert.deepEqual(calls.find(c => c.fn === 'logNote').args[0], { week: 1, day: 'T1', order: 2, note: 'face pull 3×10 na TRX, guma' });
+  assert.equal((await p.$$('.card[data-card="2"] .exn')).length, 1);
+  assert.equal(await p.textContent('.card[data-card="2"] .exn-x'), 'face pull 3×10 na TRX, guma');
+  // bez zmian w oknie = bez wysyłki; „Anuluj” też nic nie zmienia; „Usuń komentarz” czyści go w Logu i chowa w karcie
+  await p.click('.card[data-card="2"] .exn'); await p.click('#nt-ok'); await p.waitForTimeout(50);
+  await p.click('.card[data-card="2"] .exn'); await p.fill('#nt', 'coś innego'); await p.click('#sheet [data-close]'); await p.waitForTimeout(50);
+  assert.equal(calls.filter(c => c.fn === 'logNote').length, 1);
+  await p.click('.card[data-card="2"] .exn'); await p.click('#nt-del'); await p.waitForTimeout(80);
+  assert.deepEqual(calls.filter(c => c.fn === 'logNote').pop().args[0], { week: 1, day: 'T1', order: 2, note: '' });
+  assert.equal(await p.isHidden('.card[data-card="2"] .exn'), true);
   const again = Object.assign({}, D17, { logs: [{ id: 'robert|1|T1|2|1', cwiczenie: 'Face Pull', tydzien: 1, jednostka: 'T1', seria: 1, kg: 20, powt: 12, wykonane: 'TAK', typ: '', uwagi: 'z Logu' }] });
   const t = await page([], false, { data: again });
-  await t.p.goto(base + '?k=kabc'); await t.p.waitForSelector('[data-note="2"]');
-  assert.equal(await t.p.inputValue('[data-note="2"]'), 'z Logu');
+  await t.p.goto(base + '?k=kabc'); await t.p.waitForSelector('.card[data-card="2"] .exn');
+  assert.equal(await t.p.textContent('.card[data-card="2"] .exn-x'), 'z Logu');
   assert.equal(await t.p.$eval('.card[data-card="2"] .exn', d => !d.hidden), true);
   await t.ctx.close();
   assert.deepEqual(p.errors, []);
@@ -1755,11 +1815,11 @@ test('Karta v4: „+ seria (n)” wyszarza się po zużyciu limitu, pusty koment
   // przyciski dodawania w jednym rzędzie, tekst w jednej linii
   const tops = await p.$$eval('.card[data-card="1"] .adds .ghost', b => b.map(x => [Math.round(x.getBoundingClientRect().top), Math.round(x.getBoundingClientRect().height)]));
   assert.equal(new Set(tops.map(t => t[0])).size, 1); assert.ok(tops.every(t => t[1] === 44));
-  // komentarz: pusty niewidoczny, „⋯” → Komentarz pokazuje pole w karcie
+  // komentarz: pusty niewidoczny, „⋯” → Komentarz otwiera okno z polem
   assert.equal(await p.isHidden('.card[data-card="1"] .exn'), true);
   await p.click('[data-more="1"]'); await p.click('#sheet [data-mnote]');
-  assert.equal(await p.isHidden('#sheet'), true);
-  assert.equal(await p.evaluate(() => document.activeElement.dataset.note), '1');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'nt');
+  await p.click('#sheet [data-close]');
   // strzałka w kolumnie ikon zwija kartę tak samo jak nazwa
   await p.click('.card[data-card="1"] .fold-c');
   assert.equal(await p.getAttribute('.card[data-card="1"] .fold-c', 'aria-expanded'), 'false');

@@ -248,7 +248,7 @@
          font:800 22px/1 var(--f-display);letter-spacing:.06em}
   .tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
   .btn.sm{padding:8px 10px}
-  .btn.sm.x{border-color:var(--accent);color:var(--accent)}
+  .btn.sm.x,.btn.x{border-color:var(--accent);color:var(--accent)}
   .btn.sm.d{border-color:var(--accent);color:var(--accent);border-style:dashed}
   .btn.all{width:100%;margin-top:8px;border-color:var(--ok);color:var(--ok);border-width:2px}
   .bar{height:3px;background:var(--surface-2);flex:1 1 120px;overflow:hidden;display:none}
@@ -613,9 +613,21 @@
   .skipped{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:8px;font-size:14px;color:var(--ink-2);border-left:4px solid var(--muted);padding:2px 0 2px 10px}
   .card.skip{box-shadow:inset 4px 0 0 var(--muted),var(--shadow)}
   .card.skip .cn{color:var(--muted);text-decoration:line-through;text-decoration-thickness:2px}
-  .exn{margin-top:8px;border-top:1px dashed var(--line);padding-top:10px}
-  .exn label{display:block;margin:0 0 6px;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-  .exn-t{font:400 16px/1.35 var(--f-body);resize:vertical;min-height:44px}
+  /* komentarz do ćwiczenia: w karcie tekst z ołówkiem (przycisk), edycja w oknie */
+  .exn{display:flex;align-items:flex-start;gap:10px;width:100%;min-height:44px;margin-top:8px;border:0;border-top:1px dashed var(--line);border-radius:0;padding:10px 0 0;background:none;
+       text-align:left;color:var(--ink-2);font:400 15px/1.4 var(--f-body);cursor:pointer}
+  .exn[hidden]{display:none}
+  .exn small{display:block;margin-bottom:4px;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .exn-x{white-space:pre-wrap;overflow-wrap:anywhere}
+  .exn i{flex:none;margin-left:auto;font-style:normal;font-size:18px;line-height:1;color:var(--accent)}
+  #nt{font:400 16px/1.4 var(--f-body);min-height:120px;width:100%;text-transform:none;letter-spacing:0;resize:vertical}
+  /* nazwa ćwiczenia przypięta u góry przy przewijaniu otwartej karty (--stick = dolna krawędź widocznego górnego paska) */
+  .card[data-card]:not(.fold) > .ch{position:sticky;top:var(--stick,0px);z-index:3;background:var(--surface);margin:-16px -16px 0;padding:16px 16px 0;border-radius:var(--rc) var(--rc) 0 0}
+  .card[data-card] > .ch.stuck{padding:4px 16px 2px;border-bottom:1px solid var(--line);border-radius:0}
+  .ch.stuck .fold-b{align-items:center}
+  .ch.stuck .ft{display:block}
+  .ch.stuck .cn{display:block;font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ch.stuck .acts{margin-top:0}
   .emom{margin:10px 0 4px;background:var(--panel);color:var(--light-white);border-radius:var(--r);padding:10px 12px;display:grid;gap:8px}
   .em-top{display:flex;align-items:baseline;gap:6px}
   .em-l{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;opacity:.85}
@@ -983,7 +995,27 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
     last = y;
     h.classList.toggle('hid', d > 0 && y > h.offsetHeight);
   }, { passive: true });
+  window.addEventListener('scroll', stickDraw, { passive: true });
+  h.addEventListener('transitionend', stickDraw);
 })();
+/**
+ * Przypięta nazwa ćwiczenia: otwarta karta, której góra wyszła poza ekran, trzyma nagłówek (nazwa w jednej linii, ikony)
+ * pod górnym paskiem aplikacji, a gdy pasek jest schowany, na samej górze. Znika razem z końcem karty (position: sticky).
+ */
+function stickDraw(){
+  const top = Math.max(0, Math.round(document.querySelector('header').getBoundingClientRect().bottom));
+  document.documentElement.style.setProperty('--stick', top + 'px');
+  document.querySelectorAll('#main .card[data-card] > .ch').forEach(ch => {
+    const c = ch.parentNode, r = c.getBoundingClientRect();
+    const on = !c.classList.contains('fold') && r.top < top - 1 && r.bottom > top + 48;
+    if (on === ch.classList.contains('stuck')) return;
+    // przypięty pasek jest niższy niż nagłówek karty: różnicę oddaje margines, żeby treść pod spodem nie skoczyła
+    // (skok przesuwałby stronę i górny pasek aplikacji wracałby sam z siebie)
+    const h0 = ch.offsetHeight;
+    ch.classList.toggle('stuck', on);
+    ch.style.marginBottom = on ? (h0 - ch.offsetHeight) + 'px' : '';
+  });
+}
 
 /* ---------- okno (arkusz od dołu) i kalkulator talerzy ---------- */
 function openSheet(html){
@@ -2039,6 +2071,7 @@ function renderTrening(){
   document.querySelectorAll('[data-undel]').forEach(b => b.onclick = () => edUndel(+b.dataset.undel));
   vqMarks();
   bindFold(exs);
+  stickDraw();
   refreshStats();
   bindWeekBar();
   const sb = $('#sb-ok'); if (sb) sb.onclick = () => { try { localStorage.setItem(SBK, '1'); } catch (e) {} sb.closest('.sbnote').remove(); };
@@ -2336,11 +2369,28 @@ function openMore(ex){
   on('[data-swap]', () => openSwap(ex));
   on('[data-skip]', () => openSkip(ex));
   on('[data-del]', () => openDel(ex));
-  on('[data-mnote]', () => {
-    setFold(ex.order, false);
-    const box = document.querySelector(`.card[data-card="${ex.order}"] .exn`); if (!box) return;
-    box.hidden = false; box.scrollIntoView({ block: 'center' }); box.querySelector('textarea').focus();
-  });
+  on('[data-mnote]', () => openNote(ex));
+}
+/** okno „Komentarz”: jeden komentarz na ćwiczenie; gdy już jest, okno go poprawia (albo usuwa), a nie dodaje kolejnego */
+function openNote(ex){
+  const was = exNote(ex);
+  openSheet(`<h2 id="sheet-t">Komentarz</h2><p class="sub">${esc(ex.name)} · widzi go trener</p>
+    <label class="fl" for="nt">${was ? 'Twój komentarz (popraw albo dopisz)' : 'Twój komentarz'}</label>
+    <textarea id="nt" rows="4" maxlength="500" placeholder="np. 3×10 na TRX zamiast wyciągu">${esc(was)}</textarea>
+    <button type="button" class="btn p" id="nt-ok">${was ? 'Zapisz zmiany' : 'Zapisz komentarz'}</button>
+    ${was ? '<button type="button" class="btn x" id="nt-del">Usuń komentarz</button>' : ''}
+    <button type="button" class="btn" data-close>Anuluj</button>`);
+  const t = $('#nt'); t.focus(); try { t.setSelectionRange(t.value.length, t.value.length); } catch (e) {}
+  const save = v => {
+    closeSheet();
+    if (v === was) return;
+    setNote(ex, v);
+    const box = document.querySelector(`.card[data-card="${ex.order}"] .exn`);     // karta bez przerysowania: wpisane, niezapisane serie zostają
+    if (box) { box.hidden = !v; box.querySelector('.exn-x').textContent = v; }
+    if (!v) toast('Komentarz usunięty.');
+  };
+  $('#nt-ok').onclick = () => save(t.value.trim());
+  const d = $('#nt-del'); if (d) d.onclick = () => save('');
 }
 /** kompleks z kilkoma filmami: lista „Jak wykonać” */
 function openInf(ex){
@@ -2369,9 +2419,8 @@ function card(ex, tag){
   const dropInfo = plannedDrops(ex) ? `<div class="hint">+ ${plannedDrops(ex)} × drop set po ostatniej serii (ok. −20% ciężaru, do upadku technicznego).</div>` : '';
   const sk = ex.skip, gone = sk && !ex.sets, emom = isEmom(ex) && !gone;
   const note = exNote(ex);
-  // komentarz: pusty schowany (otwiera go „⋯”), wpisany widoczny w karcie
-  const noteBox = `<div class="exn" ${note ? '' : 'hidden'}><label for="exn-${ex.order}">Twój komentarz</label>
-      <textarea class="exn-t" id="exn-${ex.order}" data-note="${ex.order}" rows="${Math.min(5, Math.max(1, note.split('\n').length))}" maxlength="500" placeholder="np. 3×10 na TRX zamiast wyciągu" aria-label="Komentarz do ćwiczenia ${esc(ex.name)}">${esc(note)}</textarea></div>`;
+  // komentarz: pusty schowany (dodaje go „⋯” → Komentarz), wpisany widoczny w karcie; dotknięcie otwiera okno z tym samym komentarzem do poprawy
+  const noteBox = `<button type="button" class="exn" data-note="${ex.order}" ${note ? '' : 'hidden'} aria-label="Popraw komentarz do ćwiczenia ${esc(ex.name)}"><span><small>Twój komentarz</small><span class="exn-x">${esc(note)}</span></span><i aria-hidden="true">✎</i></button>`;
   const skipLine = sk ? `<div class="skipped"><span>${gone ? 'Pominięte' : 'Skrócone do ' + ex.sets + ' z ' + ex.planSets + ' ' + plural(ex.planSets, 'serii', 'serii', 'serii')}${sk.why ? ' · ' + esc(sk.why) : ''}</span><button type="button" class="btn sm" data-unskip="${ex.order}">Przywróć</button></div>` : '';
   // film „Jak wykonać”: ikona w nagłówku (jeden film = link, kilka = lista); bez filmu puste miejsce, żeby „⋯” i strzałka stały w miejscu
   const infs = ex.swap ? [] : (ex.infos || []), prioTxt = ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne';
@@ -2668,11 +2717,8 @@ function bind(exs, s0){
   document.querySelectorAll('[data-inf]').forEach(b => b.onclick = () => openInf(exOf(b.dataset.inf)));
   document.querySelectorAll('[data-unswap]').forEach(b => b.onclick = () => { setSwap(exOf(b.dataset.unswap), null); toast('Wrócono do ćwiczenia z planu.'); renderTrening(); });
   document.querySelectorAll('[data-unskip]').forEach(b => b.onclick = () => { unSkip(exOf(b.dataset.unskip)); toast('Przywrócono ćwiczenie.'); renderTrening(); });
-  // komentarz do ćwiczenia: 1 linia, rośnie z treścią; zapis po wyjściu z pola
-  document.querySelectorAll('[data-note]').forEach(t => {
-    t.oninput = () => { t.rows = Math.min(5, Math.max(1, t.value.split('\n').length, Math.ceil(t.value.length / 34))); };
-    t.onchange = () => setNote(exOf(t.dataset.note), t.value.trim());
-  });
+  // komentarz do ćwiczenia: dotknięcie tekstu w karcie otwiera okno z tym komentarzem
+  document.querySelectorAll('[data-note]').forEach(b => b.onclick = () => openNote(exOf(b.dataset.note)));
   exs.filter(ex => isEmom(ex) && !(ex.skip && !ex.sets)).forEach(ex => bindEmom(ex, s0, { rowsOf, rowOf, addRow, refreshDel }));
   // tryb prosty: zaznacz wszystkie niezapisane serie robocze ćwiczenia
   document.querySelectorAll('[data-all]').forEach(b => b.onclick = () => {

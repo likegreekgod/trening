@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-13 · Przypięta nazwa ćwiczenia i komentarz w oknie (v43, plan v4 PR 11)
+
+- Zgłoszone przez Damiana na zrzutach z telefonu: w długiej karcie (rozgrzewki + serie) po przewinięciu nie widać, które to ćwiczenie; pole komentarza w karcie ma być osobnym oknem.
+- Nazwa: nagłówek otwartej karty przypina się u góry ekranu (pod górnym paskiem aplikacji, a gdy pasek jest schowany, na samej górze) i odjeżdża razem z końcem karty. Wybrany wariant B: po przypięciu nazwa w jednej linii z wielokropkiem, pasek ok. 50 px; ikony ▶ / „⋯” / strzałka zostają. Odrzucony wariant A (pełna nazwa w dwóch liniach, wyższy pasek). Zwinięta karta nie przypina nazwy.
+- Komentarz: jeden na ćwiczenie. W karcie jest tekstem z ołówkiem (pusty niewidoczny); dotknięcie albo „⋯” → Komentarz otwiera okno z tym samym komentarzem: „Zapisz zmiany”, „Usuń komentarz”, „Anuluj”. Zapis komentarza nie przerysowuje karty, więc wpisane, niezapisane serie zostają. Zapis do Logu bez zmian (`setNote`, `logNote`).
+
 ## 2026-11-13 · Zmiany w jednostce trenera dla wybranych osób (v42, plan v4 PR 10)
 
 - Flaga: Klienci N `edycja` = TAK (`cfg.edit`), domyślnie wyłączone. Tylko jednostki trenera, niezakończone; własny trening ma swój kreator.
