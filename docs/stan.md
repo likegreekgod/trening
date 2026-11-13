@@ -43,7 +43,7 @@ Stan na 2026-11-13, aplikacja v42 (v40–v42 i zmiany w `apps-script/` na gałę
 
 - Decyzja o PR 2 (v40, gałąź wysłana, bez PR-a): czy okno „Trening zrobiony” jest gotowe; PR dopiero po zgodzie.
 - Decyzja o PR 3 (v41, ta sama gałąź, bez PR-a): czy okno „Historia” jest gotowe.
-- Decyzja o PR 10 (v42, ta sama gałąź). Po scaleniu: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek kolumny dopisać ręcznie albo przez „Sprawdź arkusz”), i dopisać flagę do SKILL.md skilla trenera.
+- Decyzja o PR 10 (v42, ta sama gałąź). Po scaleniu: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - PR 11: potwierdzić odczyt dwóch pomysłów ze zrzutów (opis w `docs/plan-v4.md`).
 
 Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPhone, własny trening, kolejka filmów, ścieżka sztangi) Damian potwierdził 13.11 jako zrobione.
