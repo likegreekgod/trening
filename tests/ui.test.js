@@ -1306,7 +1306,7 @@ test('Pominięcie: B bez powodu, A/K z powodem; „Skróć trening” wg ciecie 
   await p.click('#sheet [data-why="ból"]'); await p.fill('#sk-txt', 'kolano'); await p.click('#sk-ok'); await p.waitForTimeout(80);
   assert.equal(lastSet(calls).note, 'ból: kolano');
   // Skróć: Plank (ciecie 1) cały, Przysiad (ciecie 2) do serie_min 1
-  await p.click('#cut'); await p.fill('#ct-min', '11'); await p.dispatchEvent('#ct-min', 'input');
+  await p.click('#umore'); await p.click('#cut'); await p.fill('#ct-min', '11'); await p.dispatchEvent('#ct-min', 'input');
   assert.deepEqual(await p.$$eval('#ct-out li', l => l.map(x => x.textContent)), ['Plank pomiń', 'Przysiad 2 → 1 seria']);
   await p.click('#ct-ok'); await p.waitForTimeout(80);
   const sk = calls.filter(c => c.fn === 'logSet' && c.args[0].typ === 'SKIP').map(c => c.args[0].order + ':' + c.args[0].note);
@@ -1325,7 +1325,8 @@ test('Pominięcie: B bez powodu, A/K z powodem; „Skróć trening” wg ciecie 
   assert.match(await p.textContent('.card[data-card="4"] .fsum'), /2 z 2 serii · ✓/);
   for (const s of [1, 2]) { await p.click(`.set[data-o="2"][data-s="${s}"] .ok`); await p.waitForTimeout(50); }
   await p.$eval('.card[data-card="2"]', c => c.classList.remove('fold'));
-  await p.click('#fold-all');
+  assert.equal(await p.$('.utools'), null);                                       // v39: akcje jednostki pod „⋯” w górnym pasku
+  await p.click('#umore'); await p.click('#fold-all');
   assert.equal(await p.$eval('.card[data-card="2"]', c => c.classList.contains('fold')), true);
   await p.reload(); await p.waitForSelector('.card[data-card="4"]');
   assert.equal(await p.$eval('.card[data-card="4"]', c => c.classList.contains('fold')), true);
@@ -1567,6 +1568,13 @@ test('Karta v4: „+ seria (n)” wyszarza się po zużyciu limitu, pusty koment
   assert.equal(await p.getAttribute('.card[data-card="1"] .fold-c', 'aria-expanded'), 'false');
   await p.click('.card[data-card="1"] .fold-b');
   assert.equal(await p.getAttribute('.card[data-card="1"] .fold-b', 'aria-expanded'), 'true');
+  // v39: etykieta priorytetu bez własnego rzędu: otwarta karta = na początku recepty, zwinięta = w linii z wynikiem
+  assert.equal(await p.isHidden('.card[data-card="1"] .ft .badge'), true);
+  assert.match((await p.textContent('.card[data-card="1"] .rx')).trim(), /^główne/);
+  await p.click('.card[data-card="1"] .fold-c');
+  const ys = await p.$eval('.card[data-card="1"] .ft', f => [f.querySelector('.badge'), f.querySelector('.fsum')].map(e => { const r = e.getBoundingClientRect(); return Math.round(r.top + r.height / 2); }));
+  assert.ok(Math.abs(ys[0] - ys[1]) <= 3, 'etykieta i wynik w jednej linii: ' + ys);
+  assert.equal(await p.isHidden('.card[data-card="1"] .rx'), true);
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });

@@ -100,7 +100,7 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 
 | PR | Zakres | Stan |
 |---|---|---|
-| 1 | Lżejsza karta ćwiczenia | zrobione (v38), czeka na scalenie |
+| 1 | Lżejsza karta ćwiczenia | zrobione (v38, scalone) + poprawka v39 (etykieta w linii, „⋯” jednostki w górnym pasku) |
 | 2 | Podsumowanie po treningu | do zrobienia (szkic) |
 | 3 | Historia ćwiczenia w karcie | do zrobienia (szkic) |
 | 4 | Rekord w chwili zapisu | do zrobienia (szkic) |

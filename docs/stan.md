@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-12, aplikacja v38.
+Stan na 2026-11-13, aplikacja v39.
 
 ## Jak pracujemy
 
@@ -15,6 +15,7 @@ Stan na 2026-11-12, aplikacja v38.
 
 ## Ostatnio zrobione
 
+- 13.11 (v39): niższe karty: etykieta priorytetu w linii z wynikiem (zwinięta) albo receptą (otwarta); „Skróć trening” i „Zwiń zrobione” pod „⋯” w górnym pasku zamiast rzędu przycisków.
 - 12.11 (v38): plan v4 PR 1, lżejsza karta ćwiczenia: ikony ▶ / „⋯” / strzałka w stałej kolumnie nagłówka, Komentarz, Zamień i Pomiń pod „⋯”, jeden rząd „+ rozgrzewka / + seria (n) / + drop set” pod seriami.
 - 12.11 (v37): obwód / superseria: kolumna Planu `obwod` (litera), ramka A1–A3 i przerwa po rundzie na Treningu, „Połącz z poprzednim” (Kompleks / Obwód) w kreatorze własnego treningu. Wymaga też scalenia `apps-script/` (wdroży się samo).
 - 12.11 (v36): własny trening: kompleks „A + B” z kreatora („⛓ Kompleks z poprzednim”, „Rozłącz”), film każdej części od razu.
