@@ -99,6 +99,11 @@ Cel: wybrana osoba (np. sam Damian) może w trakcie treningu szybko dopasować j
 - **Ustalone 13.11:** robimy przed PR 4. Przy każdej zmianie (dodanie, zamiana, usunięcie) aplikacja pyta „Na jak długo?”: „Tylko dziś” albo „Na stałe” (= także kolejne tygodnie tej samej jednostki, do końca obecnego planu).
 - Szkic pokazany 13.11 (pliki poza repo, do odtworzenia skryptem z atrapą): przycisk „+ Ćwiczenie” pod ostatnią kartą; okno „Dodaj ćwiczenie” (szukaj, serie / powt. / kg, „Na jak długo?”); „Usuń z treningu…” pod „⋯” karty z tym samym pytaniem. Czeka na akceptację i decyzję, czy „Usuń” dotyczy też ćwiczeń z planu (rekomendacja: tak, ale wiersz Planu nie jest kasowany, zostaje ślad „usunięte przez klienta” i ćwiczenie nie liczy się do wykonania; „Pomiń” zostaje jako „dziś nie zrobiłem”).
 
+### PR 11 · Dwie poprawki karty (zgłoszone 13.11 na zrzutach z odręcznymi dopiskami; odczyt do potwierdzenia)
+
+- **Nazwa ćwiczenia przypięta u góry:** przy długiej karcie (rozgrzewki + serie) po przewinięciu nie widać, które to ćwiczenie. Nazwa ma zostać na górze ekranu, dopóki karta jest na ekranie, i zniknąć, gdy karta się kończy. Uwaga na chowany górny pasek (`header.hid`) i ramkę obwodu.
+- **Komentarz do ćwiczenia w osobnym oknie:** zamiast pola „Twój komentarz” w karcie okno `#sheet`; gdy komentarz już jest, okno go poprawia (aktualizuje), a nie dodaje kolejnego. Wpisany komentarz dalej widoczny w karcie jako tekst.
+
 ## Otwarte pytania do Damiana (zadaj przy odpowiednim PR)
 
 1. PR 1: które akcje zostają na wierzchu karty, a które idą pod „⋯”.
@@ -125,4 +130,5 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 7 | Podpowiedzi przy pierwszym użyciu | po decyzji |
 | 8 | Tryb skupienia | po decyzji, osobny szkic |
 | 9 | Raport po bloku, notatka do jednostki | po decyzji |
-| 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zgłoszone 13.11, przed PR 4; szkic pokazany, czeka na akceptację; wymaga `apps-script/` |
+| 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zrobione (v42 + `apps-script/`): flaga Klienci N `edycja`, API `editPlan`, lib `planEdit`; szczegóły w `decyzje.md` |
+| 11 | Przypięta nazwa ćwiczenia przy przewijaniu; komentarz do ćwiczenia w osobnym oknie | zgłoszone 13.11 na zrzutach, do potwierdzenia i szkicu |

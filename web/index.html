@@ -568,6 +568,15 @@
          padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:grid;gap:12px;max-width:640px;margin:0 auto}
   .sh-in h2{margin:0;font:800 28px/1 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink-2)}
   .sh-in .sub{margin:-6px 0 0}
+  /* zmiany w jednostce trenera (flaga „edycja”) */
+  .ed-q{text-align:left}
+  .sh-in .ed-s{margin:0}
+  .ed-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .ed-3 input{width:100%;min-width:0}
+  .ed-rm{margin:10px 0 var(--gap);display:grid;gap:6px}
+  .ed-rm .lbl{text-align:left}
+  .ed-r{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;color:var(--ink-2)}
+  .ed-r span{text-decoration:line-through;text-decoration-color:var(--muted);min-width:0}
   /* okno „Trening zrobiony” */
   .dn-h{display:flex;align-items:center;gap:12px}
   .dn-ck{flex:none;width:44px;height:44px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:800 24px/1 var(--f-display)}
@@ -671,10 +680,11 @@ let EXTRA_DEF = 0;     // Klienci H „dod_serie”; Plan „dod_serie” nadpis
 let NAME = '';
 let SCALE = 'RPE';     // Klienci K „skala” (RPE/RIR); przełącznik w nagłówku zapamiętany w telefonie (sc_<klucz>)
 let OLY_CEIL = 0.05;   // Klienci L „sufit_oly”: ułamek 1RM ponad plan dla bojów
+let EDIT = false;    // Klienci N „edycja” = TAK: dodawanie, usuwanie i zamiana na stałe w jednostce trenera
 let SWAP = '';         // Klienci J „zamiana”: TRENER (dawne TAK) = zamienniki z planu i bazy, DOWOLNA = cała baza + własna nazwa, '' = brak
 function applyCfg(c){
   if (!c) return;
-  PAIN = !!c.pain; SIMPLE = !!c.simple; EXTRA_DEF = Number(c.extra) || 0;
+  PAIN = !!c.pain; SIMPLE = !!c.simple; EXTRA_DEF = Number(c.extra) || 0; EDIT = !!c.edit;
   NAME = c.name || ''; document.title = 'Trening – ' + c.name;
   let own = null; try { own = localStorage.getItem('sc_' + KEY); } catch (e) {}
   SCALE = own || (c.scale === 'RIR' ? 'RIR' : 'RPE');
@@ -692,7 +702,7 @@ const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
 const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
-  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, restSec, fmtClock, plates,
+  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, planEdit, restSec, fmtClock, plates,
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
@@ -1028,6 +1038,7 @@ function useData(d){
     if (it.fn === 'deleteSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, deleted: true }; }   // usunięte bez sieci (np. cofnięte pominięcie)
     if (it.fn === 'logNote') Object.keys(LOGS).forEach(k => { const q = k.split('|'); if (q[1] === String(p.week) && q[2] === String(p.day) && q[3] === String(p.order) && !/SKIP/.test(LOGS[k].typ || '')) LOGS[k].uwagi = p.note; });
     if (it.fn === 'przesunJednostke') applyMoves(p, false);
+    if (it.fn === 'editPlan') applyEdit(p, false);                            // zmiana w jednostce trenera czekająca w kolejce
     if (it.fn === 'addOwnUnit') applyOwn(p, false);                           // własny trening czekający w kolejce
     if (it.fn === 'saveDyspozycja') applyReady(p, false);
   });
@@ -1622,6 +1633,7 @@ function openSwap(ex){
     <div class="opts why" role="group" aria-label="Powód">${SWAP_WHY.map(w => `<button type="button" class="opt" data-why="${w}">${w}</button>`).join('')}</div>
     <p class="hint" id="sw-hint" hidden>Ból: na końcu treningu zaznacz miejsce i oceń ból 0–10 w podsumowaniu.</p>
     <p class="sub" id="sw-sel" aria-live="polite"></p>
+    ${edOn(ex) ? lenSeg('Na stałe = to ćwiczenie także w kolejnych tygodniach tego treningu (' + esc(cur.day) + '), do końca obecnego planu.') : ''}
     <button type="button" class="btn p" id="sw-ok" disabled>Zamień</button>
     <button type="button" class="btn" data-close>Anuluj</button>`);
   const upd = () => {
@@ -1644,12 +1656,118 @@ function openSwap(ex){
   if (q) { q.oninput = () => res(q.value); exnLoad(() => { const qq = $('#sw-q'); if (qq) res(qq.value); }); }
   bindTo();
   document.querySelectorAll('#sheet [data-why]').forEach(b => b.onclick = () => { why = b.dataset.why; upd(); });
+  const len = bindLen();
   $('#sw-ok').onclick = () => {
+    const forever = len();
     setSwap(ex, { from: ex.name, to, why }); closeSheet();
-    toast('Zamieniono na: ' + to + '. Serie zapiszą się pod nową nazwą.');
+    const n = forever ? edSend(Object.assign({ op: 'swap', week: cur.week, day: cur.day, order: ex.order, to, forever: true }, edDx(to))) : 0;
+    toast('Zamieniono na: ' + to + '.' + (forever ? (n ? ' Także w kolejnych tygodniach: ' + n + '.' : ' W kolejnych tygodniach tego ćwiczenia nie ma.') : ' Serie zapiszą się pod nową nazwą.'));
     renderTrening();
   };
   upd();
+}
+
+/* ---------- zmiany w jednostce trenera dla osób z flagą „edycja”: dodaj / usuń / zamień, tylko ten trening albo na stałe ---------- */
+/** czy ćwiczenie można zmieniać: flaga klienta, jednostka trenera, jeszcze niezakończona */
+const edOn = ex => EDIT && !ex.own && !sessDone(cur.week, cur.day);
+const edDone = () => { const d = {}; Object.keys(SESS).forEach(k => { d[String(k).split('|').slice(-2).join('|')] = 1; }); return d; };
+/** nanosi zmianę na dane w telefonie (lib planEdit); save = zapis w pamięci telefonu. Zwraca wynik planEdit. */
+function applyEdit(p, save){
+  if (!DATA) return { error: 'Brak danych.' };
+  const r = planEdit(DATA.plan, DATA.removed || [], edDone(), p);
+  if (r.error) return r;
+  DATA.plan = r.plan; DATA.removed = r.removed; PLAN = DATA.plan;
+  if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
+  return r;
+}
+/** zmiana lokalnie + wysyłka (bez sieci: kolejka); zwraca liczbę zmienionych wierszy albo -1 przy błędzie */
+function edSend(p){
+  // pamięć telefonu (d_<klucz>) dostaje zmianę dopiero po potwierdzeniu serwera: do tego czasu zmiana żyje w kolejce
+  // i przy ponownym otwarciu jest nanoszona na dane z pamięci dokładnie raz
+  const r = applyEdit(p, false);
+  if (r.error) { toast(r.error); return -1; }
+  send('editPlan', p).then(() => { try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {} if (r.partial) refreshData(); }).catch(() => {});
+  return r.n;
+}
+/** film „Jak wykonać” i partie nowego ćwiczenia: z planu albo z bazy (getExNames) */
+function edDx(n){
+  const lc = s => String(s).toLowerCase(), p = PLAN.find(r => lc(r.name) === lc(n) && (r.infos || []).length), b = EXN.list.find(x => lc(x[0]) === lc(n));
+  return { infos: p ? p.infos : b && /^https?:\/\//i.test(String(b[1])) ? [{ n: b[0], u: b[1] }] : [],
+    parts: p ? p.parts || [] : b && b[2] ? String(b[2]).split(';').map(s => s.trim()).filter(Boolean) : [] };
+}
+const lenSeg = txt => `<div class="lbl ed-q">Na jak długo?</div><div class="seg" role="group" aria-label="Na jak długo">
+    <button type="button" data-len="0" aria-pressed="true">Tylko ten trening</button><button type="button" data-len="1" aria-pressed="false">Na stałe</button></div>
+    <p class="sub ed-s">${txt}</p>`;
+/** przełącznik „Tylko ten trening / Na stałe” w otwartym oknie; zwraca funkcję czytającą wybór */
+function bindLen(){
+  let v = false;
+  document.querySelectorAll('#sheet [data-len]').forEach(b => b.onclick = () => { v = b.dataset.len === '1';
+    document.querySelectorAll('#sheet [data-len]').forEach(x => x.setAttribute('aria-pressed', String((x.dataset.len === '1') === v))); });
+  return () => v;
+}
+function openAdd(){
+  let name = '';
+  openSheet(`<h2 id="sheet-t">Dodaj ćwiczenie</h2><p class="sub">${esc((curExs()[0] || {}).title || cur.day)} · na koniec treningu</p>
+    <label class="fl">Szukaj ćwiczenia<input id="ed-q" autocomplete="off" placeholder="np. wykroki, curl, plank"></label>
+    <div id="ed-res" class="ow-res"></div>
+    <p class="sub" id="ed-sel" aria-live="polite"></p>
+    <div class="ed-3"><label class="fl">Serie<input id="ed-sets" inputmode="numeric" value="3"></label><label class="fl">Powt.<input id="ed-reps" value="10"></label><label class="fl">Kg<input id="ed-kg" inputmode="decimal" placeholder="—"></label></div>
+    ${lenSeg('Na stałe = także w kolejnych tygodniach tego treningu (' + esc(cur.day) + '), do końca obecnego planu.')}
+    <p class="hint" id="ed-err" role="alert" hidden></p>
+    <button type="button" class="btn p" id="ed-ok" disabled>Dodaj do treningu</button>
+    <button type="button" class="btn" data-close>Anuluj</button>`);
+  const q = $('#ed-q'), pick = n => {
+    name = n; const last = PLAN.slice().reverse().find(r => r.name === n);
+    if (last) { $('#ed-sets').value = last.sets; $('#ed-reps').value = String(last.reps); $('#ed-kg').value = last.kg === '' ? '' : String(fmtKg(last.kg)); }
+    q.value = ''; res(''); $('#ed-sel').textContent = 'Wybrane: ' + n; $('#ed-ok').disabled = false;
+  };
+  const res = v => {
+    const mine = [...new Set(PLAN.slice().reverse().map(r => r.name))], r = v.trim() ? exSearch(mine, EXN.list, v, 8) : [];
+    const exact = r.some(x => x.name.toLowerCase() === v.trim().toLowerCase());
+    $('#ed-res').innerHTML = r.map(x => `<button type="button" class="opt" data-n="${esc(x.name)}">${esc(x.name)}${x.film ? '<small class="ow-f">film</small>' : ''}</button>`).join('') +
+      (v.trim() && !exact ? `<button type="button" class="opt ow-new" data-n="${esc(v.trim().replace(/\s+/g, ' ').slice(0, 80))}">+ Własna nazwa: „${esc(v.trim().slice(0, 80))}”</button>` : '');
+    document.querySelectorAll('#ed-res [data-n]').forEach(b => b.onclick = () => pick(b.dataset.n));
+  };
+  q.oninput = () => res(q.value);
+  exnLoad(() => { const qq = $('#ed-q'); if (qq) res(qq.value); });
+  const len = bindLen();
+  $('#ed-ok').onclick = () => {
+    const p = Object.assign({ op: 'add', week: cur.week, day: cur.day, name, sets: $('#ed-sets').value, reps: $('#ed-reps').value, kg: $('#ed-kg').value, forever: len() }, edDx(name));
+    const r = planEdit(DATA.plan, DATA.removed || [], edDone(), p);
+    if (r.error || !r.n) { const er = $('#ed-err'); er.textContent = r.error || 'To ćwiczenie jest już dodane do tego treningu.'; er.hidden = false; return; }
+    closeSheet(); const n = edSend(p);
+    toast('Dodano: ' + name + (n > 1 ? ' (ten trening i ' + (n - 1) + ' ' + plural(n - 1, 'kolejny', 'kolejne', 'kolejnych') + ').' : '.'));
+    renderTrening();
+    const c = [...document.querySelectorAll('.card[data-card]')].pop(); if (c) c.scrollIntoView({ block: 'center' });
+  };
+}
+function openDel(ex){
+  if (curExs().length < 2) { toast('To jedyne ćwiczenie w treningu – zostaw je albo pomiń.'); return; }
+  openSheet(`<h2 id="sheet-t">Usuń z treningu</h2><p class="sub">${esc(ex.name)}</p>
+    ${lenSeg('Na stałe = także z kolejnych tygodni tego treningu (' + esc(cur.day) + '), do końca obecnego planu. Trener widzi w arkuszu, że ćwiczenie zostało usunięte; możesz je przywrócić na dole treningu.')}
+    <button type="button" class="btn p" id="ed-del">Usuń</button>
+    <button type="button" class="btn" data-close>Anuluj</button>`);
+  const len = bindLen();
+  $('#ed-del').onclick = () => {
+    closeSheet(); setSwap(ex, null);
+    const n = edSend({ op: 'del', week: cur.week, day: cur.day, order: ex.order, forever: len() });
+    if (n < 0) return;
+    toast('Usunięto: ' + ex.name + (n > 1 ? ' (ten trening i ' + (n - 1) + ' ' + plural(n - 1, 'kolejny', 'kolejne', 'kolejnych') + ').' : '.'));
+    renderTrening();
+  };
+}
+/** usunięte ćwiczenia tej jednostki z przyciskiem „Przywróć” (na dole Treningu) */
+function edRemoved(){
+  const rm = ((DATA && DATA.removed) || []).filter(x => Number(x.week) === cur.week && String(x.day) === String(cur.day));
+  if (!rm.length) return '';
+  return `<section class="ed-rm" aria-label="Usunięte ćwiczenia"><div class="lbl">Usunięte z tego treningu</div>${rm.map(x =>
+    `<div class="ed-r"><span>${esc(x.name)}</span><button type="button" class="btn sm" data-undel="${x.order}" aria-label="Przywróć ${esc(x.name)}">Przywróć</button></div>`).join('')}</section>`;
+}
+function edUndel(order){
+  const n = edSend({ op: 'undel', week: cur.week, day: cur.day, order });
+  if (n < 0) return;
+  toast('Przywrócono.' + (navigator.onLine === false ? ' Pełne dane wrócą po połączeniu z siecią.' : ''));
+  renderTrening();
 }
 
 /* ---------- ekran Trening ---------- */
@@ -1909,12 +2027,16 @@ function renderTrening(){
     if (g && i === g.orders.length - 1) h += '</section>';
   });
   if (s0.own && ownOn() && !sessDone(cur.week, cur.day)) h += '<button type="button" class="ghost own-add" id="own-add">+ ćwiczenie</button>';
+  if (EDIT && !s0.own && open) h += '<button type="button" class="ghost own-add" id="ed-add">+ ćwiczenie</button>';
+  if (EDIT && !s0.own) h += edRemoved();
   h += sessCard(s0);
   $('#main').innerHTML = h;
   CIRC = grps; bind(exs, s0);
   grps.forEach(g => grpDraw(g.id));
   bindNotes();
   const oa = $('#own-add'); if (oa) oa.onclick = () => openOwn(units(PLAN).find(u => u.week === cur.week && u.day === cur.day));
+  const ea = $('#ed-add'); if (ea) ea.onclick = openAdd;
+  document.querySelectorAll('[data-undel]').forEach(b => b.onclick = () => edUndel(+b.dataset.undel));
   vqMarks();
   bindFold(exs);
   refreshStats();
@@ -2207,11 +2329,13 @@ function openMore(ex){
       <button type="button" class="opt" data-mnote="${ex.order}"><i aria-hidden="true">✎</i>Komentarz do ćwiczenia</button>
       ${SWAP && !gone && !ex.swap ? `<button type="button" class="opt" data-swap="${ex.order}"><i aria-hidden="true">⇄</i>Zamień ćwiczenie</button>` : ''}
       ${sk ? '' : `<button type="button" class="opt" data-skip="${ex.order}"><i aria-hidden="true">✕</i>${ex.prio === 'B' ? 'Pomiń' : 'Pomiń…<small>z powodem dla trenera</small>'}</button>`}
+      ${edOn(ex) ? `<button type="button" class="opt" data-del="${ex.order}"><i aria-hidden="true">−</i>Usuń z treningu…<small>np. brak sprzętu</small></button>` : ''}
     </div>
     <button type="button" class="btn" data-close>Zamknij</button>`);
   const on = (sel, f) => { const b = $('#sheet ' + sel); if (b) b.onclick = () => { closeSheet(); f(); }; };
   on('[data-swap]', () => openSwap(ex));
   on('[data-skip]', () => openSkip(ex));
+  on('[data-del]', () => openDel(ex));
   on('[data-mnote]', () => {
     setFold(ex.order, false);
     const box = document.querySelector(`.card[data-card="${ex.order}"] .exn`); if (!box) return;

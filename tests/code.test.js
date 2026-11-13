@@ -655,3 +655,72 @@ test('obwod: walidacja planu (litera, ≥ 2 ćwiczenia po sobie, bez EMOM) i wł
   const own = C.ownRows_('robert', { week: 1, day: 'W1', date: d(1, 0), exercises: [E('Pompki', 'A'), E('Wiosłowanie', 'a'), E('Plank', 'B'), E('Curl'), E('Dipy', 'x1')] }, []);
   assert.deepEqual(own.rows.map(r => r.obwod), ['A', 'A', '', '', '']);            // samotna litera i zła wartość = zwykłe ćwiczenie
 });
+
+// --- zmiany klienta w jednostce trenera (editPlan) ---
+test('planEdit_: dodanie, usunięcie ze śladem, przywrócenie i zamiana na stałe w jednostce trenera', () => {
+  const R = (w, j, nr, cw, x) => Object.assign({ klient: 'Robert', tydzien: w, jednostka: j, tytul: 'Siła', data: '2026-11-0' + w, nr, cwiczenie: cw, prio: 'A', serie: 3, powt: '5', kg: 100, blok: w <= 3 ? 'B1' : 'B2', uwagi: '' }, x || {});
+  const plan = [R(1, 'T1', 1, 'Przysiad'), R(1, 'T1', 2, 'Suwnica'), R(2, 'T1', 1, 'Przysiad'), R(2, 'T1', 2, 'Suwnica'), R(2, 'T2', 1, 'Suwnica'),
+    R(3, 'T1', 1, 'Suwnica', { uwagi: 'wolno' }), R(3, 'T1', 2, 'Przysiad'), R(4, 'T1', 1, 'Suwnica'),                       // tydz. 4 = inny blok
+    R(1, 'T1', 1, 'Suwnica', { klient: 'ewa' }), R(2, 'W1', 1, 'Suwnica', { zrodlo: 'klient' })];
+  const E = (e, ses) => plain(C.planEdit_(plan, ses || [], 'robert', e));
+  // dodanie tylko dziś: jeden wiersz „dodane”, nr od 51, tytuł / data / blok z jednostki
+  let r = E({ op: 'add', week: 1, day: 'T1', name: '  Wykroki   z hantlami ', sets: 3, reps: 10, kg: '12,5' });
+  assert.deepEqual(r.add.map(a => [a.tydzien, a.jednostka, a.nr, a.cwiczenie, a.serie, a.powt, a.kg, a.zrodlo, a.blok, a.tytul, a.data]),
+    [[1, 'T1', 51, 'Wykroki z hantlami', 3, '10', 12.5, 'dodane', 'B1', 'Siła', '2026-11-01']]);
+  // na stałe: także tyg. 2 i 3 (ten sam blok), bez tyg. 4 (B2), bez T2 i bez zrobionego tygodnia
+  r = E({ op: 'add', week: 1, day: 'T1', name: 'Wykroki', sets: 3, reps: 10, forever: true }, [{ tydzien: 2, jednostka: 'T1' }]);
+  assert.deepEqual(r.add.map(a => a.tydzien), [1, 3]);
+  assert.equal(E({ op: 'add', week: 1, day: 'T1', name: 'Wykroki', sets: 3, reps: 10, forever: true }).n, 3);
+  assert.deepEqual([E({ op: 'add', week: 1, day: 'T1', name: '', sets: 3, reps: 10 }).error, E({ op: 'add', week: 1, day: 'T1', name: 'X', sets: 0, reps: 10 }).error,
+    E({ op: 'add', week: 9, day: 'T1', name: 'X', sets: 3, reps: 10 }).error, E({ op: 'add', week: 2, day: 'W1', name: 'X', sets: 3, reps: 10 }).error],
+    ['Podaj nazwę ćwiczenia.', 'Serie 1–40 i powtórzenia.', 'Nie ma takiej jednostki w planie.', 'To własny trening – popraw go w kreatorze.']);
+  // usunięcie: wiersz zostaje, zmienia się tylko zrodlo; na stałe po nazwie (w tyg. 3 Suwnica ma inny nr)
+  assert.deepEqual(E({ op: 'del', week: 1, day: 'T1', order: 2 }).set, [[1, { zrodlo: 'usuniete' }]]);
+  assert.deepEqual(E({ op: 'del', week: 1, day: 'T1', order: 2, forever: true }).set, [[1, { zrodlo: 'usuniete' }], [3, { zrodlo: 'usuniete' }], [5, { zrodlo: 'usuniete' }]]);
+  assert.equal(E({ op: 'del', week: 1, day: 'T1', order: 7 }).error, 'Nie ma takiego ćwiczenia w jednostce.');
+  // ćwiczenie dodane przez klienta po usunięciu pamięta, że było dodane; przywrócenie oddaje poprzedni stan (ten i kolejne tygodnie)
+  plan.push(R(1, 'T1', 51, 'Wykroki', { zrodlo: 'dodane' }));
+  assert.deepEqual([E({ op: 'add', week: 1, day: 'T1', name: 'wykroki', sets: 3, reps: 10 }).n, E({ op: 'add', week: 1, day: 'T1', name: 'wykroki', sets: 3, reps: 10 }).error], [0, undefined]);   // ponowiona wysyłka nie dubluje
+  assert.deepEqual(E({ op: 'del', week: 1, day: 'T1', order: 51 }).set, [[10, { zrodlo: 'usuniete_d' }]]);
+  plan[10].zrodlo = 'usuniete_d'; plan[1].zrodlo = 'usuniete'; plan[5].zrodlo = 'usuniete';
+  assert.deepEqual(E({ op: 'undel', week: 1, day: 'T1', order: 51 }).set, [[10, { zrodlo: 'dodane' }]]);
+  assert.deepEqual(E({ op: 'undel', week: 1, day: 'T1', order: 2 }).set, [[1, { zrodlo: '' }], [5, { zrodlo: '' }]]);
+  assert.equal(E({ op: 'undel', week: 1, day: 'T1', order: 1 }).error, 'To ćwiczenie nie jest usunięte.');
+  assert.equal(E({ op: 'del', week: 1, day: 'T1', order: 2 }).error, 'To ćwiczenie jest już usunięte.');
+  // nowe ćwiczenie po usuniętym dodanym dostaje kolejny numer (stare serie w Logu się nie zderzą)
+  assert.equal(E({ op: 'add', week: 1, day: 'T1', name: 'Inne', sets: 2, reps: 8 }).add[0].nr, 52);
+  // zamiana na stałe: tylko kolejne tygodnie (bieżąca jednostka idzie przez Log), usunięte pominięte, ślad w uwagach
+  plan[1].zrodlo = '';
+  assert.deepEqual(E({ op: 'swap', week: 1, day: 'T1', order: 2, to: 'Przysiad bułgarski' }).set,
+    [[3, { cwiczenie: 'Przysiad bułgarski', uwagi: 'zamiana klienta: Suwnica → Przysiad bułgarski' }]]);
+  plan[5].zrodlo = '';
+  assert.equal(E({ op: 'swap', week: 1, day: 'T1', order: 2, to: 'Przysiad bułgarski' }).set[1][1].uwagi, 'wolno · zamiana klienta: Suwnica → Przysiad bułgarski');
+  assert.equal(E({ op: 'swap', week: 1, day: 'T1', order: 2, to: ' suwnica ' }).error, 'Podaj inne ćwiczenie.');
+  assert.equal(E({ op: 'x', week: 1, day: 'T1', order: 2 }).error, 'Nieznana zmiana.');
+  assert.ok(C.API_FNS.editPlan);
+});
+
+test('zmiany klienta: poza wykonaniem planu w podsumowaniu i blokach; ponowne wczytanie planu ich nie kasuje', () => {
+  const R = (j, nr, cw, x) => Object.assign({ klient: 'robert', tydzien: 1, jednostka: j, data: d(1, 0), nr, cwiczenie: cw, prio: 'A', serie: 2, powt: '5', kg: 100, blok: 'B1' }, x || {});
+  const plan = [R('T1', 1, 'Przysiad'), R('T1', 2, 'Suwnica', { zrodlo: 'usuniete' }), R('T1', 51, 'Wykroki', { zrodlo: 'dodane', kg: 20 })];
+  const L = (nr, s, kg, cw) => ({ klient: 'robert', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr_cw: nr, cwiczenie: cw, seria: s, kg, powt: 5, rpe: 7, wykonane: 'TAK', typ: '' });
+  const log = [L(1, 1, 100, 'Przysiad'), L(1, 2, 100, 'Przysiad'), L(51, 1, 20, 'Wykroki')];
+  const H = C.SUM_HEADERS, row = C.computeSummary_(plan, log, [], []).rows[0];
+  assert.equal(row[H.indexOf('wykonanie_%')], 100);                                // usunięta Suwnica nie obniża, dodane Wykroki nie podbijają
+  assert.equal(row[H.indexOf('tonaz_kg')], 1000 + 100);                           // tonaż dodanego ćwiczenia się liczy
+  assert.equal(row[H.indexOf('dod+drop')], 0);
+  const ses = [{ klient: 'robert', tydzien: 1, jednostka: 'T1', start: d(1, 0) + 'T17:00:00Z' }];
+  const b = C.computeBlocks_(plan, log, ses, [], [], {}), BH = C.BLOK_HEADERS;
+  assert.deepEqual([b[0][BH.indexOf('jednostki')], b[0][BH.indexOf('wykonanie_%')], b[0][BH.indexOf('tonaz_kg')]], ['1/1', 100, 1100]);
+  // ponowne wczytanie tego samego planu (jednostka niezrobiona): Suwnica dalej usunięta, Wykroki zostają
+  const inc = [R('T1', 1, 'Przysiad', { kg: 105 }), R('T1', 2, 'Suwnica'), R('T1', 3, 'Plank')];
+  let m = C.mergePlan_(plan, inc, []);
+  assert.deepEqual(m.rows.map(r => r.nr + ':' + r.cwiczenie + ':' + (r.zrodlo || '')), ['1:Przysiad:', '2:Suwnica:usuniete', '3:Plank:', '51:Wykroki:dodane']);
+  assert.match(m.notes[0], /robert: zachowano 2 zmian klienta/);
+  assert.equal(inc[1].zrodlo, undefined);                                           // plik wejściowy bez zmian
+  // jednostki nie ma już w pliku → dodane ćwiczenie nie zostaje samo; zrobiona jednostka zostaje w całości jak była
+  m = C.mergePlan_(plan, [R('T2', 1, 'Przysiad')], []);
+  assert.deepEqual(m.rows.map(r => r.jednostka + r.nr), ['T21']);
+  m = C.mergePlan_(plan, inc, ses);
+  assert.deepEqual(m.rows.map(r => r.nr + ':' + (r.zrodlo || '')), ['1:', '2:usuniete', '51:dodane']);
+});

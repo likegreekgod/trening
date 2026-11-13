@@ -443,6 +443,69 @@
   };
 
   /**
+   * zmiana klienta w jednostce trenera, naniesiona na dane w telefonie (ta sama reguła co planEdit_ w Code.gs).
+   * plan = wiersze getData, removed = [{week, day, order, name, row?}] (usunięte ćwiczenia), done = {tydzień|jednostka: 1} (zrobione).
+   * e = {op: add | del | undel | swap, week, day, forever, order, name, sets, reps, kg, to, infos, parts}.
+   * „Na stałe” (forever) = także kolejne tygodnie tej samej jednostki w tym samym bloku, niezrobione; ćwiczenie szukane po nazwie.
+   * Zwraca {plan, removed, n} (nowe tablice; n = liczba zmienionych wierszy) albo {error}.
+   */
+  L.EDIT_NR = 50;
+  L.planEdit = (plan, removed, done, e) => {
+    plan = plan || []; removed = removed || []; done = done || {};
+    const week = Number(e.week), day = String(e.day), lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+    const inU = (r, w) => Number(r.week) === w && String(r.day) === day;
+    const cur = plan.filter(r => inU(r, week));
+    if (!cur.length && e.op !== 'undel') return { error: 'Nie ma takiej jednostki w planie.' };
+    const base = cur[0] || removed.map(x => x.row).find(r => r && inU(r, week)) || {};
+    const block = lc(base.block);
+    const later = [...new Set(plan.filter(r => Number(r.week) > week && String(r.day) === day && lc(r.block) === block && !r.own && !done[r.week + '|' + day]).map(r => Number(r.week)))].sort((a, b) => a - b);
+    const weeks = [week].concat(e.forever ? later : []);
+    let out = plan.slice(), rem = removed.slice(), n = 0;
+    if (e.op === 'add') {
+      const name = String(e.name || '').trim().replace(/\s+/g, ' ').slice(0, 80), sets = Math.round(Number(e.sets)), reps = String(e.reps === undefined || e.reps === null ? '' : e.reps).trim().slice(0, 12);
+      if (!name) return { error: 'Podaj nazwę ćwiczenia.' };
+      if (!(sets >= 1 && sets <= L.SETS_MAX) || !reps) return { error: 'Serie 1–' + L.SETS_MAX + ' i powtórzenia.' };
+      const kv = String(e.kg === undefined || e.kg === null ? '' : e.kg).trim(), kn = parseFloat(kv.replace(',', '.'));
+      const kg = kv === '' ? '' : isFinite(Number(kv.replace(',', '.'))) ? kn : kv.slice(0, 10);
+      weeks.forEach(w => {
+        const rows = plan.filter(r => inU(r, w));
+        // już jest: w kolejnych tygodniach dowolne ćwiczenie o tej nazwie, w tej jednostce wcześniej dodane (ponowne naniesienie tej samej zmiany nic nie dubluje)
+        if (!rows.length || rows.some(r => lc(r.name) === lc(name) && (w !== week || r.added))) return;
+        const order = Math.max(L.EDIT_NR, ...rows.map(r => Number(r.order) || 0), ...removed.filter(x => inU(x, w)).map(x => Number(x.order) || 0)) + 1, b = rows[0];
+        out.push({ week: w, day, title: b.title, date: b.date, order, name, prio: 'A', sets, reps, pct: null, kg, rpe: '', note: '', extra: null, drop: 0,
+          group: '', block: b.block || '', swaps: [], infos: e.infos || [], parts: e.parts || [], added: true });
+        n++;
+      });
+      return { plan: out, removed: rem, n };
+    }
+    if (e.op === 'undel') {
+      const hit = removed.find(x => inU(x, week) && Number(x.order) === Number(e.order));
+      if (!hit) return { error: 'To ćwiczenie nie jest usunięte.' };
+      const back = removed.filter(x => String(x.day) === day && lc(x.name) === lc(hit.name) && (x === hit || later.indexOf(Number(x.week)) >= 0 || (Number(x.week) > week && !plan.some(r => inU(r, Number(x.week))))));
+      rem = removed.filter(x => back.indexOf(x) < 0);
+      back.forEach(x => { if (x.row) out.push(x.row); n++; });
+      return { plan: out, removed: rem, n, partial: back.some(x => !x.row) };
+    }
+    const hit = cur.find(r => Number(r.order) === Number(e.order));
+    if (!hit) return { error: 'Nie ma takiego ćwiczenia w jednostce.' };
+    const same = w => w === week ? [hit] : plan.filter(r => inU(r, w) && lc(r.name) === lc(hit.name));
+    if (e.op === 'del') {
+      const gone = [].concat(...weeks.map(same));
+      out = plan.filter(r => gone.indexOf(r) < 0);
+      rem = rem.concat(gone.map(r => ({ week: r.week, day: r.day, order: r.order, name: r.name, row: r })));
+      return { plan: out, removed: rem, n: gone.length };
+    }
+    if (e.op === 'swap') {
+      const to = String(e.to || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+      if (!to || lc(to) === lc(hit.name)) return { error: 'Podaj inne ćwiczenie.' };
+      const ch = [].concat(...later.map(same));
+      out = plan.map(r => ch.indexOf(r) < 0 ? r : Object.assign({}, r, { name: to, infos: e.infos || [], parts: e.parts || [], swaps: [],
+        note: ((String(r.note || '').trim() ? String(r.note).trim() + ' · ' : '') + 'zamiana klienta: ' + hit.name + ' → ' + to).slice(0, 300) }));
+      return { plan: out, removed: rem, n: ch.length };
+    }
+    return { error: 'Nieznana zmiana.' };
+  };
+  /**
    * historia ćwiczenia do okna „Historia”: ostatnie n INNYCH jednostek z tym ćwiczeniem (po nazwie wykonanej, bez wielkości liter),
    * od najnowszej (kolejność jak w lastTop: po czasie zapisu, więc pierwsza pozycja = „Ostatnio”).
    * Każda: { week, day, date, top (najcięższa zaliczona seria, jak lastTop), runs: [{kg, reps: [..]}] – kolejne serie z tym samym

@@ -832,6 +832,109 @@ for (const scheme of ['light', 'dark']) test(`Postęp ${scheme}: siła z rekorda
   await ctx.close();
 });
 
+// plan z trzema tygodniami bloku B1 i jednym B2; flaga „edycja” włącza zmiany w jednostce trenera
+const EDROW = (week, order, name) => ({ week, day: 'T1', title: 'Siła – dół', date: '2026-12-0' + week, order, name, prio: order === 1 ? 'A' : 'B', sets: 3, reps: '5', pct: null, kg: 100, rpe: 8, note: '', extra: null, drop: 0, block: week <= 3 ? 'B1' : 'B2', group: '', swaps: [], infos: [], parts: [] });
+const EDIT = Object.assign({}, PRO, { cfg: Object.assign({}, PRO.cfg, { edit: true, swap: 'DOWOLNA' }), removed: [],
+  plan: [].concat(...[1, 2, 3, 4].map(w => [EDROW(w, 1, 'Przysiad ze sztangą'), EDROW(w, 2, 'Wypychanie nóg na suwnicy')])) });
+const EXNAMES = [['Wykroki z hantlami', 'https://example.com/wykroki', 'czworogłowe; pośladki'], ['Wykroki chodzone', '', 'pośladki'], ['Goblet squat', '', 'czworogłowe']];
+
+test('Zmiany w jednostce bez flagi „edycja”: nie ma „+ ćwiczenie” ani „Usuń z treningu”', async () => {
+  const { ctx, p } = await page([], false, { data: Object.assign({}, EDIT, { cfg: Object.assign({}, EDIT.cfg, { edit: false }) }) });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await p.$('#ed-add'), null);
+  await p.click('.card[data-card="2"] [data-more]'); await p.waitForSelector('#sheet [data-skip]');
+  assert.equal(await p.$('#sheet [data-del]'), null);
+  await p.click('#sheet [data-swap]'); await p.waitForSelector('#sw-ok');
+  assert.equal(await p.$('#sheet [data-len]'), null);                               // zamiana bez pytania „na jak długo”
+  await ctx.close();
+});
+
+for (const scheme of ['light', 'dark']) test(`Zmiany w jednostce ${scheme}: dodanie na stałe, usunięcie i przywrócenie, zamiana na stałe`, async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: EDIT, scheme, api: b => b.fn === 'getExNames' ? EXNAMES : null });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const edits = () => calls.filter(c => c.fn === 'editPlan').map(c => c.args[0]);
+  // 1. dodanie ćwiczenia z bazy, na stałe: ten trening i dwa kolejne tygodnie bloku B1 (tydz. 4 to już B2)
+  await p.click('#ed-add'); await p.waitForSelector('#ed-q');
+  assert.equal(await p.$eval('#ed-ok', b => b.disabled), true);
+  await p.waitForFunction(() => EXN.list.length > 0);
+  await p.fill('#ed-q', 'wykr'); await p.dispatchEvent('#ed-q', 'input');
+  assert.deepEqual(await p.$$eval('#ed-res .opt', b => b.map(x => x.textContent.trim())), ['Wykroki z hantlamifilm', 'Wykroki chodzone', '+ Własna nazwa: „wykr”']);
+  await p.click('#ed-res [data-n="Wykroki z hantlami"]');
+  assert.equal(await p.textContent('#ed-sel'), 'Wybrane: Wykroki z hantlami');
+  await p.fill('#ed-sets', '2'); await p.fill('#ed-kg', '12,5');
+  await p.click('#sheet [data-len="1"]');
+  assert.equal(await p.getAttribute('#sheet [data-len="1"]', 'aria-pressed'), 'true');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `edycja-dodaj-${scheme}.png`) }); }
+  await p.click('#ed-ok'); await p.waitForSelector('.card[data-card="51"]');
+  assert.equal(await p.textContent('#toast'), 'Dodano: Wykroki z hantlami (ten trening i 2 kolejne).');
+  const add = edits()[0];
+  assert.deepEqual([add.op, add.week, add.day, add.name, add.sets, add.reps, add.kg, add.forever], ['add', 1, 'T1', 'Wykroki z hantlami', '2', '10', '12,5', true]);
+  assert.deepEqual(await p.evaluate(() => PLAN.filter(r => r.added).map(r => [r.week, r.order, r.sets, r.kg])), [[1, 51, 2, 12.5], [2, 51, 2, 12.5], [3, 51, 2, 12.5]]);
+  assert.ok(await p.$('.card[data-card="51"] .infb'));                              // film „Jak wykonać” z bazy od razu
+  assert.equal(await p.textContent('#st-sets'), '0/8');                             // 3 + 3 + 2 serie
+  // serię dodanego ćwiczenia zapisuje się jak każdą inną
+  await p.click('.set[data-o="51"][data-s="1"] .ok'); await p.waitForTimeout(100);
+  const ls = calls.filter(c => c.fn === 'logSet').pop().args[0];
+  assert.deepEqual([ls.order, ls.set, ls.name, ls.kg, ls.reps], [51, 1, 'Wykroki z hantlami', 12.5, 10]);
+  await p.evaluate(() => stopRest());
+  // 2. usunięcie ćwiczenia z planu, tylko ten trening: karta znika, na dole „Przywróć”
+  await p.click('.card[data-card="2"] [data-more]'); await p.click('#sheet [data-del]'); await p.waitForSelector('#ed-del');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, `edycja-usun-${scheme}.png`) });
+  await p.click('#ed-del'); await p.waitForSelector('.ed-rm');
+  assert.equal(await p.$('.card[data-card="2"]'), null);
+  assert.deepEqual(edits()[1], { op: 'del', week: 1, day: 'T1', order: 2, forever: false });
+  assert.match(await p.textContent('.ed-rm'), /Usunięte z tego treningu\s*Wypychanie nóg na suwnicy\s*Przywróć/);
+  assert.equal(await p.evaluate(() => PLAN.filter(r => r.name === 'Wypychanie nóg na suwnicy').length), 3);   // w kolejnych tygodniach zostało
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { await p.$eval('.ed-rm', e => { document.querySelector('#toast').style.display = 'none'; e.scrollIntoView({ block: 'center' }); }); await p.screenshot({ path: path.join(SCREENS, `edycja-usuniete-${scheme}.png`) }); }
+  await p.click('[data-undel="2"]'); await p.waitForSelector('.card[data-card="2"]');
+  assert.equal(await p.$('.ed-rm'), null);
+  assert.deepEqual(edits()[2], { op: 'undel', week: 1, day: 'T1', order: 2 });
+  // 3. zamiana na stałe: dziś przez Log (jak dotąd), w kolejnych tygodniach bloku inna nazwa w planie
+  await p.click('.card[data-card="1"] [data-more]'); await p.click('#sheet [data-swap]'); await p.waitForSelector('#sw-q');
+  await p.fill('#sw-q', 'gob'); await p.dispatchEvent('#sw-q', 'input'); await p.click('#sw-res [data-to="Goblet squat"]');
+  await p.click('#sheet [data-why]'); await p.click('#sheet [data-len="1"]'); await p.click('#sw-ok');
+  await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.match(await p.textContent('#toast'), /Zamieniono na: Goblet squat\. Także w kolejnych tygodniach: 2\./);
+  const sw = edits()[3];
+  assert.deepEqual([sw.op, sw.week, sw.day, sw.order, sw.to, sw.forever], ['swap', 1, 'T1', 1, 'Goblet squat', true]);
+  assert.deepEqual(await p.evaluate(() => PLAN.filter(r => r.order === 1).map(r => r.week + ':' + r.name)), ['1:Przysiad ze sztangą', '2:Goblet squat', '3:Goblet squat', '4:Przysiad ze sztangą']);
+  assert.match(await p.textContent('.card[data-card="1"] .cn'), /Goblet squat/);    // bieżąca jednostka: zamiana jak dotąd
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Zmiany w jednostce bez sieci: kolejka, po ponownym otwarciu zmiana zostaje; ostatniego ćwiczenia nie da się usunąć', async () => {
+  const { ctx, p } = await page([], false, { data: EDIT, api: b => b.fn === 'getExNames' ? EXNAMES : null });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await ctx.unroute('**/macros/**'); await ctx.route('**/macros/**', r => r.abort());
+  await p.click('#ed-add'); await p.fill('#ed-q', 'Plank boczny'); await p.dispatchEvent('#ed-q', 'input'); await p.click('#ed-res .ow-new');
+  await p.fill('#ed-sets', '0'); await p.click('#ed-ok');
+  assert.equal(await p.textContent('#ed-err'), 'Serie 1–40 i powtórzenia.');        // błąd w oknie, nic nie wysłane
+  await p.fill('#ed-sets', '2'); await p.fill('#ed-reps', '30 s'); await p.click('#ed-ok'); await p.waitForSelector('.card[data-card="51"]');
+  await p.click('.card[data-card="2"] [data-more]'); await p.click('#sheet [data-del]'); await p.click('#sheet [data-len="1"]'); await p.click('#ed-del');
+  await p.waitForSelector('.ed-rm');
+  assert.deepEqual((await p.evaluate(() => JSON.parse(localStorage.getItem('q_kabc')))).map(x => x.fn + ':' + x.payload.op + ':' + !!x.payload.forever), ['editPlan:add:false', 'editPlan:del:true']);
+  await p.goto(base); await p.waitForSelector('.set[data-o="1"]');                  // dane z pamięci telefonu + kolejka
+  assert.deepEqual(await p.$$eval('.card[data-card]', c => c.map(x => x.dataset.card)), ['1', '51']);
+  // dodane i od razu usunięte bez sieci: po kolejnym otwarciu nie wraca i nie dubluje się
+  await p.click('#ed-add'); await p.fill('#ed-q', 'Mostek'); await p.dispatchEvent('#ed-q', 'input'); await p.click('#ed-res .ow-new'); await p.click('#ed-ok'); await p.waitForSelector('.card[data-card="52"]');
+  await p.click('.card[data-card="52"] [data-more]'); await p.click('#sheet [data-del]'); await p.click('#ed-del'); await p.waitForSelector('.card[data-card="52"]', { state: 'detached' });
+  await p.goto(base); await p.waitForSelector('.set[data-o="1"]');
+  assert.deepEqual(await p.$$eval('.card[data-card]', c => c.map(x => x.dataset.card)), ['1', '51']);
+  assert.equal(await p.evaluate(() => PLAN.filter(r => r.name === 'Wypychanie nóg na suwnicy').map(r => r.week).join()), '4');   // na stałe: zostało tylko w bloku B2
+  assert.match(await p.textContent('.card[data-card="51"]'), /sek\./);              // ćwiczenie na czas
+  // zostaje jedno ćwiczenie z planu i jedno dodane: po usunięciu dodanego ostatniego już się nie da
+  await p.click('.card[data-card="51"] [data-more]'); await p.click('#sheet [data-del]'); await p.click('#ed-del'); await p.waitForSelector('.card[data-card="51"]', { state: 'detached' });
+  await p.click('.card[data-card="1"] [data-more]'); await p.click('#sheet [data-del]');
+  assert.match(await p.textContent('#toast'), /jedyne ćwiczenie/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 for (const scheme of ['light', 'dark']) test(`Historia ćwiczenia ${scheme}: „Ostatnio” otwiera okno z wykresem i 5 ostatnimi treningami`, async () => {
   const { ctx, p } = await page([], false, { data: PROG, scheme });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');

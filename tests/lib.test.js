@@ -546,3 +546,41 @@ test('exHistory: ostatnie jednostki z ćwiczeniem do okna „Historia”', () =>
   assert.deepEqual(L.exHistory(logs, 'Martwy', 3, 'T1'), []);
   assert.deepEqual(L.exHistory([G(1, 1, 'BW', 12)], 'Przysiad', 3, 'T1')[0].runs, [{ kg: 'BW', reps: ['12'] }]);
 });
+
+test('planEdit: zmiany w jednostce trenera w telefonie (dodaj, usuń, przywróć, zamień na stałe)', () => {
+  const R = (week, day, order, name, x) => Object.assign({ week, day, title: 'Siła', date: '2026-11-0' + week, order, name, prio: 'A', sets: 3, reps: '5', kg: 100, block: week <= 3 ? 'B1' : 'B2', note: '' }, x || {});
+  const plan = [R(1, 'T1', 1, 'Przysiad'), R(1, 'T1', 2, 'Suwnica'), R(2, 'T1', 1, 'Przysiad'), R(2, 'T1', 2, 'Suwnica'), R(2, 'T2', 1, 'Suwnica'),
+    R(3, 'T1', 1, 'Suwnica', { note: 'wolno' }), R(3, 'T1', 2, 'Przysiad'), R(4, 'T1', 1, 'Suwnica')];
+  const E = (e, pl, rm, done) => L.planEdit(pl || plan, rm || [], done || {}, e);
+  // dodanie: tylko ten trening / na stałe (ten sam blok, bez zrobionego tygodnia), numer od 51, pola jak wiersz z getData
+  let r = E({ op: 'add', week: 1, day: 'T1', name: ' Wykroki  z hantlami ', sets: '3', reps: 10, kg: '12,5', infos: [{ n: 'W', u: 'https://x' }], parts: ['pośladki'] });
+  assert.equal(r.n, 1);
+  const a = r.plan[r.plan.length - 1];
+  assert.deepEqual([a.week, a.day, a.order, a.name, a.sets, a.reps, a.kg, a.added, a.block, a.title, a.date, a.prio, a.parts], [1, 'T1', 51, 'Wykroki z hantlami', 3, '10', 12.5, true, 'B1', 'Siła', '2026-11-01', 'A', ['pośladki']]);
+  assert.equal(plan.length, 8);                                                     // dane wejściowe bez zmian
+  assert.equal(L.planEdit(r.plan, [], {}, { op: 'add', week: 1, day: 'T1', name: 'wykroki z hantlami', sets: 3, reps: 10 }).n, 0);   // ta sama zmiana drugi raz (kolejka po ponownym otwarciu) nic nie dubluje
+  r = E({ op: 'add', week: 1, day: 'T1', name: 'Wykroki', sets: 3, reps: 10, forever: true }, null, null, { '2|T1': 1 });
+  assert.deepEqual(r.plan.filter(x => x.added).map(x => x.week), [1, 3]);
+  assert.deepEqual([E({ op: 'add', week: 1, day: 'T1', name: ' ', sets: 3, reps: 10 }).error, E({ op: 'add', week: 1, day: 'T1', name: 'X', sets: 41, reps: 10 }).error, E({ op: 'add', week: 7, day: 'T1', name: 'X', sets: 3, reps: 10 }).error],
+    ['Podaj nazwę ćwiczenia.', 'Serie 1–40 i powtórzenia.', 'Nie ma takiej jednostki w planie.']);
+  // usunięcie na stałe: po nazwie w kolejnych tygodniach tego bloku; wiersze trafiają do „usuniętych” razem z całą treścią
+  r = E({ op: 'del', week: 1, day: 'T1', order: 2, forever: true });
+  assert.equal(r.n, 3);
+  assert.deepEqual(r.plan.map(x => x.week + x.day + x.order), ['1T11', '2T11', '2T21', '3T12', '4T11']);
+  assert.deepEqual(r.removed.map(x => [x.week, x.order, x.name]), [[1, 2, 'Suwnica'], [2, 2, 'Suwnica'], [3, 1, 'Suwnica']]);
+  // kolejne dodane ćwiczenie nie dostaje numeru usuniętego
+  const del51 = L.planEdit(E({ op: 'add', week: 1, day: 'T1', name: 'A', sets: 1, reps: 1 }).plan, [], {}, { op: 'del', week: 1, day: 'T1', order: 51 });
+  assert.equal(L.planEdit(del51.plan, del51.removed, {}, { op: 'add', week: 1, day: 'T1', name: 'B', sets: 1, reps: 1 }).plan.pop().order, 52);
+  // przywrócenie: ta jednostka i kolejne tygodnie; wiersz znany tylko z serwera (bez treści) → partial = trzeba dociągnąć dane
+  const back = L.planEdit(r.plan, r.removed, {}, { op: 'undel', week: 1, day: 'T1', order: 2 });
+  assert.deepEqual([back.n, back.removed.length, back.plan.length, !!back.partial], [3, 0, 8, false]);
+  const srv = L.planEdit(r.plan, [{ week: 1, day: 'T1', order: 2, name: 'Suwnica' }], {}, { op: 'undel', week: 1, day: 'T1', order: 2 });
+  assert.deepEqual([srv.removed.length, srv.plan.length, srv.partial], [0, 5, true]);
+  assert.equal(E({ op: 'undel', week: 1, day: 'T1', order: 1 }).error, 'To ćwiczenie nie jest usunięte.');
+  // zamiana na stałe: tylko kolejne tygodnie (bieżąca jednostka idzie przez Log), ślad w uwagach
+  r = E({ op: 'swap', week: 1, day: 'T1', order: 2, to: 'Przysiad bułgarski', forever: true });
+  assert.deepEqual(r.plan.map(x => x.name), ['Przysiad', 'Suwnica', 'Przysiad', 'Przysiad bułgarski', 'Suwnica', 'Przysiad bułgarski', 'Przysiad', 'Suwnica']);
+  assert.deepEqual([r.n, r.plan[3].note, r.plan[5].note], [2, 'zamiana klienta: Suwnica → Przysiad bułgarski', 'wolno · zamiana klienta: Suwnica → Przysiad bułgarski']);
+  assert.equal(E({ op: 'swap', week: 1, day: 'T1', order: 2, to: 'suwnica' }).error, 'Podaj inne ćwiczenie.');
+  assert.equal(E({ op: 'del', week: 1, day: 'T1', order: 9 }).error, 'Nie ma takiego ćwiczenia w jednostce.');
+});

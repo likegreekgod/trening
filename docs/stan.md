@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-13, aplikacja v41 (v40 i v41 na gałęzi, jeszcze bez PR-a).
+Stan na 2026-11-13, aplikacja v42 (v40–v42 i zmiany w `apps-script/` na gałęzi, jeszcze bez PR-a).
 
 ## Jak pracujemy
 
@@ -18,6 +18,7 @@ Stan na 2026-11-13, aplikacja v41 (v40 i v41 na gałęzi, jeszcze bez PR-a).
 
 ## Ostatnio zrobione
 
+- 13.11 (v42 + `apps-script/`): plan v4 PR 10: osoby z flagą `edycja` (Klienci N = TAK) mogą w jednostce trenera dodać ćwiczenie, usunąć je ze śladem i zamienić, tylko w tym treningu albo na stałe.
 - 13.11 (v41): plan v4 PR 3: „Ostatnio” w karcie otwiera okno „Historia” (wykres siły i 5 ostatnich treningów z tym ćwiczeniem).
 - 13.11 (v40): plan v4 PR 2: po „Zakończ i zapisz” okno „Trening zrobiony” (czas, serie, tonaż z porównaniem do poprzedniej takiej samej jednostki, rekordy, „Zobacz postęp”).
 - 13.11 (v39): niższe karty: etykieta priorytetu w linii z wynikiem (zwinięta) albo receptą (otwarta); „Skróć trening” i „Zwiń zrobione” pod „⋯” w górnym pasku zamiast rzędu przycisków.
@@ -36,13 +37,14 @@ Stan na 2026-11-13, aplikacja v41 (v40 i v41 na gałęzi, jeszcze bez PR-a).
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40) i PR 3 (v41) zrobione. Następny: PR 10 (zmiany w jednostce dla wybranych osób), potem PR 4 (rekord w chwili zapisu serii: szkic i pytanie, czy też w trybie PROSTY). Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
-- **Zgłoszone 13.11 (plan v4, PR 10):** wybrane osoby (flaga w Klientach, np. sam Damian) mogą w jednostce z planu szybko dodać własne ćwiczenie, zamienić albo usunąć istniejące, gdy nie ma sprzętu. Opis w `docs/plan-v4.md`. Ustalone: przed PR 4, przy każdej zmianie pytanie „Tylko dziś / Na stałe”. Szkic pokazany 13.11, czeka na akceptację.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41) i PR 10 (v42) zrobione. Następne: PR 11 (przypięta nazwa ćwiczenia, komentarz w oknie: potwierdzić odczyt zrzutów, potem szkic) i PR 4 (rekord w chwili zapisu serii: szkic i pytanie, czy też w trybie PROSTY). Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
 - Decyzja o PR 2 (v40, gałąź wysłana, bez PR-a): czy okno „Trening zrobiony” jest gotowe; PR dopiero po zgodzie.
 - Decyzja o PR 3 (v41, ta sama gałąź, bez PR-a): czy okno „Historia” jest gotowe.
+- Decyzja o PR 10 (v42, ta sama gałąź). Po scaleniu: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek kolumny dopisać ręcznie albo przez „Sprawdź arkusz”), i dopisać flagę do SKILL.md skilla trenera.
+- PR 11: potwierdzić odczyt dwóch pomysłów ze zrzutów (opis w `docs/plan-v4.md`).
 
 Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPhone, własny trening, kolejka filmów, ścieżka sztangi) Damian potwierdził 13.11 jako zrobione.
 

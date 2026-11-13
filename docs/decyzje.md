@@ -2,6 +2,17 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-13 · Zmiany w jednostce trenera dla wybranych osób (v42, plan v4 PR 10)
+
+- Flaga: Klienci N `edycja` = TAK (`cfg.edit`), domyślnie wyłączone. Tylko jednostki trenera, niezakończone; własny trening ma swój kreator.
+- Trzy zmiany, każda z pytaniem „Na jak długo?”: „Tylko ten trening” albo „Na stałe” (= także kolejne tygodnie tej samej jednostki w tym samym bloku, niezrobione; ćwiczenie szukane po nazwie). W szkicu było „Tylko dziś”; zmienione, bo jednostka nie zawsze jest dzisiejsza.
+  - „+ ćwiczenie” pod ostatnią kartą: wyszukiwarka bazy albo własna nazwa, serie / powt. / kg; wiersz Planu z `zrodlo = dodane`, `nr` od 51.
+  - „Usuń z treningu…” pod „⋯” karty: wiersz Planu zostaje ze `zrodlo = usuniete` (ślad dla trenera), ćwiczenie znika z aplikacji; na dole treningu lista usuniętych z „Przywróć” (przywraca ten i kolejne tygodnie). Ostatniego ćwiczenia jednostki usunąć się nie da. „Pomiń” zostaje jako „dziś nie zrobiłem”.
+  - „Zamień ćwiczenie”: bieżąca jednostka jak dotąd (Log `zamiana`), „Na stałe” zmienia nazwę w kolejnych tygodniach i dopisuje do uwag „zamiana klienta: A → B”; kg i powtórzenia z planu zostają.
+- Arkusz: dodane i usunięte wiersze są poza planem trenera (nie liczą się do wykonania, jednostek ani zaległych; zrobione serie liczą się do objętości). Ponowne wczytanie planu ich nie kasuje: usunięte zostają usunięte (po nazwie), dodane wracają, jeśli jednostka jest w pliku; w Import „zachowano n zmian klienta”. Zamiana na stałe nie przetrwa ponownego wczytania tego samego planu (plik ma starą nazwę).
+- Odrzucone: prawdziwe kasowanie wiersza Planu (nie do cofnięcia, wraca po wczytaniu planu); wybór miejsca nowego ćwiczenia (zawsze na końcu).
+- Odwraca ustalenie z 22.10 („dopisywanie ćwiczeń do jednostek trenera: na razie nie”) dla osób z flagą.
+
 ## 2026-11-13 · Do zrobienia: zmiany w jednostce na miejscu dla wybranych osób
 
 - Damian chce, żeby wybrane osoby (np. on sam) mogły w jednostce z planu szybko dodać własne ćwiczenie, zamienić albo usunąć istniejące, np. gdy nie ma sprzętu. Włączane flagą w Klientach, nie po imieniu.
