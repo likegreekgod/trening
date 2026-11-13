@@ -259,7 +259,10 @@
        font:500 16px var(--f-mono);color:var(--ink);text-decoration:underline dotted 1.5px;text-underline-offset:4px}
   /* v4: nazwa po lewej, stała kolumna ikon po prawej (film, więcej, zwiń) – zawsze w tym samym miejscu */
   .ch{align-items:flex-start;gap:4px}
-  .ft .badge{justify-self:start;margin-top:3px}
+  /* v39: etykieta priorytetu bez własnego rzędu: zwinięta karta = w linii z wynikiem, otwarta = na początku recepty */
+  .ft .cn{flex:1 0 100%}
+  .card:not(.fold):not(.skip) .ft .badge{display:none}
+  .rx .badge.bp{font:800 13px/1.1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;margin-right:6px;vertical-align:2px}
   .acts{flex:none;display:flex;margin:-4px -12px 0 0}
   .infb,.more,.fold-c{flex:none;width:44px;height:44px;border:0;background:transparent;color:var(--ink-2);display:grid;place-items:center;padding:0;border-radius:var(--r)}
   .infb svg,.more svg{width:22px;height:22px;display:block}
@@ -268,7 +271,7 @@
   .opts.act .opt i{flex:none;width:24px;text-align:center;font-style:normal;color:var(--muted)}
   .opts.act .opt small{margin-left:auto;color:var(--muted);font-size:13px}
   .fold-b{flex:1;min-width:0;min-height:44px;border:0;background:transparent;padding:0;text-align:left;display:flex;align-items:flex-start;gap:10px;color:inherit}
-  .ft{flex:1;min-width:0;display:grid;gap:3px}
+  .ft{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
   .chev{flex:none;width:10px;height:10px;margin:5px 0 0;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-135deg);transition:transform .2s}
   .fsum{font:500 13px/1.2 var(--f-mono);color:var(--muted);display:none}
   .card.fold .cbody{display:none}
@@ -593,7 +596,10 @@
   .emom .btn{border-color:var(--light-off);color:var(--light-white)}
   .emom .btn.go{background:var(--light-amber);border-color:var(--light-amber);color:var(--panel);font:800 20px/1 var(--f-display);letter-spacing:.04em}
   .emom .sub{color:var(--light-white);opacity:.8;margin:0}
-  .utools{display:flex;flex-wrap:wrap;gap:6px;margin-top:var(--gap)}
+  /* v39: „⋯” jednostki w górnym pasku (Skróć trening, Zwiń zrobione) */
+  #hx{flex:none;display:flex;align-items:center;gap:4px}
+  .hmore{flex:none;width:44px;height:44px;border:0;background:transparent;color:inherit;display:grid;place-items:center;padding:0;margin-right:-10px;border-radius:var(--r)}
+  .hmore svg{width:22px;height:22px;display:block}
   .ct-l{margin:4px 0;padding-left:18px;font-size:15px}
   .ct-l li{padding:4px 0}
   .rbtns #r-set{min-width:44px;font-size:18px}
@@ -1070,7 +1076,7 @@ function helpCard(){
     <li>Żółte pole = seria czeka na wysłanie (brak zasięgu). Wyśle się sama.</li>
     <li>Rwanie i podrzut: dotknij świateł i oceń podejście (Łatwo, Średnio, Walka, Spalone). Pod spodem pojawi się propozycja ciężaru na kolejne serie.</li>
     <li>Dodałeś wiersz przez pomyłkę? Dotknij <b>✕</b> przy jego numerze, a potem <b>„usuń?”</b>.</li>
-    <li>Pod <b>„⋯”</b> przy nazwie ćwiczenia są: komentarz, zamiana i <b>„Pomiń”</b>; <b>▶</b> obok to film „Jak wykonać”. Brakuje czasu? <b>„Skróć trening”</b> na górze zaproponuje, co pominąć. Zmiana w ćwiczeniu (inny sprzęt, inna liczba serii)? Wpisz ją w <b>„⋯” → „Komentarz do ćwiczenia”</b>.</li>
+    <li>Pod <b>„⋯”</b> przy nazwie ćwiczenia są: komentarz, zamiana i <b>„Pomiń”</b>; <b>▶</b> obok to film „Jak wykonać”. Brakuje czasu? Dotknij <b>„⋯”</b> w górnym pasku i wybierz <b>„Skróć trening”</b>: aplikacja zaproponuje, co pominąć. Zmiana w ćwiczeniu (inny sprzęt, inna liczba serii)? Wpisz ją w <b>„⋯” → „Komentarz do ćwiczenia”</b>.</li>
     <li>Film jest opcjonalny: ikona kamery przy serii. Najlepiej krótki, nagrany w 720p. Potrzebny jest zasięg.</li>
     <li>Na koniec przewiń w dół i dotknij <b>„Zakończ i zapisz trening”</b>. Czas liczy się sam od pierwszego wpisu. Włączyłeś za wcześnie? Na dole jest <b>„Licz czas od teraz”</b> i pole do poprawienia minut.</li>
   </ol></details>`;
@@ -1858,14 +1864,14 @@ function renderTrening(){
   head(weekLabel(cur.week) + ' · ' + cur.day + ' · ' + weekday(s0.date) + ' ' + ddmm(s0.date) + (sessDone(cur.week, cur.day) ? ' · zrobiona ✓' : ''),
     s0.title || cur.day,
     `<span>Czas <b class="clock">${clockText()}</b></span><span>Serie <b id="st-sets"></b></span><span>Tonaż <b id="st-ton"></b> kg</span>`,
-    (SIMPLE ? '' : `<span class="sc" role="group" aria-label="Skala">${['RPE', 'RIR'].map(s => `<button type="button" data-sc="${s}" aria-pressed="${SCALE === s}">${s}</button>`).join('')}</span>`));
+    (SIMPLE ? '' : `<span class="sc" role="group" aria-label="Skala">${['RPE', 'RIR'].map(s => `<button type="button" data-sc="${s}" aria-pressed="${SCALE === s}">${s}</button>`).join('')}</span>`) +
+    (exs.length > 1 ? `<button type="button" class="hmore" id="umore" aria-label="Więcej akcji: ${esc(s0.title || cur.day)}">${MORE_SVG}</button>` : ''));
   document.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => {
     SCALE = b.dataset.sc; try { localStorage.setItem('sc_' + KEY, SCALE); } catch (e) {}
     renderTrening();
   });
   const open = !sessDone(cur.week, cur.day);
-  let h = sbNote() + weekBar('t') + notesCard() + readyBanner() + helpCard() +
-    (exs.length > 1 ? `<div class="utools">${open ? '<button type="button" class="btn sm" id="cut">⏱ Skróć trening</button>' : ''}<button type="button" class="btn sm" id="fold-all">Zwiń zrobione</button></div>` : '');
+  let h = sbNote() + weekBar('t') + notesCard() + readyBanner() + helpCard();
   const grps = circuitGroups(exs), gOf = o => grps.find(g => g.orders.includes(o));
   exs.forEach(ex => {
     const g = gOf(ex.order), i = g ? g.orders.indexOf(ex.order) : -1;
@@ -1886,8 +1892,18 @@ function renderTrening(){
   bindWeekBar();
   const sb = $('#sb-ok'); if (sb) sb.onclick = () => { try { localStorage.setItem(SBK, '1'); } catch (e) {} sb.closest('.sbnote').remove(); };
   $('#go-dysp').onclick = () => { TAB = 'dysp'; render(); window.scrollTo(0, 0); };
-  const ct = $('#cut'); if (ct) ct.onclick = openCut;
-  const fa = $('#fold-all'); if (fa) fa.onclick = () => { let n = 0; exs.forEach(ex => { if (cardDone(ex.order) && !document.querySelector(`.card[data-card="${ex.order}"]`).classList.contains('fold')) { setFold(ex.order, true); n++; } }); toast(n ? 'Zwinięto: ' + n + '.' : 'Brak zrobionych do zwinięcia.'); };
+  // „⋯” jednostki w górnym pasku: rzadkie akcje całego treningu
+  const foldAll = () => { let n = 0; exs.forEach(ex => { if (cardDone(ex.order) && !document.querySelector(`.card[data-card="${ex.order}"]`).classList.contains('fold')) { setFold(ex.order, true); n++; } }); toast(n ? 'Zwinięto: ' + n + '.' : 'Brak zrobionych do zwinięcia.'); };
+  const um = $('#umore'); if (um) um.onclick = () => {
+    openSheet(`<h2 id="sheet-t">${esc(s0.title || cur.day)}</h2><p class="sub">Więcej akcji</p>
+      <div class="opts act">
+        ${open ? '<button type="button" class="opt" id="cut"><i aria-hidden="true">⏱</i>Skróć trening<small>gdy brakuje czasu</small></button>' : ''}
+        <button type="button" class="opt" id="fold-all"><i aria-hidden="true">▴</i>Zwiń zrobione</button>
+      </div>
+      <button type="button" class="btn" data-close>Zamknij</button>`);
+    const ct = $('#cut'); if (ct) ct.onclick = () => { closeSheet(); openCut(); };
+    $('#fold-all').onclick = () => { closeSheet(); foldAll(); };
+  };
 }
 function rxPro(ex){
   const hasKg = typeof ex.kg === 'number', z = plateZone(ex.pct);
@@ -2184,18 +2200,18 @@ function card(ex, tag){
       <textarea class="exn-t" id="exn-${ex.order}" data-note="${ex.order}" rows="${Math.min(5, Math.max(1, note.split('\n').length))}" maxlength="500" placeholder="np. 3×10 na TRX zamiast wyciągu" aria-label="Komentarz do ćwiczenia ${esc(ex.name)}">${esc(note)}</textarea></div>`;
   const skipLine = sk ? `<div class="skipped"><span>${gone ? 'Pominięte' : 'Skrócone do ' + ex.sets + ' z ' + ex.planSets + ' ' + plural(ex.planSets, 'serii', 'serii', 'serii')}${sk.why ? ' · ' + esc(sk.why) : ''}</span><button type="button" class="btn sm" data-unskip="${ex.order}">Przywróć</button></div>` : '';
   // film „Jak wykonać”: ikona w nagłówku (jeden film = link, kilka = lista); bez filmu puste miejsce, żeby „⋯” i strzałka stały w miejscu
-  const infs = ex.swap ? [] : (ex.infos || []);
+  const infs = ex.swap ? [] : (ex.infos || []), prioTxt = ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne';
   const infBtn = infs.length === 1 ? `<a class="infb inf" href="${esc(infs[0].u)}" target="_blank" rel="noopener" aria-label="Jak wykonać: ${esc(ex.name)}">${PLAY_SVG}</a>`
     : infs.length ? `<button type="button" class="infb" data-inf="${ex.order}" aria-label="Jak wykonać: ${esc(ex.name)} (${infs.length} filmy)">${PLAY_SVG}</button>` : '<span class="infb" aria-hidden="true"></span>';
   const top = `<div class="card ${ex.prio === 'K' ? 'k' : ''} ${oly ? 'oly' : ''} ${gone ? 'skip' : ''}" data-card="${ex.order}">
-    <div class="ch"><button type="button" class="fold-b" data-fold="${ex.order}" aria-expanded="true">${tag ? `<span class="gl">${tag}</span>` : ''}<span class="ft"><span class="cn">${esc(ex.name)}</span><span class="badge ${ex.prio}">${ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne'}</span><span class="fsum"></span></span></button>
+    <div class="ch"><button type="button" class="fold-b" data-fold="${ex.order}" aria-expanded="true">${tag ? `<span class="gl">${tag}</span>` : ''}<span class="ft"><span class="cn">${esc(ex.name)}</span><span class="badge ${ex.prio}">${prioTxt}</span><span class="fsum"></span></span></button>
       <div class="acts">${infBtn}<button type="button" class="more" data-more="${ex.order}" aria-label="Więcej akcji: ${esc(ex.name)}">${MORE_SVG}</button><button type="button" class="fold-c" data-fold="${ex.order}" aria-expanded="true" aria-label="Zwiń albo rozwiń: ${esc(ex.name)}"><i class="chev" aria-hidden="true"></i></button></div></div>
     <div class="cbody">
     ${ex.swap ? `<div class="swapped"><span>Zamiast: ${esc(ex.swap.from)} · ${esc(ex.swap.why)}</span><button type="button" class="btn sm" data-unswap="${ex.order}">Cofnij zamianę</button></div>` : ''}
     ${skipLine}`;
   if (gone) return top + noteBox + '</div></div>';
   return top + `
-    <div class="rx">${SIMPLE ? rxSimple(ex) : rxPro(ex)}</div>
+    <div class="rx"><span class="badge ${ex.prio} bp">${prioTxt}</span>${SIMPLE ? rxSimple(ex) : rxPro(ex)}</div>
     ${lastLine(ex)}
     ${SIMPLE ? hintSimple(ex) : ''}
     ${dropInfo}

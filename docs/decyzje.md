@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-13 · Niższe karty i „⋯” jednostki (v39)
+
+- Po próbie v38 na telefonie: etykieta priorytetu pod nazwą dawała dodatkowy rząd w każdej karcie. Teraz w zwiniętej karcie stoi w linii z wynikiem („KOREKCJA 2 z 2 serii · ✓”), w otwartej na początku recepty.
+- „Skróć trening” i „Zwiń zrobione” przeniesione pod „⋯” w górnym pasku (obok RPE/RIR); rząd przycisków nad kartami usunięty. Świadomy koszt: pasek chowa się przy przewijaniu w dół, więc do „Skróć trening” trzeba najpierw przesunąć palcem w górę. Opisane w pomocy w aplikacji.
+- Odrzucone: „Skróć trening” w „⋯” karty (to akcja całej jednostki, nie ćwiczenia).
+
 ## 2026-11-12 · Lżejsza karta ćwiczenia (v38, plan v4 PR 1)
 
 - Nagłówek karty podzielony: nazwa z etykietą priorytetu (pod nazwą) po lewej, stała kolumna ikon po prawej: ▶ „Jak wykonać”, „⋯”, strzałka zwijania. Ikony są zawsze w tym samym miejscu, niezależnie od długości nazwy; ćwiczenie bez filmu ma puste miejsce po ▶. Kompleks z kilkoma filmami: ▶ otwiera listę.
