@@ -31,11 +31,11 @@ Stan na 2026-11-13, aplikacja v39.
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 zrobiony (v38). Następny: PR 2 (podsumowanie po treningu): najpierw szkic do akceptacji i pytanie 2 z planu. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 zrobiony (v38) z poprawką v39. Następny: PR 2 (podsumowanie po treningu): szkic był pokazany 13.11, bez decyzji; odtwórz go i zapytaj o układ A / B oraz sposób porównania (opis w planie). Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- Scalenie PR 1 v4 (v38) i próba nowej karty na telefonie: czy ikony w nagłówku są czytelne, czy „⋯” nie chowa czegoś używanego na co dzień.
+- Scalenie v39 i próba na telefonie: czy karty mają dobrą wysokość, czy „⋯” w górnym pasku i w karcie nie chowa czegoś używanego na co dzień.
 - Próba obwodu na telefonie (własny trening z obwodem albo plan z kolumną `obwod`): czy przewijanie do następnego ćwiczenia i przerwa 1:30 po rundzie pasują.
 - Dopisanie do SKILL.md skilla trenera pola planu `obwod` (litera A–Z, min. 2 ćwiczenia po sobie w jednostce, bez EMOM) i przebudowanie ZIP-a.
 - Uprzedzenie klientów, że od v35 sen ocenia się odwrotnie niż dotąd (7 = bardzo dobry).

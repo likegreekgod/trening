@@ -39,6 +39,8 @@ Cel: po „Zakończ i zapisz jednostkę” klient widzi wynik, a nie tylko toast
 - Dane są w telefonie: `doneSets`, `records`, `weekSummary` w lib.js. Nowa czysta funkcja np. `unitSummary(sets, plan, week, day)` z testem.
 - Bez sieci działa tak samo (zapis idzie do kolejki).
 - Przyciski: „Zobacz postęp” (zakładka Postęp → Tydzień), „Zamknij”.
+- **Stan 13.11:** szkic pokazany Damianowi, bez decyzji (szkic trzeba odtworzyć w nowej rozmowie, pliki nie są w repo). Okno `#sheet` „Trening zrobiony” z ✓ w kółku i podtytułem „tytuł · dzień”; pod spodem czas, serie zrobione / plan, tonaż, każde z porównaniem; sekcja „Rekordy z tego treningu” (wiersze `.kv` z `key pr`, znika bez rekordów); bez sieci dopisek „zapiszę, gdy wróci sieć”; przy „Zapisz zmiany” w zapisanej jednostce okna nie ma, zostaje toast.
+- Do decyzji: układ A (trzy kafle z dużymi liczbami, polecany) czy B (lista `.kv` jak w Postępie); porównanie do poprzedniej takiej samej jednostki (polecane; brak poprzedniej = bez porównania) czy do średniej z 4 tygodni.
 
 ### PR 3 · Historia ćwiczenia w karcie
 
