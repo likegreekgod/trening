@@ -37,6 +37,7 @@ Stan na 2026-11-13, aplikacja v41 (v40 i v41 na gałęzi, jeszcze bez PR-a).
 ## Do zrobienia
 
 - **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40) i PR 3 (v41) zrobione. Następny: PR 4 (rekord w chwili zapisu serii): najpierw szkic do akceptacji i pytanie, czy też w trybie PROSTY. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Zgłoszone 13.11 (plan v4, PR 10):** wybrane osoby (flaga w Klientach, np. sam Damian) mogą w jednostce z planu szybko dodać własne ćwiczenie, zamienić albo usunąć istniejące, gdy nie ma sprzętu. Opis, co już jest i czego brakuje, w `docs/plan-v4.md`. Kolejność względem PR 4 do ustalenia.
 
 ## Czeka na Damiana
 
@@ -65,7 +66,6 @@ Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPho
 ## Później
 
 - Plan klienta z procentami bez kg: dopisać kg po poznaniu maksów.
-- Dopisywanie ćwiczeń do jednostek trenera (odłożone).
 - Flaga klienta dla Dyspozycji/Postępu; `masters = TAK` tam, gdzie trzeba.
 - Wersja do sklepów (Android) z przypomnieniami, wysyłką filmów przy zamkniętej aplikacji i sygnałem końca przerwy w tle (lokalne powiadomienie planowane przy ✓).
 - Sygnał przerwy, gdy klient jest w innej aplikacji: przeglądarka wstrzymuje stronę w tle, więc dźwięk i powiadomienie nie przychodzą. Decyzja 22.10: na razie bez zmian. Odrzucone obejścia: nagranie „cisza + sygnał” (przerywa muzykę klienta), Web Push (wymaga własnego serwera).

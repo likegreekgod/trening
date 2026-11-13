@@ -86,6 +86,18 @@ Cel: gdy zapisana seria bije dotychczasowy wynik, klient widzi to od razu.
 - **Raport po bloku dla klienta:** karta w Postępie z danych `computeBlocks_` (wykonanie, tonaż, zmiana e1RM, najlepsze boje). `getData` musiałby zwracać wiersze Bloków klienta; bez „wniosków” trenera, chyba że Damian zdecyduje inaczej.
 - **Notatka trenera do jednostki:** nowa kolumna Planu na końcu nagłówków (np. `uwagi_jedn`, wypełniana w pierwszym wierszu jednostki), pokazana na górze Treningu. Wymaga wpisu w SKILL.md skilla trenera.
 
+### PR 10 · Zmiany w jednostce na miejscu, dla wybranych osób (zgłoszone 13.11)
+
+Cel: wybrana osoba (np. sam Damian) może w trakcie treningu szybko dopasować jednostkę z planu, gdy nie ma sprzętu: **dodać** własne ćwiczenie, **zamienić** albo **usunąć** istniejące.
+
+- Dla kogo: tylko osoby z flagą w zakładce Klienci (nowa kolumna na końcu, np. `edycja` = TAK, zwracana w `cfg`), nigdy po imieniu. Domyślnie wyłączone.
+- Co już jest i wystarczy włączyć tej osobie: zamiana na dowolne ćwiczenie (`zamiana` = DOWOLNA: cała baza + własna nazwa), pominięcie ćwiczenia („Pomiń”, seria 0 SKIP).
+- Czego brakuje: **dodanie ćwiczenia do jednostki z planu**. Dziś własne ćwiczenia można dać tylko do osobnego własnego treningu (W1, W2…). To zmienia decyzję z 22.10 „dopisywanie ćwiczeń do jednostek trenera: na razie nie”.
+- Propozycja do szkicu: przycisk „+ ćwiczenie” pod ostatnią kartą jednostki (tylko z flagą) otwiera tę samą wyszukiwarkę co kreator własnego treningu (`exSearch`, filtr po partii, własna nazwa), z seriami i powtórzeniami; „Usuń” pod „⋯” karty dla ćwiczeń dodanych przez klienta, dla ćwiczeń z planu zostaje „Pomiń”.
+- Wymaga zmian w arkuszu (`apps-script/`): nowa akcja API dopisująca wiersz Planu do istniejącej jednostki z `zrodlo = klient` i kolejnym `nr`, oraz usuwająca taki wiersz. Do ustalenia: jak `mergePlan_` ma traktować dopisane wiersze przy ponownym wczytaniu planu (propozycja: zostają, jak własne treningi) i czy liczą się do wykonania planu w Podsumowaniu (propozycja: nie, jak `own_`).
+- Bez sieci: przez kolejkę, jak własny trening (`applyOwn`).
+- Pytania do Damiana przed szkicem: czy dodane ćwiczenie ma zostać tylko w tej jednostce, czy też wracać w kolejnych tygodniach; czy „usuń” ma dotyczyć także ćwiczeń z planu (dziś „Pomiń” zostawia ślad dla trenera).
+
 ## Otwarte pytania do Damiana (zadaj przy odpowiednim PR)
 
 1. PR 1: które akcje zostają na wierzchu karty, a które idą pod „⋯”.
@@ -112,3 +124,4 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 7 | Podpowiedzi przy pierwszym użyciu | po decyzji |
 | 8 | Tryb skupienia | po decyzji, osobny szkic |
 | 9 | Raport po bloku, notatka do jednostki | po decyzji |
+| 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zgłoszone 13.11, do ustalenia (pytania, potem szkic); wymaga `apps-script/` |

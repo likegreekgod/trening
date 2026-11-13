@@ -2,6 +2,11 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-13 · Do zrobienia: zmiany w jednostce na miejscu dla wybranych osób
+
+- Damian chce, żeby wybrane osoby (np. on sam) mogły w jednostce z planu szybko dodać własne ćwiczenie, zamienić albo usunąć istniejące, np. gdy nie ma sprzętu. Włączane flagą w Klientach, nie po imieniu.
+- To odwraca ustalenie z 22.10 („dopisywanie ćwiczeń do jednostek trenera: na razie nie”) dla osób z flagą. Zakres i pytania: `docs/plan-v4.md`, PR 10. Jeszcze nic nie zakodowane.
+
 ## 2026-11-13 · Historia ćwiczenia w karcie (v41, plan v4 PR 3)
 
 - „Ostatnio: …” w karcie jest przyciskiem (podkreślenie i strzałka › w kolorze akcentu, cel dotyku 44 px) i otwiera okno „Historia”: mały wykres siły (e1RM, w bojach najlepsze zaliczone kg; rekordy kropką akcentu, liczone z całej wcześniejszej historii) i 5 ostatnich jednostek z tym ćwiczeniem bez bieżącej: dzień, wszystkie serie w skrócie („100 × 5 · 5 · 5”, nieudana „✕”), najlepsza seria i wysiłek (RPE / RIR / słownie w PROSTYM / ocena podejścia w bojach).
