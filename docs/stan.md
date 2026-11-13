@@ -37,14 +37,14 @@ Stan na 2026-11-13, aplikacja v42 (v40–v42 i zmiany w `apps-script/` na gałę
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41) i PR 10 (v42) zrobione. Następne: PR 11 (przypięta nazwa ćwiczenia, komentarz w oknie: potwierdzić odczyt zrzutów, potem szkic) i PR 4 (rekord w chwili zapisu serii: szkic i pytanie, czy też w trybie PROSTY). Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41) i PR 10 (v42) zrobione. Następne: PR 11 (przypięta nazwa ćwiczenia, komentarz w oknie: szkic pokazany, czeka na wybór) i PR 4 (rekord w chwili zapisu serii: szkic i pytanie, czy też w trybie PROSTY). Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
 - Decyzja o PR 2 (v40, gałąź wysłana, bez PR-a): czy okno „Trening zrobiony” jest gotowe; PR dopiero po zgodzie.
 - Decyzja o PR 3 (v41, ta sama gałąź, bez PR-a): czy okno „Historia” jest gotowe.
 - Decyzja o PR 10 (v42, ta sama gałąź). Po scaleniu: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
-- PR 11: potwierdzić odczyt dwóch pomysłów ze zrzutów (opis w `docs/plan-v4.md`).
+- PR 11: wybór ze szkicu (nazwa przypięta w wariancie A albo B, okno komentarza).
 
 Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPhone, własny trening, kolejka filmów, ścieżka sztangi) Damian potwierdził 13.11 jako zrobione.
 
