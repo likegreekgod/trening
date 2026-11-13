@@ -832,6 +832,49 @@ for (const scheme of ['light', 'dark']) test(`Postęp ${scheme}: siła z rekorda
   await ctx.close();
 });
 
+for (const scheme of ['light', 'dark']) test(`Historia ćwiczenia ${scheme}: „Ostatnio” otwiera okno z wykresem i 5 ostatnimi treningami`, async () => {
+  const { ctx, p } = await page([], false, { data: PROG, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal((await p.textContent('.card[data-card="1"] .last')).trim(), 'Ostatnio: 117,5 kg × 5 · RPE 8');
+  assert.deepEqual(await a11y(p), []);                                              // przycisk „Ostatnio” ma ≥ 44 px
+  await p.click('.card[data-card="1"] .last'); await p.waitForSelector('#sheet .hx-r');
+  assert.match(await p.textContent('#sheet .sub'), /Przysiad tylny · ostatnie 5 treningów/);
+  assert.equal((await p.$$('#sheet .hx-r')).length, 5);                             // z 7 zrobionych tygodni pokazujemy 5
+  assert.equal((await p.$$('#sheet svg.chart .pt')).length, 5);
+  assert.equal((await p.$$('#sheet svg.chart .pt.pr')).length, 4);                  // tydz. 5 był słabszy → nie rekord; liczone z całej historii
+  const first = (await p.textContent('#sheet .hx-r')).replace(/\s+/g, ' ').trim();
+  assert.match(first, /117,5 × 5 · 5 · 5 117,5 kg × 5 ?RPE 8$/);
+  assert.equal((await p.$$('#sheet .hx-r .key.pr')).length, 4);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `historia-${scheme}.png`) }); }
+  await p.click('#sheet [data-close]');
+  // boje: najlepsze zaliczone kg zamiast e1RM, ocena podejścia słownie, nieudana jako ✕
+  await p.click('.card[data-card="2"] .last'); await p.waitForSelector('#sheet .hx-r');
+  assert.match(await p.textContent('#sheet .dn-s'), /Najlepsze zaliczone/);
+  assert.match((await p.textContent('#sheet .hx-r')).replace(/\s+/g, ' '), /77,5 × 2 · 2 · 2 77,5 kg × 2 ?Średnio/);
+  assert.match(await p.textContent('#sheet'), /67,5 × 2 · 2 · ✕/);                   // tydz. 3: trzecie podejście spalone
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Historia ćwiczenia: bez wcześniejszych treningów nie ma „Ostatnio”; jeden trening = lista bez wykresu; PROSTY słownie', async () => {
+  const none = await page([]);
+  await none.p.goto(base + '?k=kabc'); await none.p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await none.p.$('.last'), null);
+  await none.ctx.close();
+  const data = Object.assign({}, DATA, { plan: DATA.plan.concat(DATA.plan.map(r => Object.assign({}, r, { week: 2, date: '2026-10-13' }))),
+    logs: [{ id: 'robert|1|T1|1|1', zapisano: '2026-10-06T17:00:00.000Z', cwiczenie: 'Wyciskanie sztangi na ławce płaskiej', tydzien: 1, jednostka: 'T1', data: '2026-10-06', nr_cw: 1, seria: 1, kg: 50, powt: 8, rpe: 9, wykonane: 'TAK', typ: '' }],
+    sessions: [{ id: 'robert|1|T1', tydzien: 1, jednostka: 'T1', data: '2026-10-06', czas_min: 50 }] });
+  const { ctx, p } = await page([], false, { data });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('.last'); await p.waitForSelector('#sheet .hx-r');
+  assert.match(await p.textContent('#sheet .sub'), /ostatni trening/);
+  assert.equal(await p.$('#sheet svg.chart'), null);
+  assert.match((await p.textContent('#sheet .hx-r')).replace(/\s+/g, ' '), /wt 06\.10 50 × 8 50 kg × 8 ?Ciężko/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 for (const scheme of ['light', 'dark']) test(`Trening zrobiony ${scheme}: okno po zapisie jednostki, porównanie z poprzednią T1, rekord, przejście do Postępu`, async () => {
   const calls = [];
   const data = Object.assign({}, PROG, { sessions: PROG.sessions.slice() });       // atrapa pamięta zapisaną jednostkę jak serwer

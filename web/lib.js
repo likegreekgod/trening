@@ -442,6 +442,33 @@
     return { lvl, title: L.READY_TITLE[lvl], advice: L.READY_ADVICE[lvl], out, cmjAvg, hs };
   };
 
+  /**
+   * historia ćwiczenia do okna „Historia”: ostatnie n INNYCH jednostek z tym ćwiczeniem (po nazwie wykonanej, bez wielkości liter),
+   * od najnowszej (kolejność jak w lastTop: po czasie zapisu, więc pierwsza pozycja = „Ostatnio”).
+   * Każda: { week, day, date, top (najcięższa zaliczona seria, jak lastTop), runs: [{kg, reps: [..]}] – kolejne serie z tym samym
+   * ciężarem zebrane razem; nieudana seria ma reps „✕” }. Bez rozgrzewki. dates: {tydzień|jednostka → faktyczny dzień}.
+   */
+  L.exHistory = (logs, name, week, day, n = 5, dates = {}) => {
+    const nm = String(name).trim().toLowerCase(), by = {};
+    (logs || []).forEach(l => {
+      if (String(l.cwiczenie || '').trim().toLowerCase() !== nm || l.wykonane !== 'TAK' || /^R/i.test(String(l.seria))) return;
+      if (String(l.tydzien) === String(week) && String(l.jednostka) === String(day)) return;
+      const k = l.tydzien + '|' + l.jednostka;
+      const u = by[k] = by[k] || { week: l.tydzien, day: String(l.jednostka), date: dates[k] || String(l.data || '').slice(0, 10), t: 0, rows: [] };
+      u.rows.push(l); u.t = Math.max(u.t, Date.parse(l.zapisano) || 0);
+    });
+    const kgOf = l => { const v = nf(l.kg); return isNaN(v) ? String(l.kg === undefined || l.kg === null ? '' : l.kg) : v; };
+    const ord = s => /^D/i.test(String(s)) ? 1000 + (parseInt(String(s).slice(1)) || 0) : parseInt(s) || 0;
+    return Object.values(by).sort((a, b) => b.t - a.t || String(b.date).localeCompare(String(a.date))).slice(0, n).map(u => {
+      const rows = u.rows.slice().sort((a, b) => ord(a.seria) - ord(b.seria)), ok = rows.filter(l => !/FAIL/.test(l.typ || ''));
+      const t = ok.slice().sort((a, b) => (nf(b.kg) || 0) - (nf(a.kg) || 0) || (nf(b.powt) || 0) - (nf(a.powt) || 0))[0];
+      const runs = [];
+      rows.forEach(l => { const kg = kgOf(l), last = runs[runs.length - 1], r = /FAIL/.test(l.typ || '') ? '✕' : String(l.powt === undefined || l.powt === null ? '' : l.powt);
+        if (last && last.kg === kg) last.reps.push(r); else runs.push({ kg, reps: [r] }); });
+      return { week: u.week, day: u.day, date: u.date, runs,
+        top: t ? { kg: kgOf(t), reps: t.powt, rpe: t.rpe, ocena: String(t.ocena || '').toUpperCase() } : null };
+    });
+  };
   /* ---------- postęp: siła, objętość, obciążenie (cała historia z Logu) ---------- */
   const mondayOf = d => L.addDays(d, -((new Date(utc(d)).getUTCDay() + 6) % 7));
   /** e1RM = kg × (1 + (powt. + RIR) / 30), RIR = 10 − RPE; jak w podsumowaniu: tylko serie z RPE ≥ 5 */

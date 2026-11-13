@@ -49,6 +49,7 @@ Cel: dotknięcie „Ostatnio: kg × powt. · RPE” pokazuje, jak szło wcześni
 - Dziś „Ostatnio” liczy `lastTop(logs, name, week, day)` (lib.js ok. 200, użycie ok. 1933).
 - Propozycja: „Ostatnio” jako przycisk → `#sheet` z ostatnimi 5 jednostkami tego ćwiczenia (data, najlepsza seria, wszystkie serie w skrócie, RPE), mały wykres `chartLine` (e1RM albo najlepsze kg w bojach, jak w Postęp → Siła: `strengthSeries`).
 - Nowa czysta funkcja np. `exHistory(sets, name, n)` z testem. Zamienione ćwiczenie liczy się pod nazwą wykonaną.
+- **Ustalone 13.11:** wariant A (wykres + lista), „Ostatnio” z podkreśleniem i strzałką ›, 5 ostatnich treningów. Zrobione w v41.
 
 ### PR 4 · Rekord w chwili zapisu
 
@@ -104,7 +105,7 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 |---|---|---|
 | 1 | Lżejsza karta ćwiczenia | zrobione (v38, scalone) + poprawka v39 (etykieta w linii, „⋯” jednostki w górnym pasku) |
 | 2 | Podsumowanie po treningu | zrobione (v40): układ A (kafle), porównanie z poprzednią taką samą jednostką; lib `unitSummary`, `doneSummary` / `openDone` |
-| 3 | Historia ćwiczenia w karcie | do zrobienia (szkic) |
+| 3 | Historia ćwiczenia w karcie | zrobione (v41): wariant A (wykres + 5 treningów), „Ostatnio” jako przycisk; lib `exHistory`, `openHist`, `effTxt` |
 | 4 | Rekord w chwili zapisu | do zrobienia (szkic) |
 | 5 | Ekran „dziś” | po decyzji |
 | 6 | Ruch i timer | po decyzji |

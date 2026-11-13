@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-13 · Historia ćwiczenia w karcie (v41, plan v4 PR 3)
+
+- „Ostatnio: …” w karcie jest przyciskiem (podkreślenie i strzałka › w kolorze akcentu, cel dotyku 44 px) i otwiera okno „Historia”: mały wykres siły (e1RM, w bojach najlepsze zaliczone kg; rekordy kropką akcentu, liczone z całej wcześniejszej historii) i 5 ostatnich jednostek z tym ćwiczeniem bez bieżącej: dzień, wszystkie serie w skrócie („100 × 5 · 5 · 5”, nieudana „✕”), najlepsza seria i wysiłek (RPE / RIR / słownie w PROSTYM / ocena podejścia w bojach).
+- Wybrane ze szkicu: wariant A (wykres + lista), 5 treningów. Odrzucone: sama lista, „Historia” pod „⋯”, 10 treningów (okno wymagałoby przewijania).
+- Jeden wcześniejszy trening albo ćwiczenie na czas: lista bez wykresu. Brak historii: „Ostatnio” nie ma, jak dotąd. Zamienione ćwiczenie liczy się pod nazwą wykonaną. Dane z telefonu (`exHistory`), bez zmian w arkuszu i zapisie.
+
 ## 2026-11-13 · Okno „Trening zrobiony” (v40, plan v4 PR 2)
 
 - Po „Zakończ i zapisz” nowej jednostki otwiera się okno: czas, serie zrobione / plan, tonaż w trzech kaflach (układ A ze szkicu), rekordy z tej jednostki, „Zamknij” i „Zobacz postęp” (Postęp → Tydzień, z dociągnięciem świeżych danych). Poprawka już zapisanej jednostki („Zapisz zmiany”) daje tylko komunikat.

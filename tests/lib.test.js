@@ -527,3 +527,22 @@ test('unitSummary: okno „Trening zrobiony” – porównanie z poprzednią tak
   assert.deepEqual(oly.records, [{ name: 'Rwanie', v: 72, delta: 2, oly: true }]);
   assert.equal(oly.prev.min, null);
 });
+
+test('exHistory: ostatnie jednostki z ćwiczeniem do okna „Historia”', () => {
+  const G = (week, seria, kg, powt, x) => Object.assign({ tydzien: week, jednostka: 'T1', data: '2026-10-0' + week, zapisano: '2026-10-0' + week + 'T17:00:00Z', cwiczenie: 'Przysiad', seria, kg, powt, rpe: 8, wykonane: 'TAK', typ: '' }, x || {});
+  const logs = [G(1, 'R1', 60, 5), G(1, 2, 100, 5), G(1, 1, 100, 5), G(1, 3, 105, 3, { rpe: 9 }), G(1, 4, 110, 1, { typ: 'FAIL' }), G(1, 'D1', 80, 8, { typ: 'DROP' }),
+    G(2, 1, '102,5', 5), G(2, 2, '102,5', 4, { cwiczenie: ' przysiad ' }), G(2, 3, 100, 5, { wykonane: '' }),
+    G(3, 1, 105, 5), G(2, 1, 60, 10, { cwiczenie: 'Wiosło' })];
+  const h = L.exHistory(logs, 'Przysiad', 3, 'T1', 5, { '1|T1': '2026-10-02' });
+  assert.deepEqual(h.map(u => [u.week, u.date]), [[2, '2026-10-02'], [1, '2026-10-02']]);   // od najnowszej; tydz. 1 z faktycznym dniem (dates), tydz. 2 z Logu
+  // tydz. 2: dwie serie z tym samym ciężarem razem, niezapisana pominięta, nazwa bez wielkości liter
+  assert.deepEqual(h[0].runs, [{ kg: 102.5, reps: ['5', '4'] }]);
+  assert.deepEqual(h[0].top, { kg: 102.5, reps: 5, rpe: 8, ocena: '' });
+  // tydz. 1: kolejność serii 1, 2, 3, 4, D1; bez rozgrzewki; nieudana jako ✕ i nie jest „najlepszą”
+  assert.deepEqual(h[1].runs, [{ kg: 100, reps: ['5', '5'] }, { kg: 105, reps: ['3'] }, { kg: 110, reps: ['✕'] }, { kg: 80, reps: ['8'] }]);
+  assert.deepEqual(h[1].top, { kg: 105, reps: 3, rpe: 9, ocena: '' });
+  assert.equal(L.exHistory(logs, 'Przysiad', 9, 'T1', 2).length, 2);                 // limit n; bieżąca jednostka (tydz. 3) wtedy też jest historią
+  assert.equal(L.exHistory(logs, 'Przysiad', 9, 'T1', 2)[0].week, 3);
+  assert.deepEqual(L.exHistory(logs, 'Martwy', 3, 'T1'), []);
+  assert.deepEqual(L.exHistory([G(1, 1, 'BW', 12)], 'Przysiad', 3, 'T1')[0].runs, [{ kg: 'BW', reps: ['12'] }]);
+});

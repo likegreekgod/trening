@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-13, aplikacja v40.
+Stan na 2026-11-13, aplikacja v41 (v40 i v41 na gałęzi, jeszcze bez PR-a).
 
 ## Jak pracujemy
 
@@ -18,6 +18,7 @@ Stan na 2026-11-13, aplikacja v40.
 
 ## Ostatnio zrobione
 
+- 13.11 (v41): plan v4 PR 3: „Ostatnio” w karcie otwiera okno „Historia” (wykres siły i 5 ostatnich treningów z tym ćwiczeniem).
 - 13.11 (v40): plan v4 PR 2: po „Zakończ i zapisz” okno „Trening zrobiony” (czas, serie, tonaż z porównaniem do poprzedniej takiej samej jednostki, rekordy, „Zobacz postęp”).
 - 13.11 (v39): niższe karty: etykieta priorytetu w linii z wynikiem (zwinięta) albo receptą (otwarta); „Skróć trening” i „Zwiń zrobione” pod „⋯” w górnym pasku zamiast rzędu przycisków.
 - 12.11 (v38): plan v4 PR 1, lżejsza karta ćwiczenia: ikony ▶ / „⋯” / strzałka w stałej kolumnie nagłówka, Komentarz, Zamień i Pomiń pod „⋯”, jeden rząd „+ rozgrzewka / + seria (n) / + drop set” pod seriami.
@@ -35,12 +36,12 @@ Stan na 2026-11-13, aplikacja v40.
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39) i PR 2 (v40) zrobione. Następny: PR 3 (historia ćwiczenia w karcie): najpierw szkic do akceptacji. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40) i PR 3 (v41) zrobione. Następny: PR 4 (rekord w chwili zapisu serii): najpierw szkic do akceptacji i pytanie, czy też w trybie PROSTY. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
 - Decyzja o PR 2 (v40, gałąź wysłana, bez PR-a): czy okno „Trening zrobiony” jest gotowe; PR dopiero po zgodzie.
-- PR 3: wybór ze szkicu (wariant A z wykresem czy B sama lista; wygląd „Ostatnio” jako przycisku).
+- Decyzja o PR 3 (v41, ta sama gałąź, bez PR-a): czy okno „Historia” jest gotowe.
 
 Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPhone, własny trening, kolejka filmów, ścieżka sztangi) Damian potwierdził 13.11 jako zrobione.
 

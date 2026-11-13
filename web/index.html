@@ -178,6 +178,16 @@
   .zone{display:inline-block;width:11px;height:11px;border:1px solid var(--ink);border-radius:3px;flex:none}
   .zone.p5{background:var(--p5)}.zone.p10{background:var(--p10)}.zone.p15{background:var(--p15)}.zone.p20{background:var(--p20)}.zone.p25{background:var(--p25)}
   .last{font-size:13px;color:var(--muted);margin:2px 0 4px}
+  /* „Ostatnio” jako przycisk do historii ćwiczenia */
+  button.last{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 10px;margin:0 0 0 -10px;border:0;background:none;font:400 13px var(--f-body);color:var(--ink-2);text-align:left;cursor:pointer}
+  button.last span{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+  button.last::after{content:'›';font:700 18px/1 var(--f-display);color:var(--accent)}
+  .hx-r{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .hx-r div{display:grid;gap:2px;min-width:0}
+  .hx-r span{font-size:14px;color:var(--ink-2)}
+  .hx-r small{font:500 13px var(--f-mono);color:var(--muted)}
+  .hx-r b{font:500 15px var(--f-mono);color:var(--ink);white-space:nowrap;text-align:right}
+  .hx-r b i{font-style:normal;font-size:13px;color:var(--muted)}
   /* przełącznik RPE / RIR w nagłówku */
   .trow{display:flex;align-items:flex-start;gap:8px}
   .trow h1{flex:1;min-width:0}
@@ -682,7 +692,7 @@ const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
 const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
-  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, restSec, fmtClock, plates,
+  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, restSec, fmtClock, plates,
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
@@ -1972,9 +1982,30 @@ function lastLine(ex){
   const t = lastTop(DATA ? DATA.logs : [], ex.name, cur.week, cur.day);
   if (!t) return '';
   const kg = typeof t.kg === 'number' ? fmtKg(t.kg) + ' kg' : esc(t.kg);
-  const eff = isOly(ex) && RATE[t.ocena] ? ' · ' + RATE[t.ocena].label : blank(t.rpe) ? '' : SIMPLE ? ' · ' + (EFFORT.find(e => e[0] === effortVal(t.rpe)) || ['', ''])[1]
-    : SCALE === 'RIR' ? ' · RIR ' + fmtKg(rirOfRpe(t.rpe)) : ' · RPE ' + fmtKg(t.rpe);
-  return `<div class="last">Ostatnio: ${kg} × ${esc(t.reps)}${eff}</div>`;
+  const eff = effTxt(ex, t);
+  return `<button type="button" class="last" data-hist="${ex.order}" aria-label="Historia ćwiczenia ${esc(ex.name)}"><span>Ostatnio: ${kg} × ${esc(t.reps)}${eff ? ' · ' + eff : ''}</span></button>`;
+}
+/** wysiłek serii słownie: ocena podejścia w bojach, PROSTY słownie, PRO jako RPE albo RIR wg przełącznika */
+function effTxt(ex, t){
+  return isOly(ex) && RATE[t.ocena] ? RATE[t.ocena].label : blank(t.rpe) ? '' : SIMPLE ? (EFFORT.find(e => e[0] === effortVal(t.rpe)) || ['', ''])[1]
+    : SCALE === 'RIR' ? 'RIR ' + fmtKg(rirOfRpe(t.rpe)) : 'RPE ' + fmtKg(t.rpe);
+}
+/** okno „Historia”: wykres siły (jak Postęp → Siła) i 5 ostatnich jednostek z tym ćwiczeniem, bez bieżącej */
+function openHist(ex){
+  const logs = (DATA && DATA.logs) || [], dates = unitDays(), hist = exHistory(logs, ex.name, cur.week, cur.day, 5, dates);
+  if (!hist.length) return;
+  const nm = String(ex.name).trim().toLowerCase(), oly = isOly(ex), unit = timeUnit(ex.reps), kgT = v => typeof v === 'number' ? fmtKg(v) : esc(v);
+  // punkty wykresu z całej wcześniejszej historii (rekord = lepszy od wszystkiego przed nim), pokazane ostatnie 5
+  const sets = doneSets(logs.filter(l => !(String(l.tydzien) === String(cur.week) && String(l.jednostka) === String(cur.day))), PLAN, dates)
+    .filter(s => s.name.trim().toLowerCase() === nm).map(s => Object.assign({}, s, { name: nm }));
+  const all = unit ? [] : strengthSeries(sets, nm), ser = all.slice(-5), pr = {}; all.forEach(p => { if (p.pr) pr[p.date] = 1; });
+  const rows = hist.map(u => `<div class="hx-r"><div><span>${pr[u.date] ? '<i class="key pr"></i> ' : ''}${u.date ? weekday(u.date) + ' ' + ddmm(u.date) : esc(u.day)}</span>
+      <small>${u.runs.map(r => kgT(r.kg) + ' × ' + r.reps.map(esc).join(' · ')).join(' &nbsp; ')}${unit ? ' ' + unit : ''}</small></div>
+      ${u.top ? `<b>${kgT(u.top.kg)}${typeof u.top.kg === 'number' ? ' kg' : ''} × ${esc(u.top.reps)}${unit ? ' ' + unit : ''}<br><i>${esc(effTxt(ex, u.top))}</i></b>` : '<b>–</b>'}</div>`).join('');
+  openSheet(`<h2 id="sheet-t">Historia</h2><p class="sub">${esc(ex.name)} · ${hist.length === 1 ? 'ostatni trening' : 'ostatnie ' + hist.length + ' ' + plural(hist.length, 'trening', 'treningi', 'treningów')}</p>
+    ${ser.length > 1 ? `<div><div class="dn-s">${oly ? 'Najlepsze zaliczone (kg)' : 'Siła (e1RM, kg)'}</div>${chartLine(ser, { unit: 'kg', label: (oly ? 'Najlepsze zaliczone kg: ' : 'e1RM: ') + ex.name })}
+      <p class="sub" style="margin:0"><i class="key pr"></i> rekord${oly ? '' : ' · e1RM liczone z ciężaru, powtórzeń i zapasu'}</p></div>` : ''}
+    <div>${rows}</div><button type="button" class="btn" data-close>Zamknij</button>`);
 }
 function rxSimple(ex){
   const n = ex.sets, reps = String(ex.reps).trim(), r = parseInt(reps);
@@ -2509,6 +2540,7 @@ function bind(exs, s0){
   document.querySelectorAll('[data-plates]').forEach(b => b.onclick = () => openPlates(exOf(b.dataset.plates)));
   exs.forEach(updateSug);
   document.querySelectorAll('[data-more]').forEach(b => b.onclick = () => openMore(exOf(b.dataset.more)));
+  document.querySelectorAll('[data-hist]').forEach(b => b.onclick = () => openHist(exOf(b.dataset.hist)));
   document.querySelectorAll('[data-inf]').forEach(b => b.onclick = () => openInf(exOf(b.dataset.inf)));
   document.querySelectorAll('[data-unswap]').forEach(b => b.onclick = () => { setSwap(exOf(b.dataset.unswap), null); toast('Wrócono do ćwiczenia z planu.'); renderTrening(); });
   document.querySelectorAll('[data-unskip]').forEach(b => b.onclick = () => { unSkip(exOf(b.dataset.unskip)); toast('Przywrócono ćwiczenie.'); renderTrening(); });

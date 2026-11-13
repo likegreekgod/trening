@@ -125,7 +125,7 @@ Konwencje Damiana:
   - dotknięcie numeru serii roboczej/dodatkowej: zwykła → drop (typ DROP) → nieudana;
   - zmiana kg/powt./RPE w zapisanej serii zapisuje ją od razu;
   - PRO: lista RPE albo RIR (0…5+) wg `cfg.scale` i przełącznika w nagłówku (`sc_<klucz>`); zapis zawsze w RPE;
-  - recepta: kwadrat w kolorze talerza wg % 1RM, „RIR ≥ n” przy skali RIR; „Ostatnio: kg × powt. · RPE” z poprzedniej jednostki (`lastTop`).
+  - recepta: kwadrat w kolorze talerza wg % 1RM, „RIR ≥ n” przy skali RIR; „Ostatnio: kg × powt. · RPE” z poprzedniej jednostki (`lastTop`) jest przyciskiem (`button.last`, `data-hist`) i otwiera okno „Historia” (`openHist`, lib `exHistory`): wykres siły z `strengthSeries` (ostatnie 5 punktów, rekordy z całej historii) i 5 ostatnich jednostek z tym ćwiczeniem bez bieżącej (serie w skrócie, najlepsza seria, wysiłek przez `effTxt`); jeden trening albo ćwiczenie na czas = bez wykresu.
   - „✓ Wszystko jak w planie” (PROSTY) widoczne tylko przy niezapisanych seriach z planu (`refreshAll`);
   - czas jednostki: start od pierwszego wpisu; pierwsza zapisana seria po > 30 min bez serii restartuje go (`LATE_START_MIN`, `restartClock`); w podsumowaniu „Licz czas od teraz” i ręczna poprawka minut (`#smin` ma pierwszeństwo);
   - po zaliczeniu serii (✓/✕, nie rozgrzewka) timer przerwy nad dolnym menu: A 2:00, B 1:30, K 1:00 (`restSec`), −15 / +15 / Pomiń, wibracja na koniec;
