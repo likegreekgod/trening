@@ -558,6 +558,17 @@
          padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:grid;gap:12px;max-width:640px;margin:0 auto}
   .sh-in h2{margin:0;font:800 28px/1 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink-2)}
   .sh-in .sub{margin:-6px 0 0}
+  /* okno „Trening zrobiony” */
+  .dn-h{display:flex;align-items:center;gap:12px}
+  .dn-ck{flex:none;width:44px;height:44px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:800 24px/1 var(--f-display)}
+  .dn-h .sub,.sh-in .dn-cmp{margin:2px 0 0}
+  .dn-t{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .dn-t div{background:var(--bg);border-radius:var(--r);padding:10px 10px 9px;display:grid;gap:4px;align-content:start;min-width:0}
+  .dn-t span,.dn-s{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .dn-t b{font:800 30px/1 var(--f-display);color:var(--ink);white-space:nowrap}
+  .dn-t b i{font:600 13px var(--f-body);font-style:normal;color:var(--muted)}
+  .dn-t small{font-size:12px;color:var(--ink-2)}
+  .dn-b{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .fl{display:grid;gap:6px;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
   .fl input{font:700 26px/1 var(--f-display);min-height:48px;text-transform:none;letter-spacing:.01em}
   .fl input::placeholder{font:400 16px var(--f-body);color:var(--muted);opacity:1}
@@ -675,7 +686,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
   isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit } = window.TL;
 
 /* ---------- kolejka offline ---------- */
@@ -1031,6 +1042,14 @@ function load(){
     if (!cached) { $('#main').innerHTML = '<div class="empty">Błąd: ' + esc(e.message) + '</div>'; setSync('błąd'); }
     else setSync('offline – ostatnie dane');
   });
+}
+/** świeże dane z serwera bez zmiany ekranu i bieżącej jednostki (najpierw wysyła kolejkę) */
+function refreshData(){
+  return flush().then(() => call('getData')).then(d => {
+    try { localStorage.setItem(DK, JSON.stringify(d)); } catch (e) {}
+    const w = cur.week, dd = cur.day;
+    useData(d); cur.week = w; cur.day = dd; render(); setSync('gotowe');
+  }).catch(() => {});
 }
 /** brak klucza (np. iOS: aplikacja z ekranu głównego ma osobną pamięć i startuje bez ?k=) → wklejenie linku albo kodu */
 function askKey(){
@@ -2272,6 +2291,33 @@ function sessCard(s0){
     <label for="snote">Uwagi dla trenera</label><textarea id="snote" rows="3">${esc(s.uwagi || '')}</textarea>
     <div style="height:10px"></div><button class="btn p" id="saveSess">${s.id ? 'Zapisz zmiany' : 'Zakończ i zapisz ' + (SIMPLE ? 'trening' : 'jednostkę')}</button></div>`;
 }
+/** dane do okna „Trening zrobiony”: bieżąca jednostka z telefonu, porównanie i rekordy z historii (lib unitSummary) */
+function doneSummary(minutes){
+  const exs = curExs(), sets = [];
+  exs.forEach(ex => { const L2 = exLogs(ex); Object.keys(L2).forEach(k => { const l = L2[k];
+    if (l.wykonane !== 'TAK' || /^R/i.test(k) || /SKIP/.test(l.typ || '')) return;
+    sets.push({ name: ex.name, prio: ex.prio, group: ex.group, kg: num(l.kg), reps: num(l.powt), rpe: num(l.rpe), fail: /FAIL/.test(l.typ || ''), timed: !!timeUnit(ex.reps) }); }); });
+  const u = unitList().find(x => x.week === cur.week && x.day === cur.day);
+  return Object.assign(unitSummary({ week: cur.week, day: cur.day, plan: PLAN, logs: (DATA && DATA.logs) || [], sessions: (DATA && DATA.sessions) || [],
+    dates: unitDays(), stats: unitStats(exs, exLogs), minutes, sets }), { title: (u && u.title) || '', date: localDate() });
+}
+function openDone(u, off){
+  const cmp = (d, unit) => d === null ? '' : d === 0 ? 'bez zmian' : (d > 0 ? '▲ ' : '▼ ') + Math.abs(d).toLocaleString('pl-PL') + unit;
+  const h = u.min ? Math.floor(u.min / 60) : 0, tile = (k, v, sm) => `<div><span>${k}</span><b>${v}</b>${sm ? `<small>${sm}</small>` : ''}</div>`;
+  openSheet(`<div class="dn-h"><span class="dn-ck" aria-hidden="true">✓</span><div><h2 id="sheet-t">Trening zrobiony</h2>
+      <p class="sub">${esc([u.title, weekday(u.date) + ' ' + ddmm(u.date)].filter(Boolean).join(' · '))}</p></div></div>
+    <div class="dn-t">
+      ${tile('Czas', u.min ? (h ? h + '<i> h </i>' + (u.min % 60) : u.min) + '<i> min</i>' : '–', cmp(u.dMin, ' min'))}
+      ${tile('Serie', u.done + (u.all ? '<i> / ' + u.all + '</i>' : ''), u.all && u.done >= u.all ? 'cały plan' : '')}
+      ${tile('Tonaż', u.ton.toLocaleString('pl-PL') + '<i> kg</i>', cmp(u.dTon, '%'))}</div>
+    ${u.dMin !== null || u.dTon !== null ? `<p class="sub dn-cmp">Porównanie z poprzednim razem: ${esc(cur.day)}${u.prev.date ? ', ' + weekday(u.prev.date) + ' ' + ddmm(u.prev.date) : ''}.</p>` : ''}
+    ${u.records.length ? `<div><div class="dn-s">Rekordy z tego treningu</div>${u.records.map(r =>
+      `<div class="kv"><span><i class="key pr"></i> ${esc(r.name)}<small> · ${r.oly ? 'zaliczone' : 'e1RM'}, +${kgTxt(r.delta)} kg</small></span><b>${kgTxt(r.v)} kg</b></div>`).join('')}</div>` : ''}
+    ${off ? '<p class="sub dn-cmp">Brak sieci: zapiszę, gdy wróci połączenie.</p>' : ''}
+    <div class="dn-b"><button type="button" class="btn" data-close>Zamknij</button><button type="button" class="btn p" id="dn-go">Zobacz postęp</button></div>`);
+  // Postęp liczy się z danych serwera: po przejściu dociągnij świeże (z tą jednostką); bez sieci zostaje dotychczasowy stan
+  $('#dn-go').onclick = () => { closeSheet(); TAB = 'postep'; PT = 'tyd'; PWK = null; render(); window.scrollTo(0, 0); refreshData(); };
+}
 function sessClick(e){
   const pv = e.target.closest('.pv');
   if (pv) {
@@ -2546,8 +2592,10 @@ function bind(exs, s0){
     SESS['local|' + k] = { id: 'local|' + k, bol_kolano: p.knee, bol_bark: p.shoulder, bol: p.pain, bol_max: p.painMax, rpe_sesji: p.rpeSession, samopoczucie: p.feel, czas_min: p.minutes,
       uwagi: p.note, start: p.start, koniec: p.end };
     const m = tGet(); delete m[k]; delete m['r|' + k]; tSet(m);
-    const msg = s.id ? 'Zmiany zapisane.' : (SIMPLE ? 'Trening' : 'Jednostka') + ' zapisan' + (SIMPLE ? 'y' : 'a') + (minutes ? ' (' + minutes + ' min)' : '') + '. Dobra robota!';
-    send('logSession', p).then(() => { toast(msg); render(); }).catch(() => { toast('Brak sieci – zapiszę, gdy wróci połączenie.'); render(); });
+    // nowa jednostka: okno „Trening zrobiony” (liczone przed render, z danych w telefonie); poprawka zapisanej: tylko komunikat
+    const sum = s.id ? null : doneSummary(minutes);
+    const after = off => { render(); if (sum) openDone(sum, off); else toast(off ? 'Brak sieci – zapiszę, gdy wróci połączenie.' : 'Zmiany zapisane.'); };
+    send('logSession', p).then(() => after(false)).catch(() => after(true));
   };
 }
 // pole z wpisaną wartością: dotknięcie zaznacza całość, więc pierwsza cyfra nadpisuje zamiast dopisywać

@@ -142,6 +142,7 @@ Konwencje Damiana:
 - Karta ćwiczenia: „Pomiń” (B) / „Pomiń…” z powodem (A/K) → `saveSkip` (seria 0, SKIP), `withSkip` skraca serie, „Przywróć” = `unSkip` (deleteSet seria 0); „Skróć trening” (`openCut`, lib `cutPlan`: `ciecie`, `serie_min`, bez nich B od końca); „Zwiń zrobione”; komentarz do ćwiczenia (`exNote`, `setNote`, `en_<klucz>`). Karta zwija się sama, gdy ćwiczenie staje się zrobione (także po ręcznym rozwinięciu).
 - Sygnał przerwy (`audioUnlock`, `beep`, `vib`, `flash`, `notifyBg`, ustawienia `sg_<klucz>` w `openSignal` pod ♪): koniec = 3 × 880 Hz, wibracja 300-150-300-150-600, mignięcie, powiadomienie w tle.
 - Klasy poziomów (dyspozycja: werdykt, baner, powody) to `lv-ok/warn/bad/none`. Nie używaj `.ok`, `.pend` itp. jako klasy stanu w innych komponentach: `.ok` to przycisk ✓ z wysokością 44 px.
+- Po „Zakończ i zapisz” nowej jednostki okno `#sheet` „Trening zrobiony” (`doneSummary` → lib `unitSummary`, `openDone`): kafle czas / serie / tonaż z porównaniem do poprzedniej takiej samej jednostki (ten sam `day` w najbliższym wcześniejszym tygodniu z seriami; własny trening bez porównania), rekordy ćwiczeń A z tej jednostki, „Zobacz postęp” (`refreshData` dociąga getData); „Zapisz zmiany” w zapisanej jednostce = tylko toast.
 - Podsumowanie jednostki:
   - RPE sesji 0–10;
   - samopoczucie 1–5;

@@ -502,3 +502,28 @@ test('circuitGroups, circuitState, circuitLetter, circuitTidy: obwód / superser
   assert.deepEqual(L.circuitTidy([T('A', 3), T('A', 5), T('', 2), T('B', 4), T('', 1), T('C', 2, true), T('C', 2, true)]).map(e => e.c + e.sets), ['A3', 'A3', '2', '4', '1', 'C2', 'C2']);
   assert.equal(L.CIRCUIT_REST, 90);
 });
+
+test('unitSummary: okno „Trening zrobiony” – porównanie z poprzednią taką samą jednostką i rekordy', () => {
+  const R = (week, day, order, name, reps, x) => Object.assign({ week, day, order, name, prio: 'A', sets: 3, reps, group: '' }, x || {});
+  const plan = [R(1, 'T1', 1, 'Przysiad', '5'), R(1, 'T1', 2, 'Plank', '30 s', { prio: 'B' }), R(2, 'T1', 1, 'Przysiad', '5'), R(2, 'T1', 2, 'Plank', '30 s', { prio: 'B' }),
+    R(2, 'T2', 1, 'Martwy ciąg', '3'), R(2, 'W1', 1, 'Przysiad', '5', { own: true })];
+  const G = (week, nr, name, seria, kg, powt, x) => Object.assign({ tydzien: week, jednostka: 'T1', data: '2026-10-0' + (5 + week), nr_cw: nr, cwiczenie: name, seria, kg, powt, rpe: 8, wykonane: 'TAK', typ: '' }, x || {});
+  const logs = [G(1, 1, 'Przysiad', 'R1', 60, 5), G(1, 1, 'Przysiad', 1, 100, 5), G(1, 1, 'Przysiad', 2, 100, 5), G(1, 1, 'Przysiad', 3, 100, 5), G(1, 2, 'Plank', 1, 10, 30),
+    G(2, 1, 'Przysiad', 1, 140, 5)];                                               // wpis tej jednostki z serwera nie jest historią
+  const sessions = [{ tydzien: 1, jednostka: 'T1', czas_min: 64 }];
+  const S = (name, kg, reps, x) => Object.assign({ name, prio: 'A', group: '', kg, reps, rpe: 8, fail: false, timed: false }, x || {});
+  const sets = [S('Przysiad', 105, 5), S('Przysiad', 105, 5), S('Przysiad', 130, 5, { fail: true }), S('Plank', 10, 30, { prio: 'B', timed: true })];
+  const u = L.unitSummary({ week: 2, day: 'T1', plan, logs, sessions, dates: { '1|T1': '2026-10-07' }, stats: { done: 2, all: 6, ton: 1575 }, minutes: 58, sets });
+  assert.deepEqual(u.prev, { week: 1, date: '2026-10-07', ton: 1500, min: 64 });      // bez rozgrzewki i planka na czas; dzień z Sesje.start
+  assert.deepEqual([u.min, u.done, u.all, u.ton, u.dMin, u.dTon], [58, 2, 6, 1575, -6, 5]);
+  assert.deepEqual(u.records, [{ name: 'Przysiad', v: 129.5, delta: 6.2, oly: false }]);   // 105 × (1 + 7/30) wobec 123,3; nieudana się nie liczy
+  // pierwsza taka jednostka, inna jednostka i własny trening: bez porównania; pierwszy wynik ćwiczenia to nie rekord
+  const first = L.unitSummary({ week: 1, day: 'T1', plan, logs, sessions, stats: { done: 3, all: 6, ton: 1500 }, minutes: '', sets: [S('Przysiad', 100, 5)] });
+  assert.deepEqual([first.prev, first.dMin, first.dTon, first.min, first.records], [null, null, null, null, []]);
+  assert.equal(L.unitSummary({ week: 2, day: 'T2', plan, logs, sessions, stats: {}, sets: [S('Martwy ciąg', 150, 3)] }).records.length, 0);
+  assert.equal(L.unitSummary({ week: 2, day: 'W1', plan, logs: logs.concat([G(1, 1, 'Przysiad', 1, 90, 5, { jednostka: 'W1' })]), sessions, stats: { ton: 500 }, sets: [] }).prev, null);
+  // boje: rekord = najcięższe zaliczone kg
+  const oly = L.unitSummary({ week: 2, day: 'T1', plan, logs: [G(1, 1, 'Rwanie', 1, 70, 1)], sessions: [], stats: {}, sets: [S('Rwanie', 72, 1, { group: 'R', rpe: '' }), S('Rwanie', 75, 1, { group: 'R', fail: true })] });
+  assert.deepEqual(oly.records, [{ name: 'Rwanie', v: 72, delta: 2, oly: true }]);
+  assert.equal(oly.prev.min, null);
+});

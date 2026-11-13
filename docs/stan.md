@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-13, aplikacja v39.
+Stan na 2026-11-13, aplikacja v40.
 
 ## Jak pracujemy
 
@@ -15,6 +15,7 @@ Stan na 2026-11-13, aplikacja v39.
 
 ## Ostatnio zrobione
 
+- 13.11 (v40): plan v4 PR 2: po „Zakończ i zapisz” okno „Trening zrobiony” (czas, serie, tonaż z porównaniem do poprzedniej takiej samej jednostki, rekordy, „Zobacz postęp”).
 - 13.11 (v39): niższe karty: etykieta priorytetu w linii z wynikiem (zwinięta) albo receptą (otwarta); „Skróć trening” i „Zwiń zrobione” pod „⋯” w górnym pasku zamiast rzędu przycisków.
 - 12.11 (v38): plan v4 PR 1, lżejsza karta ćwiczenia: ikony ▶ / „⋯” / strzałka w stałej kolumnie nagłówka, Komentarz, Zamień i Pomiń pod „⋯”, jeden rząd „+ rozgrzewka / + seria (n) / + drop set” pod seriami.
 - 12.11 (v37): obwód / superseria: kolumna Planu `obwod` (litera), ramka A1–A3 i przerwa po rundzie na Treningu, „Połącz z poprzednim” (Kompleks / Obwód) w kreatorze własnego treningu. Wymaga też scalenia `apps-script/` (wdroży się samo).
@@ -31,11 +32,12 @@ Stan na 2026-11-13, aplikacja v39.
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 zrobiony (v38) z poprawką v39. Następny: PR 2 (podsumowanie po treningu): szkic był pokazany 13.11, bez decyzji; odtwórz go i zapytaj o układ A / B oraz sposób porównania (opis w planie). Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39) i PR 2 (v40) zrobione. Następny: PR 3 (historia ćwiczenia w karcie): najpierw szkic do akceptacji. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- Scalenie v39 i próba na telefonie: czy karty mają dobrą wysokość, czy „⋯” w górnym pasku i w karcie nie chowa czegoś używanego na co dzień.
+- Scalenie v40 i próba na telefonie: czy okno „Trening zrobiony” po zapisie jednostki pokazuje sensowne liczby i porównanie.
+- Próba v39 na telefonie: czy karty mają dobrą wysokość, czy „⋯” w górnym pasku i w karcie nie chowa czegoś używanego na co dzień.
 - Próba obwodu na telefonie (własny trening z obwodem albo plan z kolumną `obwod`): czy przewijanie do następnego ćwiczenia i przerwa 1:30 po rundzie pasują.
 - Dopisanie do SKILL.md skilla trenera pola planu `obwod` (litera A–Z, min. 2 ćwiczenia po sobie w jednostce, bez EMOM) i przebudowanie ZIP-a.
 - Uprzedzenie klientów, że od v35 sen ocenia się odwrotnie niż dotąd (7 = bardzo dobry).

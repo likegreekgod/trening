@@ -40,7 +40,7 @@ Cel: po „Zakończ i zapisz jednostkę” klient widzi wynik, a nie tylko toast
 - Bez sieci działa tak samo (zapis idzie do kolejki).
 - Przyciski: „Zobacz postęp” (zakładka Postęp → Tydzień), „Zamknij”.
 - **Stan 13.11:** szkic pokazany Damianowi, bez decyzji (szkic trzeba odtworzyć w nowej rozmowie, pliki nie są w repo). Okno `#sheet` „Trening zrobiony” z ✓ w kółku i podtytułem „tytuł · dzień”; pod spodem czas, serie zrobione / plan, tonaż, każde z porównaniem; sekcja „Rekordy z tego treningu” (wiersze `.kv` z `key pr`, znika bez rekordów); bez sieci dopisek „zapiszę, gdy wróci sieć”; przy „Zapisz zmiany” w zapisanej jednostce okna nie ma, zostaje toast.
-- Do decyzji: układ A (trzy kafle z dużymi liczbami, polecany) czy B (lista `.kv` jak w Postępie); porównanie do poprzedniej takiej samej jednostki (polecane; brak poprzedniej = bez porównania) czy do średniej z 4 tygodni.
+- **Ustalone 13.11:** układ A (trzy kafle), porównanie z poprzednią taką samą jednostką (brak poprzedniej = bez porównania). Zrobione w v40.
 
 ### PR 3 · Historia ćwiczenia w karcie
 
@@ -103,7 +103,7 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | PR | Zakres | Stan |
 |---|---|---|
 | 1 | Lżejsza karta ćwiczenia | zrobione (v38, scalone) + poprawka v39 (etykieta w linii, „⋯” jednostki w górnym pasku) |
-| 2 | Podsumowanie po treningu | do zrobienia (szkic) |
+| 2 | Podsumowanie po treningu | zrobione (v40): układ A (kafle), porównanie z poprzednią taką samą jednostką; lib `unitSummary`, `doneSummary` / `openDone` |
 | 3 | Historia ćwiczenia w karcie | do zrobienia (szkic) |
 | 4 | Rekord w chwili zapisu | do zrobienia (szkic) |
 | 5 | Ekran „dziś” | po decyzji |

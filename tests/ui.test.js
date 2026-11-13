@@ -832,6 +832,56 @@ for (const scheme of ['light', 'dark']) test(`Postęp ${scheme}: siła z rekorda
   await ctx.close();
 });
 
+for (const scheme of ['light', 'dark']) test(`Trening zrobiony ${scheme}: okno po zapisie jednostki, porównanie z poprzednią T1, rekord, przejście do Postępu`, async () => {
+  const calls = [];
+  const data = Object.assign({}, PROG, { sessions: PROG.sessions.slice() });       // atrapa pamięta zapisaną jednostkę jak serwer
+  const { ctx, p } = await page(calls, false, { data, scheme, api: b => { if (b.fn === 'logSession') data.sessions.push({ id: 'robert|8|T1', tydzien: 8, jednostka: 'T1', czas_min: b.args[0].minutes, start: b.args[0].start }); } });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.match(await p.textContent('#eyebrow'), /tydz\. 4 · T1/);                    // tydz. 8 = 4. tydzień bloku B2
+  for (const n of [1, 2, 3]) { await p.selectOption(`.set[data-o="1"][data-s="${n}"] .rpe`, '8'); await p.click(`.set[data-o="1"][data-s="${n}"] .ok`); await p.waitForTimeout(80); }
+  await p.evaluate(() => stopRest());
+  await p.click('#saveSess'); await p.waitForSelector('#sheet .dn-t');
+  assert.equal(calls.filter(c => c.fn === 'logSession').length, 1);
+  assert.match(await p.textContent('#sheet-t'), /Trening zrobiony/);
+  const tiles = await p.$$eval('#sheet .dn-t div', d => d.map(x => x.textContent.replace(/\s+/g, ' ').trim()));
+  assert.match(tiles[0], /^Czas1 min▼ 59 min$/);                                    // poprzednio 60 min
+  assert.match(tiles[1], /^Serie3 \/ 6$/);
+  assert.match(tiles[2], /^Tonaż1\s?800 kg▼ 19%$/);                                  // 3 × 120 × 5 wobec 2 228 kg tydzień wcześniej
+  assert.match(await p.textContent('#sheet .dn-cmp'), /Porównanie z poprzednim razem: T1, /);
+  assert.match((await p.textContent('#sheet .kv')).replace(/\s+/g, ' '), /Przysiad tylny · e1RM, \+3,1 kg ?148 kg/);   // 120 × (1 + 7/30) wobec 144,9
+  assert.equal((await p.$$('#sheet .kv')).length, 1);                               // rwanie bez podejść: bez rekordu
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `zrobiony-${scheme}.png`) }); }
+  await p.click('#dn-go'); await p.waitForSelector('#postep .card');
+  await p.waitForTimeout(200);
+  assert.equal(calls.filter(c => c.fn === 'getData').length, 2);                    // Postęp dociąga świeże dane z serwera
+  assert.equal(await p.$eval('#sheet', e => e.hidden), true);
+  assert.equal(await p.$eval('[data-pt="tyd"]', b => b.getAttribute('aria-selected')), 'true');
+  // poprawka zapisanej jednostki: bez okna, sam komunikat
+  await p.click('#nav [data-tab="trening"]'); await p.fill('#smin', '62'); await p.click('#saveSess'); await p.waitForTimeout(200);
+  assert.equal(await p.$eval('#sheet', e => e.hidden), true);
+  assert.equal(await p.textContent('#toast'), 'Zmiany zapisane.');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Trening zrobiony bez sieci: okno z dopiskiem, zapis w kolejce; pierwsza jednostka bez porównania i rekordów', async () => {
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(100);
+  await ctx.unroute('**/macros/**'); await ctx.route('**/macros/**', r => r.abort());
+  await p.evaluate(() => stopRest());
+  await p.click('#saveSess'); await p.waitForSelector('#sheet .dn-t');
+  assert.match(await p.textContent('#sheet'), /Brak sieci: zapiszę, gdy wróci połączenie\./);
+  assert.equal(await p.$('#sheet .kv'), null);
+  assert.equal(await p.$$eval('#sheet .dn-t small', x => x.length), 0);
+  assert.deepEqual((await p.evaluate(() => JSON.parse(localStorage.getItem('q_kabc')))).map(x => x.fn), ['logSession']);
+  await p.click('#sheet [data-close]');
+  assert.equal(await p.$eval('#sheet', e => e.hidden), true);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 for (const scheme of ['light', 'dark']) test(`Postęp → Tydzień ${scheme}: wykonanie, rekordy, odczucia, przełączanie tygodni`, async () => {
   // każdy tydzień kalendarzowy ma dokładnie jedną jednostkę PROG (co 7 dni); ostatnia zrobiona (tydz. 7) jest sprzed 8 dni,
   // czyli zwykle w poprzednim tygodniu kalendarzowym, a w poniedziałek dwa tygodnie wstecz (26.10 test przez to nie przechodził)
@@ -919,6 +969,7 @@ test('Czas treningu: przypadkowy start 2 h wcześniej → liczy od pierwszej zap
   await p.click('#saveSess'); await p.waitForTimeout(0); await p.clock.runFor(300);
   assert.equal(calls.find(c => c.fn === 'logSession').args[0].minutes, 5);
   // po zapisaniu: poprawka minut ręcznie
+  await p.click('#sheet [data-close]');                                          // okno „Trening zrobiony”
   await p.waitForSelector('#smin'); assert.equal(await p.inputValue('#smin'), '5');
   assert.equal(await p.$('#t-reset'), null);
   await p.fill('#smin', '62'); await p.click('#saveSess'); await p.clock.runFor(300);

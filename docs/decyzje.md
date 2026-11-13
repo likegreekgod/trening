@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-13 · Okno „Trening zrobiony” (v40, plan v4 PR 2)
+
+- Po „Zakończ i zapisz” nowej jednostki otwiera się okno: czas, serie zrobione / plan, tonaż w trzech kaflach (układ A ze szkicu), rekordy z tej jednostki, „Zamknij” i „Zobacz postęp” (Postęp → Tydzień, z dociągnięciem świeżych danych). Poprawka już zapisanej jednostki („Zapisz zmiany”) daje tylko komunikat.
+- Porównanie czasu i tonażu: z poprzednią taką samą jednostką, czyli tym samym `day` (np. T1) w najbliższym wcześniejszym tygodniu z zapisanymi seriami, także z poprzedniego bloku. Bez poprzedniej (pierwszy tydzień, własny trening) same liczby. Odrzucone: średnia z 4 tygodni (porównuje różne treningi).
+- Rekord liczony jak w Postępie (ćwiczenia A: e1RM, w bojach najcięższe zaliczone kg) wobec całej wcześniejszej historii; pierwszy wynik ćwiczenia to nie rekord. Wszystko liczone w telefonie (`unitSummary`), bez zmian w arkuszu i zapisie; bez sieci okno ma dopisek, że zapis czeka.
+
 ## 2026-11-13 · Niższe karty i „⋯” jednostki (v39)
 
 - Po próbie v38 na telefonie: etykieta priorytetu pod nazwą dawała dodatkowy rząd w każdej karcie. Teraz w zwiniętej karcie stoi w linii z wynikiem („KOREKCJA 2 z 2 serii · ✓”), w otwartej na początku recepty.

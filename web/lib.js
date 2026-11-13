@@ -610,6 +610,49 @@
       empty: !sets.length && !ses.length && !skips.length
     };
   };
+  /**
+   * podsumowanie zakończonej jednostki do okna „Trening zrobiony”. d:
+   *   week, day, plan (wiersze getData), logs (Log z serwera), sessions (Sesje), dates {tydzień|jednostka → faktyczny dzień},
+   *   stats (unitStats bieżącej jednostki), minutes, sets: serie tej jednostki [{name, prio, group, kg, reps, rpe, fail, timed}]
+   *   (zaliczone i nieudane, bez rozgrzewki; name = ćwiczenie wykonane, także po zamianie).
+   * prev = poprzednia taka sama jednostka: ten sam `day` w najbliższym wcześniejszym tygodniu z zapisanymi seriami
+   * (własny trening nie ma poprzedniej). Rekord = wynik lepszy od całej wcześniejszej historii ćwiczenia głównego (A),
+   * liczony jak w Postępie; pierwszy wynik w historii to jeszcze nie rekord.
+   */
+  L.unitSummary = d => {
+    const plan = d.plan || [], logs = d.logs || [], st = d.stats || {}, week = Number(d.week), day = String(d.day);
+    const mine = l => Number(l.tydzien) === week && String(l.jednostka) === day;
+    const ok = l => l.wykonane === 'TAK' && !/^R/i.test(String(l.seria));
+    const own = plan.some(r => r.week === d.week && String(r.day) === day && r.own);
+    let prev = null;
+    const pw = own ? [] : logs.filter(l => ok(l) && String(l.jednostka) === day && Number(l.tydzien) < week).map(l => Number(l.tydzien));
+    if (pw.length) {
+      const w = Math.max(...pw), P = {}; plan.forEach(r => { if (r.week === w && String(r.day) === day) P[r.order] = r; });
+      let ton = 0, date = '';
+      logs.forEach(l => {
+        if (!ok(l) || Number(l.tydzien) !== w || String(l.jednostka) !== day) return;
+        const kg = nf(l.kg), reps = nf(l.powt);
+        if (kg > 0 && reps > 0 && !L.timeUnit((P[l.nr_cw] || {}).reps)) ton += kg * reps;
+        if (!date) date = String(l.data || '').slice(0, 10);
+      });
+      const ses = (d.sessions || []).find(x => Number(x.tydzien) === w && String(x.jednostka) === day), min = ses ? nf(ses.czas_min) : NaN;
+      prev = { week: w, date: (d.dates || {})[w + '|' + day] || date, ton: Math.round(ton), min: min > 0 ? Math.round(min) : null };
+    }
+    const hist = L.doneSets(logs.filter(l => !mine(l)), plan, d.dates || {}), recs = [];
+    const now = (d.sets || []).filter(x => x.prio === 'A' && !x.fail && !x.timed).map(x => Object.assign({}, x, { grp: L.groupOf(x.group, x.name) }));
+    [...new Set(now.map(x => x.name))].forEach(name => {
+      const oly = now.some(x => x.name === name && (x.grp === 'R' || x.grp === 'P'));
+      const was = Math.max(0, ...L.strengthSeries(hist, name).map(p => p.v));
+      const best = Math.max(0, ...now.filter(x => x.name === name).map(x => oly ? x.kg : L.e1rm(x.kg, x.reps, x.rpe)).filter(v => v > 0));
+      const v = Math.round(best * 10) / 10;
+      if (was > 0 && v > was) recs.push({ name, v, delta: Math.round((v - was) * 10) / 10, oly });
+    });
+    const min = nf(d.minutes) > 0 ? Math.round(nf(d.minutes)) : null, ton = Number(st.ton) || 0;
+    return { min, done: Number(st.done) || 0, all: Number(st.all) || 0, ton, prev,
+      dMin: prev && prev.min && min ? min - prev.min : null,
+      dTon: prev && prev.ton > 0 && ton > 0 ? Math.round(100 * (ton / prev.ton - 1)) : null,
+      records: recs.sort((a, b) => a.name.localeCompare(b.name, 'pl')) };
+  };
   /** pomiary dyspozycji w czasie: [{date, v}] dla klucza (cmj_sr, vbt_test) */
   L.readySeries = (rows, key) => (rows || []).map(r => ({ date: String(r.data || '').slice(0, 10), v: nf(r[key]) }))
     .filter(p => p.v > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.date)).sort((a, b) => a.date.localeCompare(b.date));
