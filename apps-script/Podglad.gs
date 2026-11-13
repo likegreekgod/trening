@@ -73,6 +73,7 @@ function podglad_(plan, log, ses, klienci, opts) {
     u.log.forEach(l => { const n = s_(l.nr_cw); (byNr[n] || (byNr[n] = { nr: n, p: null, l: [] })).l.push(l); });
     Object.keys(byNr).map(n => byNr[n]).sort((a, b) => (n_(a.nr) - n_(b.nr)) || (a.nr > b.nr ? 1 : -1)).forEach(e => {
       const p = e.p || {}, notes = [];
+      if (added_(p)) notes.push('dodane przez klienta'); else if (removed_(p)) notes.push('usunięte przez klienta');
       const skip = e.l.filter(l => /SKIP/.test(String(l.typ || '')));
       const sets = e.l.filter(l => String(l.wykonane).toUpperCase() === 'TAK' && !/^R/i.test(s_(l.seria)) && s_(l.seria) !== '0')
         .sort((a, b) => { const o = x => /^D/i.test(s_(x.seria)) ? 1000 + (parseInt(s_(x.seria).slice(1), 10) || 0) : (n_(x.seria) || 0); return o(a) - o(b); });

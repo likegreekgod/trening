@@ -178,6 +178,16 @@
   .zone{display:inline-block;width:11px;height:11px;border:1px solid var(--ink);border-radius:3px;flex:none}
   .zone.p5{background:var(--p5)}.zone.p10{background:var(--p10)}.zone.p15{background:var(--p15)}.zone.p20{background:var(--p20)}.zone.p25{background:var(--p25)}
   .last{font-size:13px;color:var(--muted);margin:2px 0 4px}
+  /* „Ostatnio” jako przycisk do historii ćwiczenia */
+  button.last{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 10px;margin:0 0 0 -10px;border:0;background:none;font:400 13px var(--f-body);color:var(--ink-2);text-align:left;cursor:pointer}
+  button.last span{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+  button.last::after{content:'›';font:700 18px/1 var(--f-display);color:var(--accent)}
+  .hx-r{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .hx-r div{display:grid;gap:2px;min-width:0}
+  .hx-r span{font-size:14px;color:var(--ink-2)}
+  .hx-r small{font:500 13px var(--f-mono);color:var(--muted)}
+  .hx-r b{font:500 15px var(--f-mono);color:var(--ink);white-space:nowrap;text-align:right}
+  .hx-r b i{font-style:normal;font-size:13px;color:var(--muted)}
   /* przełącznik RPE / RIR w nagłówku */
   .trow{display:flex;align-items:flex-start;gap:8px}
   .trow h1{flex:1;min-width:0}
@@ -238,7 +248,7 @@
          font:800 22px/1 var(--f-display);letter-spacing:.06em}
   .tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
   .btn.sm{padding:8px 10px}
-  .btn.sm.x{border-color:var(--accent);color:var(--accent)}
+  .btn.sm.x,.btn.x{border-color:var(--accent);color:var(--accent)}
   .btn.sm.d{border-color:var(--accent);color:var(--accent);border-style:dashed}
   .btn.all{width:100%;margin-top:8px;border-color:var(--ok);color:var(--ok);border-width:2px}
   .bar{height:3px;background:var(--surface-2);flex:1 1 120px;overflow:hidden;display:none}
@@ -558,6 +568,26 @@
          padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:grid;gap:12px;max-width:640px;margin:0 auto}
   .sh-in h2{margin:0;font:800 28px/1 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink-2)}
   .sh-in .sub{margin:-6px 0 0}
+  /* zmiany w jednostce trenera (flaga „edycja”) */
+  .ed-q{text-align:left}
+  .sh-in .ed-s{margin:0}
+  .ed-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .ed-3 input{width:100%;min-width:0}
+  .ed-rm{margin:10px 0 var(--gap);display:grid;gap:6px}
+  .ed-rm .lbl{text-align:left}
+  .ed-r{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;color:var(--ink-2)}
+  .ed-r span{text-decoration:line-through;text-decoration-color:var(--muted);min-width:0}
+  /* okno „Trening zrobiony” */
+  .dn-h{display:flex;align-items:center;gap:12px}
+  .dn-ck{flex:none;width:44px;height:44px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font:800 24px/1 var(--f-display)}
+  .dn-h .sub,.sh-in .dn-cmp{margin:2px 0 0}
+  .dn-t{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .dn-t div{background:var(--bg);border-radius:var(--r);padding:10px 10px 9px;display:grid;gap:4px;align-content:start;min-width:0}
+  .dn-t span,.dn-s{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .dn-t b{font:800 30px/1 var(--f-display);color:var(--ink);white-space:nowrap}
+  .dn-t b i{font:600 13px var(--f-body);font-style:normal;color:var(--muted)}
+  .dn-t small{font-size:12px;color:var(--ink-2)}
+  .dn-b{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .fl{display:grid;gap:6px;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
   .fl input{font:700 26px/1 var(--f-display);min-height:48px;text-transform:none;letter-spacing:.01em}
   .fl input::placeholder{font:400 16px var(--f-body);color:var(--muted);opacity:1}
@@ -583,9 +613,21 @@
   .skipped{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:8px;font-size:14px;color:var(--ink-2);border-left:4px solid var(--muted);padding:2px 0 2px 10px}
   .card.skip{box-shadow:inset 4px 0 0 var(--muted),var(--shadow)}
   .card.skip .cn{color:var(--muted);text-decoration:line-through;text-decoration-thickness:2px}
-  .exn{margin-top:8px;border-top:1px dashed var(--line);padding-top:10px}
-  .exn label{display:block;margin:0 0 6px;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-  .exn-t{font:400 16px/1.35 var(--f-body);resize:vertical;min-height:44px}
+  /* komentarz do ćwiczenia: w karcie tekst z ołówkiem (przycisk), edycja w oknie */
+  .exn{display:flex;align-items:flex-start;gap:10px;width:100%;min-height:44px;margin-top:8px;border:0;border-top:1px dashed var(--line);border-radius:0;padding:10px 0 0;background:none;
+       text-align:left;color:var(--ink-2);font:400 15px/1.4 var(--f-body);cursor:pointer}
+  .exn[hidden]{display:none}
+  .exn small{display:block;margin-bottom:4px;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .exn-x{white-space:pre-wrap;overflow-wrap:anywhere}
+  .exn i{flex:none;margin-left:auto;font-style:normal;font-size:18px;line-height:1;color:var(--accent)}
+  #nt{font:400 16px/1.4 var(--f-body);min-height:120px;width:100%;text-transform:none;letter-spacing:0;resize:vertical}
+  /* nazwa ćwiczenia przypięta u góry przy przewijaniu otwartej karty (--stick = dolna krawędź widocznego górnego paska) */
+  .card[data-card]:not(.fold) > .ch{position:sticky;top:var(--stick,0px);z-index:3;background:var(--surface);margin:-16px -16px 0;padding:16px 16px 0;border-radius:var(--rc) var(--rc) 0 0}
+  .card[data-card] > .ch.stuck{padding:4px 16px 2px;border-bottom:1px solid var(--line);border-radius:0}
+  .ch.stuck .fold-b{align-items:center}
+  .ch.stuck .ft{display:block}
+  .ch.stuck .cn{display:block;font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ch.stuck .acts{margin-top:0}
   .emom{margin:10px 0 4px;background:var(--panel);color:var(--light-white);border-radius:var(--r);padding:10px 12px;display:grid;gap:8px}
   .em-top{display:flex;align-items:baseline;gap:6px}
   .em-l{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;opacity:.85}
@@ -650,10 +692,11 @@ let EXTRA_DEF = 0;     // Klienci H „dod_serie”; Plan „dod_serie” nadpis
 let NAME = '';
 let SCALE = 'RPE';     // Klienci K „skala” (RPE/RIR); przełącznik w nagłówku zapamiętany w telefonie (sc_<klucz>)
 let OLY_CEIL = 0.05;   // Klienci L „sufit_oly”: ułamek 1RM ponad plan dla bojów
+let EDIT = false;    // Klienci N „edycja” = TAK: dodawanie, usuwanie i zamiana na stałe w jednostce trenera
 let SWAP = '';         // Klienci J „zamiana”: TRENER (dawne TAK) = zamienniki z planu i bazy, DOWOLNA = cała baza + własna nazwa, '' = brak
 function applyCfg(c){
   if (!c) return;
-  PAIN = !!c.pain; SIMPLE = !!c.simple; EXTRA_DEF = Number(c.extra) || 0;
+  PAIN = !!c.pain; SIMPLE = !!c.simple; EXTRA_DEF = Number(c.extra) || 0; EDIT = !!c.edit;
   NAME = c.name || ''; document.title = 'Trening – ' + c.name;
   let own = null; try { own = localStorage.getItem('sc_' + KEY); } catch (e) {}
   SCALE = own || (c.scale === 'RIR' ? 'RIR' : 'RPE');
@@ -671,11 +714,11 @@ const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
 const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
-  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, restSec, fmtClock, plates,
+  RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, planEdit, restSec, fmtClock, plates,
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
   isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit } = window.TL;
 
 /* ---------- kolejka offline ---------- */
@@ -952,7 +995,27 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
     last = y;
     h.classList.toggle('hid', d > 0 && y > h.offsetHeight);
   }, { passive: true });
+  window.addEventListener('scroll', stickDraw, { passive: true });
+  h.addEventListener('transitionend', stickDraw);
 })();
+/**
+ * Przypięta nazwa ćwiczenia: otwarta karta, której góra wyszła poza ekran, trzyma nagłówek (nazwa w jednej linii, ikony)
+ * pod górnym paskiem aplikacji, a gdy pasek jest schowany, na samej górze. Znika razem z końcem karty (position: sticky).
+ */
+function stickDraw(){
+  const top = Math.max(0, Math.round(document.querySelector('header').getBoundingClientRect().bottom));
+  document.documentElement.style.setProperty('--stick', top + 'px');
+  document.querySelectorAll('#main .card[data-card] > .ch').forEach(ch => {
+    const c = ch.parentNode, r = c.getBoundingClientRect();
+    const on = !c.classList.contains('fold') && r.top < top - 1 && r.bottom > top + 48;
+    if (on === ch.classList.contains('stuck')) return;
+    // przypięty pasek jest niższy niż nagłówek karty: różnicę oddaje margines, żeby treść pod spodem nie skoczyła
+    // (skok przesuwałby stronę i górny pasek aplikacji wracałby sam z siebie)
+    const h0 = ch.offsetHeight;
+    ch.classList.toggle('stuck', on);
+    ch.style.marginBottom = on ? (h0 - ch.offsetHeight) + 'px' : '';
+  });
+}
 
 /* ---------- okno (arkusz od dołu) i kalkulator talerzy ---------- */
 function openSheet(html){
@@ -1007,6 +1070,7 @@ function useData(d){
     if (it.fn === 'deleteSet') { const id = ['local', p.week, p.day, p.order, p.set].join('|'); LOGS[id] = { id, deleted: true }; }   // usunięte bez sieci (np. cofnięte pominięcie)
     if (it.fn === 'logNote') Object.keys(LOGS).forEach(k => { const q = k.split('|'); if (q[1] === String(p.week) && q[2] === String(p.day) && q[3] === String(p.order) && !/SKIP/.test(LOGS[k].typ || '')) LOGS[k].uwagi = p.note; });
     if (it.fn === 'przesunJednostke') applyMoves(p, false);
+    if (it.fn === 'editPlan') applyEdit(p, false);                            // zmiana w jednostce trenera czekająca w kolejce
     if (it.fn === 'addOwnUnit') applyOwn(p, false);                           // własny trening czekający w kolejce
     if (it.fn === 'saveDyspozycja') applyReady(p, false);
   });
@@ -1031,6 +1095,14 @@ function load(){
     if (!cached) { $('#main').innerHTML = '<div class="empty">Błąd: ' + esc(e.message) + '</div>'; setSync('błąd'); }
     else setSync('offline – ostatnie dane');
   });
+}
+/** świeże dane z serwera bez zmiany ekranu i bieżącej jednostki (najpierw wysyła kolejkę) */
+function refreshData(){
+  return flush().then(() => call('getData')).then(d => {
+    try { localStorage.setItem(DK, JSON.stringify(d)); } catch (e) {}
+    const w = cur.week, dd = cur.day;
+    useData(d); cur.week = w; cur.day = dd; render(); setSync('gotowe');
+  }).catch(() => {});
 }
 /** brak klucza (np. iOS: aplikacja z ekranu głównego ma osobną pamięć i startuje bez ?k=) → wklejenie linku albo kodu */
 function askKey(){
@@ -1593,6 +1665,7 @@ function openSwap(ex){
     <div class="opts why" role="group" aria-label="Powód">${SWAP_WHY.map(w => `<button type="button" class="opt" data-why="${w}">${w}</button>`).join('')}</div>
     <p class="hint" id="sw-hint" hidden>Ból: na końcu treningu zaznacz miejsce i oceń ból 0–10 w podsumowaniu.</p>
     <p class="sub" id="sw-sel" aria-live="polite"></p>
+    ${edOn(ex) ? lenSeg('Na stałe = to ćwiczenie także w kolejnych tygodniach tego treningu (' + esc(cur.day) + '), do końca obecnego planu.') : ''}
     <button type="button" class="btn p" id="sw-ok" disabled>Zamień</button>
     <button type="button" class="btn" data-close>Anuluj</button>`);
   const upd = () => {
@@ -1615,12 +1688,118 @@ function openSwap(ex){
   if (q) { q.oninput = () => res(q.value); exnLoad(() => { const qq = $('#sw-q'); if (qq) res(qq.value); }); }
   bindTo();
   document.querySelectorAll('#sheet [data-why]').forEach(b => b.onclick = () => { why = b.dataset.why; upd(); });
+  const len = bindLen();
   $('#sw-ok').onclick = () => {
+    const forever = len();
     setSwap(ex, { from: ex.name, to, why }); closeSheet();
-    toast('Zamieniono na: ' + to + '. Serie zapiszą się pod nową nazwą.');
+    const n = forever ? edSend(Object.assign({ op: 'swap', week: cur.week, day: cur.day, order: ex.order, to, forever: true }, edDx(to))) : 0;
+    toast('Zamieniono na: ' + to + '.' + (forever ? (n ? ' Także w kolejnych tygodniach: ' + n + '.' : ' W kolejnych tygodniach tego ćwiczenia nie ma.') : ' Serie zapiszą się pod nową nazwą.'));
     renderTrening();
   };
   upd();
+}
+
+/* ---------- zmiany w jednostce trenera dla osób z flagą „edycja”: dodaj / usuń / zamień, tylko ten trening albo na stałe ---------- */
+/** czy ćwiczenie można zmieniać: flaga klienta, jednostka trenera, jeszcze niezakończona */
+const edOn = ex => EDIT && !ex.own && !sessDone(cur.week, cur.day);
+const edDone = () => { const d = {}; Object.keys(SESS).forEach(k => { d[String(k).split('|').slice(-2).join('|')] = 1; }); return d; };
+/** nanosi zmianę na dane w telefonie (lib planEdit); save = zapis w pamięci telefonu. Zwraca wynik planEdit. */
+function applyEdit(p, save){
+  if (!DATA) return { error: 'Brak danych.' };
+  const r = planEdit(DATA.plan, DATA.removed || [], edDone(), p);
+  if (r.error) return r;
+  DATA.plan = r.plan; DATA.removed = r.removed; PLAN = DATA.plan;
+  if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
+  return r;
+}
+/** zmiana lokalnie + wysyłka (bez sieci: kolejka); zwraca liczbę zmienionych wierszy albo -1 przy błędzie */
+function edSend(p){
+  // pamięć telefonu (d_<klucz>) dostaje zmianę dopiero po potwierdzeniu serwera: do tego czasu zmiana żyje w kolejce
+  // i przy ponownym otwarciu jest nanoszona na dane z pamięci dokładnie raz
+  const r = applyEdit(p, false);
+  if (r.error) { toast(r.error); return -1; }
+  send('editPlan', p).then(() => { try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {} if (r.partial) refreshData(); }).catch(() => {});
+  return r.n;
+}
+/** film „Jak wykonać” i partie nowego ćwiczenia: z planu albo z bazy (getExNames) */
+function edDx(n){
+  const lc = s => String(s).toLowerCase(), p = PLAN.find(r => lc(r.name) === lc(n) && (r.infos || []).length), b = EXN.list.find(x => lc(x[0]) === lc(n));
+  return { infos: p ? p.infos : b && /^https?:\/\//i.test(String(b[1])) ? [{ n: b[0], u: b[1] }] : [],
+    parts: p ? p.parts || [] : b && b[2] ? String(b[2]).split(';').map(s => s.trim()).filter(Boolean) : [] };
+}
+const lenSeg = txt => `<div class="lbl ed-q">Na jak długo?</div><div class="seg" role="group" aria-label="Na jak długo">
+    <button type="button" data-len="0" aria-pressed="true">Tylko ten trening</button><button type="button" data-len="1" aria-pressed="false">Na stałe</button></div>
+    <p class="sub ed-s">${txt}</p>`;
+/** przełącznik „Tylko ten trening / Na stałe” w otwartym oknie; zwraca funkcję czytającą wybór */
+function bindLen(){
+  let v = false;
+  document.querySelectorAll('#sheet [data-len]').forEach(b => b.onclick = () => { v = b.dataset.len === '1';
+    document.querySelectorAll('#sheet [data-len]').forEach(x => x.setAttribute('aria-pressed', String((x.dataset.len === '1') === v))); });
+  return () => v;
+}
+function openAdd(){
+  let name = '';
+  openSheet(`<h2 id="sheet-t">Dodaj ćwiczenie</h2><p class="sub">${esc((curExs()[0] || {}).title || cur.day)} · na koniec treningu</p>
+    <label class="fl">Szukaj ćwiczenia<input id="ed-q" autocomplete="off" placeholder="np. wykroki, curl, plank"></label>
+    <div id="ed-res" class="ow-res"></div>
+    <p class="sub" id="ed-sel" aria-live="polite"></p>
+    <div class="ed-3"><label class="fl">Serie<input id="ed-sets" inputmode="numeric" value="3"></label><label class="fl">Powt.<input id="ed-reps" value="10"></label><label class="fl">Kg<input id="ed-kg" inputmode="decimal" placeholder="—"></label></div>
+    ${lenSeg('Na stałe = także w kolejnych tygodniach tego treningu (' + esc(cur.day) + '), do końca obecnego planu.')}
+    <p class="hint" id="ed-err" role="alert" hidden></p>
+    <button type="button" class="btn p" id="ed-ok" disabled>Dodaj do treningu</button>
+    <button type="button" class="btn" data-close>Anuluj</button>`);
+  const q = $('#ed-q'), pick = n => {
+    name = n; const last = PLAN.slice().reverse().find(r => r.name === n);
+    if (last) { $('#ed-sets').value = last.sets; $('#ed-reps').value = String(last.reps); $('#ed-kg').value = last.kg === '' ? '' : String(fmtKg(last.kg)); }
+    q.value = ''; res(''); $('#ed-sel').textContent = 'Wybrane: ' + n; $('#ed-ok').disabled = false;
+  };
+  const res = v => {
+    const mine = [...new Set(PLAN.slice().reverse().map(r => r.name))], r = v.trim() ? exSearch(mine, EXN.list, v, 8) : [];
+    const exact = r.some(x => x.name.toLowerCase() === v.trim().toLowerCase());
+    $('#ed-res').innerHTML = r.map(x => `<button type="button" class="opt" data-n="${esc(x.name)}">${esc(x.name)}${x.film ? '<small class="ow-f">film</small>' : ''}</button>`).join('') +
+      (v.trim() && !exact ? `<button type="button" class="opt ow-new" data-n="${esc(v.trim().replace(/\s+/g, ' ').slice(0, 80))}">+ Własna nazwa: „${esc(v.trim().slice(0, 80))}”</button>` : '');
+    document.querySelectorAll('#ed-res [data-n]').forEach(b => b.onclick = () => pick(b.dataset.n));
+  };
+  q.oninput = () => res(q.value);
+  exnLoad(() => { const qq = $('#ed-q'); if (qq) res(qq.value); });
+  const len = bindLen();
+  $('#ed-ok').onclick = () => {
+    const p = Object.assign({ op: 'add', week: cur.week, day: cur.day, name, sets: $('#ed-sets').value, reps: $('#ed-reps').value, kg: $('#ed-kg').value, forever: len() }, edDx(name));
+    const r = planEdit(DATA.plan, DATA.removed || [], edDone(), p);
+    if (r.error || !r.n) { const er = $('#ed-err'); er.textContent = r.error || 'To ćwiczenie jest już dodane do tego treningu.'; er.hidden = false; return; }
+    closeSheet(); const n = edSend(p);
+    toast('Dodano: ' + name + (n > 1 ? ' (ten trening i ' + (n - 1) + ' ' + plural(n - 1, 'kolejny', 'kolejne', 'kolejnych') + ').' : '.'));
+    renderTrening();
+    const c = [...document.querySelectorAll('.card[data-card]')].pop(); if (c) c.scrollIntoView({ block: 'center' });
+  };
+}
+function openDel(ex){
+  if (curExs().length < 2) { toast('To jedyne ćwiczenie w treningu – zostaw je albo pomiń.'); return; }
+  openSheet(`<h2 id="sheet-t">Usuń z treningu</h2><p class="sub">${esc(ex.name)}</p>
+    ${lenSeg('Na stałe = także z kolejnych tygodni tego treningu (' + esc(cur.day) + '), do końca obecnego planu. Trener widzi w arkuszu, że ćwiczenie zostało usunięte; możesz je przywrócić na dole treningu.')}
+    <button type="button" class="btn p" id="ed-del">Usuń</button>
+    <button type="button" class="btn" data-close>Anuluj</button>`);
+  const len = bindLen();
+  $('#ed-del').onclick = () => {
+    closeSheet(); setSwap(ex, null);
+    const n = edSend({ op: 'del', week: cur.week, day: cur.day, order: ex.order, forever: len() });
+    if (n < 0) return;
+    toast('Usunięto: ' + ex.name + (n > 1 ? ' (ten trening i ' + (n - 1) + ' ' + plural(n - 1, 'kolejny', 'kolejne', 'kolejnych') + ').' : '.'));
+    renderTrening();
+  };
+}
+/** usunięte ćwiczenia tej jednostki z przyciskiem „Przywróć” (na dole Treningu) */
+function edRemoved(){
+  const rm = ((DATA && DATA.removed) || []).filter(x => Number(x.week) === cur.week && String(x.day) === String(cur.day));
+  if (!rm.length) return '';
+  return `<section class="ed-rm" aria-label="Usunięte ćwiczenia"><div class="lbl">Usunięte z tego treningu</div>${rm.map(x =>
+    `<div class="ed-r"><span>${esc(x.name)}</span><button type="button" class="btn sm" data-undel="${x.order}" aria-label="Przywróć ${esc(x.name)}">Przywróć</button></div>`).join('')}</section>`;
+}
+function edUndel(order){
+  const n = edSend({ op: 'undel', week: cur.week, day: cur.day, order });
+  if (n < 0) return;
+  toast('Przywrócono.' + (navigator.onLine === false ? ' Pełne dane wrócą po połączeniu z siecią.' : ''));
+  renderTrening();
 }
 
 /* ---------- ekran Trening ---------- */
@@ -1880,14 +2059,19 @@ function renderTrening(){
     if (g && i === g.orders.length - 1) h += '</section>';
   });
   if (s0.own && ownOn() && !sessDone(cur.week, cur.day)) h += '<button type="button" class="ghost own-add" id="own-add">+ ćwiczenie</button>';
+  if (EDIT && !s0.own && open) h += '<button type="button" class="ghost own-add" id="ed-add">+ ćwiczenie</button>';
+  if (EDIT && !s0.own) h += edRemoved();
   h += sessCard(s0);
   $('#main').innerHTML = h;
   CIRC = grps; bind(exs, s0);
   grps.forEach(g => grpDraw(g.id));
   bindNotes();
   const oa = $('#own-add'); if (oa) oa.onclick = () => openOwn(units(PLAN).find(u => u.week === cur.week && u.day === cur.day));
+  const ea = $('#ed-add'); if (ea) ea.onclick = openAdd;
+  document.querySelectorAll('[data-undel]').forEach(b => b.onclick = () => edUndel(+b.dataset.undel));
   vqMarks();
   bindFold(exs);
+  stickDraw();
   refreshStats();
   bindWeekBar();
   const sb = $('#sb-ok'); if (sb) sb.onclick = () => { try { localStorage.setItem(SBK, '1'); } catch (e) {} sb.closest('.sbnote').remove(); };
@@ -1953,9 +2137,30 @@ function lastLine(ex){
   const t = lastTop(DATA ? DATA.logs : [], ex.name, cur.week, cur.day);
   if (!t) return '';
   const kg = typeof t.kg === 'number' ? fmtKg(t.kg) + ' kg' : esc(t.kg);
-  const eff = isOly(ex) && RATE[t.ocena] ? ' · ' + RATE[t.ocena].label : blank(t.rpe) ? '' : SIMPLE ? ' · ' + (EFFORT.find(e => e[0] === effortVal(t.rpe)) || ['', ''])[1]
-    : SCALE === 'RIR' ? ' · RIR ' + fmtKg(rirOfRpe(t.rpe)) : ' · RPE ' + fmtKg(t.rpe);
-  return `<div class="last">Ostatnio: ${kg} × ${esc(t.reps)}${eff}</div>`;
+  const eff = effTxt(ex, t);
+  return `<button type="button" class="last" data-hist="${ex.order}" aria-label="Historia ćwiczenia ${esc(ex.name)}"><span>Ostatnio: ${kg} × ${esc(t.reps)}${eff ? ' · ' + eff : ''}</span></button>`;
+}
+/** wysiłek serii słownie: ocena podejścia w bojach, PROSTY słownie, PRO jako RPE albo RIR wg przełącznika */
+function effTxt(ex, t){
+  return isOly(ex) && RATE[t.ocena] ? RATE[t.ocena].label : blank(t.rpe) ? '' : SIMPLE ? (EFFORT.find(e => e[0] === effortVal(t.rpe)) || ['', ''])[1]
+    : SCALE === 'RIR' ? 'RIR ' + fmtKg(rirOfRpe(t.rpe)) : 'RPE ' + fmtKg(t.rpe);
+}
+/** okno „Historia”: wykres siły (jak Postęp → Siła) i 5 ostatnich jednostek z tym ćwiczeniem, bez bieżącej */
+function openHist(ex){
+  const logs = (DATA && DATA.logs) || [], dates = unitDays(), hist = exHistory(logs, ex.name, cur.week, cur.day, 5, dates);
+  if (!hist.length) return;
+  const nm = String(ex.name).trim().toLowerCase(), oly = isOly(ex), unit = timeUnit(ex.reps), kgT = v => typeof v === 'number' ? fmtKg(v) : esc(v);
+  // punkty wykresu z całej wcześniejszej historii (rekord = lepszy od wszystkiego przed nim), pokazane ostatnie 5
+  const sets = doneSets(logs.filter(l => !(String(l.tydzien) === String(cur.week) && String(l.jednostka) === String(cur.day))), PLAN, dates)
+    .filter(s => s.name.trim().toLowerCase() === nm).map(s => Object.assign({}, s, { name: nm }));
+  const all = unit ? [] : strengthSeries(sets, nm), ser = all.slice(-5), pr = {}; all.forEach(p => { if (p.pr) pr[p.date] = 1; });
+  const rows = hist.map(u => `<div class="hx-r"><div><span>${pr[u.date] ? '<i class="key pr"></i> ' : ''}${u.date ? weekday(u.date) + ' ' + ddmm(u.date) : esc(u.day)}</span>
+      <small>${u.runs.map(r => kgT(r.kg) + ' × ' + r.reps.map(esc).join(' · ')).join(' &nbsp; ')}${unit ? ' ' + unit : ''}</small></div>
+      ${u.top ? `<b>${kgT(u.top.kg)}${typeof u.top.kg === 'number' ? ' kg' : ''} × ${esc(u.top.reps)}${unit ? ' ' + unit : ''}<br><i>${esc(effTxt(ex, u.top))}</i></b>` : '<b>–</b>'}</div>`).join('');
+  openSheet(`<h2 id="sheet-t">Historia</h2><p class="sub">${esc(ex.name)} · ${hist.length === 1 ? 'ostatni trening' : 'ostatnie ' + hist.length + ' ' + plural(hist.length, 'trening', 'treningi', 'treningów')}</p>
+    ${ser.length > 1 ? `<div><div class="dn-s">${oly ? 'Najlepsze zaliczone (kg)' : 'Siła (e1RM, kg)'}</div>${chartLine(ser, { unit: 'kg', label: (oly ? 'Najlepsze zaliczone kg: ' : 'e1RM: ') + ex.name })}
+      <p class="sub" style="margin:0"><i class="key pr"></i> rekord${oly ? '' : ' · e1RM liczone z ciężaru, powtórzeń i zapasu'}</p></div>` : ''}
+    <div>${rows}</div><button type="button" class="btn" data-close>Zamknij</button>`);
 }
 function rxSimple(ex){
   const n = ex.sets, reps = String(ex.reps).trim(), r = parseInt(reps);
@@ -2157,16 +2362,35 @@ function openMore(ex){
       <button type="button" class="opt" data-mnote="${ex.order}"><i aria-hidden="true">✎</i>Komentarz do ćwiczenia</button>
       ${SWAP && !gone && !ex.swap ? `<button type="button" class="opt" data-swap="${ex.order}"><i aria-hidden="true">⇄</i>Zamień ćwiczenie</button>` : ''}
       ${sk ? '' : `<button type="button" class="opt" data-skip="${ex.order}"><i aria-hidden="true">✕</i>${ex.prio === 'B' ? 'Pomiń' : 'Pomiń…<small>z powodem dla trenera</small>'}</button>`}
+      ${edOn(ex) ? `<button type="button" class="opt" data-del="${ex.order}"><i aria-hidden="true">−</i>Usuń z treningu…<small>np. brak sprzętu</small></button>` : ''}
     </div>
     <button type="button" class="btn" data-close>Zamknij</button>`);
   const on = (sel, f) => { const b = $('#sheet ' + sel); if (b) b.onclick = () => { closeSheet(); f(); }; };
   on('[data-swap]', () => openSwap(ex));
   on('[data-skip]', () => openSkip(ex));
-  on('[data-mnote]', () => {
-    setFold(ex.order, false);
-    const box = document.querySelector(`.card[data-card="${ex.order}"] .exn`); if (!box) return;
-    box.hidden = false; box.scrollIntoView({ block: 'center' }); box.querySelector('textarea').focus();
-  });
+  on('[data-del]', () => openDel(ex));
+  on('[data-mnote]', () => openNote(ex));
+}
+/** okno „Komentarz”: jeden komentarz na ćwiczenie; gdy już jest, okno go poprawia (albo usuwa), a nie dodaje kolejnego */
+function openNote(ex){
+  const was = exNote(ex);
+  openSheet(`<h2 id="sheet-t">Komentarz</h2><p class="sub">${esc(ex.name)} · widzi go trener</p>
+    <label class="fl" for="nt">${was ? 'Twój komentarz (popraw albo dopisz)' : 'Twój komentarz'}</label>
+    <textarea id="nt" rows="4" maxlength="500" placeholder="np. 3×10 na TRX zamiast wyciągu">${esc(was)}</textarea>
+    <button type="button" class="btn p" id="nt-ok">${was ? 'Zapisz zmiany' : 'Zapisz komentarz'}</button>
+    ${was ? '<button type="button" class="btn x" id="nt-del">Usuń komentarz</button>' : ''}
+    <button type="button" class="btn" data-close>Anuluj</button>`);
+  const t = $('#nt'); t.focus(); try { t.setSelectionRange(t.value.length, t.value.length); } catch (e) {}
+  const save = v => {
+    closeSheet();
+    if (v === was) return;
+    setNote(ex, v);
+    const box = document.querySelector(`.card[data-card="${ex.order}"] .exn`);     // karta bez przerysowania: wpisane, niezapisane serie zostają
+    if (box) { box.hidden = !v; box.querySelector('.exn-x').textContent = v; }
+    if (!v) toast('Komentarz usunięty.');
+  };
+  $('#nt-ok').onclick = () => save(t.value.trim());
+  const d = $('#nt-del'); if (d) d.onclick = () => save('');
 }
 /** kompleks z kilkoma filmami: lista „Jak wykonać” */
 function openInf(ex){
@@ -2195,9 +2419,8 @@ function card(ex, tag){
   const dropInfo = plannedDrops(ex) ? `<div class="hint">+ ${plannedDrops(ex)} × drop set po ostatniej serii (ok. −20% ciężaru, do upadku technicznego).</div>` : '';
   const sk = ex.skip, gone = sk && !ex.sets, emom = isEmom(ex) && !gone;
   const note = exNote(ex);
-  // komentarz: pusty schowany (otwiera go „⋯”), wpisany widoczny w karcie
-  const noteBox = `<div class="exn" ${note ? '' : 'hidden'}><label for="exn-${ex.order}">Twój komentarz</label>
-      <textarea class="exn-t" id="exn-${ex.order}" data-note="${ex.order}" rows="${Math.min(5, Math.max(1, note.split('\n').length))}" maxlength="500" placeholder="np. 3×10 na TRX zamiast wyciągu" aria-label="Komentarz do ćwiczenia ${esc(ex.name)}">${esc(note)}</textarea></div>`;
+  // komentarz: pusty schowany (dodaje go „⋯” → Komentarz), wpisany widoczny w karcie; dotknięcie otwiera okno z tym samym komentarzem do poprawy
+  const noteBox = `<button type="button" class="exn" data-note="${ex.order}" ${note ? '' : 'hidden'} aria-label="Popraw komentarz do ćwiczenia ${esc(ex.name)}"><span><small>Twój komentarz</small><span class="exn-x">${esc(note)}</span></span><i aria-hidden="true">✎</i></button>`;
   const skipLine = sk ? `<div class="skipped"><span>${gone ? 'Pominięte' : 'Skrócone do ' + ex.sets + ' z ' + ex.planSets + ' ' + plural(ex.planSets, 'serii', 'serii', 'serii')}${sk.why ? ' · ' + esc(sk.why) : ''}</span><button type="button" class="btn sm" data-unskip="${ex.order}">Przywróć</button></div>` : '';
   // film „Jak wykonać”: ikona w nagłówku (jeden film = link, kilka = lista); bez filmu puste miejsce, żeby „⋯” i strzałka stały w miejscu
   const infs = ex.swap ? [] : (ex.infos || []), prioTxt = ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne';
@@ -2271,6 +2494,33 @@ function sessCard(s0){
     <label class="fl" for="smin">Popraw czas, jeśli się nie zgadza (min)<input id="smin" inputmode="numeric" value="${esc(s.id && !blank(s.czas_min) ? s.czas_min : '')}" placeholder="policzę sam"></label>
     <label for="snote">Uwagi dla trenera</label><textarea id="snote" rows="3">${esc(s.uwagi || '')}</textarea>
     <div style="height:10px"></div><button class="btn p" id="saveSess">${s.id ? 'Zapisz zmiany' : 'Zakończ i zapisz ' + (SIMPLE ? 'trening' : 'jednostkę')}</button></div>`;
+}
+/** dane do okna „Trening zrobiony”: bieżąca jednostka z telefonu, porównanie i rekordy z historii (lib unitSummary) */
+function doneSummary(minutes){
+  const exs = curExs(), sets = [];
+  exs.forEach(ex => { const L2 = exLogs(ex); Object.keys(L2).forEach(k => { const l = L2[k];
+    if (l.wykonane !== 'TAK' || /^R/i.test(k) || /SKIP/.test(l.typ || '')) return;
+    sets.push({ name: ex.name, prio: ex.prio, group: ex.group, kg: num(l.kg), reps: num(l.powt), rpe: num(l.rpe), fail: /FAIL/.test(l.typ || ''), timed: !!timeUnit(ex.reps) }); }); });
+  const u = unitList().find(x => x.week === cur.week && x.day === cur.day);
+  return Object.assign(unitSummary({ week: cur.week, day: cur.day, plan: PLAN, logs: (DATA && DATA.logs) || [], sessions: (DATA && DATA.sessions) || [],
+    dates: unitDays(), stats: unitStats(exs, exLogs), minutes, sets }), { title: (u && u.title) || '', date: localDate() });
+}
+function openDone(u, off){
+  const cmp = (d, unit) => d === null ? '' : d === 0 ? 'bez zmian' : (d > 0 ? '▲ ' : '▼ ') + Math.abs(d).toLocaleString('pl-PL') + unit;
+  const h = u.min ? Math.floor(u.min / 60) : 0, tile = (k, v, sm) => `<div><span>${k}</span><b>${v}</b>${sm ? `<small>${sm}</small>` : ''}</div>`;
+  openSheet(`<div class="dn-h"><span class="dn-ck" aria-hidden="true">✓</span><div><h2 id="sheet-t">Trening zrobiony</h2>
+      <p class="sub">${esc([u.title, weekday(u.date) + ' ' + ddmm(u.date)].filter(Boolean).join(' · '))}</p></div></div>
+    <div class="dn-t">
+      ${tile('Czas', u.min ? (h ? h + '<i> h </i>' + (u.min % 60) : u.min) + '<i> min</i>' : '–', cmp(u.dMin, ' min'))}
+      ${tile('Serie', u.done + (u.all ? '<i> / ' + u.all + '</i>' : ''), u.all && u.done >= u.all ? 'cały plan' : '')}
+      ${tile('Tonaż', u.ton.toLocaleString('pl-PL') + '<i> kg</i>', cmp(u.dTon, '%'))}</div>
+    ${u.dMin !== null || u.dTon !== null ? `<p class="sub dn-cmp">Porównanie z poprzednim razem: ${esc(cur.day)}${u.prev.date ? ', ' + weekday(u.prev.date) + ' ' + ddmm(u.prev.date) : ''}.</p>` : ''}
+    ${u.records.length ? `<div><div class="dn-s">Rekordy z tego treningu</div>${u.records.map(r =>
+      `<div class="kv"><span><i class="key pr"></i> ${esc(r.name)}<small> · ${r.oly ? 'zaliczone' : 'e1RM'}, +${kgTxt(r.delta)} kg</small></span><b>${kgTxt(r.v)} kg</b></div>`).join('')}</div>` : ''}
+    ${off ? '<p class="sub dn-cmp">Brak sieci: zapiszę, gdy wróci połączenie.</p>' : ''}
+    <div class="dn-b"><button type="button" class="btn" data-close>Zamknij</button><button type="button" class="btn p" id="dn-go">Zobacz postęp</button></div>`);
+  // Postęp liczy się z danych serwera: po przejściu dociągnij świeże (z tą jednostką); bez sieci zostaje dotychczasowy stan
+  $('#dn-go').onclick = () => { closeSheet(); TAB = 'postep'; PT = 'tyd'; PWK = null; render(); window.scrollTo(0, 0); refreshData(); };
 }
 function sessClick(e){
   const pv = e.target.closest('.pv');
@@ -2463,14 +2713,12 @@ function bind(exs, s0){
   document.querySelectorAll('[data-plates]').forEach(b => b.onclick = () => openPlates(exOf(b.dataset.plates)));
   exs.forEach(updateSug);
   document.querySelectorAll('[data-more]').forEach(b => b.onclick = () => openMore(exOf(b.dataset.more)));
+  document.querySelectorAll('[data-hist]').forEach(b => b.onclick = () => openHist(exOf(b.dataset.hist)));
   document.querySelectorAll('[data-inf]').forEach(b => b.onclick = () => openInf(exOf(b.dataset.inf)));
   document.querySelectorAll('[data-unswap]').forEach(b => b.onclick = () => { setSwap(exOf(b.dataset.unswap), null); toast('Wrócono do ćwiczenia z planu.'); renderTrening(); });
   document.querySelectorAll('[data-unskip]').forEach(b => b.onclick = () => { unSkip(exOf(b.dataset.unskip)); toast('Przywrócono ćwiczenie.'); renderTrening(); });
-  // komentarz do ćwiczenia: 1 linia, rośnie z treścią; zapis po wyjściu z pola
-  document.querySelectorAll('[data-note]').forEach(t => {
-    t.oninput = () => { t.rows = Math.min(5, Math.max(1, t.value.split('\n').length, Math.ceil(t.value.length / 34))); };
-    t.onchange = () => setNote(exOf(t.dataset.note), t.value.trim());
-  });
+  // komentarz do ćwiczenia: dotknięcie tekstu w karcie otwiera okno z tym komentarzem
+  document.querySelectorAll('[data-note]').forEach(b => b.onclick = () => openNote(exOf(b.dataset.note)));
   exs.filter(ex => isEmom(ex) && !(ex.skip && !ex.sets)).forEach(ex => bindEmom(ex, s0, { rowsOf, rowOf, addRow, refreshDel }));
   // tryb prosty: zaznacz wszystkie niezapisane serie robocze ćwiczenia
   document.querySelectorAll('[data-all]').forEach(b => b.onclick = () => {
@@ -2546,8 +2794,10 @@ function bind(exs, s0){
     SESS['local|' + k] = { id: 'local|' + k, bol_kolano: p.knee, bol_bark: p.shoulder, bol: p.pain, bol_max: p.painMax, rpe_sesji: p.rpeSession, samopoczucie: p.feel, czas_min: p.minutes,
       uwagi: p.note, start: p.start, koniec: p.end };
     const m = tGet(); delete m[k]; delete m['r|' + k]; tSet(m);
-    const msg = s.id ? 'Zmiany zapisane.' : (SIMPLE ? 'Trening' : 'Jednostka') + ' zapisan' + (SIMPLE ? 'y' : 'a') + (minutes ? ' (' + minutes + ' min)' : '') + '. Dobra robota!';
-    send('logSession', p).then(() => { toast(msg); render(); }).catch(() => { toast('Brak sieci – zapiszę, gdy wróci połączenie.'); render(); });
+    // nowa jednostka: okno „Trening zrobiony” (liczone przed render, z danych w telefonie); poprawka zapisanej: tylko komunikat
+    const sum = s.id ? null : doneSummary(minutes);
+    const after = off => { render(); if (sum) openDone(sum, off); else toast(off ? 'Brak sieci – zapiszę, gdy wróci połączenie.' : 'Zmiany zapisane.'); };
+    send('logSession', p).then(() => after(false)).catch(() => after(true));
   };
 }
 // pole z wpisaną wartością: dotknięcie zaznacza całość, więc pierwsza cyfra nadpisuje zamiast dopisywać

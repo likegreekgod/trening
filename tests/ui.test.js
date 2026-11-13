@@ -832,6 +832,239 @@ for (const scheme of ['light', 'dark']) test(`Postęp ${scheme}: siła z rekorda
   await ctx.close();
 });
 
+// plan z trzema tygodniami bloku B1 i jednym B2; flaga „edycja” włącza zmiany w jednostce trenera
+const EDROW = (week, order, name) => ({ week, day: 'T1', title: 'Siła – dół', date: '2026-12-0' + week, order, name, prio: order === 1 ? 'A' : 'B', sets: 3, reps: '5', pct: null, kg: 100, rpe: 8, note: '', extra: null, drop: 0, block: week <= 3 ? 'B1' : 'B2', group: '', swaps: [], infos: [], parts: [] });
+const EDIT = Object.assign({}, PRO, { cfg: Object.assign({}, PRO.cfg, { edit: true, swap: 'DOWOLNA' }), removed: [],
+  plan: [].concat(...[1, 2, 3, 4].map(w => [EDROW(w, 1, 'Przysiad ze sztangą'), EDROW(w, 2, 'Wypychanie nóg na suwnicy')])) });
+const EXNAMES = [['Wykroki z hantlami', 'https://example.com/wykroki', 'czworogłowe; pośladki'], ['Wykroki chodzone', '', 'pośladki'], ['Goblet squat', '', 'czworogłowe']];
+
+test('Zmiany w jednostce bez flagi „edycja”: nie ma „+ ćwiczenie” ani „Usuń z treningu”', async () => {
+  const { ctx, p } = await page([], false, { data: Object.assign({}, EDIT, { cfg: Object.assign({}, EDIT.cfg, { edit: false }) }) });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await p.$('#ed-add'), null);
+  await p.click('.card[data-card="2"] [data-more]'); await p.waitForSelector('#sheet [data-skip]');
+  assert.equal(await p.$('#sheet [data-del]'), null);
+  await p.click('#sheet [data-swap]'); await p.waitForSelector('#sw-ok');
+  assert.equal(await p.$('#sheet [data-len]'), null);                               // zamiana bez pytania „na jak długo”
+  await ctx.close();
+});
+
+for (const scheme of ['light', 'dark']) test(`Zmiany w jednostce ${scheme}: dodanie na stałe, usunięcie i przywrócenie, zamiana na stałe`, async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: EDIT, scheme, api: b => b.fn === 'getExNames' ? EXNAMES : null });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const edits = () => calls.filter(c => c.fn === 'editPlan').map(c => c.args[0]);
+  // 1. dodanie ćwiczenia z bazy, na stałe: ten trening i dwa kolejne tygodnie bloku B1 (tydz. 4 to już B2)
+  await p.click('#ed-add'); await p.waitForSelector('#ed-q');
+  assert.equal(await p.$eval('#ed-ok', b => b.disabled), true);
+  await p.waitForFunction(() => EXN.list.length > 0);
+  await p.fill('#ed-q', 'wykr'); await p.dispatchEvent('#ed-q', 'input');
+  assert.deepEqual(await p.$$eval('#ed-res .opt', b => b.map(x => x.textContent.trim())), ['Wykroki z hantlamifilm', 'Wykroki chodzone', '+ Własna nazwa: „wykr”']);
+  await p.click('#ed-res [data-n="Wykroki z hantlami"]');
+  assert.equal(await p.textContent('#ed-sel'), 'Wybrane: Wykroki z hantlami');
+  await p.fill('#ed-sets', '2'); await p.fill('#ed-kg', '12,5');
+  await p.click('#sheet [data-len="1"]');
+  assert.equal(await p.getAttribute('#sheet [data-len="1"]', 'aria-pressed'), 'true');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `edycja-dodaj-${scheme}.png`) }); }
+  await p.click('#ed-ok'); await p.waitForSelector('.card[data-card="51"]');
+  assert.equal(await p.textContent('#toast'), 'Dodano: Wykroki z hantlami (ten trening i 2 kolejne).');
+  const add = edits()[0];
+  assert.deepEqual([add.op, add.week, add.day, add.name, add.sets, add.reps, add.kg, add.forever], ['add', 1, 'T1', 'Wykroki z hantlami', '2', '10', '12,5', true]);
+  assert.deepEqual(await p.evaluate(() => PLAN.filter(r => r.added).map(r => [r.week, r.order, r.sets, r.kg])), [[1, 51, 2, 12.5], [2, 51, 2, 12.5], [3, 51, 2, 12.5]]);
+  assert.ok(await p.$('.card[data-card="51"] .infb'));                              // film „Jak wykonać” z bazy od razu
+  assert.equal(await p.textContent('#st-sets'), '0/8');                             // 3 + 3 + 2 serie
+  // serię dodanego ćwiczenia zapisuje się jak każdą inną
+  await p.click('.set[data-o="51"][data-s="1"] .ok'); await p.waitForTimeout(100);
+  const ls = calls.filter(c => c.fn === 'logSet').pop().args[0];
+  assert.deepEqual([ls.order, ls.set, ls.name, ls.kg, ls.reps], [51, 1, 'Wykroki z hantlami', 12.5, 10]);
+  await p.evaluate(() => stopRest());
+  // 2. usunięcie ćwiczenia z planu, tylko ten trening: karta znika, na dole „Przywróć”
+  await p.click('.card[data-card="2"] [data-more]'); await p.click('#sheet [data-del]'); await p.waitForSelector('#ed-del');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, `edycja-usun-${scheme}.png`) });
+  await p.click('#ed-del'); await p.waitForSelector('.ed-rm');
+  assert.equal(await p.$('.card[data-card="2"]'), null);
+  assert.deepEqual(edits()[1], { op: 'del', week: 1, day: 'T1', order: 2, forever: false });
+  assert.match(await p.textContent('.ed-rm'), /Usunięte z tego treningu\s*Wypychanie nóg na suwnicy\s*Przywróć/);
+  assert.equal(await p.evaluate(() => PLAN.filter(r => r.name === 'Wypychanie nóg na suwnicy').length), 3);   // w kolejnych tygodniach zostało
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { await p.$eval('.ed-rm', e => { document.querySelector('#toast').style.display = 'none'; e.scrollIntoView({ block: 'center' }); }); await p.screenshot({ path: path.join(SCREENS, `edycja-usuniete-${scheme}.png`) }); }
+  await p.click('[data-undel="2"]'); await p.waitForSelector('.card[data-card="2"]');
+  assert.equal(await p.$('.ed-rm'), null);
+  assert.deepEqual(edits()[2], { op: 'undel', week: 1, day: 'T1', order: 2 });
+  // 3. zamiana na stałe: dziś przez Log (jak dotąd), w kolejnych tygodniach bloku inna nazwa w planie
+  await p.click('.card[data-card="1"] [data-more]'); await p.click('#sheet [data-swap]'); await p.waitForSelector('#sw-q');
+  await p.fill('#sw-q', 'gob'); await p.dispatchEvent('#sw-q', 'input'); await p.click('#sw-res [data-to="Goblet squat"]');
+  await p.click('#sheet [data-why]'); await p.click('#sheet [data-len="1"]'); await p.click('#sw-ok');
+  await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.match(await p.textContent('#toast'), /Zamieniono na: Goblet squat\. Także w kolejnych tygodniach: 2\./);
+  const sw = edits()[3];
+  assert.deepEqual([sw.op, sw.week, sw.day, sw.order, sw.to, sw.forever], ['swap', 1, 'T1', 1, 'Goblet squat', true]);
+  assert.deepEqual(await p.evaluate(() => PLAN.filter(r => r.order === 1).map(r => r.week + ':' + r.name)), ['1:Przysiad ze sztangą', '2:Goblet squat', '3:Goblet squat', '4:Przysiad ze sztangą']);
+  assert.match(await p.textContent('.card[data-card="1"] .cn'), /Goblet squat/);    // bieżąca jednostka: zamiana jak dotąd
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Zmiany w jednostce bez sieci: kolejka, po ponownym otwarciu zmiana zostaje; ostatniego ćwiczenia nie da się usunąć', async () => {
+  const { ctx, p } = await page([], false, { data: EDIT, api: b => b.fn === 'getExNames' ? EXNAMES : null });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await ctx.unroute('**/macros/**'); await ctx.route('**/macros/**', r => r.abort());
+  await p.click('#ed-add'); await p.fill('#ed-q', 'Plank boczny'); await p.dispatchEvent('#ed-q', 'input'); await p.click('#ed-res .ow-new');
+  await p.fill('#ed-sets', '0'); await p.click('#ed-ok');
+  assert.equal(await p.textContent('#ed-err'), 'Serie 1–40 i powtórzenia.');        // błąd w oknie, nic nie wysłane
+  await p.fill('#ed-sets', '2'); await p.fill('#ed-reps', '30 s'); await p.click('#ed-ok'); await p.waitForSelector('.card[data-card="51"]');
+  await p.click('.card[data-card="2"] [data-more]'); await p.click('#sheet [data-del]'); await p.click('#sheet [data-len="1"]'); await p.click('#ed-del');
+  await p.waitForSelector('.ed-rm');
+  assert.deepEqual((await p.evaluate(() => JSON.parse(localStorage.getItem('q_kabc')))).map(x => x.fn + ':' + x.payload.op + ':' + !!x.payload.forever), ['editPlan:add:false', 'editPlan:del:true']);
+  await p.goto(base); await p.waitForSelector('.set[data-o="1"]');                  // dane z pamięci telefonu + kolejka
+  assert.deepEqual(await p.$$eval('.card[data-card]', c => c.map(x => x.dataset.card)), ['1', '51']);
+  // dodane i od razu usunięte bez sieci: po kolejnym otwarciu nie wraca i nie dubluje się
+  await p.click('#ed-add'); await p.fill('#ed-q', 'Mostek'); await p.dispatchEvent('#ed-q', 'input'); await p.click('#ed-res .ow-new'); await p.click('#ed-ok'); await p.waitForSelector('.card[data-card="52"]');
+  await p.click('.card[data-card="52"] [data-more]'); await p.click('#sheet [data-del]'); await p.click('#ed-del'); await p.waitForSelector('.card[data-card="52"]', { state: 'detached' });
+  await p.goto(base); await p.waitForSelector('.set[data-o="1"]');
+  assert.deepEqual(await p.$$eval('.card[data-card]', c => c.map(x => x.dataset.card)), ['1', '51']);
+  assert.equal(await p.evaluate(() => PLAN.filter(r => r.name === 'Wypychanie nóg na suwnicy').map(r => r.week).join()), '4');   // na stałe: zostało tylko w bloku B2
+  assert.match(await p.textContent('.card[data-card="51"]'), /sek\./);              // ćwiczenie na czas
+  // zostaje jedno ćwiczenie z planu i jedno dodane: po usunięciu dodanego ostatniego już się nie da
+  await p.click('.card[data-card="51"] [data-more]'); await p.click('#sheet [data-del]'); await p.click('#ed-del'); await p.waitForSelector('.card[data-card="51"]', { state: 'detached' });
+  await p.click('.card[data-card="1"] [data-more]'); await p.click('#sheet [data-del]');
+  assert.match(await p.textContent('#toast'), /jedyne ćwiczenie/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+for (const scheme of ['light', 'dark']) test(`Przypięta nazwa ćwiczenia ${scheme}: przy przewijaniu długiej karty nazwa zostaje u góry w jednej linii i znika z końcem karty`, async () => {
+  const row = (order, name, sets) => ({ week: 1, day: 'T1', title: 'Siła', date: '2026-12-01', order, name, prio: 'A', sets, reps: '3', pct: null, kg: 60, rpe: 8, note: '', extra: null, drop: 0, group: '', swaps: [], infos: [], parts: [] });
+  const data = Object.assign({}, PRO, { plan: [row(1, 'Hang power snatch poniżej kolan z pauzą', 12), row(2, 'Przysiad', 12)] });
+  const { ctx, p } = await page([], false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const st = () => p.evaluate(() => [...document.querySelectorAll('.card[data-card] > .ch')].map(ch => { const r = ch.getBoundingClientRect(), n = ch.querySelector('.cn').getBoundingClientRect();
+    return { stuck: ch.classList.contains('stuck'), top: Math.round(r.top), h: Math.round(r.height), nameH: Math.round(n.height), head: Math.round(Math.max(0, document.querySelector('header').getBoundingClientRect().bottom)) }; }));
+  const cardTop = n => p.evaluate(o => Math.round(document.querySelector(`.card[data-card="${o}"]`).getBoundingClientRect().top + scrollY), n);
+  const to = async y => { await p.evaluate(v => window.scrollTo(0, v), y); await p.waitForTimeout(350); };
+  let s = await st();
+  assert.deepEqual(s.map(x => x.stuck), [false, false]);                            // na górze strony nic nie jest przypięte
+  assert.ok(s[0].nameH > 40);                                                       // długa nazwa w karcie w dwóch liniach
+  // przewinięcie w dół w środek pierwszej karty: górny pasek schowany, nazwa na samej górze, jedna linia
+  await to(await cardTop(1) + 400); s = await st();
+  assert.deepEqual([s[0].stuck, s[0].top, s[0].head, s[1].stuck], [true, 0, 0, false]);
+  assert.ok(s[0].nameH <= 24 && s[0].h <= 52, JSON.stringify(s[0]));
+  assert.ok(await p.evaluate(() => { const c = document.querySelector('.card[data-card="1"] .ch .cn'); return c.scrollWidth > c.clientWidth; }));   // przycięta wielokropkiem
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `przypieta-${scheme}.png`) }); }
+  // ikony w przypiętym pasku działają: „⋯” otwiera akcje tego ćwiczenia
+  await p.click('.card[data-card="1"] .ch [data-more]'); await p.waitForSelector('#sheet [data-mnote]');
+  assert.match(await p.textContent('#sheet-t'), /Hang power snatch/);
+  await p.click('#sheet [data-close]');
+  // lekko w górę: górny pasek wraca, nazwa siedzi tuż pod nim
+  await to(await cardTop(1) + 340); s = await st();
+  assert.ok(s[0].head > 40 && s[0].stuck && Math.abs(s[0].top - s[0].head) <= 1, JSON.stringify(s[0]));
+  // dalej w dół, do drugiej karty: pierwsza nazwa odjechała z kartą, przypięta jest druga
+  await to(await cardTop(2) + 300); s = await st();
+  assert.deepEqual([s[0].stuck, s[1].stuck, s[1].top], [false, true, 0]);
+  assert.ok(s[0].top < 0);
+  // zwinięta karta nie przypina nazwy
+  await p.click('.card[data-card="2"] .ch .fold-c'); await p.waitForTimeout(100);
+  assert.equal((await st())[1].stuck, false);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+for (const scheme of ['light', 'dark']) test(`Historia ćwiczenia ${scheme}: „Ostatnio” otwiera okno z wykresem i 5 ostatnimi treningami`, async () => {
+  const { ctx, p } = await page([], false, { data: PROG, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal((await p.textContent('.card[data-card="1"] .last')).trim(), 'Ostatnio: 117,5 kg × 5 · RPE 8');
+  assert.deepEqual(await a11y(p), []);                                              // przycisk „Ostatnio” ma ≥ 44 px
+  await p.click('.card[data-card="1"] .last'); await p.waitForSelector('#sheet .hx-r');
+  assert.match(await p.textContent('#sheet .sub'), /Przysiad tylny · ostatnie 5 treningów/);
+  assert.equal((await p.$$('#sheet .hx-r')).length, 5);                             // z 7 zrobionych tygodni pokazujemy 5
+  assert.equal((await p.$$('#sheet svg.chart .pt')).length, 5);
+  assert.equal((await p.$$('#sheet svg.chart .pt.pr')).length, 4);                  // tydz. 5 był słabszy → nie rekord; liczone z całej historii
+  const first = (await p.textContent('#sheet .hx-r')).replace(/\s+/g, ' ').trim();
+  assert.match(first, /117,5 × 5 · 5 · 5 117,5 kg × 5 ?RPE 8$/);
+  assert.equal((await p.$$('#sheet .hx-r .key.pr')).length, 4);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `historia-${scheme}.png`) }); }
+  await p.click('#sheet [data-close]');
+  // boje: najlepsze zaliczone kg zamiast e1RM, ocena podejścia słownie, nieudana jako ✕
+  await p.click('.card[data-card="2"] .last'); await p.waitForSelector('#sheet .hx-r');
+  assert.match(await p.textContent('#sheet .dn-s'), /Najlepsze zaliczone/);
+  assert.match((await p.textContent('#sheet .hx-r')).replace(/\s+/g, ' '), /77,5 × 2 · 2 · 2 77,5 kg × 2 ?Średnio/);
+  assert.match(await p.textContent('#sheet'), /67,5 × 2 · 2 · ✕/);                   // tydz. 3: trzecie podejście spalone
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Historia ćwiczenia: bez wcześniejszych treningów nie ma „Ostatnio”; jeden trening = lista bez wykresu; PROSTY słownie', async () => {
+  const none = await page([]);
+  await none.p.goto(base + '?k=kabc'); await none.p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await none.p.$('.last'), null);
+  await none.ctx.close();
+  const data = Object.assign({}, DATA, { plan: DATA.plan.concat(DATA.plan.map(r => Object.assign({}, r, { week: 2, date: '2026-10-13' }))),
+    logs: [{ id: 'robert|1|T1|1|1', zapisano: '2026-10-06T17:00:00.000Z', cwiczenie: 'Wyciskanie sztangi na ławce płaskiej', tydzien: 1, jednostka: 'T1', data: '2026-10-06', nr_cw: 1, seria: 1, kg: 50, powt: 8, rpe: 9, wykonane: 'TAK', typ: '' }],
+    sessions: [{ id: 'robert|1|T1', tydzien: 1, jednostka: 'T1', data: '2026-10-06', czas_min: 50 }] });
+  const { ctx, p } = await page([], false, { data });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('.last'); await p.waitForSelector('#sheet .hx-r');
+  assert.match(await p.textContent('#sheet .sub'), /ostatni trening/);
+  assert.equal(await p.$('#sheet svg.chart'), null);
+  assert.match((await p.textContent('#sheet .hx-r')).replace(/\s+/g, ' '), /wt 06\.10 50 × 8 50 kg × 8 ?Ciężko/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+for (const scheme of ['light', 'dark']) test(`Trening zrobiony ${scheme}: okno po zapisie jednostki, porównanie z poprzednią T1, rekord, przejście do Postępu`, async () => {
+  const calls = [];
+  const data = Object.assign({}, PROG, { sessions: PROG.sessions.slice() });       // atrapa pamięta zapisaną jednostkę jak serwer
+  const { ctx, p } = await page(calls, false, { data, scheme, api: b => { if (b.fn === 'logSession') data.sessions.push({ id: 'robert|8|T1', tydzien: 8, jednostka: 'T1', czas_min: b.args[0].minutes, start: b.args[0].start }); } });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.match(await p.textContent('#eyebrow'), /tydz\. 4 · T1/);                    // tydz. 8 = 4. tydzień bloku B2
+  for (const n of [1, 2, 3]) { await p.selectOption(`.set[data-o="1"][data-s="${n}"] .rpe`, '8'); await p.click(`.set[data-o="1"][data-s="${n}"] .ok`); await p.waitForTimeout(80); }
+  await p.evaluate(() => stopRest());
+  await p.click('#saveSess'); await p.waitForSelector('#sheet .dn-t');
+  assert.equal(calls.filter(c => c.fn === 'logSession').length, 1);
+  assert.match(await p.textContent('#sheet-t'), /Trening zrobiony/);
+  const tiles = await p.$$eval('#sheet .dn-t div', d => d.map(x => x.textContent.replace(/\s+/g, ' ').trim()));
+  assert.match(tiles[0], /^Czas1 min▼ 59 min$/);                                    // poprzednio 60 min
+  assert.match(tiles[1], /^Serie3 \/ 6$/);
+  assert.match(tiles[2], /^Tonaż1\s?800 kg▼ 19%$/);                                  // 3 × 120 × 5 wobec 2 228 kg tydzień wcześniej
+  assert.match(await p.textContent('#sheet .dn-cmp'), /Porównanie z poprzednim razem: T1, /);
+  assert.match((await p.textContent('#sheet .kv')).replace(/\s+/g, ' '), /Przysiad tylny · e1RM, \+3,1 kg ?148 kg/);   // 120 × (1 + 7/30) wobec 144,9
+  assert.equal((await p.$$('#sheet .kv')).length, 1);                               // rwanie bez podejść: bez rekordu
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `zrobiony-${scheme}.png`) }); }
+  await p.click('#dn-go'); await p.waitForSelector('#postep .card');
+  await p.waitForTimeout(200);
+  assert.equal(calls.filter(c => c.fn === 'getData').length, 2);                    // Postęp dociąga świeże dane z serwera
+  assert.equal(await p.$eval('#sheet', e => e.hidden), true);
+  assert.equal(await p.$eval('[data-pt="tyd"]', b => b.getAttribute('aria-selected')), 'true');
+  // poprawka zapisanej jednostki: bez okna, sam komunikat
+  await p.click('#nav [data-tab="trening"]'); await p.fill('#smin', '62'); await p.click('#saveSess'); await p.waitForTimeout(200);
+  assert.equal(await p.$eval('#sheet', e => e.hidden), true);
+  assert.equal(await p.textContent('#toast'), 'Zmiany zapisane.');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Trening zrobiony bez sieci: okno z dopiskiem, zapis w kolejce; pierwsza jednostka bez porównania i rekordów', async () => {
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(100);
+  await ctx.unroute('**/macros/**'); await ctx.route('**/macros/**', r => r.abort());
+  await p.evaluate(() => stopRest());
+  await p.click('#saveSess'); await p.waitForSelector('#sheet .dn-t');
+  assert.match(await p.textContent('#sheet'), /Brak sieci: zapiszę, gdy wróci połączenie\./);
+  assert.equal(await p.$('#sheet .kv'), null);
+  assert.equal(await p.$$eval('#sheet .dn-t small', x => x.length), 0);
+  assert.deepEqual((await p.evaluate(() => JSON.parse(localStorage.getItem('q_kabc')))).map(x => x.fn), ['logSession']);
+  await p.click('#sheet [data-close]');
+  assert.equal(await p.$eval('#sheet', e => e.hidden), true);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 for (const scheme of ['light', 'dark']) test(`Postęp → Tydzień ${scheme}: wykonanie, rekordy, odczucia, przełączanie tygodni`, async () => {
   // każdy tydzień kalendarzowy ma dokładnie jedną jednostkę PROG (co 7 dni); ostatnia zrobiona (tydz. 7) jest sprzed 8 dni,
   // czyli zwykle w poprzednim tygodniu kalendarzowym, a w poniedziałek dwa tygodnie wstecz (26.10 test przez to nie przechodził)
@@ -919,6 +1152,7 @@ test('Czas treningu: przypadkowy start 2 h wcześniej → liczy od pierwszej zap
   await p.click('#saveSess'); await p.waitForTimeout(0); await p.clock.runFor(300);
   assert.equal(calls.find(c => c.fn === 'logSession').args[0].minutes, 5);
   // po zapisaniu: poprawka minut ręcznie
+  await p.click('#sheet [data-close]');                                          // okno „Trening zrobiony”
   await p.waitForSelector('#smin'); assert.equal(await p.inputValue('#smin'), '5');
   assert.equal(await p.$('#t-reset'), null);
   await p.fill('#smin', '62'); await p.click('#saveSess'); await p.clock.runFor(300);
@@ -1252,17 +1486,40 @@ test('Komentarz do ćwiczenia: zapis z serią (uwagi) i poprawka wszystkich seri
   const calls = [];
   const { ctx, p } = await page(calls, false, { data: D17 });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="2"]');
-  await p.click('[data-more="2"]'); await p.click('#sheet [data-mnote]');
-  await p.fill('[data-note="2"]', 'face pull 3×10 na TRX'); await p.dispatchEvent('[data-note="2"]', 'change');
+  // pusty komentarz: „⋯” → Komentarz otwiera okno, w karcie nic nie ma
+  assert.equal(await p.isHidden('.card[data-card="2"] .exn'), true);
+  await p.click('[data-more="2"]'); await p.click('#sheet [data-mnote]'); await p.waitForSelector('#nt');
+  assert.equal(await p.textContent('#nt-ok'), 'Zapisz komentarz');
+  assert.equal(await p.$('#nt-del'), null);
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'nt');
+  await p.fill('.set[data-o="2"][data-s="2"] .kg', '22,5');                        // wpisana, niezapisana seria ma przetrwać zapis komentarza
+  await p.fill('#nt', 'face pull 3×10 na TRX'); await p.click('#nt-ok'); await p.waitForSelector('#sheet', { state: 'hidden' });
   assert.equal(calls.filter(c => c.fn === 'logNote').length, 0);                 // bez zapisanej serii: pójdzie z pierwszą
+  assert.equal(await p.textContent('.card[data-card="2"] .exn-x'), 'face pull 3×10 na TRX');
+  assert.equal(await p.inputValue('.set[data-o="2"][data-s="2"] .kg'), '22,5');
   await p.click('.set[data-o="2"][data-s="1"] .ok'); await p.waitForTimeout(80);
   assert.equal(lastSet(calls).note, 'face pull 3×10 na TRX');
-  await p.fill('[data-note="2"]', 'face pull 3×10 na TRX, guma'); await p.dispatchEvent('[data-note="2"]', 'change'); await p.waitForTimeout(80);
+  // komentarz już jest: dotknięcie tekstu w karcie otwiera okno z tym samym komentarzem i go poprawia (nie dodaje drugiego)
+  await p.click('.card[data-card="2"] .exn'); await p.waitForSelector('#nt');
+  assert.equal(await p.inputValue('#nt'), 'face pull 3×10 na TRX');
+  assert.equal(await p.textContent('#nt-ok'), 'Zapisz zmiany');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'komentarz-okno.png') }); }
+  await p.fill('#nt', 'face pull 3×10 na TRX, guma'); await p.click('#nt-ok'); await p.waitForTimeout(80);
   assert.deepEqual(calls.find(c => c.fn === 'logNote').args[0], { week: 1, day: 'T1', order: 2, note: 'face pull 3×10 na TRX, guma' });
+  assert.equal((await p.$$('.card[data-card="2"] .exn')).length, 1);
+  assert.equal(await p.textContent('.card[data-card="2"] .exn-x'), 'face pull 3×10 na TRX, guma');
+  // bez zmian w oknie = bez wysyłki; „Anuluj” też nic nie zmienia; „Usuń komentarz” czyści go w Logu i chowa w karcie
+  await p.click('.card[data-card="2"] .exn'); await p.click('#nt-ok'); await p.waitForTimeout(50);
+  await p.click('.card[data-card="2"] .exn'); await p.fill('#nt', 'coś innego'); await p.click('#sheet [data-close]'); await p.waitForTimeout(50);
+  assert.equal(calls.filter(c => c.fn === 'logNote').length, 1);
+  await p.click('.card[data-card="2"] .exn'); await p.click('#nt-del'); await p.waitForTimeout(80);
+  assert.deepEqual(calls.filter(c => c.fn === 'logNote').pop().args[0], { week: 1, day: 'T1', order: 2, note: '' });
+  assert.equal(await p.isHidden('.card[data-card="2"] .exn'), true);
   const again = Object.assign({}, D17, { logs: [{ id: 'robert|1|T1|2|1', cwiczenie: 'Face Pull', tydzien: 1, jednostka: 'T1', seria: 1, kg: 20, powt: 12, wykonane: 'TAK', typ: '', uwagi: 'z Logu' }] });
   const t = await page([], false, { data: again });
-  await t.p.goto(base + '?k=kabc'); await t.p.waitForSelector('[data-note="2"]');
-  assert.equal(await t.p.inputValue('[data-note="2"]'), 'z Logu');
+  await t.p.goto(base + '?k=kabc'); await t.p.waitForSelector('.card[data-card="2"] .exn');
+  assert.equal(await t.p.textContent('.card[data-card="2"] .exn-x'), 'z Logu');
   assert.equal(await t.p.$eval('.card[data-card="2"] .exn', d => !d.hidden), true);
   await t.ctx.close();
   assert.deepEqual(p.errors, []);
@@ -1558,11 +1815,11 @@ test('Karta v4: „+ seria (n)” wyszarza się po zużyciu limitu, pusty koment
   // przyciski dodawania w jednym rzędzie, tekst w jednej linii
   const tops = await p.$$eval('.card[data-card="1"] .adds .ghost', b => b.map(x => [Math.round(x.getBoundingClientRect().top), Math.round(x.getBoundingClientRect().height)]));
   assert.equal(new Set(tops.map(t => t[0])).size, 1); assert.ok(tops.every(t => t[1] === 44));
-  // komentarz: pusty niewidoczny, „⋯” → Komentarz pokazuje pole w karcie
+  // komentarz: pusty niewidoczny, „⋯” → Komentarz otwiera okno z polem
   assert.equal(await p.isHidden('.card[data-card="1"] .exn'), true);
   await p.click('[data-more="1"]'); await p.click('#sheet [data-mnote]');
-  assert.equal(await p.isHidden('#sheet'), true);
-  assert.equal(await p.evaluate(() => document.activeElement.dataset.note), '1');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'nt');
+  await p.click('#sheet [data-close]');
   // strzałka w kolumnie ikon zwija kartę tak samo jak nazwa
   await p.click('.card[data-card="1"] .fold-c');
   assert.equal(await p.getAttribute('.card[data-card="1"] .fold-c', 'aria-expanded'), 'false');

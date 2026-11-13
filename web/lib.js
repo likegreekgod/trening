@@ -442,6 +442,96 @@
     return { lvl, title: L.READY_TITLE[lvl], advice: L.READY_ADVICE[lvl], out, cmjAvg, hs };
   };
 
+  /**
+   * zmiana klienta w jednostce trenera, naniesiona na dane w telefonie (ta sama reguła co planEdit_ w Code.gs).
+   * plan = wiersze getData, removed = [{week, day, order, name, row?}] (usunięte ćwiczenia), done = {tydzień|jednostka: 1} (zrobione).
+   * e = {op: add | del | undel | swap, week, day, forever, order, name, sets, reps, kg, to, infos, parts}.
+   * „Na stałe” (forever) = także kolejne tygodnie tej samej jednostki w tym samym bloku, niezrobione; ćwiczenie szukane po nazwie.
+   * Zwraca {plan, removed, n} (nowe tablice; n = liczba zmienionych wierszy) albo {error}.
+   */
+  L.EDIT_NR = 50;
+  L.planEdit = (plan, removed, done, e) => {
+    plan = plan || []; removed = removed || []; done = done || {};
+    const week = Number(e.week), day = String(e.day), lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+    const inU = (r, w) => Number(r.week) === w && String(r.day) === day;
+    const cur = plan.filter(r => inU(r, week));
+    if (!cur.length && e.op !== 'undel') return { error: 'Nie ma takiej jednostki w planie.' };
+    const base = cur[0] || removed.map(x => x.row).find(r => r && inU(r, week)) || {};
+    const block = lc(base.block);
+    const later = [...new Set(plan.filter(r => Number(r.week) > week && String(r.day) === day && lc(r.block) === block && !r.own && !done[r.week + '|' + day]).map(r => Number(r.week)))].sort((a, b) => a - b);
+    const weeks = [week].concat(e.forever ? later : []);
+    let out = plan.slice(), rem = removed.slice(), n = 0;
+    if (e.op === 'add') {
+      const name = String(e.name || '').trim().replace(/\s+/g, ' ').slice(0, 80), sets = Math.round(Number(e.sets)), reps = String(e.reps === undefined || e.reps === null ? '' : e.reps).trim().slice(0, 12);
+      if (!name) return { error: 'Podaj nazwę ćwiczenia.' };
+      if (!(sets >= 1 && sets <= L.SETS_MAX) || !reps) return { error: 'Serie 1–' + L.SETS_MAX + ' i powtórzenia.' };
+      const kv = String(e.kg === undefined || e.kg === null ? '' : e.kg).trim(), kn = parseFloat(kv.replace(',', '.'));
+      const kg = kv === '' ? '' : isFinite(Number(kv.replace(',', '.'))) ? kn : kv.slice(0, 10);
+      weeks.forEach(w => {
+        const rows = plan.filter(r => inU(r, w));
+        // już jest: w kolejnych tygodniach dowolne ćwiczenie o tej nazwie, w tej jednostce wcześniej dodane (ponowne naniesienie tej samej zmiany nic nie dubluje)
+        if (!rows.length || rows.some(r => lc(r.name) === lc(name) && (w !== week || r.added))) return;
+        const order = Math.max(L.EDIT_NR, ...rows.map(r => Number(r.order) || 0), ...removed.filter(x => inU(x, w)).map(x => Number(x.order) || 0)) + 1, b = rows[0];
+        out.push({ week: w, day, title: b.title, date: b.date, order, name, prio: 'A', sets, reps, pct: null, kg, rpe: '', note: '', extra: null, drop: 0,
+          group: '', block: b.block || '', swaps: [], infos: e.infos || [], parts: e.parts || [], added: true });
+        n++;
+      });
+      return { plan: out, removed: rem, n };
+    }
+    if (e.op === 'undel') {
+      const hit = removed.find(x => inU(x, week) && Number(x.order) === Number(e.order));
+      if (!hit) return { error: 'To ćwiczenie nie jest usunięte.' };
+      const back = removed.filter(x => String(x.day) === day && lc(x.name) === lc(hit.name) && (x === hit || later.indexOf(Number(x.week)) >= 0 || (Number(x.week) > week && !plan.some(r => inU(r, Number(x.week))))));
+      rem = removed.filter(x => back.indexOf(x) < 0);
+      back.forEach(x => { if (x.row) out.push(x.row); n++; });
+      return { plan: out, removed: rem, n, partial: back.some(x => !x.row) };
+    }
+    const hit = cur.find(r => Number(r.order) === Number(e.order));
+    if (!hit) return { error: 'Nie ma takiego ćwiczenia w jednostce.' };
+    const same = w => w === week ? [hit] : plan.filter(r => inU(r, w) && lc(r.name) === lc(hit.name));
+    if (e.op === 'del') {
+      const gone = [].concat(...weeks.map(same));
+      out = plan.filter(r => gone.indexOf(r) < 0);
+      rem = rem.concat(gone.map(r => ({ week: r.week, day: r.day, order: r.order, name: r.name, row: r })));
+      return { plan: out, removed: rem, n: gone.length };
+    }
+    if (e.op === 'swap') {
+      const to = String(e.to || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+      if (!to || lc(to) === lc(hit.name)) return { error: 'Podaj inne ćwiczenie.' };
+      const ch = [].concat(...later.map(same));
+      out = plan.map(r => ch.indexOf(r) < 0 ? r : Object.assign({}, r, { name: to, infos: e.infos || [], parts: e.parts || [], swaps: [],
+        note: ((String(r.note || '').trim() ? String(r.note).trim() + ' · ' : '') + 'zamiana klienta: ' + hit.name + ' → ' + to).slice(0, 300) }));
+      return { plan: out, removed: rem, n: ch.length };
+    }
+    return { error: 'Nieznana zmiana.' };
+  };
+  /**
+   * historia ćwiczenia do okna „Historia”: ostatnie n INNYCH jednostek z tym ćwiczeniem (po nazwie wykonanej, bez wielkości liter),
+   * od najnowszej (kolejność jak w lastTop: po czasie zapisu, więc pierwsza pozycja = „Ostatnio”).
+   * Każda: { week, day, date, top (najcięższa zaliczona seria, jak lastTop), runs: [{kg, reps: [..]}] – kolejne serie z tym samym
+   * ciężarem zebrane razem; nieudana seria ma reps „✕” }. Bez rozgrzewki. dates: {tydzień|jednostka → faktyczny dzień}.
+   */
+  L.exHistory = (logs, name, week, day, n = 5, dates = {}) => {
+    const nm = String(name).trim().toLowerCase(), by = {};
+    (logs || []).forEach(l => {
+      if (String(l.cwiczenie || '').trim().toLowerCase() !== nm || l.wykonane !== 'TAK' || /^R/i.test(String(l.seria))) return;
+      if (String(l.tydzien) === String(week) && String(l.jednostka) === String(day)) return;
+      const k = l.tydzien + '|' + l.jednostka;
+      const u = by[k] = by[k] || { week: l.tydzien, day: String(l.jednostka), date: dates[k] || String(l.data || '').slice(0, 10), t: 0, rows: [] };
+      u.rows.push(l); u.t = Math.max(u.t, Date.parse(l.zapisano) || 0);
+    });
+    const kgOf = l => { const v = nf(l.kg); return isNaN(v) ? String(l.kg === undefined || l.kg === null ? '' : l.kg) : v; };
+    const ord = s => /^D/i.test(String(s)) ? 1000 + (parseInt(String(s).slice(1)) || 0) : parseInt(s) || 0;
+    return Object.values(by).sort((a, b) => b.t - a.t || String(b.date).localeCompare(String(a.date))).slice(0, n).map(u => {
+      const rows = u.rows.slice().sort((a, b) => ord(a.seria) - ord(b.seria)), ok = rows.filter(l => !/FAIL/.test(l.typ || ''));
+      const t = ok.slice().sort((a, b) => (nf(b.kg) || 0) - (nf(a.kg) || 0) || (nf(b.powt) || 0) - (nf(a.powt) || 0))[0];
+      const runs = [];
+      rows.forEach(l => { const kg = kgOf(l), last = runs[runs.length - 1], r = /FAIL/.test(l.typ || '') ? '✕' : String(l.powt === undefined || l.powt === null ? '' : l.powt);
+        if (last && last.kg === kg) last.reps.push(r); else runs.push({ kg, reps: [r] }); });
+      return { week: u.week, day: u.day, date: u.date, runs,
+        top: t ? { kg: kgOf(t), reps: t.powt, rpe: t.rpe, ocena: String(t.ocena || '').toUpperCase() } : null };
+    });
+  };
   /* ---------- postęp: siła, objętość, obciążenie (cała historia z Logu) ---------- */
   const mondayOf = d => L.addDays(d, -((new Date(utc(d)).getUTCDay() + 6) % 7));
   /** e1RM = kg × (1 + (powt. + RIR) / 30), RIR = 10 − RPE; jak w podsumowaniu: tylko serie z RPE ≥ 5 */
@@ -609,6 +699,49 @@
       skips, fails: sets.filter(x => x.fail && x.grp !== 'R' && x.grp !== 'P').length, notes,
       empty: !sets.length && !ses.length && !skips.length
     };
+  };
+  /**
+   * podsumowanie zakończonej jednostki do okna „Trening zrobiony”. d:
+   *   week, day, plan (wiersze getData), logs (Log z serwera), sessions (Sesje), dates {tydzień|jednostka → faktyczny dzień},
+   *   stats (unitStats bieżącej jednostki), minutes, sets: serie tej jednostki [{name, prio, group, kg, reps, rpe, fail, timed}]
+   *   (zaliczone i nieudane, bez rozgrzewki; name = ćwiczenie wykonane, także po zamianie).
+   * prev = poprzednia taka sama jednostka: ten sam `day` w najbliższym wcześniejszym tygodniu z zapisanymi seriami
+   * (własny trening nie ma poprzedniej). Rekord = wynik lepszy od całej wcześniejszej historii ćwiczenia głównego (A),
+   * liczony jak w Postępie; pierwszy wynik w historii to jeszcze nie rekord.
+   */
+  L.unitSummary = d => {
+    const plan = d.plan || [], logs = d.logs || [], st = d.stats || {}, week = Number(d.week), day = String(d.day);
+    const mine = l => Number(l.tydzien) === week && String(l.jednostka) === day;
+    const ok = l => l.wykonane === 'TAK' && !/^R/i.test(String(l.seria));
+    const own = plan.some(r => r.week === d.week && String(r.day) === day && r.own);
+    let prev = null;
+    const pw = own ? [] : logs.filter(l => ok(l) && String(l.jednostka) === day && Number(l.tydzien) < week).map(l => Number(l.tydzien));
+    if (pw.length) {
+      const w = Math.max(...pw), P = {}; plan.forEach(r => { if (r.week === w && String(r.day) === day) P[r.order] = r; });
+      let ton = 0, date = '';
+      logs.forEach(l => {
+        if (!ok(l) || Number(l.tydzien) !== w || String(l.jednostka) !== day) return;
+        const kg = nf(l.kg), reps = nf(l.powt);
+        if (kg > 0 && reps > 0 && !L.timeUnit((P[l.nr_cw] || {}).reps)) ton += kg * reps;
+        if (!date) date = String(l.data || '').slice(0, 10);
+      });
+      const ses = (d.sessions || []).find(x => Number(x.tydzien) === w && String(x.jednostka) === day), min = ses ? nf(ses.czas_min) : NaN;
+      prev = { week: w, date: (d.dates || {})[w + '|' + day] || date, ton: Math.round(ton), min: min > 0 ? Math.round(min) : null };
+    }
+    const hist = L.doneSets(logs.filter(l => !mine(l)), plan, d.dates || {}), recs = [];
+    const now = (d.sets || []).filter(x => x.prio === 'A' && !x.fail && !x.timed).map(x => Object.assign({}, x, { grp: L.groupOf(x.group, x.name) }));
+    [...new Set(now.map(x => x.name))].forEach(name => {
+      const oly = now.some(x => x.name === name && (x.grp === 'R' || x.grp === 'P'));
+      const was = Math.max(0, ...L.strengthSeries(hist, name).map(p => p.v));
+      const best = Math.max(0, ...now.filter(x => x.name === name).map(x => oly ? x.kg : L.e1rm(x.kg, x.reps, x.rpe)).filter(v => v > 0));
+      const v = Math.round(best * 10) / 10;
+      if (was > 0 && v > was) recs.push({ name, v, delta: Math.round((v - was) * 10) / 10, oly });
+    });
+    const min = nf(d.minutes) > 0 ? Math.round(nf(d.minutes)) : null, ton = Number(st.ton) || 0;
+    return { min, done: Number(st.done) || 0, all: Number(st.all) || 0, ton, prev,
+      dMin: prev && prev.min && min ? min - prev.min : null,
+      dTon: prev && prev.ton > 0 && ton > 0 ? Math.round(100 * (ton / prev.ton - 1)) : null,
+      records: recs.sort((a, b) => a.name.localeCompare(b.name, 'pl')) };
   };
   /** pomiary dyspozycji w czasie: [{date, v}] dla klucza (cmj_sr, vbt_test) */
   L.readySeries = (rows, key) => (rows || []).map(r => ({ date: String(r.data || '').slice(0, 10), v: nf(r[key]) }))

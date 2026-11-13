@@ -2,12 +2,15 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-13, aplikacja v39.
+Stan na 2026-11-13, aplikacja v43 (v40–v43 i zmiany w `apps-script/` w PR #65, czeka na scalenie).
 
 ## Jak pracujemy
 
 - Repo: `C:\Users\dt\Desktop\trening-repo`. Sesję Claude Code otwieraj w tym folderze, wtedy `CLAUDE.md` wczytuje się sam.
-- Zmiana = gałąź → `npm test` (wszystko zielone) → push → link `compare/main...gałąź?expand=1&title=…&body=…` dla Damiana. Scala sam i pisze „ok”. Brak `gh`; stan sprawdzaj przez publiczne API GitHuba.
+- Zmiana = gałąź → `npm test` (wszystko zielone) → commit i push gałęzi (kontener sesji jest tymczasowy; wysyłanie gałęzi bez pytania Damian potwierdził 13.11). Brak `gh`; stan sprawdzaj przez publiczne API GitHuba.
+- **PR (link `compare/main...gałąź?expand=1&title=…&body=…`) dopiero, gdy wszystko jest ustalone i Damian wyraźnie pozwoli** (ustalenie 13.11). Do tego czasu pokazuj zrzuty i opis, poprawki dokładaj na tę samą gałąź. Scala sam i pisze „ok”.
+- **Po zakończeniu zadania od razu oznacz je w plikach md jako zrobione** (ten plik, tabela „Stan” w planie, `decyzje.md` przy nowym ustaleniu), w tym samym commicie co kod, bez czekania na scalenie.
+- **Przy testach tłumacz Damianowi prostym językiem**: co test sprawdza, jak to robi i dlaczego, oraz co znaczył każdy błąd po drodze i jak został naprawiony. Chce rozumieć, co dzieje się w kodzie.
 - Scalenie `web/**` publikuje aplikację (GitHub Pages; podbij `VERSION` w `web/sw.js`), scalenie `apps-script/**` wdraża skrypt (Action z clasp). `clasp push` z komputera jest zablokowany.
 - Zmiany wyglądu: najpierw szkic do akceptacji, potem kod. Po każdym zadaniu odpowiedź kończy się listą zadań.
 - Pomiar ładowania: `getData` zwraca `ms` z czasami etapów (16.10: skrypt 2,0–2,8 s, całość 3,3–4,8 s).
@@ -15,6 +18,10 @@ Stan na 2026-11-13, aplikacja v39.
 
 ## Ostatnio zrobione
 
+- 13.11 (v43): plan v4 PR 11: nazwa ćwiczenia przypięta u góry przy przewijaniu długiej karty; komentarz do ćwiczenia w osobnym oknie (poprawia istniejący).
+- 13.11 (v42 + `apps-script/`): plan v4 PR 10: osoby z flagą `edycja` (Klienci N = TAK) mogą w jednostce trenera dodać ćwiczenie, usunąć je ze śladem i zamienić, tylko w tym treningu albo na stałe.
+- 13.11 (v41): plan v4 PR 3: „Ostatnio” w karcie otwiera okno „Historia” (wykres siły i 5 ostatnich treningów z tym ćwiczeniem).
+- 13.11 (v40): plan v4 PR 2: po „Zakończ i zapisz” okno „Trening zrobiony” (czas, serie, tonaż z porównaniem do poprzedniej takiej samej jednostki, rekordy, „Zobacz postęp”).
 - 13.11 (v39): niższe karty: etykieta priorytetu w linii z wynikiem (zwinięta) albo receptą (otwarta); „Skróć trening” i „Zwiń zrobione” pod „⋯” w górnym pasku zamiast rzędu przycisków.
 - 12.11 (v38): plan v4 PR 1, lżejsza karta ćwiczenia: ikony ▶ / „⋯” / strzałka w stałej kolumnie nagłówka, Komentarz, Zamień i Pomiń pod „⋯”, jeden rząd „+ rozgrzewka / + seria (n) / + drop set” pod seriami.
 - 12.11 (v37): obwód / superseria: kolumna Planu `obwod` (litera), ramka A1–A3 i przerwa po rundzie na Treningu, „Połącz z poprzednim” (Kompleks / Obwód) w kreatorze własnego treningu. Wymaga też scalenia `apps-script/` (wdroży się samo).
@@ -31,19 +38,15 @@ Stan na 2026-11-13, aplikacja v39.
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 zrobiony (v38) z poprawką v39. Następny: PR 2 (podsumowanie po treningu): szkic był pokazany 13.11, bez decyzji; odtwórz go i zapytaj o układ A / B oraz sposób porównania (opis w planie). Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 4 (rekord w chwili zapisu serii: szkic i pytanie, czy też w trybie PROSTY). Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- Scalenie v39 i próba na telefonie: czy karty mają dobrą wysokość, czy „⋯” w górnym pasku i w karcie nie chowa czegoś używanego na co dzień.
-- Próba obwodu na telefonie (własny trening z obwodem albo plan z kolumną `obwod`): czy przewijanie do następnego ćwiczenia i przerwa 1:30 po rundzie pasują.
-- Dopisanie do SKILL.md skilla trenera pola planu `obwod` (litera A–Z, min. 2 ćwiczenia po sobie w jednostce, bez EMOM) i przebudowanie ZIP-a.
-- Uprzedzenie klientów, że od v35 sen ocenia się odwrotnie niż dotąd (7 = bardzo dobry).
-- Sprawdzenie na iPhonie: aplikacja z ekranu głównego → wklejenie linku → plan.
-- Próba własnego treningu.
-- Wgranie ZIP-a skilla z 24.10 na claude.ai (skill zaktualizowany pod v31: nowe pola planu `tryb`, `ciecie`, `serie_min`, serie do 40, W… zarezerwowane, Klienci J/M, komentarze trenera, SKIP, nowe kolumny Przeglądu, menu, co widzi klient). Kopię SKILL.md trzymaj w `Desktop\hgvtjv\skill-aplikacja-treningowa-klienta`.
-- Test kolejki filmów na telefonie (wyjście z aplikacji w trakcie wysyłki).
-- Test ścieżki sztangi z nagrywaniem i 5–10 filmów testowych do strojenia analizy.
+- Scalenie PR #65 (v40–v43 + `apps-script/`: PR 2, 3, 10 i 11 planu v4), założonego 13.11 za zgodą Damiana.
+- Po scaleniu: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
+- Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
+
+Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPhone, własny trening, kolejka filmów, ścieżka sztangi) Damian potwierdził 13.11 jako zrobione.
 
 ## Do obserwacji
 
@@ -65,7 +68,6 @@ Stan na 2026-11-13, aplikacja v39.
 ## Później
 
 - Plan klienta z procentami bez kg: dopisać kg po poznaniu maksów.
-- Dopisywanie ćwiczeń do jednostek trenera (odłożone).
 - Flaga klienta dla Dyspozycji/Postępu; `masters = TAK` tam, gdzie trzeba.
 - Wersja do sklepów (Android) z przypomnieniami, wysyłką filmów przy zamkniętej aplikacji i sygnałem końca przerwy w tle (lokalne powiadomienie planowane przy ✓).
 - Sygnał przerwy, gdy klient jest w innej aplikacji: przeglądarka wstrzymuje stronę w tle, więc dźwięk i powiadomienie nie przychodzą. Decyzja 22.10: na razie bez zmian. Odrzucone obejścia: nagranie „cisza + sygnał” (przerywa muzykę klienta), Web Push (wymaga własnego serwera).

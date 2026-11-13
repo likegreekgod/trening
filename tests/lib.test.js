@@ -502,3 +502,85 @@ test('circuitGroups, circuitState, circuitLetter, circuitTidy: obwód / superser
   assert.deepEqual(L.circuitTidy([T('A', 3), T('A', 5), T('', 2), T('B', 4), T('', 1), T('C', 2, true), T('C', 2, true)]).map(e => e.c + e.sets), ['A3', 'A3', '2', '4', '1', 'C2', 'C2']);
   assert.equal(L.CIRCUIT_REST, 90);
 });
+
+test('unitSummary: okno „Trening zrobiony” – porównanie z poprzednią taką samą jednostką i rekordy', () => {
+  const R = (week, day, order, name, reps, x) => Object.assign({ week, day, order, name, prio: 'A', sets: 3, reps, group: '' }, x || {});
+  const plan = [R(1, 'T1', 1, 'Przysiad', '5'), R(1, 'T1', 2, 'Plank', '30 s', { prio: 'B' }), R(2, 'T1', 1, 'Przysiad', '5'), R(2, 'T1', 2, 'Plank', '30 s', { prio: 'B' }),
+    R(2, 'T2', 1, 'Martwy ciąg', '3'), R(2, 'W1', 1, 'Przysiad', '5', { own: true })];
+  const G = (week, nr, name, seria, kg, powt, x) => Object.assign({ tydzien: week, jednostka: 'T1', data: '2026-10-0' + (5 + week), nr_cw: nr, cwiczenie: name, seria, kg, powt, rpe: 8, wykonane: 'TAK', typ: '' }, x || {});
+  const logs = [G(1, 1, 'Przysiad', 'R1', 60, 5), G(1, 1, 'Przysiad', 1, 100, 5), G(1, 1, 'Przysiad', 2, 100, 5), G(1, 1, 'Przysiad', 3, 100, 5), G(1, 2, 'Plank', 1, 10, 30),
+    G(2, 1, 'Przysiad', 1, 140, 5)];                                               // wpis tej jednostki z serwera nie jest historią
+  const sessions = [{ tydzien: 1, jednostka: 'T1', czas_min: 64 }];
+  const S = (name, kg, reps, x) => Object.assign({ name, prio: 'A', group: '', kg, reps, rpe: 8, fail: false, timed: false }, x || {});
+  const sets = [S('Przysiad', 105, 5), S('Przysiad', 105, 5), S('Przysiad', 130, 5, { fail: true }), S('Plank', 10, 30, { prio: 'B', timed: true })];
+  const u = L.unitSummary({ week: 2, day: 'T1', plan, logs, sessions, dates: { '1|T1': '2026-10-07' }, stats: { done: 2, all: 6, ton: 1575 }, minutes: 58, sets });
+  assert.deepEqual(u.prev, { week: 1, date: '2026-10-07', ton: 1500, min: 64 });      // bez rozgrzewki i planka na czas; dzień z Sesje.start
+  assert.deepEqual([u.min, u.done, u.all, u.ton, u.dMin, u.dTon], [58, 2, 6, 1575, -6, 5]);
+  assert.deepEqual(u.records, [{ name: 'Przysiad', v: 129.5, delta: 6.2, oly: false }]);   // 105 × (1 + 7/30) wobec 123,3; nieudana się nie liczy
+  // pierwsza taka jednostka, inna jednostka i własny trening: bez porównania; pierwszy wynik ćwiczenia to nie rekord
+  const first = L.unitSummary({ week: 1, day: 'T1', plan, logs, sessions, stats: { done: 3, all: 6, ton: 1500 }, minutes: '', sets: [S('Przysiad', 100, 5)] });
+  assert.deepEqual([first.prev, first.dMin, first.dTon, first.min, first.records], [null, null, null, null, []]);
+  assert.equal(L.unitSummary({ week: 2, day: 'T2', plan, logs, sessions, stats: {}, sets: [S('Martwy ciąg', 150, 3)] }).records.length, 0);
+  assert.equal(L.unitSummary({ week: 2, day: 'W1', plan, logs: logs.concat([G(1, 1, 'Przysiad', 1, 90, 5, { jednostka: 'W1' })]), sessions, stats: { ton: 500 }, sets: [] }).prev, null);
+  // boje: rekord = najcięższe zaliczone kg
+  const oly = L.unitSummary({ week: 2, day: 'T1', plan, logs: [G(1, 1, 'Rwanie', 1, 70, 1)], sessions: [], stats: {}, sets: [S('Rwanie', 72, 1, { group: 'R', rpe: '' }), S('Rwanie', 75, 1, { group: 'R', fail: true })] });
+  assert.deepEqual(oly.records, [{ name: 'Rwanie', v: 72, delta: 2, oly: true }]);
+  assert.equal(oly.prev.min, null);
+});
+
+test('exHistory: ostatnie jednostki z ćwiczeniem do okna „Historia”', () => {
+  const G = (week, seria, kg, powt, x) => Object.assign({ tydzien: week, jednostka: 'T1', data: '2026-10-0' + week, zapisano: '2026-10-0' + week + 'T17:00:00Z', cwiczenie: 'Przysiad', seria, kg, powt, rpe: 8, wykonane: 'TAK', typ: '' }, x || {});
+  const logs = [G(1, 'R1', 60, 5), G(1, 2, 100, 5), G(1, 1, 100, 5), G(1, 3, 105, 3, { rpe: 9 }), G(1, 4, 110, 1, { typ: 'FAIL' }), G(1, 'D1', 80, 8, { typ: 'DROP' }),
+    G(2, 1, '102,5', 5), G(2, 2, '102,5', 4, { cwiczenie: ' przysiad ' }), G(2, 3, 100, 5, { wykonane: '' }),
+    G(3, 1, 105, 5), G(2, 1, 60, 10, { cwiczenie: 'Wiosło' })];
+  const h = L.exHistory(logs, 'Przysiad', 3, 'T1', 5, { '1|T1': '2026-10-02' });
+  assert.deepEqual(h.map(u => [u.week, u.date]), [[2, '2026-10-02'], [1, '2026-10-02']]);   // od najnowszej; tydz. 1 z faktycznym dniem (dates), tydz. 2 z Logu
+  // tydz. 2: dwie serie z tym samym ciężarem razem, niezapisana pominięta, nazwa bez wielkości liter
+  assert.deepEqual(h[0].runs, [{ kg: 102.5, reps: ['5', '4'] }]);
+  assert.deepEqual(h[0].top, { kg: 102.5, reps: 5, rpe: 8, ocena: '' });
+  // tydz. 1: kolejność serii 1, 2, 3, 4, D1; bez rozgrzewki; nieudana jako ✕ i nie jest „najlepszą”
+  assert.deepEqual(h[1].runs, [{ kg: 100, reps: ['5', '5'] }, { kg: 105, reps: ['3'] }, { kg: 110, reps: ['✕'] }, { kg: 80, reps: ['8'] }]);
+  assert.deepEqual(h[1].top, { kg: 105, reps: 3, rpe: 9, ocena: '' });
+  assert.equal(L.exHistory(logs, 'Przysiad', 9, 'T1', 2).length, 2);                 // limit n; bieżąca jednostka (tydz. 3) wtedy też jest historią
+  assert.equal(L.exHistory(logs, 'Przysiad', 9, 'T1', 2)[0].week, 3);
+  assert.deepEqual(L.exHistory(logs, 'Martwy', 3, 'T1'), []);
+  assert.deepEqual(L.exHistory([G(1, 1, 'BW', 12)], 'Przysiad', 3, 'T1')[0].runs, [{ kg: 'BW', reps: ['12'] }]);
+});
+
+test('planEdit: zmiany w jednostce trenera w telefonie (dodaj, usuń, przywróć, zamień na stałe)', () => {
+  const R = (week, day, order, name, x) => Object.assign({ week, day, title: 'Siła', date: '2026-11-0' + week, order, name, prio: 'A', sets: 3, reps: '5', kg: 100, block: week <= 3 ? 'B1' : 'B2', note: '' }, x || {});
+  const plan = [R(1, 'T1', 1, 'Przysiad'), R(1, 'T1', 2, 'Suwnica'), R(2, 'T1', 1, 'Przysiad'), R(2, 'T1', 2, 'Suwnica'), R(2, 'T2', 1, 'Suwnica'),
+    R(3, 'T1', 1, 'Suwnica', { note: 'wolno' }), R(3, 'T1', 2, 'Przysiad'), R(4, 'T1', 1, 'Suwnica')];
+  const E = (e, pl, rm, done) => L.planEdit(pl || plan, rm || [], done || {}, e);
+  // dodanie: tylko ten trening / na stałe (ten sam blok, bez zrobionego tygodnia), numer od 51, pola jak wiersz z getData
+  let r = E({ op: 'add', week: 1, day: 'T1', name: ' Wykroki  z hantlami ', sets: '3', reps: 10, kg: '12,5', infos: [{ n: 'W', u: 'https://x' }], parts: ['pośladki'] });
+  assert.equal(r.n, 1);
+  const a = r.plan[r.plan.length - 1];
+  assert.deepEqual([a.week, a.day, a.order, a.name, a.sets, a.reps, a.kg, a.added, a.block, a.title, a.date, a.prio, a.parts], [1, 'T1', 51, 'Wykroki z hantlami', 3, '10', 12.5, true, 'B1', 'Siła', '2026-11-01', 'A', ['pośladki']]);
+  assert.equal(plan.length, 8);                                                     // dane wejściowe bez zmian
+  assert.equal(L.planEdit(r.plan, [], {}, { op: 'add', week: 1, day: 'T1', name: 'wykroki z hantlami', sets: 3, reps: 10 }).n, 0);   // ta sama zmiana drugi raz (kolejka po ponownym otwarciu) nic nie dubluje
+  r = E({ op: 'add', week: 1, day: 'T1', name: 'Wykroki', sets: 3, reps: 10, forever: true }, null, null, { '2|T1': 1 });
+  assert.deepEqual(r.plan.filter(x => x.added).map(x => x.week), [1, 3]);
+  assert.deepEqual([E({ op: 'add', week: 1, day: 'T1', name: ' ', sets: 3, reps: 10 }).error, E({ op: 'add', week: 1, day: 'T1', name: 'X', sets: 41, reps: 10 }).error, E({ op: 'add', week: 7, day: 'T1', name: 'X', sets: 3, reps: 10 }).error],
+    ['Podaj nazwę ćwiczenia.', 'Serie 1–40 i powtórzenia.', 'Nie ma takiej jednostki w planie.']);
+  // usunięcie na stałe: po nazwie w kolejnych tygodniach tego bloku; wiersze trafiają do „usuniętych” razem z całą treścią
+  r = E({ op: 'del', week: 1, day: 'T1', order: 2, forever: true });
+  assert.equal(r.n, 3);
+  assert.deepEqual(r.plan.map(x => x.week + x.day + x.order), ['1T11', '2T11', '2T21', '3T12', '4T11']);
+  assert.deepEqual(r.removed.map(x => [x.week, x.order, x.name]), [[1, 2, 'Suwnica'], [2, 2, 'Suwnica'], [3, 1, 'Suwnica']]);
+  // kolejne dodane ćwiczenie nie dostaje numeru usuniętego
+  const del51 = L.planEdit(E({ op: 'add', week: 1, day: 'T1', name: 'A', sets: 1, reps: 1 }).plan, [], {}, { op: 'del', week: 1, day: 'T1', order: 51 });
+  assert.equal(L.planEdit(del51.plan, del51.removed, {}, { op: 'add', week: 1, day: 'T1', name: 'B', sets: 1, reps: 1 }).plan.pop().order, 52);
+  // przywrócenie: ta jednostka i kolejne tygodnie; wiersz znany tylko z serwera (bez treści) → partial = trzeba dociągnąć dane
+  const back = L.planEdit(r.plan, r.removed, {}, { op: 'undel', week: 1, day: 'T1', order: 2 });
+  assert.deepEqual([back.n, back.removed.length, back.plan.length, !!back.partial], [3, 0, 8, false]);
+  const srv = L.planEdit(r.plan, [{ week: 1, day: 'T1', order: 2, name: 'Suwnica' }], {}, { op: 'undel', week: 1, day: 'T1', order: 2 });
+  assert.deepEqual([srv.removed.length, srv.plan.length, srv.partial], [0, 5, true]);
+  assert.equal(E({ op: 'undel', week: 1, day: 'T1', order: 1 }).error, 'To ćwiczenie nie jest usunięte.');
+  // zamiana na stałe: tylko kolejne tygodnie (bieżąca jednostka idzie przez Log), ślad w uwagach
+  r = E({ op: 'swap', week: 1, day: 'T1', order: 2, to: 'Przysiad bułgarski', forever: true });
+  assert.deepEqual(r.plan.map(x => x.name), ['Przysiad', 'Suwnica', 'Przysiad', 'Przysiad bułgarski', 'Suwnica', 'Przysiad bułgarski', 'Przysiad', 'Suwnica']);
+  assert.deepEqual([r.n, r.plan[3].note, r.plan[5].note], [2, 'zamiana klienta: Suwnica → Przysiad bułgarski', 'wolno · zamiana klienta: Suwnica → Przysiad bułgarski']);
+  assert.equal(E({ op: 'swap', week: 1, day: 'T1', order: 2, to: 'suwnica' }).error, 'Podaj inne ćwiczenie.');
+  assert.equal(E({ op: 'del', week: 1, day: 'T1', order: 9 }).error, 'Nie ma takiego ćwiczenia w jednostce.');
+});

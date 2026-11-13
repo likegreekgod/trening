@@ -40,7 +40,7 @@ Cel: po „Zakończ i zapisz jednostkę” klient widzi wynik, a nie tylko toast
 - Bez sieci działa tak samo (zapis idzie do kolejki).
 - Przyciski: „Zobacz postęp” (zakładka Postęp → Tydzień), „Zamknij”.
 - **Stan 13.11:** szkic pokazany Damianowi, bez decyzji (szkic trzeba odtworzyć w nowej rozmowie, pliki nie są w repo). Okno `#sheet` „Trening zrobiony” z ✓ w kółku i podtytułem „tytuł · dzień”; pod spodem czas, serie zrobione / plan, tonaż, każde z porównaniem; sekcja „Rekordy z tego treningu” (wiersze `.kv` z `key pr`, znika bez rekordów); bez sieci dopisek „zapiszę, gdy wróci sieć”; przy „Zapisz zmiany” w zapisanej jednostce okna nie ma, zostaje toast.
-- Do decyzji: układ A (trzy kafle z dużymi liczbami, polecany) czy B (lista `.kv` jak w Postępie); porównanie do poprzedniej takiej samej jednostki (polecane; brak poprzedniej = bez porównania) czy do średniej z 4 tygodni.
+- **Ustalone 13.11:** układ A (trzy kafle), porównanie z poprzednią taką samą jednostką (brak poprzedniej = bez porównania). Zrobione w v40.
 
 ### PR 3 · Historia ćwiczenia w karcie
 
@@ -49,6 +49,7 @@ Cel: dotknięcie „Ostatnio: kg × powt. · RPE” pokazuje, jak szło wcześni
 - Dziś „Ostatnio” liczy `lastTop(logs, name, week, day)` (lib.js ok. 200, użycie ok. 1933).
 - Propozycja: „Ostatnio” jako przycisk → `#sheet` z ostatnimi 5 jednostkami tego ćwiczenia (data, najlepsza seria, wszystkie serie w skrócie, RPE), mały wykres `chartLine` (e1RM albo najlepsze kg w bojach, jak w Postęp → Siła: `strengthSeries`).
 - Nowa czysta funkcja np. `exHistory(sets, name, n)` z testem. Zamienione ćwiczenie liczy się pod nazwą wykonaną.
+- **Ustalone 13.11:** wariant A (wykres + lista), „Ostatnio” z podkreśleniem i strzałką ›, 5 ostatnich treningów. Zrobione w v41.
 
 ### PR 4 · Rekord w chwili zapisu
 
@@ -85,6 +86,25 @@ Cel: gdy zapisana seria bije dotychczasowy wynik, klient widzi to od razu.
 - **Raport po bloku dla klienta:** karta w Postępie z danych `computeBlocks_` (wykonanie, tonaż, zmiana e1RM, najlepsze boje). `getData` musiałby zwracać wiersze Bloków klienta; bez „wniosków” trenera, chyba że Damian zdecyduje inaczej.
 - **Notatka trenera do jednostki:** nowa kolumna Planu na końcu nagłówków (np. `uwagi_jedn`, wypełniana w pierwszym wierszu jednostki), pokazana na górze Treningu. Wymaga wpisu w SKILL.md skilla trenera.
 
+### PR 10 · Zmiany w jednostce na miejscu, dla wybranych osób (zgłoszone 13.11)
+
+Cel: wybrana osoba (np. sam Damian) może w trakcie treningu szybko dopasować jednostkę z planu, gdy nie ma sprzętu: **dodać** własne ćwiczenie, **zamienić** albo **usunąć** istniejące.
+
+- Dla kogo: tylko osoby z flagą w zakładce Klienci (nowa kolumna na końcu, np. `edycja` = TAK, zwracana w `cfg`), nigdy po imieniu. Domyślnie wyłączone.
+- Co już jest i wystarczy włączyć tej osobie: zamiana na dowolne ćwiczenie (`zamiana` = DOWOLNA: cała baza + własna nazwa), pominięcie ćwiczenia („Pomiń”, seria 0 SKIP).
+- Czego brakuje: **dodanie ćwiczenia do jednostki z planu**. Dziś własne ćwiczenia można dać tylko do osobnego własnego treningu (W1, W2…). To zmienia decyzję z 22.10 „dopisywanie ćwiczeń do jednostek trenera: na razie nie”.
+- Propozycja do szkicu: przycisk „+ ćwiczenie” pod ostatnią kartą jednostki (tylko z flagą) otwiera tę samą wyszukiwarkę co kreator własnego treningu (`exSearch`, filtr po partii, własna nazwa), z seriami i powtórzeniami; „Usuń” pod „⋯” karty dla ćwiczeń dodanych przez klienta, dla ćwiczeń z planu zostaje „Pomiń”.
+- Wymaga zmian w arkuszu (`apps-script/`): nowa akcja API dopisująca wiersz Planu do istniejącej jednostki z `zrodlo = klient` i kolejnym `nr`, oraz usuwająca taki wiersz. Do ustalenia: jak `mergePlan_` ma traktować dopisane wiersze przy ponownym wczytaniu planu (propozycja: zostają, jak własne treningi) i czy liczą się do wykonania planu w Podsumowaniu (propozycja: nie, jak `own_`).
+- Bez sieci: przez kolejkę, jak własny trening (`applyOwn`).
+- **Ustalone 13.11:** robimy przed PR 4. Przy każdej zmianie (dodanie, zamiana, usunięcie) aplikacja pyta „Na jak długo?”: „Tylko dziś” albo „Na stałe” (= także kolejne tygodnie tej samej jednostki, do końca obecnego planu).
+- Szkic pokazany 13.11 (pliki poza repo, do odtworzenia skryptem z atrapą): przycisk „+ Ćwiczenie” pod ostatnią kartą; okno „Dodaj ćwiczenie” (szukaj, serie / powt. / kg, „Na jak długo?”); „Usuń z treningu…” pod „⋯” karty z tym samym pytaniem. Czeka na akceptację i decyzję, czy „Usuń” dotyczy też ćwiczeń z planu (rekomendacja: tak, ale wiersz Planu nie jest kasowany, zostaje ślad „usunięte przez klienta” i ćwiczenie nie liczy się do wykonania; „Pomiń” zostaje jako „dziś nie zrobiłem”).
+
+### PR 11 · Dwie poprawki karty (zgłoszone 13.11 na zrzutach; odczyt potwierdzony)
+
+- **Nazwa ćwiczenia przypięta u góry:** przy długiej karcie (rozgrzewki + serie) po przewinięciu nie widać, które to ćwiczenie. Nazwa ma zostać na górze ekranu, dopóki karta jest na ekranie, i zniknąć, gdy karta się kończy. Uwaga na chowany górny pasek (`header.hid`) i ramkę obwodu.
+- **Komentarz do ćwiczenia w osobnym oknie:** zamiast pola „Twój komentarz” w karcie okno `#sheet`; gdy komentarz już jest, okno go poprawia (aktualizuje), a nie dodaje kolejnego. Wpisany komentarz dalej widoczny w karcie jako tekst.
+- **Szkic pokazany 13.11** (pliki poza repo): nazwa przypięta w wariancie A (pełny nagłówek karty, nazwa w dwóch liniach) albo B (jedna linia z wielokropkiem, niższy pasek), w obu ▶ / „⋯” / strzałka zostają; komentarz w karcie jako tekst z ołówkiem, dotknięcie otwiera okno „Komentarz” z „Zapisz zmiany”, „Usuń komentarz”, „Anuluj”. **Ustalone 13.11:** nazwa w wariancie B, komentarz jak na szkicu. Zrobione w v43.
+
 ## Otwarte pytania do Damiana (zadaj przy odpowiednim PR)
 
 1. PR 1: które akcje zostają na wierzchu karty, a które idą pod „⋯”.
@@ -103,11 +123,13 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | PR | Zakres | Stan |
 |---|---|---|
 | 1 | Lżejsza karta ćwiczenia | zrobione (v38, scalone) + poprawka v39 (etykieta w linii, „⋯” jednostki w górnym pasku) |
-| 2 | Podsumowanie po treningu | do zrobienia (szkic) |
-| 3 | Historia ćwiczenia w karcie | do zrobienia (szkic) |
+| 2 | Podsumowanie po treningu | zrobione (v40): układ A (kafle), porównanie z poprzednią taką samą jednostką; lib `unitSummary`, `doneSummary` / `openDone` |
+| 3 | Historia ćwiczenia w karcie | zrobione (v41): wariant A (wykres + 5 treningów), „Ostatnio” jako przycisk; lib `exHistory`, `openHist`, `effTxt` |
 | 4 | Rekord w chwili zapisu | do zrobienia (szkic) |
 | 5 | Ekran „dziś” | po decyzji |
 | 6 | Ruch i timer | po decyzji |
 | 7 | Podpowiedzi przy pierwszym użyciu | po decyzji |
 | 8 | Tryb skupienia | po decyzji, osobny szkic |
 | 9 | Raport po bloku, notatka do jednostki | po decyzji |
+| 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zrobione (v42 + `apps-script/`): flaga Klienci N `edycja`, API `editPlan`, lib `planEdit`; szczegóły w `decyzje.md` |
+| 11 | Przypięta nazwa ćwiczenia przy przewijaniu; komentarz do ćwiczenia w osobnym oknie | zrobione (v43): nazwa przypięta w wariancie B (`stickDraw`, `.ch.stuck`), komentarz w oknie (`openNote`) |

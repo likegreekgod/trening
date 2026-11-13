@@ -2,6 +2,40 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-13 · Przypięta nazwa ćwiczenia i komentarz w oknie (v43, plan v4 PR 11)
+
+- Zgłoszone przez Damiana na zrzutach z telefonu: w długiej karcie (rozgrzewki + serie) po przewinięciu nie widać, które to ćwiczenie; pole komentarza w karcie ma być osobnym oknem.
+- Nazwa: nagłówek otwartej karty przypina się u góry ekranu (pod górnym paskiem aplikacji, a gdy pasek jest schowany, na samej górze) i odjeżdża razem z końcem karty. Wybrany wariant B: po przypięciu nazwa w jednej linii z wielokropkiem, pasek ok. 50 px; ikony ▶ / „⋯” / strzałka zostają. Odrzucony wariant A (pełna nazwa w dwóch liniach, wyższy pasek). Zwinięta karta nie przypina nazwy.
+- Komentarz: jeden na ćwiczenie. W karcie jest tekstem z ołówkiem (pusty niewidoczny); dotknięcie albo „⋯” → Komentarz otwiera okno z tym samym komentarzem: „Zapisz zmiany”, „Usuń komentarz”, „Anuluj”. Zapis komentarza nie przerysowuje karty, więc wpisane, niezapisane serie zostają. Zapis do Logu bez zmian (`setNote`, `logNote`).
+
+## 2026-11-13 · Zmiany w jednostce trenera dla wybranych osób (v42, plan v4 PR 10)
+
+- Flaga: Klienci N `edycja` = TAK (`cfg.edit`), domyślnie wyłączone. Tylko jednostki trenera, niezakończone; własny trening ma swój kreator.
+- Trzy zmiany, każda z pytaniem „Na jak długo?”: „Tylko ten trening” albo „Na stałe” (= także kolejne tygodnie tej samej jednostki w tym samym bloku, niezrobione; ćwiczenie szukane po nazwie). W szkicu było „Tylko dziś”; zmienione, bo jednostka nie zawsze jest dzisiejsza.
+  - „+ ćwiczenie” pod ostatnią kartą: wyszukiwarka bazy albo własna nazwa, serie / powt. / kg; wiersz Planu z `zrodlo = dodane`, `nr` od 51.
+  - „Usuń z treningu…” pod „⋯” karty: wiersz Planu zostaje ze `zrodlo = usuniete` (ślad dla trenera), ćwiczenie znika z aplikacji; na dole treningu lista usuniętych z „Przywróć” (przywraca ten i kolejne tygodnie). Ostatniego ćwiczenia jednostki usunąć się nie da. „Pomiń” zostaje jako „dziś nie zrobiłem”.
+  - „Zamień ćwiczenie”: bieżąca jednostka jak dotąd (Log `zamiana`), „Na stałe” zmienia nazwę w kolejnych tygodniach i dopisuje do uwag „zamiana klienta: A → B”; kg i powtórzenia z planu zostają.
+- Arkusz: dodane i usunięte wiersze są poza planem trenera (nie liczą się do wykonania, jednostek ani zaległych; zrobione serie liczą się do objętości). Ponowne wczytanie planu ich nie kasuje: usunięte zostają usunięte (po nazwie), dodane wracają, jeśli jednostka jest w pliku; w Import „zachowano n zmian klienta”. Zamiana na stałe nie przetrwa ponownego wczytania tego samego planu (plik ma starą nazwę).
+- Odrzucone: prawdziwe kasowanie wiersza Planu (nie do cofnięcia, wraca po wczytaniu planu); wybór miejsca nowego ćwiczenia (zawsze na końcu).
+- Odwraca ustalenie z 22.10 („dopisywanie ćwiczeń do jednostek trenera: na razie nie”) dla osób z flagą.
+
+## 2026-11-13 · Do zrobienia: zmiany w jednostce na miejscu dla wybranych osób
+
+- Damian chce, żeby wybrane osoby (np. on sam) mogły w jednostce z planu szybko dodać własne ćwiczenie, zamienić albo usunąć istniejące, np. gdy nie ma sprzętu. Włączane flagą w Klientach, nie po imieniu.
+- To odwraca ustalenie z 22.10 („dopisywanie ćwiczeń do jednostek trenera: na razie nie”) dla osób z flagą. Zakres i pytania: `docs/plan-v4.md`, PR 10. Jeszcze nic nie zakodowane.
+
+## 2026-11-13 · Historia ćwiczenia w karcie (v41, plan v4 PR 3)
+
+- „Ostatnio: …” w karcie jest przyciskiem (podkreślenie i strzałka › w kolorze akcentu, cel dotyku 44 px) i otwiera okno „Historia”: mały wykres siły (e1RM, w bojach najlepsze zaliczone kg; rekordy kropką akcentu, liczone z całej wcześniejszej historii) i 5 ostatnich jednostek z tym ćwiczeniem bez bieżącej: dzień, wszystkie serie w skrócie („100 × 5 · 5 · 5”, nieudana „✕”), najlepsza seria i wysiłek (RPE / RIR / słownie w PROSTYM / ocena podejścia w bojach).
+- Wybrane ze szkicu: wariant A (wykres + lista), 5 treningów. Odrzucone: sama lista, „Historia” pod „⋯”, 10 treningów (okno wymagałoby przewijania).
+- Jeden wcześniejszy trening albo ćwiczenie na czas: lista bez wykresu. Brak historii: „Ostatnio” nie ma, jak dotąd. Zamienione ćwiczenie liczy się pod nazwą wykonaną. Dane z telefonu (`exHistory`), bez zmian w arkuszu i zapisie.
+
+## 2026-11-13 · Okno „Trening zrobiony” (v40, plan v4 PR 2)
+
+- Po „Zakończ i zapisz” nowej jednostki otwiera się okno: czas, serie zrobione / plan, tonaż w trzech kaflach (układ A ze szkicu), rekordy z tej jednostki, „Zamknij” i „Zobacz postęp” (Postęp → Tydzień, z dociągnięciem świeżych danych). Poprawka już zapisanej jednostki („Zapisz zmiany”) daje tylko komunikat.
+- Porównanie czasu i tonażu: z poprzednią taką samą jednostką, czyli tym samym `day` (np. T1) w najbliższym wcześniejszym tygodniu z zapisanymi seriami, także z poprzedniego bloku. Bez poprzedniej (pierwszy tydzień, własny trening) same liczby. Odrzucone: średnia z 4 tygodni (porównuje różne treningi).
+- Rekord liczony jak w Postępie (ćwiczenia A: e1RM, w bojach najcięższe zaliczone kg) wobec całej wcześniejszej historii; pierwszy wynik ćwiczenia to nie rekord. Wszystko liczone w telefonie (`unitSummary`), bez zmian w arkuszu i zapisie; bez sieci okno ma dopisek, że zapis czeka.
+
 ## 2026-11-13 · Niższe karty i „⋯” jednostki (v39)
 
 - Po próbie v38 na telefonie: etykieta priorytetu pod nazwą dawała dodatkowy rząd w każdej karcie. Teraz w zwiniętej karcie stoi w linii z wynikiem („KOREKCJA 2 z 2 serii · ✓”), w otwartej na początku recepty.
