@@ -7,7 +7,10 @@ Stan na 2026-11-13, aplikacja v40.
 ## Jak pracujemy
 
 - Repo: `C:\Users\dt\Desktop\trening-repo`. Sesję Claude Code otwieraj w tym folderze, wtedy `CLAUDE.md` wczytuje się sam.
-- Zmiana = gałąź → `npm test` (wszystko zielone) → push → link `compare/main...gałąź?expand=1&title=…&body=…` dla Damiana. Scala sam i pisze „ok”. Brak `gh`; stan sprawdzaj przez publiczne API GitHuba.
+- Zmiana = gałąź → `npm test` (wszystko zielone) → commit i push gałęzi (kontener sesji jest tymczasowy). Brak `gh`; stan sprawdzaj przez publiczne API GitHuba.
+- **PR (link `compare/main...gałąź?expand=1&title=…&body=…`) dopiero, gdy wszystko jest ustalone i Damian wyraźnie pozwoli** (ustalenie 13.11). Do tego czasu pokazuj zrzuty i opis, poprawki dokładaj na tę samą gałąź. Scala sam i pisze „ok”.
+- **Po zakończeniu zadania od razu oznacz je w plikach md jako zrobione** (ten plik, tabela „Stan” w planie, `decyzje.md` przy nowym ustaleniu), w tym samym commicie co kod, bez czekania na scalenie.
+- **Przy testach tłumacz Damianowi prostym językiem**: co test sprawdza, jak to robi i dlaczego, oraz co znaczył każdy błąd po drodze i jak został naprawiony. Chce rozumieć, co dzieje się w kodzie.
 - Scalenie `web/**` publikuje aplikację (GitHub Pages; podbij `VERSION` w `web/sw.js`), scalenie `apps-script/**` wdraża skrypt (Action z clasp). `clasp push` z komputera jest zablokowany.
 - Zmiany wyglądu: najpierw szkic do akceptacji, potem kod. Po każdym zadaniu odpowiedź kończy się listą zadań.
 - Pomiar ładowania: `getData` zwraca `ms` z czasami etapów (16.10: skrypt 2,0–2,8 s, całość 3,3–4,8 s).

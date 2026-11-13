@@ -3,6 +3,7 @@
 Aplikacja, w której klienci trenera personalnego (ciężary, siła, sylwetka) widzą plan i zapisują wykonanie: serie, RPE, filmy, ból i samopoczucie. Dane trafiają do Arkusza Google Damiana, filmy na jego Google Drive. Arkusz liczy tygodniowe podsumowanie obciążenia ze statusem (za dużo / uwaga / OK / za lekko).
 
 Rozmawiaj z Damianem po polsku, zwięźle. Interfejs aplikacji jest po polsku.
+Zasady pracy (PR dopiero po zgodzie Damiana, oznaczanie zadań w md od razu, tłumaczenie testów) są w `docs/stan.md`, „Jak pracujemy”.
 
 ## Dokumenty
 
