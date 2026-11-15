@@ -535,6 +535,9 @@
   .lights i{width:14px;height:14px;border-radius:50%;background:var(--light-off);display:block}
   .lights i.w{background:var(--light-white)}
   .lights i.r{background:var(--light-red)}
+  .rec{display:flex;align-items:center;gap:8px;padding:2px 0 8px;border-bottom:1px solid var(--line);font:600 14px/1.3 var(--f-body);color:var(--ink-2)}
+  .rec b{flex:none;font:700 13px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;background:var(--accent);color:var(--on-accent);padding:5px 8px;border-radius:999px}
+  .set.isrec{border-bottom:0}
   .rate{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:6px 0;border-bottom:1px solid var(--line)}
   .rate button{min-height:56px;border:1px solid var(--light-off);border-radius:var(--r);background:var(--panel);color:var(--light-white);
                display:grid;justify-items:center;align-content:center;gap:3px;padding:6px}
@@ -718,7 +721,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
   isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit } = window.TL;
 
 /* ---------- kolejka offline ---------- */
@@ -2495,12 +2498,30 @@ function sessCard(s0){
     <label for="snote">Uwagi dla trenera</label><textarea id="snote" rows="3">${esc(s.uwagi || '')}</textarea>
     <div style="height:10px"></div><button class="btn p" id="saveSess">${s.id ? 'Zapisz zmiany' : 'Zakończ i zapisz ' + (SIMPLE ? 'trening' : 'jednostkę')}</button></div>`;
 }
+/** zaliczone serie bieżącej jednostki z telefonu (bez rozgrzewki i pominięć) w kształcie dla lib unitSummary / unitRecord */
+function unitSets(exs){
+  const sets = [];
+  exs.forEach(ex => { const L2 = exLogs(ex); Object.keys(L2).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999)).forEach(k => { const l = L2[k];
+    if (l.wykonane !== 'TAK' || /^R/i.test(k) || /SKIP/.test(l.typ || '')) return;
+    sets.push({ set: k, name: ex.name, prio: ex.prio, group: ex.group, kg: num(l.kg), reps: num(l.powt), rpe: num(l.rpe), fail: /FAIL/.test(l.typ || ''), timed: !!timeUnit(ex.reps) }); }); });
+  return sets;
+}
+/** rekord w chwili zapisu: pasek pod najlepszą serią ćwiczenia głównego, gdy bije całą wcześniejszą historię (lib unitRecord) */
+function recDraw(ex){
+  if (!ex) return;
+  document.querySelectorAll(`.rec[data-o="${ex.order}"]`).forEach(x => x.remove());
+  document.querySelectorAll(`.set.isrec[data-o="${ex.order}"]`).forEach(x => x.classList.remove('isrec'));
+  if (ex.prio !== 'A' || timeUnit(ex.reps)) return;
+  const r = unitRecord({ week: cur.week, day: cur.day, plan: PLAN, logs: (DATA && DATA.logs) || [], dates: unitDays(), sets: unitSets([ex]) }, ex.name);
+  const row = r && document.querySelector(`.set[data-o="${ex.order}"][data-s="${r.set}"]`);
+  if (!row) return;
+  row.classList.add('isrec');
+  row.insertAdjacentHTML('afterend', `<div class="rec" data-o="${ex.order}" role="status"><b>★ Rekord</b><span>${
+    SIMPLE ? 'Najlepszy wynik w tym ćwiczeniu' : (r.oly ? 'najlepsze zaliczone ' : 'szacowane maks. ') + kgTxt(r.v) + ' kg · było ' + kgTxt(r.was)}</span></div>`);
+}
 /** dane do okna „Trening zrobiony”: bieżąca jednostka z telefonu, porównanie i rekordy z historii (lib unitSummary) */
 function doneSummary(minutes){
-  const exs = curExs(), sets = [];
-  exs.forEach(ex => { const L2 = exLogs(ex); Object.keys(L2).forEach(k => { const l = L2[k];
-    if (l.wykonane !== 'TAK' || /^R/i.test(k) || /SKIP/.test(l.typ || '')) return;
-    sets.push({ name: ex.name, prio: ex.prio, group: ex.group, kg: num(l.kg), reps: num(l.powt), rpe: num(l.rpe), fail: /FAIL/.test(l.typ || ''), timed: !!timeUnit(ex.reps) }); }); });
+  const exs = curExs(), sets = unitSets(exs);
   const u = unitList().find(x => x.week === cur.week && x.day === cur.day);
   return Object.assign(unitSummary({ week: cur.week, day: cur.day, plan: PLAN, logs: (DATA && DATA.logs) || [], sessions: (DATA && DATA.sessions) || [],
     dates: unitDays(), stats: unitStats(exs, exLogs), minutes, sets }), { title: (u && u.title) || '', date: localDate() });
@@ -2659,7 +2680,7 @@ function bindRow(row, ex, s0){
     if (!was && st && kind !== 'w' && !isEmom(ex) && !inGrp) startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce; EMOM ma zegar minut
     putLocal(ex, p);
     if (st) followRow(row);
-    refreshStats(); updateSug(ex); refreshAll(ex.order, !!st && !wasDone);
+    refreshStats(); updateSug(ex); recDraw(ex); refreshAll(ex.order, !!st && !wasDone);
     if (inGrp) { if (!was && st && kind !== 'w') grpAfter(ex); else grpDraw(grpOf(ex.order).id); }
     send('logSet', p).then(() => { if (row.dataset.st === st) setState(row, st); }).catch(() => {});
     const em = document.querySelector(`.emom[data-emom="${ex.order}"]`); if (em && em._draw) em._draw();
@@ -2702,6 +2723,7 @@ function bind(exs, s0){
       if (k === 'd' && rs.length <= plannedDrops(ex)) return;       // drop z planu – nie usuwamy
       last.querySelector('.n').insertAdjacentHTML('beforeend', '<button class="del" aria-label="usuń serię">✕</button>');
     });
+    recDraw(ex);                                                    // pasek rekordu zostaje pod swoją serią po dodaniu / usunięciu wiersza
     const b = document.querySelector(`[data-extra="${o}"]`);
     if (b) { const left = allowedExtra(ex) - rowsOf(o, 'x').length; b.disabled = left <= 0; b.textContent = '+ seria (' + Math.max(0, left) + ')'; }
   };

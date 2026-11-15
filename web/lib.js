@@ -709,6 +709,24 @@
    * (własny trening nie ma poprzedniej). Rekord = wynik lepszy od całej wcześniejszej historii ćwiczenia głównego (A),
    * liczony jak w Postępie; pierwszy wynik w historii to jeszcze nie rekord.
    */
+  /**
+   * Rekord ćwiczenia głównego (prio A) w bieżącej jednostce: najlepsza zaliczona seria (e1RM, w bojach kg), jeśli bije całą
+   * wcześniejszą historię (bez tej jednostki). d jak w unitSummary; sets: [{set, name, prio, group, kg, reps, rpe, fail, timed}].
+   * Zwraca {set, v, was, oly} albo null (brak historii = brak rekordu; przy remisie pierwsza z najlepszych serii).
+   */
+  L.unitRecord = (d, name) => {
+    const week = Number(d.week), day = String(d.day);
+    const now = (d.sets || []).filter(x => x.name === name && x.prio === 'A' && !x.fail && !x.timed).map(x => Object.assign({}, x, { grp: L.groupOf(x.group, x.name) }));
+    if (!now.length) return null;
+    const hist = L.doneSets((d.logs || []).filter(l => !(Number(l.tydzien) === week && String(l.jednostka) === day)), d.plan || [], d.dates || {});
+    const was = Math.max(0, ...L.strengthSeries(hist, name).map(p => p.v));
+    const oly = now.some(x => x.grp === 'R' || x.grp === 'P');
+    let top = null;
+    now.forEach(x => { const v = oly ? x.kg : L.e1rm(x.kg, x.reps, x.rpe); if (v > 0 && (!top || v > top.v)) top = { set: x.set, v }; });
+    if (!top) return null;
+    const v = Math.round(top.v * 10) / 10;
+    return was > 0 && v > was ? { set: top.set, v, was, oly } : null;
+  };
   L.unitSummary = d => {
     const plan = d.plan || [], logs = d.logs || [], st = d.stats || {}, week = Number(d.week), day = String(d.day);
     const mine = l => Number(l.tydzien) === week && String(l.jednostka) === day;
@@ -728,15 +746,10 @@
       const ses = (d.sessions || []).find(x => Number(x.tydzien) === w && String(x.jednostka) === day), min = ses ? nf(ses.czas_min) : NaN;
       prev = { week: w, date: (d.dates || {})[w + '|' + day] || date, ton: Math.round(ton), min: min > 0 ? Math.round(min) : null };
     }
-    const hist = L.doneSets(logs.filter(l => !mine(l)), plan, d.dates || {}), recs = [];
-    const now = (d.sets || []).filter(x => x.prio === 'A' && !x.fail && !x.timed).map(x => Object.assign({}, x, { grp: L.groupOf(x.group, x.name) }));
-    [...new Set(now.map(x => x.name))].forEach(name => {
-      const oly = now.some(x => x.name === name && (x.grp === 'R' || x.grp === 'P'));
-      const was = Math.max(0, ...L.strengthSeries(hist, name).map(p => p.v));
-      const best = Math.max(0, ...now.filter(x => x.name === name).map(x => oly ? x.kg : L.e1rm(x.kg, x.reps, x.rpe)).filter(v => v > 0));
-      const v = Math.round(best * 10) / 10;
-      if (was > 0 && v > was) recs.push({ name, v, delta: Math.round((v - was) * 10) / 10, oly });
-    });
+    const recs = [...new Set((d.sets || []).filter(x => x.prio === 'A').map(x => x.name))].map(name => {
+      const r = L.unitRecord(d, name);
+      return r && { name, v: r.v, delta: Math.round((r.v - r.was) * 10) / 10, oly: r.oly };
+    }).filter(Boolean);
     const min = nf(d.minutes) > 0 ? Math.round(nf(d.minutes)) : null, ton = Number(st.ton) || 0;
     return { min, done: Number(st.done) || 0, all: Number(st.all) || 0, ton, prev,
       dMin: prev && prev.min && min ? min - prev.min : null,

@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-15, aplikacja v43 (PR #65 scalony: v40–v43 i zmiany w `apps-script/`).
+Stan na 2026-11-15, aplikacja v44 (v44 na gałęzi `ccr-d54c063c-bc9jh1`, bez PR; `main` = v43 po PR #65).
 
 ## Jak pracujemy
 
@@ -18,6 +18,7 @@ Stan na 2026-11-15, aplikacja v43 (PR #65 scalony: v40–v43 i zmiany w `apps-sc
 
 ## Ostatnio zrobione
 
+- 15.11 (v44): plan v4 PR 4: rekord w chwili zapisu serii, pasek „★ Rekord” pod najlepszą serią ćwiczenia głównego (PRO z liczbami, PROSTY bez).
 - 13.11 (v43): plan v4 PR 11: nazwa ćwiczenia przypięta u góry przy przewijaniu długiej karty; komentarz do ćwiczenia w osobnym oknie (poprawia istniejący).
 - 13.11 (v42 + `apps-script/`): plan v4 PR 10: osoby z flagą `edycja` (Klienci N = TAK) mogą w jednostce trenera dodać ćwiczenie, usunąć je ze śladem i zamienić, tylko w tym treningu albo na stałe.
 - 13.11 (v41): plan v4 PR 3: „Ostatnio” w karcie otwiera okno „Historia” (wykres siły i 5 ostatnich treningów z tym ćwiczeniem).
@@ -38,11 +39,12 @@ Stan na 2026-11-15, aplikacja v43 (PR #65 scalony: v40–v43 i zmiany w `apps-sc
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 4 (rekord w chwili zapisu serii): szkic pokazany 15.11, czeka na wybór wariantu. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 5 (ekran „dziś”), po decyzji Damiana, czy dalej chce; najpierw szkic. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- Decyzja do szkicu PR 4 (rekord przy zapisie): wariant A (pasek pod serią) czy B (gwiazdka + komunikat), czy też w PROSTYM, czy tylko ćwiczenia główne.
+- Zgoda na PR z v44 (rekord przy zapisie serii) i próba na telefonie po scaleniu.
+- Decyzja, czy robimy PR 5 (ekran „dziś”).
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
 
