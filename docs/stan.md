@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-13, aplikacja v43 (v40–v43 i zmiany w `apps-script/` w PR #65, czeka na scalenie).
+Stan na 2026-11-15, aplikacja v43 (PR #65 scalony: v40–v43 i zmiany w `apps-script/`).
 
 ## Jak pracujemy
 
@@ -38,12 +38,12 @@ Stan na 2026-11-13, aplikacja v43 (v40–v43 i zmiany w `apps-script/` w PR #65,
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 4 (rekord w chwili zapisu serii: szkic i pytanie, czy też w trybie PROSTY). Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 4 (rekord w chwili zapisu serii): szkic pokazany 15.11, czeka na wybór wariantu. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- Scalenie PR #65 (v40–v43 + `apps-script/`: PR 2, 3, 10 i 11 planu v4), założonego 13.11 za zgodą Damiana.
-- Po scaleniu: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
+- Decyzja do szkicu PR 4 (rekord przy zapisie): wariant A (pasek pod serią) czy B (gwiazdka + komunikat), czy też w PROSTYM, czy tylko ćwiczenia główne.
+- Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
 
 Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPhone, własny trening, kolejka filmów, ścieżka sztangi) Damian potwierdził 13.11 jako zrobione.
