@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-15, aplikacja v44 (v44 na gałęzi `ccr-d54c063c-bc9jh1`, bez PR; `main` = v43 po PR #65).
+Stan na 2026-11-15, aplikacja v44 (v44 w PR #66, czeka na scalenie; `main` = v43 po PR #65).
 
 ## Jak pracujemy
 
@@ -43,7 +43,7 @@ Stan na 2026-11-15, aplikacja v44 (v44 na gałęzi `ccr-d54c063c-bc9jh1`, bez PR
 
 ## Czeka na Damiana
 
-- Zgoda na PR z v44 (rekord przy zapisie serii) i próba na telefonie po scaleniu.
+- Scalenie PR #66 (v44, rekord przy zapisie serii), założonego 15.11 za zgodą Damiana; potem próba na telefonie.
 - Decyzja, czy robimy PR 5 (ekran „dziś”).
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
