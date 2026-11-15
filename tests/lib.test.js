@@ -528,6 +528,25 @@ test('unitSummary: okno „Trening zrobiony” – porównanie z poprzednią tak
   assert.equal(oly.prev.min, null);
 });
 
+test('unitRecord: rekord w chwili zapisu – która seria i o ile, tylko ćwiczenia główne', () => {
+  const R = (week, order, name, x) => Object.assign({ week, day: 'T1', order, name, prio: 'A', sets: 3, reps: '5', group: '' }, x || {});
+  const plan = [R(1, 1, 'Przysiad'), R(2, 1, 'Przysiad'), R(1, 2, 'Rwanie', { group: 'R' }), R(2, 2, 'Rwanie', { group: 'R' })];
+  const G = (week, nr, name, seria, kg, powt, x) => Object.assign({ tydzien: week, jednostka: 'T1', data: '2026-10-0' + (5 + week), nr_cw: nr, cwiczenie: name, seria, kg, powt, rpe: 8, wykonane: 'TAK', typ: '' }, x || {});
+  const logs = [G(1, 1, 'Przysiad', 1, 100, 5), G(1, 2, 'Rwanie', 1, 70, 1), G(2, 1, 'Przysiad', 1, 200, 5)];   // wpis bieżącej jednostki to nie historia
+  const S = (set, name, kg, reps, x) => Object.assign({ set: String(set), name, prio: 'A', group: '', kg, reps, rpe: 8, fail: false, timed: false }, x || {});
+  const d = sets => ({ week: 2, day: 'T1', plan, logs, sets });
+  // 100 × 5 @8 = 123,3; seria 2 (105 × 5 = 129,5) bije historię, seria 1 nie; remis = pierwsza z najlepszych
+  assert.deepEqual(L.unitRecord(d([S(1, 'Przysiad', 100, 5), S(2, 'Przysiad', 105, 5), S(3, 'Przysiad', 105, 5)]), 'Przysiad'), { set: '2', v: 129.5, was: 123.3, oly: false });
+  assert.equal(L.unitRecord(d([S(1, 'Przysiad', 100, 5)]), 'Przysiad'), null);                          // wyrównanie to nie rekord
+  assert.equal(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { fail: true })]), 'Przysiad'), null);          // nieudana
+  assert.equal(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { prio: 'B' })]), 'Przysiad'), null);           // tylko główne
+  assert.equal(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { timed: true })]), 'Przysiad'), null);         // na czas
+  assert.equal(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { rpe: '' })]), 'Przysiad'), null);             // bez RPE nie ma e1RM
+  assert.equal(L.unitRecord(d([S(1, 'Wiosłowanie', 60, 8)]), 'Wiosłowanie'), null);                     // pierwszy raz = brak punktu odniesienia
+  // boje: najcięższe zaliczone kg, RPE niepotrzebne
+  assert.deepEqual(L.unitRecord(d([S(1, 'Rwanie', 72, 1, { group: 'R', rpe: '' }), S(2, 'Rwanie', 75, 1, { group: 'R', fail: true })]), 'Rwanie'), { set: '1', v: 72, was: 70, oly: true });
+});
+
 test('exHistory: ostatnie jednostki z ćwiczeniem do okna „Historia”', () => {
   const G = (week, seria, kg, powt, x) => Object.assign({ tydzien: week, jednostka: 'T1', data: '2026-10-0' + week, zapisano: '2026-10-0' + week + 'T17:00:00Z', cwiczenie: 'Przysiad', seria, kg, powt, rpe: 8, wykonane: 'TAK', typ: '' }, x || {});
   const logs = [G(1, 'R1', 60, 5), G(1, 2, 100, 5), G(1, 1, 100, 5), G(1, 3, 105, 3, { rpe: 9 }), G(1, 4, 110, 1, { typ: 'FAIL' }), G(1, 'D1', 80, 8, { typ: 'DROP' }),

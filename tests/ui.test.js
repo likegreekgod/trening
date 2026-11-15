@@ -1835,3 +1835,49 @@ test('Karta v4: „+ seria (n)” wyszarza się po zużyciu limitu, pusty koment
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
+
+test('Rekord przy zapisie serii: pasek pod najlepszą serią ćwiczenia głównego (PRO z liczbami, PROSTY bez), znika po cofnięciu', async () => {
+  const N = 'Wyciskanie sztangi na ławce płaskiej';
+  const R = (w, d, o, name, x) => Object.assign({ week: w, day: 'T1', title: 'FBW A', date: d, order: o, name, prio: 'A', sets: 3, reps: '6–8', pct: null, kg: 50, rpe: 8, note: '', extra: null, drop: 0 }, x || {});
+  const G = (o, name, s, kg) => ({ id: `robert|1|T1|${o}|${s}`, zapisano: '2026-11-08T17:00:00.000Z', cwiczenie: name, tydzien: 1, jednostka: 'T1', data: '2026-11-08', nr_cw: o, seria: s, kg, powt: 8, rpe: 8, wykonane: 'TAK', typ: '' });
+  const mk = simple => ({ cfg: { name: 'Robert', pain: false, simple, extra: 1 },
+    plan: [R(1, '2026-11-08', 1, N), R(1, '2026-11-08', 2, 'Uginanie ramion', { prio: 'B', kg: 10 }),
+      R(2, '2026-11-15', 1, N, { kg: 52.5 }), R(2, '2026-11-15', 2, 'Uginanie ramion', { prio: 'B', kg: 12.5 })],
+    logs: [G(1, N, 1, 50), G(2, 'Uginanie ramion', 1, 10)], sessions: [{ id: 'robert|1|T1', tydzien: 1, jednostka: 'T1', data: '2026-11-08', czas_min: 50 }] });
+  const row = (o, s) => `.set[data-o="${o}"][data-s="${s}"]`;
+  // PRO
+  let calls = [], { ctx, p } = await page(calls, false, { data: mk(false) });
+  await p.goto(base + '?k=k0123456789a'); await p.waitForSelector(row(1, 1));
+  await p.fill(row(1, 1) + ' .reps', '8'); await p.selectOption(row(1, 1) + ' .rpe', '8');
+  await p.click(row(1, 1) + ' .ok'); await p.waitForSelector('.rec');
+  assert.match((await p.textContent('.rec')).replace(/\s+/g, ' '), /★ Rekord.*szacowane maks\. 70 kg · było 66,7/);
+  assert.ok(await p.$eval(row(1, 1), r => r.classList.contains('isrec') && r.nextElementSibling.classList.contains('rec')));
+  const ls = calls.filter(c => c.fn === 'logSet').pop().args[0];
+  assert.deepEqual([ls.kg, ls.reps, ls.rpe, ls.done, ls.typ], [52.5, 8, 8, true, '']);          // zapis serii bez zmian
+  await p.screenshot({ path: path.join(SCREENS, 'rekord-pro-jasny.png') });
+  // lepsza seria 2 → pasek przechodzi pod nią (jeden na ćwiczenie)
+  await p.fill(row(1, 2) + ' .kg', '55'); await p.fill(row(1, 2) + ' .reps', '8'); await p.selectOption(row(1, 2) + ' .rpe', '8');
+  await p.click(row(1, 2) + ' .ok'); await p.waitForFunction(() => /73,3/.test((document.querySelector('.rec') || {}).textContent || ''));
+  assert.equal(await p.$$eval('.rec', x => x.length), 1);
+  assert.ok(await p.$eval(row(1, 2), r => r.nextElementSibling.classList.contains('rec')));
+  // seria 2 nieudana → rekord wraca pod serię 1; obie cofnięte → brak paska
+  await p.click(row(1, 2) + ' .ok'); await p.waitForFunction(() => /70 kg/.test((document.querySelector('.rec') || {}).textContent || ''));
+  await p.click(row(1, 1) + ' .ok'); await p.click(row(1, 1) + ' .ok'); await p.waitForFunction(() => !document.querySelector('.rec'));
+  // ćwiczenie uzupełniające (B): bez paska mimo lepszego wyniku
+  await p.fill(row(2, 1) + ' .reps', '8'); await p.selectOption(row(2, 1) + ' .rpe', '8'); await p.click(row(2, 1) + ' .ok'); await p.waitForTimeout(200);
+  assert.equal(await p.$('.rec'), null);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+  // PROSTY, ciemny: bez liczb; pasek jest też po ponownym otwarciu (z kolejki / pamięci telefonu)
+  calls = []; ({ ctx, p } = await page(calls, false, { data: mk(true), scheme: 'dark' }));
+  await p.goto(base + '?k=k0123456789a'); await p.waitForSelector(row(1, 1));
+  await p.fill(row(1, 1) + ' .reps', '8'); await p.selectOption(row(1, 1) + ' .rpe', { label: 'Średnio' });
+  await p.click(row(1, 1) + ' .ok'); await p.waitForSelector('.rec');
+  assert.match(await p.textContent('.rec'), /Najlepszy wynik w tym ćwiczeniu/);
+  assert.doesNotMatch(await p.textContent('.rec'), /\d/);
+  await p.screenshot({ path: path.join(SCREENS, 'rekord-prosty-ciemny.png') });
+  await p.click('[data-warm="1"]'); await p.waitForTimeout(100);                               // nowy wiersz nie rozdziela serii i paska
+  assert.ok(await p.$eval(row(1, 1), r => r.nextElementSibling.classList.contains('rec')));
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});

@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-15 · Rekord w chwili zapisu serii (v44, plan v4 PR 4)
+
+- Wybrany wariant A: pasek „★ Rekord” pod wierszem serii, widoczny do końca treningu. Odrzucony wariant B (gwiazdka przy numerze + komunikat na dole): komunikat znika po 2,5 s i pojawia się razem z przerwą, więc łatwo go przegapić.
+- Tylko ćwiczenia główne (A), jak „Rekordy tygodnia” w Postępie; przy uzupełniających paski pojawiałyby się zbyt często.
+- Także w trybie PROSTY, ale bez liczb („Najlepszy wynik w tym ćwiczeniu”); PRO: „szacowane maks. X kg · było Y”, w bojach „najlepsze zaliczone X kg · było Y”.
+- Jeden pasek na ćwiczenie, pod najlepszą zaliczoną serią jednostki (przy remisie pod pierwszą), porównanie z całą historią sprzed tej jednostki. Nie liczą się: rozgrzewka, seria nieudana, ćwiczenie na czas, pierwszy trening z ćwiczeniem; poza bojami seria bez RPE (nie ma z czego policzyć e1RM). Bez dźwięku i komunikatu.
+- Zapis serii bez zmian; rekord liczy telefon z danych, które już ma (działa bez sieci).
+
 ## 2026-11-13 · Przypięta nazwa ćwiczenia i komentarz w oknie (v43, plan v4 PR 11)
 
 - Zgłoszone przez Damiana na zrzutach z telefonu: w długiej karcie (rozgrzewki + serie) po przewinięciu nie widać, które to ćwiczenie; pole komentarza w karcie ma być osobnym oknem.

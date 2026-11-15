@@ -59,6 +59,8 @@ Cel: gdy zapisana seria bije dotychczasowy wynik, klient widzi to od razu.
 - Rekord liczony jak w Postępie (`records` w lib.js): e1RM poza bojami, najlepsze zaliczone kg w bojach; tylko seria zaliczona (✓), nie rozgrzewka, nie FAIL, nie ćwiczenie na czas.
 - Forma do szkicu: krótki znacznik przy wierszu serii („rekord”) + toast; bez dźwięku, żeby nie mylić z sygnałem przerwy.
 - Uwaga: pierwsza w historii seria ćwiczenia nie jest rekordem (brak punktu odniesienia), tak jak w „Rekordy tygodnia”.
+- **Szkic pokazany 15.11** (pliki poza repo, do odtworzenia skryptem z atrapą): wariant A = pasek pod wierszem serii („★ Rekord” + „szacowane maks. 70 kg · było 66,7”; w PROSTYM „Najlepszy wynik w tym ćwiczeniu”), zostaje do końca treningu, bez komunikatu; wariant B = gwiazdka pod numerem serii w kolorze akcentu + komunikat (toast) z tą samą treścią.
+- **Ustalone 15.11:** wariant A (pasek pod serią), także w PROSTYM (bez liczb), tylko ćwiczenia główne (A). Jeden pasek na ćwiczenie, pod najlepszą serią jednostki; bez komunikatu i dźwięku. Zrobione w v44.
 
 ### PR 5 · Ekran „dziś”
 
@@ -125,7 +127,7 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 1 | Lżejsza karta ćwiczenia | zrobione (v38, scalone) + poprawka v39 (etykieta w linii, „⋯” jednostki w górnym pasku) |
 | 2 | Podsumowanie po treningu | zrobione (v40): układ A (kafle), porównanie z poprzednią taką samą jednostką; lib `unitSummary`, `doneSummary` / `openDone` |
 | 3 | Historia ćwiczenia w karcie | zrobione (v41): wariant A (wykres + 5 treningów), „Ostatnio” jako przycisk; lib `exHistory`, `openHist`, `effTxt` |
-| 4 | Rekord w chwili zapisu | do zrobienia (szkic) |
+| 4 | Rekord w chwili zapisu | zrobione (v44): wariant A, pasek „★ Rekord” pod najlepszą serią ćwiczenia głównego, PROSTY bez liczb; lib `unitRecord`, `recDraw`, `unitSets` |
 | 5 | Ekran „dziś” | po decyzji |
 | 6 | Ruch i timer | po decyzji |
 | 7 | Podpowiedzi przy pierwszym użyciu | po decyzji |
