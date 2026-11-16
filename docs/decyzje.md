@@ -2,6 +2,16 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-16 · Tryb skupienia (v48, plan v4 PR 8)
+
+- Wybrany wariant A: pasek „Ćwiczenie n z m” z odcinkami (zrobione zielone, bieżące w kolorze akcentu), pod kartą „‹” i „Następne: <ćwiczenie> ›”. Odrzucony wariant B (przyciski 1 / 2 / A1…): same numery niewiele mówią.
+- To przełącznik, nie nowy widok domyślny: domyślnie lista, włączenie pod „⋯” w górnym pasku („Tryb skupienia”), wyjście przez „☰ Cała lista” albo to samo „⋯”. Wybór w telefonie (`fx_<klucz>`), nic nie idzie na serwer.
+- Po ostatniej serii ćwiczenia aplikacja nie przechodzi sama dalej: czeka na „Następne” (widać wynik i „+ seria”). Przesunięcie palcem w bok też zmienia ćwiczenie.
+- Obwód / superseria to jeden krok (cała ramka). Ostatni krok to podsumowanie jednostki („Zakończ i zapisz”), razem z „+ ćwiczenie” i listą usuniętych.
+- W trybie skupienia schowane są: karta „dziś”, pasek tygodnia, baner dyspozycji, karta nowych komentarzy trenera (kropka w dolnym menu zostaje), ściągawka. Jednostka z jednym ćwiczeniem zawsze jest listą.
+- Start od pierwszego niezrobionego ćwiczenia; po dociągnięciu świeżych danych krok wybierany jest od nowa, dopóki klient sam nie zmienił kroku.
+- Wszystkie karty zostają w DOM (ukryte klasą `fx-off`), więc zapis serii, kolejka i pozostałe testy są bez zmian.
+
 ## 2026-11-16 · Podpowiedzi przy pierwszym użyciu (v47, plan v4 PR 7)
 
 - Wybrany wariant A: ciemny dymek ze strzałką przy elemencie, element w ramce akcentu, licznik „n z 4” i „Rozumiem”. Odrzucony wariant B (jasny pasek wstawiony w kartę): rozsuwa kartę i słabiej wskazuje przycisk.

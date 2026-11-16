@@ -120,6 +120,26 @@
   .wk-u.st-late{background:var(--bad);color:var(--surface)}
   .wk-u.st-today{background:var(--accent);color:var(--on-accent)}
   .wk-hint{margin:2px 8px 4px;font-size:12px;color:var(--muted);text-align:center}
+  /* tryb skupienia: pasek „Ćwiczenie n z m” na górze, jedno ćwiczenie (albo obwód), pod nim „Następne”; reszta Treningu schowana klasą fx-off */
+  .fx-off{display:none!important}
+  .fx{background:var(--surface);border:1px solid var(--line);border-radius:var(--rc);box-shadow:var(--shadow);margin-top:10px;padding:6px 14px 12px}
+  .fx-t{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .fx-t b{font-size:14px;color:var(--ink)}
+  .fx-l{min-height:44px;border:0;background:none;font:600 14px var(--f-body);color:var(--accent);padding:0 2px 0 10px}
+  .fx-seg{display:flex;gap:5px}
+  .fx-seg i{flex:1;height:8px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line)}
+  .fx-seg i.d{background:var(--ok);border-color:var(--ok)}
+  .fx-seg i.c{background:var(--accent);border-color:var(--accent)}
+  .fx-nav{display:flex;gap:10px;margin-top:var(--gap)}
+  .fx-nav button{min-height:52px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);font:600 15px var(--f-body);color:var(--ink);padding:0 16px}
+  .fx-nav #fx-prev{min-width:52px}
+  .fx-nav button:disabled{opacity:.4}
+  .fx-nav .n{flex:1;min-width:0;background:var(--primary);color:var(--on-primary);border-color:var(--primary);text-align:left;line-height:1.2}
+  .fx-nav .n small{display:block;font-weight:400;font-size:12px;opacity:.85}
+  .fx-nav .n span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fx-nav .b{flex:1}
+  .card.fxc .fold-c{visibility:hidden}
+  .fx + .card, .fx + .grp{margin-top:var(--gap)}
   /* karta „dziś”: co dziś i ile to potrwa, przycisk do pierwszego niezrobionego ćwiczenia */
   .today{background:var(--surface);border:1px solid var(--line);border-radius:var(--rc);box-shadow:inset 5px 0 0 var(--accent),var(--shadow);margin-top:10px;padding:14px 16px 14px 20px}
   .td-row{display:flex;align-items:center;gap:12px}
@@ -757,7 +777,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
   doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
-  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip } = window.TL;
+  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -1101,6 +1121,7 @@ const DK = 'd_' + KEY;
 function useData(d){
   applyCfg(d.cfg);
   DATA = d; PLAN = d.plan; LOGS = {}; SESS = {};
+  if (!FXM) FXI = null;                                           // tryb skupienia: świeże dane (start z pamięci telefonu, potem serwer) wybierają krok od nowa, dopóki klient sam nie przeszedł dalej
   d.logs.forEach(l => LOGS[l.id] = l);
   d.sessions.forEach(s => SESS[s.id] = s);
   // lokalne, jeszcze niewysłane zapisy z kolejki nadpisują dane z serwera
@@ -1275,6 +1296,7 @@ function refreshStats(){
   if (sets) sets.textContent = st.done + '/' + st.all;
   if (ton) ton.textContent = st.ton.toLocaleString('pl-PL');
   todayDraw();
+  fxDraw();
 }
 /** karta „dziś” (lib todayInfo): przed startem ile ćwiczeń, serii i minut; w trakcie postęp i następne ćwiczenie; po serii rysowana od nowa */
 function todayDraw(){
@@ -2174,7 +2196,8 @@ function renderTrening(){
     renderTrening();
   });
   const open = !sessDone(cur.week, cur.day);
-  let h = sbNote() + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section>' : '') + weekBar('t') + notesCard() + readyBanner();
+  const fx = FX && exs.length > 1;
+  let h = sbNote() + (fx ? '<section class="fx" id="fx" aria-label="Tryb skupienia"></section>' : '') + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section>' : '') + weekBar('t') + notesCard() + readyBanner();
   const grps = circuitGroups(exs), gOf = o => grps.find(g => g.orders.includes(o));
   exs.forEach(ex => {
     const g = gOf(ex.order), i = g ? g.orders.indexOf(ex.order) : -1;
@@ -2185,7 +2208,7 @@ function renderTrening(){
   if (s0.own && ownOn() && !sessDone(cur.week, cur.day)) h += '<button type="button" class="ghost own-add" id="own-add">+ ćwiczenie</button>';
   if (EDIT && !s0.own && open) h += '<button type="button" class="ghost own-add" id="ed-add">+ ćwiczenie</button>';
   if (EDIT && !s0.own) h += edRemoved();
-  h += sessCard(s0) + helpCard();
+  h += sessCard(s0) + helpCard() + (fx ? '<div class="fx-nav" id="fx-nav"></div>' : '');
   $('#main').innerHTML = h;
   CIRC = grps; bind(exs, s0);
   grps.forEach(g => grpDraw(g.id));
@@ -2207,11 +2230,13 @@ function renderTrening(){
     openSheet(`<h2 id="sheet-t">${esc(s0.title || cur.day)}</h2><p class="sub">Więcej akcji</p>
       <div class="opts act">
         ${open ? '<button type="button" class="opt" id="cut"><i aria-hidden="true">⏱</i>Skróć trening<small>gdy brakuje czasu</small></button>' : ''}
-        <button type="button" class="opt" id="fold-all"><i aria-hidden="true">▴</i>Zwiń zrobione</button>
+        ${fx ? '' : '<button type="button" class="opt" id="fold-all"><i aria-hidden="true">▴</i>Zwiń zrobione</button>'}
+        <button type="button" class="opt" id="fx-sw"><i aria-hidden="true">${fx ? '☰' : '▣'}</i>${fx ? 'Cała lista' : 'Tryb skupienia'}<small>${fx ? 'wszystkie ćwiczenia' : 'jedno ćwiczenie na ekranie'}</small></button>
       </div>
       <button type="button" class="btn" data-close>Zamknij</button>`);
     const ct = $('#cut'); if (ct) ct.onclick = () => { closeSheet(); openCut(); };
-    $('#fold-all').onclick = () => { closeSheet(); foldAll(); };
+    const fa = $('#fold-all'); if (fa) fa.onclick = () => { closeSheet(); foldAll(); };
+    $('#fx-sw').onclick = () => { closeSheet(); fxSet(!fx); };
   };
 }
 function rxPro(ex){
@@ -2754,14 +2779,66 @@ function foldMove(c, h0){
 function setFold(o, on, keep = true){
   const c = document.querySelector(`.card[data-card="${o}"]`); if (!c) return;
   const h0 = keep && c.classList.contains('fold') !== on ? c.offsetHeight : 0;
-  c.classList.toggle('fold', on); foldMove(c, h0); c.querySelectorAll('[data-fold]').forEach(b => b.setAttribute('aria-expanded', String(!on)));
+  c.classList.toggle('fold', on && !fxOn()); foldMove(c, h0); c.querySelectorAll('[data-fold]').forEach(b => b.setAttribute('aria-expanded', String(!on)));
   if (on) { const ch = c.querySelector('.ch'); if (ch) { ch.classList.remove('stuck'); ch.style.marginBottom = ''; } }   // zwinięta karta nie ma przypiętej nazwy (bez czekania na przewinięcie)
   if (keep) { const m = foldGet(); m[foldKey(o)] = on ? 1 : 0; try { localStorage.setItem(FK, JSON.stringify(m)); } catch (e) {} }
 }
 function bindFold(exs){
   exs.forEach(ex => { const st = foldGet()[foldKey(ex.order)]; foldSum(ex.order); setFold(ex.order, st === undefined ? cardDone(ex.order) : st === 1, false); });
-  document.querySelectorAll('[data-fold]').forEach(b => b.onclick = () => setFold(b.dataset.fold, !b.closest('.card').classList.contains('fold')));
+  document.querySelectorAll('[data-fold]').forEach(b => b.onclick = () => { if (!fxOn()) setFold(b.dataset.fold, !b.closest('.card').classList.contains('fold')); });
 }
+/* ---------- tryb skupienia (lib focusSteps, focusStart): wszystkie karty zostają w DOM, widać jeden krok; przełącznik pod „⋯” górnego paska, wybór w fx_<klucz> ---------- */
+const FXK = 'fx_' + KEY;
+let FX = false, FXI = null, FXU = '', FXM = false;                // włączony, numer kroku (liczba kroków = podsumowanie), jednostka, której dotyczy krok, klient sam zmienił krok
+try { FX = localStorage.getItem(FXK) === '1'; } catch (e) {}
+const fxOn = () => !!$('#fx');
+function fxSet(on){
+  const st = focusSteps(curExs(), CIRC)[FXI], o = fxOn() && st ? st.orders[0] : 0;
+  FX = on; FXI = null; FXM = false; try { localStorage.setItem(FXK, on ? '1' : '0'); } catch (e) {}
+  renderTrening();
+  const c = !on && o ? document.querySelector(`.card[data-card="${o}"]`) : null;   // powrót do listy: zostań przy ćwiczeniu, które było na ekranie
+  if (c) { setFold(o, false, false); window.scrollTo(0, (c.closest('.grp') || c).getBoundingClientRect().top + window.scrollY - 8); } else window.scrollTo(0, 0);
+  stickDraw();
+}
+function fxGo(i){ FXI = i; FXM = true; fxDraw(); window.scrollTo(0, 0); stickDraw(); tipDraw(); }
+/** rysuje pasek i przyciski, pokazuje bieżący krok; wołane też po każdej serii (odcinki paska) */
+function fxDraw(){
+  const bar = $('#fx'); if (!bar) return;
+  const exs = curExs(), steps = focusSteps(exs, CIRC), u = cur.week + '|' + cur.day;
+  const done = exs.filter(ex => cardDone(ex.order)).map(ex => ex.order);
+  if (FXU !== u) FXM = false;
+  if (FXU !== u || FXI === null) { FXU = u; FXI = sessDone(cur.week, cur.day) ? 0 : focusStart(steps, done); }
+  FXI = Math.max(0, Math.min(FXI, steps.length));
+  const st = steps[FXI], show = st ? st.orders : [], pos = o => exs.findIndex(ex => ex.order === o) + 1;
+  [...$('#main').children].forEach(e => {
+    const keep = e === bar || e.id === 'fx-nav' || (st ? e.matches('.card[data-card]') && show.includes(+e.dataset.card) || e.matches('.grp') && e.dataset.grp === st.grp
+      : e.matches('.card.sess, .own-add, .ed-rm'));
+    e.classList.toggle('fx-off', !keep);
+  });
+  show.forEach(o => { const c = document.querySelector(`.card[data-card="${o}"]`); if (c) { c.classList.remove('fold'); c.classList.add('fxc'); } });
+  const title = !st ? 'Podsumowanie' : show.length > 1 ? `Ćwiczenia ${pos(show[0])}–${pos(show[show.length - 1])} z ${exs.length}` : `Ćwiczenie ${pos(show[0])} z ${exs.length}`;
+  bar.innerHTML = `<div class="fx-t"><b id="fx-title">${title}</b><button type="button" class="fx-l" id="fx-list">☰ Cała lista</button></div>
+    <div class="fx-seg" role="img" aria-label="Zrobione ${done.length} z ${exs.length} ćwiczeń">${exs.map(ex => `<i class="${done.includes(ex.order) ? 'd' : show.includes(ex.order) ? 'c' : ''}"></i>`).join('')}</div>`;
+  $('#fx-list').onclick = () => fxSet(false);
+  const nx = steps[FXI + 1], nav = $('#fx-nav');
+  const nxName = nx ? (nx.grp ? (nx.orders.length === 2 ? 'Superseria ' : 'Obwód ') + nx.grp : (exs.find(ex => ex.order === nx.orders[0]) || {}).name || '') : 'Podsumowanie';
+  nav.innerHTML = st
+    ? `<button type="button" id="fx-prev" aria-label="Poprzednie ćwiczenie" ${FXI ? '' : 'disabled'}>‹</button><button type="button" class="n" id="fx-next"><small>${nx ? 'Następne' : 'Dalej'}</small><span>${esc(nxName)} ›</span></button>`
+    : '<button type="button" class="b" id="fx-prev">‹ Wróć do ćwiczeń</button>';
+  $('#fx-prev').onclick = () => fxGo(FXI - 1);
+  const nb = $('#fx-next'); if (nb) nb.onclick = () => fxGo(FXI + 1);
+}
+// przesunięcie palcem w bok = poprzednie / następne ćwiczenie (tylko w trybie skupienia)
+(() => {
+  let x0 = null, y0 = null; const m = $('#main');
+  m.addEventListener('touchstart', e => { x0 = fxOn() ? e.touches[0].clientX : null; y0 = e.touches[0].clientY; }, { passive: true });
+  m.addEventListener('touchend', e => {
+    if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (!fxOn() || Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return;
+    const n = focusSteps(curExs(), CIRC).length, i = FXI + (dx < 0 ? 1 : -1);
+    if (i >= 0 && i <= n) fxGo(i);
+  });
+})();
 /** stan pola odhaczenia: '' (puste) → ok (✓ zrobiona) → x (✕ nieudana, FAIL); pend = czeka na zapis / w kolejce */
 function setState(row, st, pend){
   const btn = row.querySelector('.ok'), lt = row.querySelector('.lt'), nt = row.querySelector('.nt');

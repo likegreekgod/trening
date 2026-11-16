@@ -2076,3 +2076,77 @@ test('podpowiedź znika poza Treningiem i idzie za elementem, gdy karta zmienia 
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
+
+test('Tryb skupienia: jedno ćwiczenie na ekranie, obwód jako jeden krok, „Następne”, podsumowanie, wybór zapamiętany', async () => {
+  const calls = [];
+  const data = Object.assign({}, CIRC, { logs: [] });                             // atrapa pamięta zapisane serie jak serwer (potrzebne po przeładowaniu)
+  const { ctx, p } = await page(calls, false, { data });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const shown = () => p.$$eval('.card[data-card]', cs => cs.filter(c => c.offsetParent !== null).map(c => +c.dataset.card));
+  assert.equal(await p.$('#fx'), null);                                           // domyślnie lista
+  assert.deepEqual(await shown(), [1, 2, 3, 4, 5]);
+  await p.click('#umore'); await p.click('#fx-sw'); await p.waitForSelector('#fx');
+  assert.equal(await p.evaluate(() => localStorage.getItem('fx_kabc')), '1');
+  assert.deepEqual(await shown(), [1]);                                           // wszystkie karty są w DOM, widać jedną
+  assert.equal(await p.$$eval('.card[data-card]', cs => cs.length), 5);
+  assert.equal(await p.textContent('#fx-title'), 'Ćwiczenie 1 z 5');
+  assert.equal(await p.$eval('.wk', e => e.offsetParent === null), true);         // pasek tygodnia i karta „dziś” schowane
+  assert.equal(await p.$eval('#fx-prev', b => b.disabled), true);
+  assert.match(await p.textContent('#fx-next'), /Następne.*Obwód A/s);
+  // zapis serii bez zmian; po ostatniej serii karta zostaje (czeka na „Następne”), odcinek paska robi się zielony
+  const n = await p.$$eval('.set[data-o="1"][data-k="p"]', r => r.length);
+  for (let s = 1; s <= n; s++) { await p.click(`.set[data-o="1"][data-s="${s}"] .ok`); await p.waitForTimeout(60); }
+  const ls = calls.filter(c => c.fn === 'logSet');
+  assert.equal(ls.length, n); assert.equal(ls[0].args[0].order, 1); assert.equal(ls[0].args[0].set, 1);
+  await p.waitForTimeout(1100);                                                   // w liście karta zwinęłaby się po 0,9 s
+  assert.deepEqual(await shown(), [1]);
+  assert.equal(await p.$eval('.card[data-card="1"]', c => c.classList.contains('fold')), false);
+  assert.deepEqual(await p.$$eval('.fx-seg i', a => a.map(i => i.className)), ['d', '', '', '', '']);
+  await p.click('#fx-next');
+  assert.deepEqual(await shown(), [2, 3, 4]);                                     // obwód = jeden krok, cała ramka
+  assert.equal(await p.textContent('#fx-title'), 'Ćwiczenia 2–4 z 5');
+  assert.deepEqual(await p.$$eval('.fx-seg i', a => a.map(i => i.className)), ['d', 'c', 'c', 'c', '']);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'skupienie-obwod.png') }); }
+  await p.click('#fx-next'); assert.deepEqual(await shown(), [5]);
+  assert.match(await p.textContent('#fx-next'), /Dalej.*Podsumowanie/s);
+  await p.click('#fx-next');                                                      // ostatni krok: podsumowanie jednostki
+  assert.deepEqual(await shown(), []);
+  assert.equal(await p.textContent('#fx-title'), 'Podsumowanie');
+  assert.equal(await p.$eval('.card.sess', e => e.offsetParent !== null), true);
+  assert.equal(await p.$('#fx-next'), null);
+  await p.click('#fx-prev'); assert.deepEqual(await shown(), [5]);
+  // po przeładowaniu tryb zostaje i otwiera pierwsze niezrobione ćwiczenie (ćw. 1 zrobione → obwód)
+  data.logs = [1, 2].map(s => ({ id: `robert|1|T1|1|${s}`, zapisano: '2026-10-06T10:00:00.000Z', cwiczenie: 'Przysiad', tydzien: 1, jednostka: 'T1', seria: s, kg: 20, powt: 10, rpe: 8, wykonane: 'TAK', typ: '' }));
+  await p.reload(); await p.waitForSelector('#fx');
+  assert.deepEqual(await shown(), [2, 3, 4]);
+  // powrót do listy: wszystkie karty, zrobiona zwinięta, „Zwiń zrobione” wraca
+  await p.click('#fx-list'); await p.waitForSelector('.wk');
+  assert.equal(await p.$('#fx'), null);
+  assert.deepEqual(await shown(), [1, 2, 3, 4, 5]);
+  assert.equal(await p.$eval('.card[data-card="1"]', c => c.classList.contains('fold')), true);
+  assert.equal(await p.evaluate(() => localStorage.getItem('fx_kabc')), '0');
+  assert.deepEqual(await a11y(p), []);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Tryb skupienia: przesunięcie palcem zmienia ćwiczenie; zrzuty PROSTY / PRO w obu motywach', async () => {
+  for (const [mode, data] of [['prosty', DATA], ['pro', PRO]]) for (const scheme of ['light', 'dark']) {
+    const { ctx, p } = await page([], false, { data, scheme });
+    await ctx.addInitScript(() => { try { localStorage.setItem('fx_kabc', '1'); } catch (e) {} });
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('#fx');
+    const shown = () => p.$$eval('.card[data-card]', cs => cs.filter(c => c.offsetParent !== null).map(c => +c.dataset.card));
+    const swipe = dx => p.evaluate(d => { const m = document.querySelector('#main'), t = x => ({ touches: [{ clientX: x, clientY: 300 }], changedTouches: [{ clientX: x, clientY: 300 }] });
+      const ev = (n, x) => Object.assign(new Event(n, { bubbles: true }), t(x)); m.dispatchEvent(ev('touchstart', 200)); m.dispatchEvent(ev('touchend', 200 + d)); }, dx);
+    assert.deepEqual(await shown(), [1]);
+    assert.deepEqual(await a11y(p), []);
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `skupienie-${mode}-${scheme}.png`) }); }
+    await swipe(-30); assert.deepEqual(await shown(), [1]);                       // za krótki ruch
+    await swipe(-120); assert.deepEqual(await shown(), [2]);
+    await swipe(-120); assert.deepEqual(await shown(), []);                       // podsumowanie
+    await swipe(-120); assert.equal(await p.textContent('#fx-title'), 'Podsumowanie');   // dalej nie ma
+    await swipe(120); assert.deepEqual(await shown(), [2]);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});

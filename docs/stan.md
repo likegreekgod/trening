@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-16, aplikacja v47 (v47 w PR #69, czeka na scalenie; `main` = v46 po PR #68).
+Stan na 2026-11-16, aplikacja v48 (v48 w PR #70, czeka na scalenie; `main` = v47 po PR #69).
 
 ## Jak pracujemy
 
@@ -17,6 +17,8 @@ Stan na 2026-11-16, aplikacja v47 (v47 w PR #69, czeka na scalenie; `main` = v46
 - Skill trenera dla claude.ai leży poza repo (`Desktop\hgvtjv\skill-aplikacja-treningowa-klienta`, zawiera identyfikatory arkusza). Po zmianie SKILL.md przebuduj ZIP.
 
 ## Ostatnio zrobione
+
+- 16.11 (v48): plan v4 PR 8: tryb skupienia, jedno ćwiczenie na ekranie (włączany pod „⋯” w górnym pasku, pasek „Ćwiczenie n z m”, „Następne”, przesunięcie palcem, podsumowanie jako ostatni krok).
 
 - 16.11 (v47): plan v4 PR 7: podpowiedzi przy pierwszym użyciu, cztery dymki po kolei (✓, „⋯”, kamera, dzień w pasku), każdy raz; długa ściągawka w PROSTYM zwinięta na dole Treningu.
 - 16.11 (v46): plan v4 PR 6: timer przerwy z grubym paskiem u góry i czerwonymi ostatnimi 10 s, puste stany jako karty z ikoną, płynne zwijanie kart i krótki ruch ✓.
@@ -42,12 +44,13 @@ Stan na 2026-11-16, aplikacja v47 (v47 w PR #69, czeka na scalenie; `main` = v46
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 5 (v45), PR 6 (v46), PR 7 (v47), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 8 (tryb skupienia), po decyzji Damiana, czy dalej chce; najpierw szkic. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 5 (v45), PR 6 (v46), PR 7 (v47), PR 8 (v48), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 9 (raport po bloku dla klienta, notatka trenera do jednostki), po decyzji Damiana, czy dalej chce; wymaga zmian w arkuszu. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- Scalenie PR #69 (v47, plan v4 PR 7, podpowiedzi), założonego 16.11 za zgodą Damiana; potem próba na telefonie (obecni klienci zobaczą cztery dymki raz).
-- Decyzja, czy robimy PR 8 (tryb skupienia).
+- Scalenie PR #70 (v48, plan v4 PR 8, tryb skupienia), założonego 16.11 za zgodą Damiana; potem próba na telefonie.
+- Decyzja, czy robimy PR 9 (raport po bloku, notatka trenera do jednostki).
+- Próba na telefonie: podpowiedzi przy pierwszym użyciu (v47, PR #69 scalony 16.11; obecni klienci zobaczą cztery dymki raz).
 - Próba na telefonie: timer, zwijanie kart, ✓ (v46, PR #68 scalony 16.11).
 - Próba na telefonie: karta „dziś” (v45, PR #67 scalony 16.11). Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
 - Próba na telefonie: pasek „★ Rekord” (v44).
