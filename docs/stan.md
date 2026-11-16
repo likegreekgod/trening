@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-16, aplikacja v45 (v45 w PR #67, czeka na scalenie; `main` = v44 po PR #66).
+Stan na 2026-11-16, aplikacja v45 (`main` = v45 po PR #67).
 
 ## Jak pracujemy
 
@@ -44,7 +44,7 @@ Stan na 2026-11-16, aplikacja v45 (v45 w PR #67, czeka na scalenie; `main` = v44
 
 ## Czeka na Damiana
 
-- Scalenie PR #67 (v45, karta „dziś”), założonego 16.11 za zgodą Damiana; potem próba na telefonie. Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
+- Próba na telefonie: karta „dziś” (v45, PR #67 scalony 16.11). Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
 - Decyzja, czy robimy PR 6 (ruch i timer).
 - Próba na telefonie: pasek „★ Rekord” (v44).
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
