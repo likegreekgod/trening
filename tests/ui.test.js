@@ -27,7 +27,7 @@ test.before(async () => {
 test.after(async () => { await browser.close(); server.close(); });
 
 async function page(calls, offline, opt = {}) {
-  const ctx = await browser.newContext(Object.assign({ viewport: { width: 390, height: 844 }, colorScheme: opt.scheme || 'light' }, opt.ua ? { userAgent: opt.ua } : {}));
+  const ctx = await browser.newContext(Object.assign({ viewport: { width: 390, height: 844 }, colorScheme: opt.scheme || 'light', reducedMotion: opt.motion ? 'no-preference' : 'reduce' }, opt.ua ? { userAgent: opt.ua } : {}));
   const data = opt.data || DATA;
   await ctx.route('**/macros/**', async r => {
     if (offline) return r.abort();
@@ -1655,8 +1655,8 @@ test('Bez planu: klient z dostępem robi własny trening, menu i zakładki dzia�
   await ctx.close();
   const off = Object.assign({}, data, { cfg: Object.assign({}, DATA.cfg, { own: false }) });
   const t2 = await page([], false, { data: off });
-  await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.empty');
-  assert.match(await t2.p.textContent('#main'), /Brak planu/);
+  await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.es');
+  assert.match(await t2.p.textContent('#main'), /Jeszcze nie masz planu/);
   assert.equal(await t2.p.isVisible('#nav'), false);
   await t2.ctx.close();
 });
@@ -1934,4 +1934,88 @@ test('Karta „dziś”: jednostka z innego dnia = „Zaległy”, po zapisaniu 
   await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.set[data-o="1"]');
   assert.equal(await t2.p.$('#today'), null);
   await t2.ctx.close();
+});
+
+// Plan v4 PR 6: timer z grubym paskiem u góry i czerwoną końcówką, puste stany jako karty, ruch przy zwijaniu i ✓
+test('Timer przerwy: pasek na górnej krawędzi, ostatnie 10 s na czerwono z „Zaraz koniec”, +15 cofa', async () => {
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForSelector('#rest:not([hidden])');
+  const g = await p.evaluate(() => { const r = document.querySelector('#rest').getBoundingClientRect(), b = document.querySelector('.rbar').getBoundingClientRect(); return [Math.round(b.top - r.top), Math.round(b.height), Math.round(b.width - r.width)]; });
+  assert.deepEqual(g, [0, 8, 0]);                                              // pasek: sama góra, 8 px, cała szerokość
+  assert.match(await p.textContent('#rlbl'), /^Przerwa · /);
+  assert.equal(await p.$eval('#rest', e => e.classList.contains('end')), false);
+  const amber = await p.$eval('#rtime', e => getComputedStyle(e).color);
+  await p.evaluate(() => { REST.end = Date.now() + 8400; restTick(); });       // zostało 8 s
+  assert.equal(await p.$eval('#rest', e => e.classList.contains('end')), true);
+  assert.match(await p.textContent('#rlbl'), /^Zaraz koniec · /);
+  assert.notEqual(await p.$eval('#rtime', e => getComputedStyle(e).color), amber);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.$eval('#toast', e => e.style.display = 'none'); await p.screenshot({ path: path.join(SCREENS, 'przerwa-koniec.png'), clip: { x: 0, y: 844 - 170, width: 390, height: 170 } }); }
+  await p.click('#rest [data-r="15"]');                                        // +15 s → znów zwykła przerwa
+  assert.equal(await p.$eval('#rest', e => e.classList.contains('end')), false);
+  assert.match(await p.textContent('#rlbl'), /^Przerwa · /);
+  await p.click('#rest [data-r="0"]');
+  assert.equal(await p.$eval('#rest', e => e.classList.contains('end')), false);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Puste stany: karta z ikoną i przyciskiem (brak planu → ponowne sprawdzenie, Postęp → przejście do treningu, Trener)', async () => {
+  const calls = [];
+  const none = { cfg: Object.assign({}, DATA.cfg, { own: false }), plan: [], logs: [], sessions: [] };
+  const { ctx, p } = await page(calls, false, { data: none });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#main .es');
+  assert.equal(await p.$$eval('#main .es svg, #main .es .cn, #main .es .sub, #main #es-again', e => e.length), 4);
+  const n0 = calls.filter(c => c.fn === 'getData').length;
+  await p.click('#es-again'); await p.waitForFunction(() => /Planu jeszcze nie ma/.test(document.querySelector('#toast').textContent));
+  assert.equal(calls.filter(c => c.fn === 'getData').length, n0 + 1);          // przycisk naprawdę pyta serwer
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'pusty-plan.png') }); }
+  await ctx.close();
+  for (const scheme of ['light', 'dark']) {
+    const t = await page([], false, { scheme });
+    await t.p.goto(base + '?k=kabc'); await t.p.waitForSelector('.set[data-o="1"]');
+    await t.p.click('#nav [data-tab="postep"]');
+    for (const [k, re] of [['sila', /Tu będzie Twoja siła/], ['obj', /Tu będzie Twoja objętość/], ['dys', /Tu będzie Twoja dyspozycja/]]) {
+      await t.p.click(`[data-pt="${k}"]`); await t.p.waitForSelector('#postep .es');
+      assert.match(await t.p.textContent('#postep .es'), re);
+      assert.ok(await t.p.$eval('#postep .es .btn', b => b.getBoundingClientRect().height) >= 44);
+    }
+    if (process.env.SCREENS !== '0') await t.p.screenshot({ path: path.join(SCREENS, `pusty-postep-${scheme}.png`) });
+    await t.p.click('#postep .es [data-go="dysp"]');
+    assert.equal(await t.p.isVisible('#dysp'), true);
+    await t.p.click('#nav [data-tab="postep"]'); await t.p.click('[data-pt="sila"]'); await t.p.click('#postep .es [data-go="trening"]');
+    assert.equal(await t.p.isVisible('.set[data-o="1"]'), true);
+    await t.p.click('#nav [data-tab="trener"]'); await t.p.waitForSelector('#trener .es');
+    assert.match(await t.p.textContent('#trener .es'), /Jeszcze bez komentarzy/);
+    assert.equal(await t.p.$('#trener .es .btn'), null);
+    assert.deepEqual(t.p.errors, []);
+    await t.ctx.close();
+  }
+});
+
+test('Ruch: karta zwija się płynnie (stan od razu, wysokość w 0,2 s), ✓ dostaje krótki ruch; przy ograniczeniu ruchu nic się nie animuje', async () => {
+  const run = async motion => {
+    const { ctx, p } = await page([], false, { motion });
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+    const card = '.card[data-card="1"]';
+    assert.equal(await p.$eval(card, c => c.classList.contains('folding')), false);   // pierwsze rysowanie bez animacji
+    const h0 = await p.$eval(card, c => c.offsetHeight);
+    const r = await p.evaluate(() => { const c = document.querySelector('.card[data-card="1"]'); c.querySelector('[data-fold]').click();
+      return [c.classList.contains('fold'), c.classList.contains('folding'), c.getAnimations().length, Math.round(c.getBoundingClientRect().height)]; });
+    assert.equal(r[0], true);                                                  // zwinięta od razu, niezależnie od animacji
+    if (motion) { assert.equal(r[1], true); assert.equal(r[2], 1); assert.equal(r[3], h0); }   // start animacji z pełnej wysokości
+    else { assert.equal(r[1], false); assert.equal(r[2], 0); assert.ok(r[3] < h0); }
+    await p.waitForFunction(() => !document.querySelector('.card[data-card="1"]').classList.contains('folding'));
+    const h1 = await p.$eval(card, c => c.offsetHeight); assert.ok(h1 < h0);
+    await p.click(card + ' [data-fold]');
+    await p.waitForFunction(() => !document.querySelector('.card[data-card="1"]').classList.contains('folding'));
+    assert.equal(await p.$eval(card, c => c.offsetHeight), h0);                // po rozwinięciu ta sama wysokość, bez resztek stylu
+    assert.equal(await p.$eval(card, c => c.style.height), '');
+    await p.click('.set[data-o="1"][data-s="1"] .ok');
+    assert.equal(await p.$eval('.set[data-o="1"][data-s="1"] .ok', b => b.classList.contains('pop')), true);
+    assert.equal(await p.$eval('.set[data-o="1"][data-s="1"] .ok', b => getComputedStyle(b).animationName), motion ? 'pop' : 'none');
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  };
+  await run(true); await run(false);
 });

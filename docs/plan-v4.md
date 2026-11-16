@@ -74,6 +74,8 @@ Cel: gdy zapisana seria bije dotychczasowy wynik, klient widzi to od razu.
 
 - Płynne zwijanie kart (dziś klasa `fold` bez animacji), krótka animacja ✓, kołowy albo wyraźniejszy timer przerwy (`#rest`, `restTick`), lepsze puste stany (brak planu, brak historii).
 - Tylko CSS i drobny JS; nic w zapisie.
+- **Szkic pokazany 16.11** (pliki poza repo, do odtworzenia skryptem z atrapą: podmiana `#rest` i pustych stanów). Timer: wariant A = koło 92 px z czasem w środku (cyfry 30 px zamiast 46), obok pełna nazwa ćwiczenia i przyciski; wariant B = układ jak dziś, pasek postępu 8 px na górnej krawędzi zamiast 3 px na dole, w ostatnich 10 s cyfry i pasek czerwone, etykieta „Zaraz koniec”. Puste stany (brak planu, Postęp bez historii): karta z ikoną, nagłówkiem, zdaniem i przyciskiem („Sprawdź ponownie”, „Przejdź do treningu”) zamiast szarego tekstu. Ruch (bez szkicu, opis): karta zwija się i rozwija płynnie ok. 0,2 s, ✓ krótko „podskakuje” przy zaliczeniu; wyłączone przy `prefers-reduced-motion`. 
+- **Ustalone 16.11:** timer B, puste stany tak, animacje tak. Zrobione w v46.
 
 ### PR 7 · Podpowiedzi przy pierwszym użyciu
 
@@ -132,7 +134,7 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 3 | Historia ćwiczenia w karcie | zrobione (v41): wariant A (wykres + 5 treningów), „Ostatnio” jako przycisk; lib `exHistory`, `openHist`, `effTxt` |
 | 4 | Rekord w chwili zapisu | zrobione (v44): wariant A, pasek „★ Rekord” pod najlepszą serią ćwiczenia głównego, PROSTY bez liczb; lib `unitRecord`, `recDraw`, `unitSets` |
 | 5 | Ekran „dziś” | zrobione (v45): wariant B, karta `#today` nad paskiem tygodnia; lib `todayInfo`, `todayDraw` |
-| 6 | Ruch i timer | po decyzji |
+| 6 | Ruch i timer | zrobione (v46): timer B (pasek u góry, czerwone ostatnie 10 s), puste stany jako karty (`emptyCard`), płynne zwijanie (`foldMove`) i ruch ✓ (`.ok.pop`) |
 | 7 | Podpowiedzi przy pierwszym użyciu | po decyzji |
 | 8 | Tryb skupienia | po decyzji, osobny szkic |
 | 9 | Raport po bloku, notatka do jednostki | po decyzji |
