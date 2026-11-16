@@ -892,6 +892,20 @@
     return { need: Math.ceil(start / 60), left: Math.ceil(need / 60), cuts, fits: need <= goal };
   };
 
+  /* ---------- tryb skupienia: jedno ćwiczenie (albo cały obwód) na ekranie ---------- */
+  /** kroki jednostki: [{orders: [3, 4], grp: 'A'}]; obwód to jeden krok, zwykłe ćwiczenie ma grp '' */
+  L.focusSteps = (exs, groups) => {
+    const out = [];
+    (exs || []).forEach(ex => {
+      const g = (groups || []).find(x => x.orders.includes(ex.order));
+      if (!g) out.push({ orders: [ex.order], grp: '' });
+      else if (g.orders[0] === ex.order) out.push({ orders: g.orders.slice(), grp: g.id });
+    });
+    return out;
+  };
+  /** od którego kroku zacząć: pierwszy z niezrobionym ćwiczeniem; wszystko zrobione = liczba kroków (podsumowanie) */
+  L.focusStart = (steps, done) => { const i = (steps || []).findIndex(s => s.orders.some(o => !(done || []).includes(o))); return i < 0 ? (steps || []).length : i; };
+
   /** podpowiedzi po kolei: pierwsza nieobejrzana, której element jest teraz na ekranie; '' gdy nie ma czego pokazać */
   L.nextTip = (order, seen, avail) => (order || []).find(id => !(seen || []).includes(id) && (avail || []).includes(id)) || '';
 

@@ -629,3 +629,15 @@ test('nextTip: po kolei, pomija obejrzane i te, których elementu nie ma na ekra
   assert.equal(L.nextTip(o, [], []), '');
   assert.equal(L.nextTip(o, null, null), '');
 });
+
+test('focusSteps / focusStart: tryb skupienia – obwód jako jeden krok, start od pierwszego niezrobionego', () => {
+  const exs = [1, 2, 3, 4, 5].map(o => ({ order: o, circuit: o === 3 || o === 4 ? 'A' : '' }));
+  const st = L.focusSteps(exs, L.circuitGroups(exs));
+  assert.deepEqual(st, [{ orders: [1], grp: '' }, { orders: [2], grp: '' }, { orders: [3, 4], grp: 'A' }, { orders: [5], grp: '' }]);
+  assert.equal(L.focusStart(st, []), 0);
+  assert.equal(L.focusStart(st, [1, 2, 3]), 2);                   // obwód z jednym niezrobionym ćwiczeniem dalej jest bieżący
+  assert.equal(L.focusStart(st, [1, 3, 4]), 1);                   // pominięte wcześniej ćwiczenie wraca jako pierwsze
+  assert.equal(L.focusStart(st, [1, 2, 3, 4, 5]), 4);             // wszystko zrobione → podsumowanie
+  assert.deepEqual(L.focusSteps([], []), []);
+  assert.equal(L.focusStart([], null), 0);
+});
