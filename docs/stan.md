@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-16, aplikacja v46 (na gałęzi, bez PR; `main` = v45 po PR #67).
+Stan na 2026-11-16, aplikacja v46 (v46 w PR #68, czeka na scalenie; `main` = v45 po PR #67).
 
 ## Jak pracujemy
 
@@ -45,7 +45,7 @@ Stan na 2026-11-16, aplikacja v46 (na gałęzi, bez PR; `main` = v45 po PR #67).
 
 ## Czeka na Damiana
 
-- Zgoda na PR dla v46 (plan v4 PR 6, gałąź `ccr-0d9777f0-dw00rf`), potem próba na telefonie: timer, zwijanie kart, ✓.
+- Scalenie PR #68 (v46, plan v4 PR 6), założonego 16.11 za zgodą Damiana; potem próba na telefonie: timer, zwijanie kart, ✓.
 - Decyzja, czy robimy PR 7 (podpowiedzi przy pierwszym użyciu).
 - Próba na telefonie: karta „dziś” (v45, PR #67 scalony 16.11). Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
 - Próba na telefonie: pasek „★ Rekord” (v44).
