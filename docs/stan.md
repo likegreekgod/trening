@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-16, aplikacja v46 (`main` = v46 po PR #68).
+Stan na 2026-11-16, aplikacja v47 (v47 na gałęzi `claude/fervent-goldberg-4u0f11`, czeka na zgodę na PR; `main` = v46 po PR #68).
 
 ## Jak pracujemy
 
@@ -18,6 +18,7 @@ Stan na 2026-11-16, aplikacja v46 (`main` = v46 po PR #68).
 
 ## Ostatnio zrobione
 
+- 16.11 (v47): plan v4 PR 7: podpowiedzi przy pierwszym użyciu, cztery dymki po kolei (✓, „⋯”, kamera, dzień w pasku), każdy raz; długa ściągawka w PROSTYM zwinięta na dole Treningu.
 - 16.11 (v46): plan v4 PR 6: timer przerwy z grubym paskiem u góry i czerwonymi ostatnimi 10 s, puste stany jako karty z ikoną, płynne zwijanie kart i krótki ruch ✓.
 - 16.11 (v45): plan v4 PR 5: karta „dziś” nad paskiem tygodnia (ile ćwiczeń, serii i minut, „Zacznij” / „Dalej” / „Zakończ”, postęp w trakcie).
 - 15.11 (v44): plan v4 PR 4: rekord w chwili zapisu serii, pasek „★ Rekord” pod najlepszą serią ćwiczenia głównego (PRO z liczbami, PROSTY bez).
@@ -41,11 +42,12 @@ Stan na 2026-11-16, aplikacja v46 (`main` = v46 po PR #68).
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 5 (v45), PR 6 (v46), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 7 (podpowiedzi przy pierwszym użyciu): szkic pokazany 16.11, czeka na wybór wariantu. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 5 (v45), PR 6 (v46), PR 7 (v47), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 8 (tryb skupienia), po decyzji Damiana, czy dalej chce; najpierw szkic. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- PR 7 (podpowiedzi): wybór wariantu A (dymek) / B (pasek w karcie) i odpowiedzi na pytania z `plan-v4.md`.
+- Zgoda na PR z v47 (plan v4 PR 7, podpowiedzi), scalenie, potem próba na telefonie (obecni klienci zobaczą cztery dymki raz).
+- Decyzja, czy robimy PR 8 (tryb skupienia).
 - Próba na telefonie: timer, zwijanie kart, ✓ (v46, PR #68 scalony 16.11).
 - Próba na telefonie: karta „dziś” (v45, PR #67 scalony 16.11). Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
 - Próba na telefonie: pasek „★ Rekord” (v44).

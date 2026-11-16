@@ -2,6 +2,15 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-16 · Podpowiedzi przy pierwszym użyciu (v47, plan v4 PR 7)
+
+- Wybrany wariant A: ciemny dymek ze strzałką przy elemencie, element w ramce akcentu, licznik „n z 4” i „Rozumiem”. Odrzucony wariant B (jasny pasek wstawiony w kartę): rozsuwa kartę i słabiej wskazuje przycisk.
+- Cztery podpowiedzi po kolei: ✓ pierwszej serii, „⋯” w karcie, kamera, przytrzymanie dnia w pasku tygodnia. Następna pojawia się po „Rozumiem”; użycie wskazanego elementu też odhacza podpowiedź. Każda raz, stan w telefonie (`tip_<klucz>`), nic nie idzie na serwer.
+- Element, którego nie ma na ekranie (np. brak niezrobionej serii), jest pomijany bez odhaczenia: podpowiedź pokaże się przy kolejnej okazji.
+- Także w PRO. Obecni klienci zobaczą je raz po aktualizacji.
+- Długa ściągawka „Jak to działa?” (PROSTY) nie otwiera się już sama; leży zwinięta na dole Treningu, pod podsumowaniem jednostki.
+- Testy UI mają podpowiedzi domyślnie odhaczone (dymek zasłania część karty); sprawdzają je osobne testy z `tips: true`.
+
 ## 2026-11-16 · Ruch i timer (v46, plan v4 PR 6)
 
 - Timer przerwy: wybrany wariant B. Układ i duże cyfry bez zmian, pasek postępu 8 px na górnej krawędzi (było 3 px na dole); w ostatnich 10 s (`REST_END`) cyfry i pasek czerwone, etykieta „Zaraz koniec · <ćwiczenie>”; „+15” ponad 10 s wraca do zwykłego wyglądu. Odrzucony wariant A (koło z czasem w środku): cyfry 30 px zamiast 46, a telefon zwykle leży na podłodze.

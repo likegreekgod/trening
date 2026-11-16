@@ -619,3 +619,13 @@ test('todayInfo: karta „dziś” – ile ćwiczeń, serii i minut, następne �
   assert.equal(L.todayInfo(exs, '2026-11-18', '2026-11-16', true).when, 'plan');
   assert.equal(L.todayInfo([{ order: 1, name: 'X', prio: 'K', sets: 1, done: 0 }], '', '2026-11-16', false).min, 5);   // nigdy „0 min” przy niezrobionej serii
 });
+
+test('nextTip: po kolei, pomija obejrzane i te, których elementu nie ma na ekranie', () => {
+  const o = ['seria', 'wiecej', 'kamera', 'dzien'];
+  assert.equal(L.nextTip(o, [], o), 'seria');
+  assert.equal(L.nextTip(o, ['seria'], o), 'wiecej');
+  assert.equal(L.nextTip(o, ['seria'], ['seria', 'kamera', 'dzien']), 'kamera');   // „⋯” nie ma na ekranie: czeka, nie jest odhaczone
+  assert.equal(L.nextTip(o, o, o), '');
+  assert.equal(L.nextTip(o, [], []), '');
+  assert.equal(L.nextTip(o, null, null), '');
+});
