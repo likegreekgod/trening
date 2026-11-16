@@ -673,6 +673,17 @@
   .ct-l li{padding:4px 0}
   .rbtns #r-set{min-width:44px;font-size:18px}
   /* koniec przerwy: mocne mignięcie ekranu (sygnał wizualny, także przy wyciszonym telefonie) */
+  #tip{position:absolute;z-index:4;background:var(--panel);color:var(--light-white);border:1px solid var(--bar-line);border-radius:14px;padding:12px 14px;
+       box-shadow:0 8px 24px rgba(0,0,0,.28);font:500 14px/1.4 var(--f-body)}
+  #tip[hidden]{display:none}
+  #tip b.h{display:block;font:700 18px/1.15 var(--f-display);text-transform:uppercase;letter-spacing:.02em;margin-bottom:4px}
+  #tip .r{display:flex;align-items:center;justify-content:space-between;margin-top:10px;gap:10px}
+  #tip .r small{font-size:12px;color:var(--bar-muted)}
+  #tip button{min-height:44px;padding:0 16px;border-radius:var(--r);border:0;background:var(--light-white);color:var(--panel);font:700 14px var(--f-body)}
+  #tip::after{content:"";position:absolute;width:14px;height:14px;background:var(--panel);transform:rotate(45deg);left:var(--ax,20px)}
+  #tip.up::after{top:-7px;border-left:1px solid var(--bar-line);border-top:1px solid var(--bar-line)}
+  #tip.dn::after{bottom:-7px;border-right:1px solid var(--bar-line);border-bottom:1px solid var(--bar-line)}
+  .tipring{outline:3px solid var(--accent);outline-offset:3px;border-radius:var(--r)}
   body.flash::after{content:"";position:fixed;inset:0;z-index:40;pointer-events:none;background:var(--light-amber);animation:flash .5s ease-out 3}
   @keyframes flash{from{opacity:.75}to{opacity:0}}
   @media (prefers-reduced-motion: reduce){ body.flash::after{animation:flash 1.5s ease-out 1} }
@@ -746,7 +757,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
   doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
-  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo } = window.TL;
+  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -1161,13 +1172,10 @@ function getLog(ex, set){
 }
 function sessDone(week, day){ return Object.keys(SESS).some(k => k.endsWith('|' + week + '|' + day)); }
 
-/* ---------- tryb prosty: ściągawka przy pierwszym uruchomieniu ---------- */
-const HK = 'h_' + KEY;
+/* ---------- tryb prosty: pełna ściągawka, zwinięta na dole Treningu (na start są podpowiedzi: tipDraw) ---------- */
 function helpCard(){
   if (!SIMPLE) return '';
-  let seen = false;
-  try { seen = !!localStorage.getItem(HK); localStorage.setItem(HK, '1'); } catch(e){}
-  return `<details class="help" ${seen ? '' : 'open'}><summary>Jak to działa?</summary><ol>
+  return `<details class="help"><summary>Jak to działa?</summary><ol>
     <li>Aplikacja sama otwiera dzisiejszy albo najbliższy trening. Inny dzień wybierzesz w pasku tygodnia na górze (◀ ▶ zmienia tydzień). <b>Przytrzymaj</b> dzień, żeby przenieść trening na inny dzień.</li>
     <li>Szare liczby w polach to ciężar i powtórzenia z planu. Zrobiłeś tak samo? Po prostu dotknij <b>✓</b>. Inaczej? Wpisz swoją liczbę, nie trzeba nic kasować.</li>
     <li>Po każdej serii wybierz, jak było ciężko, i dotknij <b>✓</b>. Zielony = zapisane.</li>
@@ -1183,6 +1191,54 @@ function helpCard(){
   </ol></details>`;
 }
 
+/* ---------- podpowiedzi przy pierwszym użyciu: dymek przy elemencie, po kolei, każda raz (tip_<klucz>) ---------- */
+const TIPK = 'tip_' + KEY;
+const TIPS = [
+  { id: 'seria', up: true, sel: '.card[data-card]:not(.fold) .set[data-k="p"][data-st=""] .ok', h: 'Zrobione? Dotknij ✓',
+    t: 'Szare liczby to plan. Zrobiłeś tak samo, dotknij ✓. Inaczej, wpisz swoją liczbę. Drugie dotknięcie ✓ = seria nieudana (✕).' },
+  { id: 'wiecej', sel: '.card[data-card]:not(.fold) [data-more]', h: 'Więcej pod „⋯”', t: 'Komentarz do ćwiczenia, zamiana na inne i „Pomiń”.' },
+  { id: 'kamera', up: true, sel: '.card[data-card]:not(.fold) .set button.cam', h: 'Nagraj serię', t: 'Film trafi do trenera razem z tą serią. Najlepiej krótki, w 720p. Potrzebny zasięg.' },
+  { id: 'dzien', sel: '.wk[data-wk="t"] .wk-d.cur, .wk[data-wk="t"] .wk-d:not(.free)', h: 'Inny dzień?', t: 'Przytrzymaj dzień w pasku, żeby przenieść trening. Dotknięcie otwiera trening z tego dnia.' }
+];
+let TIP = null;                                                   // { tip, el } pokazywanej podpowiedzi
+const tipSeen = () => { try { const a = JSON.parse(localStorage.getItem(TIPK) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+const tipEl = t => [...document.querySelectorAll(t.sel)].find(e => e.offsetParent !== null) || null;
+/** rysuje pierwszą nieobejrzaną podpowiedź, której element jest na ekranie Treningu; go = przewiń do niej */
+function tipDraw(go){
+  let box = $('#tip');
+  if (TIP) { TIP.el.classList.remove('tipring'); TIP = null; }
+  const id = TAB === 'trening' ? nextTip(TIPS.map(t => t.id), tipSeen(), TIPS.filter(tipEl).map(t => t.id)) : '';
+  if (!id) { if (box) box.hidden = true; return; }
+  const tip = TIPS.find(t => t.id === id), el = tipEl(tip);
+  if (!box) {
+    box = document.createElement('aside'); box.id = 'tip'; box.setAttribute('aria-label', 'Podpowiedź');
+    document.body.appendChild(box);
+    document.addEventListener('click', e => { if (TIP && TIP.el.contains(e.target)) tipOk(false); }, true);   // użył = rozumie
+    window.addEventListener('resize', tipPlace);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(tipPlace).observe($('#main'));              // karta się zwinęła, doszedł wiersz
+  }
+  box.innerHTML = `<b class="h">${esc(tip.h)}</b>${esc(tip.t)}<div class="r"><small>${TIPS.indexOf(tip) + 1} z ${TIPS.length}</small><button type="button" id="tip-ok">Rozumiem</button></div>`;
+  box.className = tip.up ? 'dn' : 'up'; box.hidden = false;
+  el.classList.add('tipring'); TIP = { tip, el };
+  $('#tip-ok').onclick = () => tipOk(true);
+  tipPlace();
+  if (go) el.scrollIntoView({ block: 'center', behavior: calm() ? 'auto' : 'smooth' });
+}
+function tipPlace(){
+  const box = $('#tip'); if (!TIP || !box || box.hidden) return;
+  if (!TIP.el.isConnected || TIP.el.offsetParent === null) return tipDraw();
+  const r = TIP.el.getBoundingClientRect(), vw = document.documentElement.clientWidth, w = Math.min(270, vw - 24);
+  const left = Math.min(Math.max(12, r.left + r.width / 2 - w / 2), vw - w - 12);
+  box.style.width = w + 'px'; box.style.left = (left + window.scrollX) + 'px';
+  box.style.setProperty('--ax', (r.left + r.width / 2 - left - 7) + 'px');
+  box.style.top = (window.scrollY + (TIP.tip.up ? r.top - 16 - box.offsetHeight : r.bottom + 16)) + 'px';
+}
+function tipOk(go){
+  if (!TIP) return;
+  try { localStorage.setItem(TIPK, JSON.stringify(tipSeen().concat(TIP.tip.id))); } catch (e) {}
+  tipDraw(go);
+}
+
 /* ---------- render ---------- */
 function render(){
   $('#nav').hidden = !PLAN.length && !ownOn();                  // bez planu, ale z własnymi treningami: menu jest
@@ -1193,6 +1249,7 @@ function render(){
   $('#main').hidden = TAB !== 'trening'; $('#plan').hidden = TAB !== 'plan'; $('#dysp').hidden = TAB !== 'dysp'; $('#postep').hidden = TAB !== 'postep'; $('#trener').hidden = TAB !== 'trener';
   if (TAB === 'plan') renderPlan(); else if (TAB === 'dysp') renderDysp(); else if (TAB === 'postep') renderPostep(); else if (TAB === 'trener') renderTrener(); else renderTrening();
   navDot();
+  if (TAB !== 'trening') tipDraw();
 }
 /** pusty stan: karta z ikoną; btn = [id albo atrybut, napis] */
 const ES_ICON = {
@@ -2117,7 +2174,7 @@ function renderTrening(){
     renderTrening();
   });
   const open = !sessDone(cur.week, cur.day);
-  let h = sbNote() + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section>' : '') + weekBar('t') + notesCard() + readyBanner() + helpCard();
+  let h = sbNote() + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section>' : '') + weekBar('t') + notesCard() + readyBanner();
   const grps = circuitGroups(exs), gOf = o => grps.find(g => g.orders.includes(o));
   exs.forEach(ex => {
     const g = gOf(ex.order), i = g ? g.orders.indexOf(ex.order) : -1;
@@ -2128,7 +2185,7 @@ function renderTrening(){
   if (s0.own && ownOn() && !sessDone(cur.week, cur.day)) h += '<button type="button" class="ghost own-add" id="own-add">+ ćwiczenie</button>';
   if (EDIT && !s0.own && open) h += '<button type="button" class="ghost own-add" id="ed-add">+ ćwiczenie</button>';
   if (EDIT && !s0.own) h += edRemoved();
-  h += sessCard(s0);
+  h += sessCard(s0) + helpCard();
   $('#main').innerHTML = h;
   CIRC = grps; bind(exs, s0);
   grps.forEach(g => grpDraw(g.id));
@@ -2141,6 +2198,7 @@ function renderTrening(){
   stickDraw();
   refreshStats();
   bindWeekBar();
+  tipDraw();
   const sb = $('#sb-ok'); if (sb) sb.onclick = () => { try { localStorage.setItem(SBK, '1'); } catch (e) {} sb.closest('.sbnote').remove(); };
   $('#go-dysp').onclick = () => { TAB = 'dysp'; render(); window.scrollTo(0, 0); };
   // „⋯” jednostki w górnym pasku: rzadkie akcje całego treningu

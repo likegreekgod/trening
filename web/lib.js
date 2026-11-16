@@ -892,6 +892,9 @@
     return { need: Math.ceil(start / 60), left: Math.ceil(need / 60), cuts, fits: need <= goal };
   };
 
+  /** podpowiedzi po kolei: pierwsza nieobejrzana, której element jest teraz na ekranie; '' gdy nie ma czego pokazać */
+  L.nextTip = (order, seen, avail) => (order || []).find(id => !(seen || []).includes(id) && (avail || []).includes(id)) || '';
+
   /** klucz klienta z wklejonego linku (…?k=k…) albo samego kodu „k” + 11 znaków hex; '' gdy nie rozpoznano */
   L.keyFrom = v => {
     const t = String(v || '').trim();

@@ -35,6 +35,8 @@ async function page(calls, offline, opt = {}) {
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
       body: JSON.stringify({ ok: true, result: b.fn === 'getData' ? data : (opt.api && opt.api(b)) || { ok: true } }) });
   });
+  // podpowiedzi przy pierwszym użyciu zasłaniają część karty: domyślnie obejrzane, opt.tips je włącza
+  if (!opt.tips) await ctx.addInitScript(() => { try { ['kabc', 'k0123456789a', 'kABCDEF01234'].forEach(k => localStorage.setItem('tip_' + k, '["seria","wiecej","kamera","dzien"]')); } catch (e) {} });
   const p = await ctx.newPage(); p.errors = []; p.on('pageerror', e => p.errors.push(e.message));
   p.external = []; p.on('request', q => { if (!q.url().startsWith(base) && !/\/macros\//.test(q.url())) p.external.push(q.url()); });
   return { ctx, p };
@@ -2018,4 +2020,59 @@ test('Ruch: karta zwija się płynnie (stan od razu, wysokość w 0,2 s), ✓ do
     await ctx.close();
   };
   await run(true); await run(false);
+});
+
+for (const [mode, data] of [['prosty', DATA], ['pro', PRO]]) for (const scheme of ['light', 'dark'])
+test(`podpowiedzi przy pierwszym użyciu (${mode}, ${scheme}): po kolei, każda raz, „Rozumiem” albo użycie elementu`, async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { tips: true, data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#tip:not([hidden])');
+  const tip = () => p.$eval('#tip', e => e.hidden ? '' : e.textContent);
+  const ring = () => p.$eval('.tipring', e => e.className + '|' + (e.dataset.more || '') + '|' + (e.closest('.set') ? e.closest('.set').dataset.s : ''));
+  assert.match(await tip(), /Zrobione\? Dotknij ✓.*1 z 4/);
+  assert.match(await ring(), /^ok .*\|1$/);                                   // ramka na ✓ pierwszej serii
+  // dymek nad ✓, strzałka wskazuje środek przycisku, mieści się w ekranie
+  const geo = await p.evaluate(() => { const t = document.querySelector('#tip').getBoundingClientRect(), o = document.querySelector('.tipring').getBoundingClientRect();
+    return { above: t.bottom <= o.top, l: t.left, r: t.right, ax: t.left + parseFloat(getComputedStyle(document.querySelector('#tip')).getPropertyValue('--ax')) + 7, cx: o.left + o.width / 2, bh: document.querySelector('#tip-ok').offsetHeight }; });
+  assert.ok(geo.above && geo.l >= 12 && geo.r <= 378 && Math.abs(geo.ax - geo.cx) < 1 && geo.bh >= 44, JSON.stringify(geo));
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `podpowiedz-${mode}-${scheme}.png`) }); }
+  if (mode === 'prosty') assert.equal(await p.$eval('details.help', e => e.open), false);   // długa ściągawka zwinięta, na dole
+  else assert.equal(await p.$('details.help'), null);
+  await p.click('#tip-ok');
+  assert.match(await tip(), /Więcej pod „⋯”.*2 z 4/);
+  assert.match(await ring(), /\|1\|$/);
+  assert.equal(await p.$$eval('.tipring', a => a.length), 1);
+  await p.click('.tipring');                                                  // użycie elementu = obejrzane; okno „⋯” się otwiera
+  await p.waitForSelector('#sheet:not([hidden])');
+  assert.match(await tip(), /Nagraj serię.*3 z 4/);
+  await p.evaluate(() => closeSheet());
+  await p.reload(); await p.waitForSelector('#tip:not([hidden])');           // po ponownym otwarciu ciąg dalszy, nie od początku
+  assert.match(await tip(), /Nagraj serię.*3 z 4/);
+  await p.click('#tip-ok');
+  assert.match(await tip(), /Inny dzień\?.*4 z 4/);
+  if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, `podpowiedz-dzien-${mode}-${scheme}.png`) });
+  await p.click('#tip-ok');
+  assert.equal(await tip(), '');
+  assert.equal(await p.$('.tipring'), null);
+  assert.deepEqual(await p.evaluate(() => JSON.parse(localStorage.getItem('tip_kabc'))), ['seria', 'wiecej', 'kamera', 'dzien']);
+  await p.reload(); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await p.$('#tip:not([hidden])'), null);
+  assert.equal(calls.filter(c => c.fn !== 'getData').length, 0);             // podpowiedzi niczego nie zapisują na serwerze
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('podpowiedź znika poza Treningiem i idzie za elementem, gdy karta zmienia wysokość', async () => {
+  const { ctx, p } = await page([], false, { tips: true });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#tip:not([hidden])');
+  const gap = () => p.evaluate(() => Math.round(document.querySelector('.tipring').getBoundingClientRect().top - document.querySelector('#tip').getBoundingClientRect().bottom));
+  assert.equal(await gap(), 16);
+  await p.click('.card[data-card="1"] [data-warm]');                         // nowy wiersz rozgrzewki przesuwa ✓ w dół
+  await p.waitForFunction(() => Math.round(document.querySelector('.tipring').getBoundingClientRect().top - document.querySelector('#tip').getBoundingClientRect().bottom) === 16);
+  await p.click('#nav [data-tab="plan"]');
+  assert.equal(await p.$eval('#tip', e => e.hidden), true);
+  await p.click('#nav [data-tab="trening"]');
+  assert.equal(await p.$eval('#tip', e => e.hidden), false);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
 });
