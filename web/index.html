@@ -120,6 +120,19 @@
   .wk-u.st-late{background:var(--bad);color:var(--surface)}
   .wk-u.st-today{background:var(--accent);color:var(--on-accent)}
   .wk-hint{margin:2px 8px 4px;font-size:12px;color:var(--muted);text-align:center}
+  /* karta „dziś”: co dziś i ile to potrwa, przycisk do pierwszego niezrobionego ćwiczenia */
+  .today{background:var(--surface);border:1px solid var(--line);border-radius:var(--rc);box-shadow:inset 5px 0 0 var(--accent),var(--shadow);margin-top:10px;padding:14px 16px 14px 20px}
+  .td-row{display:flex;align-items:center;gap:12px}
+  .td-row > div{flex:1;min-width:0}
+  .td-row .btn.p{width:auto;flex:0 0 auto;padding:12px 18px;margin:0}
+  .td-e{font:600 12px/1.2 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .td-t{font:700 25px/1.02 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink)}
+  .td-s{font-size:14px;color:var(--ink-2);margin-top:4px}
+  .td-s b{color:var(--ink);white-space:nowrap}
+  .td-pb{height:6px;border-radius:3px;background:var(--surface-2);margin-top:12px;overflow:hidden}
+  .td-pb i{display:block;height:100%;background:var(--accent)}
+  .td-n{font-size:13px;color:var(--muted);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .td-n b{color:var(--ink-2);font-weight:600}
   .wk .offer{margin:6px 8px 4px}
   .mv-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
   .mv-g .lbl{padding:2px 0}
@@ -722,7 +735,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
   doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
-  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit } = window.TL;
+  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -1179,6 +1192,30 @@ function refreshStats(){
   const sets = $('#st-sets'), ton = $('#st-ton');
   if (sets) sets.textContent = st.done + '/' + st.all;
   if (ton) ton.textContent = st.ton.toLocaleString('pl-PL');
+  todayDraw();
+}
+/** karta „dziś” (lib todayInfo): przed startem ile ćwiczeń, serii i minut; w trakcie postęp i następne ćwiczenie; po serii rysowana od nowa */
+function todayDraw(){
+  const box = $('#today'); if (!box) return;
+  const exs = curExs(); if (!exs.length) return;
+  const t = todayInfo(exs.map(ex => ({ order: ex.order, name: ex.name, prio: ex.prio, sets: ex.skip && !ex.sets ? 0 : ex.sets,
+    done: document.querySelectorAll(`.set[data-o="${ex.order}"][data-k="p"]:not([data-st=""])`).length })), curDate(), localDate(), unitList().some(u => u.date === localDate()));
+  const d = weekday(curDate()) + ' ' + ddmm(curDate());
+  const eye = { today: 'Dziś · ' + d, late: 'Zaległy · ' + d, free: 'Dziś wolne · najbliższy: ' + d, plan: 'Zaplanowany · ' + d }[t.when];
+  const line = !t.next ? 'Wszystkie serie zrobione. Zostało podsumowanie.'
+    : t.done ? `Zrobione <b>${t.done} z ${t.all}</b> ${plural(t.all, 'serii', 'serii', 'serii')} · zostało ok. <b>${t.min} min</b>`
+    : `<b>${t.n}</b> ${plural(t.n, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} · <b>${t.all}</b> ${plural(t.all, 'seria', 'serie', 'serii')} · ok. <b>${t.min} min</b>`;
+  box.innerHTML = `<div class="td-row"><div><div class="td-e">${eye}</div><div class="td-t">${esc(exs[0].title || cur.day)}</div><div class="td-s">${line}</div></div>
+      <button type="button" class="btn p" id="td-go">${!t.next ? 'Zakończ' : t.done ? 'Dalej' : 'Zacznij'}</button></div>` +
+    (t.done && t.next ? `<div class="td-pb" role="progressbar" aria-label="Zrobione serie" aria-valuemin="0" aria-valuemax="${t.all}" aria-valuenow="${t.done}"><i style="width:${Math.round(100 * t.done / t.all)}%"></i></div>
+      <div class="td-n">Następne: <b>${esc(t.next.name)}</b></div>` : '');
+  box.hidden = false;
+  $('#td-go').onclick = () => {
+    if (t.next) setFold(t.next.order, false);
+    const c = t.next ? document.querySelector(`.card[data-card="${t.next.order}"]`) : document.querySelector('.card.sess'); if (!c) return;
+    const g = c.closest('.grp') || c;
+    window.scrollTo({ top: g.getBoundingClientRect().top + window.scrollY - 8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  };
 }
 
 /* ---------- ekran Dyspozycja: ankieta Hoopera, CMJ, prędkość na rozgrzewce → werdykt ---------- */
@@ -1534,7 +1571,7 @@ function weekBar(mode){
       return `<button type="button" class="wk-d ${d.date === today ? 'now' : ''} ${d.items.length ? '' : 'free'} ${curIn ? 'cur' : ''}" data-date="${d.date}" aria-label="${esc(lbl)}" ${d.items.length ? '' : 'tabindex="-1"'}>
         <span class="wk-wd">${WD[i]}</span><span class="wk-dd">${d.date.slice(8, 10)}</span>
         ${d.items.map(it => `<span class="wk-u st-${it.st}">${esc(it.day)}<i aria-hidden="true">${WK_MARK[it.st]}</i></span>`).join('')}</button>`; }).join('')}</div>
-    <p class="wk-hint">Dotknij dnia, aby otworzyć trening · przytrzymaj, aby zmienić dzień</p>${offer}</section>`;
+    ${mode === 't' ? '' : '<p class="wk-hint">Dotknij dnia, aby otworzyć trening · przytrzymaj, aby zmienić dzień</p>'}${offer}</section>`;
 }
 function bindWeekBar(){
   const bar = document.querySelector((TAB === 'plan' ? '#plan' : '#main') + ' .wk'); if (!bar) return;
@@ -2053,7 +2090,7 @@ function renderTrening(){
     renderTrening();
   });
   const open = !sessDone(cur.week, cur.day);
-  let h = sbNote() + weekBar('t') + notesCard() + readyBanner() + helpCard();
+  let h = sbNote() + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section>' : '') + weekBar('t') + notesCard() + readyBanner() + helpCard();
   const grps = circuitGroups(exs), gOf = o => grps.find(g => g.orders.includes(o));
   exs.forEach(ex => {
     const g = gOf(ex.order), i = g ? g.orders.indexOf(ex.order) : -1;
@@ -2623,6 +2660,7 @@ function foldSum(o){
 function setFold(o, on, keep = true){
   const c = document.querySelector(`.card[data-card="${o}"]`); if (!c) return;
   c.classList.toggle('fold', on); c.querySelectorAll('[data-fold]').forEach(b => b.setAttribute('aria-expanded', String(!on)));
+  if (on) { const ch = c.querySelector('.ch'); if (ch) { ch.classList.remove('stuck'); ch.style.marginBottom = ''; } }   // zwinięta karta nie ma przypiętej nazwy (bez czekania na przewinięcie)
   if (keep) { const m = foldGet(); m[foldKey(o)] = on ? 1 : 0; try { localStorage.setItem(FK, JSON.stringify(m)); } catch (e) {} }
 }
 function bindFold(exs){

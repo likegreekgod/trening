@@ -2,6 +2,15 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-16 · Karta „dziś” na Treningu (v45, plan v4 PR 5)
+
+- Wybrany wariant B: wąska karta nad paskiem tygodnia (etykieta dnia, tytuł jednostki, „n ćwiczeń · n serii · ok. n min”, przycisk „Zacznij”), żeby pierwsze ćwiczenie było widać bez przewijania. Odrzucony wariant A (kafle i pełna lista ćwiczeń): zajmował cały pierwszy ekran.
+- W trakcie: „Zrobione x z y serii · zostało ok. n min”, pasek postępu, „Następne: <ćwiczenie>”, przycisk „Dalej” (otwiera i przewija do pierwszego niezrobionego). Wszystkie serie zrobione: „Zakończ” przewija do podsumowania. Po zapisaniu jednostki karty nie ma.
+- Czas to szacunek jak w „Skróć trening” (45 s seria + przerwa wg priorytetu), zaokrąglony do 5 min; liczą się serie z planu, bez rozgrzewek i dodatkowych.
+- Etykieta: „Dziś”, „Zaległy”, „Zaplanowany”, a gdy na dziś nie ma jednostki „Dziś wolne · najbliższy: …”. Aplikacja dalej sama otwiera najbliższą albo zaległą jednostkę (bez osobnego ekranu „Dziś wolne”): przyjęte przez Claude jako bezpieczne ustawienie domyślne, Damian odpowiedział tylko na wybór wariantu.
+- Pasek tygodnia na Treningu bez podpowiedzi „Dotknij dnia…” (zostaje w Planie i w „Jak to działa?”).
+- Przy okazji: zwinięcie karty z przypiętą nazwą od razu zdejmuje przypięcie (wcześniej dopiero przy przewinięciu, przez co test „Karta v4” bywał czerwony).
+
 ## 2026-11-15 · Rekord w chwili zapisu serii (v44, plan v4 PR 4)
 
 - Wybrany wariant A: pasek „★ Rekord” pod wierszem serii, widoczny do końca treningu. Odrzucony wariant B (gwiazdka przy numerze + komunikat na dole): komunikat znika po 2,5 s i pojawia się razem z przerwą, więc łatwo go przegapić.

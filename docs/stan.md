@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-15, aplikacja v44 (v44 w PR #66, czeka na scalenie; `main` = v43 po PR #65).
+Stan na 2026-11-16, aplikacja v45 (v45 w PR #67, czeka na scalenie; `main` = v44 po PR #66).
 
 ## Jak pracujemy
 
@@ -18,6 +18,7 @@ Stan na 2026-11-15, aplikacja v44 (v44 w PR #66, czeka na scalenie; `main` = v43
 
 ## Ostatnio zrobione
 
+- 16.11 (v45): plan v4 PR 5: karta „dziś” nad paskiem tygodnia (ile ćwiczeń, serii i minut, „Zacznij” / „Dalej” / „Zakończ”, postęp w trakcie).
 - 15.11 (v44): plan v4 PR 4: rekord w chwili zapisu serii, pasek „★ Rekord” pod najlepszą serią ćwiczenia głównego (PRO z liczbami, PROSTY bez).
 - 13.11 (v43): plan v4 PR 11: nazwa ćwiczenia przypięta u góry przy przewijaniu długiej karty; komentarz do ćwiczenia w osobnym oknie (poprawia istniejący).
 - 13.11 (v42 + `apps-script/`): plan v4 PR 10: osoby z flagą `edycja` (Klienci N = TAK) mogą w jednostce trenera dodać ćwiczenie, usunąć je ze śladem i zamienić, tylko w tym treningu albo na stałe.
@@ -39,12 +40,13 @@ Stan na 2026-11-15, aplikacja v44 (v44 w PR #66, czeka na scalenie; `main` = v43
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 5 (ekran „dziś”), po decyzji Damiana, czy dalej chce; najpierw szkic. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 5 (v45), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 6 (ruch i timer), po decyzji Damiana, czy dalej chce; najpierw szkic. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- Scalenie PR #66 (v44, rekord przy zapisie serii), założonego 15.11 za zgodą Damiana; potem próba na telefonie.
-- Decyzja, czy robimy PR 5 (ekran „dziś”).
+- Scalenie PR #67 (v45, karta „dziś”), założonego 16.11 za zgodą Damiana; potem próba na telefonie. Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
+- Decyzja, czy robimy PR 6 (ruch i timer).
+- Próba na telefonie: pasek „★ Rekord” (v44).
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
 
