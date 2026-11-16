@@ -1881,3 +1881,57 @@ test('Rekord przy zapisie serii: pasek pod najlepszą serią ćwiczenia główne
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
+
+// v45 (plan v4 PR 5): karta „dziś” nad paskiem tygodnia
+for (const scheme of ['light', 'dark']) test('Karta „dziś” (' + scheme + '): przed startem ćwiczenia / serie / minuty i „Zacznij”, w trakcie postęp i „Dalej”, po seriach „Zakończ”, po zapisie jednostki znika', async () => {
+  const d = new Date(), iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const data = Object.assign({}, DATA, { plan: DATA.plan.map(r => Object.assign({}, r, { date: iso })) });
+  const { ctx, p } = await page([], false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#today:not([hidden])');
+  const txt = async s => (await p.textContent(s)).replace(/\s+/g, ' ').trim();
+  assert.match(await txt('#today .td-e'), /^Dziś · /);
+  assert.equal(await txt('#today .td-t'), 'FBW A');
+  assert.equal(await txt('#today .td-s'), '2 ćwiczenia · 5 serii · ok. 15 min');     // 5 serii A × (45 s + 2:00) ≈ 14 min → do 5 min
+  assert.equal(await txt('#td-go'), 'Zacznij');
+  assert.equal(await p.$('#today .td-pb'), null);
+  assert.equal(await p.$('#main .wk .wk-hint'), null);                              // pasek tygodnia na Treningu bez podpowiedzi
+  assert.ok((await p.$eval('#td-go', b => b.getBoundingClientRect().height)) >= 44);
+  assert.ok(await p.$eval('#today', t => t.nextElementSibling.classList.contains('wk')));
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `dzis-${scheme}.png`) }); }
+  // „Zacznij” przewija do pierwszego niezrobionego ćwiczenia
+  await p.click('#td-go');
+  await p.waitForFunction(() => { const r = document.querySelector('.card[data-card="1"]').getBoundingClientRect(); return window.scrollY > 0 && r.top < 200; });
+  // w trakcie: wszystkie serie pierwszego ćwiczenia → postęp i następne
+  for (const s of [1, 2, 3]) await p.click(`.set[data-o="1"][data-s="${s}"] .ok`);
+  await p.waitForFunction(() => /Zrobione 3 z 5/.test(document.querySelector('#today').textContent));
+  await p.waitForSelector('.card[data-card="1"].fold');                             // zrobione ćwiczenie zwija się samo (z opóźnieniem)
+  assert.equal(await txt('#today .td-s'), 'Zrobione 3 z 5 serii · zostało ok. 5 min');
+  assert.equal(await txt('#today .td-n'), 'Następne: Zarzut i podrzut');
+  assert.equal(await p.getAttribute('#today .td-pb', 'aria-valuenow'), '3');
+  assert.equal(await txt('#td-go'), 'Dalej');
+  if (process.env.SCREENS !== '0') { await p.evaluate(() => { window.scrollTo(0, 0); document.querySelector('#toast').style.display = 'none'; }); await p.waitForTimeout(300); await p.screenshot({ path: path.join(SCREENS, `dzis-w-trakcie-${scheme}.png`) }); }
+  // „Dalej” otwiera zwinięte ćwiczenie i przewija do niego
+  await p.click('.card[data-card="2"] .fold-c');
+  await p.emulateMedia({ reducedMotion: 'reduce', colorScheme: scheme });           // bez płynnego przewijania: skok od razu
+  await p.evaluate(() => window.scrollTo(0, 0)); await p.click('#td-go');
+  assert.equal(await p.getAttribute('.card[data-card="2"] .fold-c', 'aria-expanded'), 'true');
+  await p.click('.card[data-card="1"] .fold-c');                                    // zrobione ćwiczenie zwinęło się samo: otwórz
+  // cofnięcie serii zmniejsza postęp
+  await p.click('.set[data-o="1"][data-s="3"] .ok'); await p.click('.set[data-o="1"][data-s="3"] .ok');
+  await p.waitForFunction(() => /Zrobione 2 z 5/.test(document.querySelector('#today').textContent));
+  assert.equal(await txt('#today .td-n'), 'Następne: Wyciskanie sztangi na ławce płaskiej');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Karta „dziś”: jednostka z innego dnia = „Zaległy”, po zapisaniu jednostki karty nie ma', async () => {
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#today:not([hidden])');
+  assert.equal((await p.textContent('#today .td-e')).trim(), 'Zaległy · wt 06.10');
+  await ctx.close();
+  const done = Object.assign({}, DATA, { sessions: [{ id: 'robert|1|T1', tydzien: 1, jednostka: 'T1', start: '2026-10-06T10:00:00.000Z' }] });
+  const t2 = await page([], false, { data: done });
+  await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await t2.p.$('#today'), null);
+  await t2.ctx.close();
+});

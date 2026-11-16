@@ -603,3 +603,19 @@ test('planEdit: zmiany w jednostce trenera w telefonie (dodaj, usuń, przywróć
   assert.equal(E({ op: 'swap', week: 1, day: 'T1', order: 2, to: 'suwnica' }).error, 'Podaj inne ćwiczenie.');
   assert.equal(E({ op: 'del', week: 1, day: 'T1', order: 9 }).error, 'Nie ma takiego ćwiczenia w jednostce.');
 });
+
+test('todayInfo: karta „dziś” – ile ćwiczeń, serii i minut, następne ćwiczenie, etykieta dnia', () => {
+  const exs = [{ order: 1, name: 'Wyciskanie', prio: 'A', sets: 4, done: 0 }, { order: 2, name: 'Wiosłowanie', prio: 'B', sets: 3, done: 0 },
+    { order: 3, name: 'Face pull', prio: 'K', sets: 3, done: 0 }, { order: 4, name: 'Pominięte', prio: 'B', sets: 0, done: 0 }];
+  const t = L.todayInfo(exs, '2026-11-16', '2026-11-16', true);
+  // 4 × (45 + 120) + 3 × (45 + 90) + 3 × (45 + 60) = 1380 s = 23 min → do 5 min
+  assert.deepEqual([t.n, t.all, t.done, t.min, t.next.order, t.when], [3, 10, 0, 25, 1, 'today']);
+  exs[0].done = 6; exs[1].done = 1;                               // serie dodatkowe nie liczą się ponad plan
+  const m = L.todayInfo(exs, '2026-11-14', '2026-11-16', true);
+  assert.deepEqual([m.done, m.min, m.next.name, m.when], [5, 10, 'Wiosłowanie', 'late']);
+  exs[1].done = 3; exs[2].done = 3;
+  const e = L.todayInfo(exs, '2026-11-18', '2026-11-16', false);
+  assert.deepEqual([e.done, e.min, e.next, e.when], [10, 0, null, 'free']);
+  assert.equal(L.todayInfo(exs, '2026-11-18', '2026-11-16', true).when, 'plan');
+  assert.equal(L.todayInfo([{ order: 1, name: 'X', prio: 'K', sets: 1, done: 0 }], '', '2026-11-16', false).min, 5);   // nigdy „0 min” przy niezrobionej serii
+});

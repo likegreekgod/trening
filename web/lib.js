@@ -845,6 +845,20 @@
     return s.find(u => u.date === today && !u.done) || s.find(u => u.date >= today && !u.done) || s.find(u => u.date >= today) || s[s.length - 1] || null;
   };
 
+  /**
+   * Karta „dziś” na górze Treningu. exs: [{order, name, prio, sets, done}] (done = zrobione serie z planu; sets 0 = pominięte),
+   * date = dzień jednostki, today = dziś, hasToday = czy na dziś jest w planie jakaś jednostka.
+   * → {n, all, done, min (ile zostało, do 5 min, szacunek jak w cutPlan), next: {order, name} | null, when: today | late | free | plan}
+   */
+  L.todayInfo = (exs, date, today, hasToday) => {
+    const live = (exs || []).filter(ex => ex.sets > 0), dn = ex => Math.min(ex.sets, Math.max(0, ex.done || 0));
+    const sec = live.reduce((a, ex) => a + (ex.sets - dn(ex)) * (L.SET_SEC + L.restSec(ex.prio)), 0);
+    const nx = live.find(ex => dn(ex) < ex.sets);
+    return { n: live.length, all: live.reduce((a, ex) => a + ex.sets, 0), done: live.reduce((a, ex) => a + dn(ex), 0),
+      min: sec ? Math.max(5, Math.round(sec / 300) * 5) : 0, next: nx ? { order: nx.order, name: nx.name } : null,
+      when: !date || date === today ? 'today' : date < today ? 'late' : hasToday ? 'plan' : 'free' };
+  };
+
   /* ---------- pominięte / skrócone ćwiczenie: Log seria 0, typ SKIP, uwagi = ten tekst ---------- */
   L.SKIP_WHY = ['brak czasu', 'ból', 'sprzęt', 'inne'];
   /** {to, from, why} → „skrócone do 2 z 4 serii · brak czasu” (to > 0) albo sam powód (całe pominięte) */

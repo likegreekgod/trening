@@ -67,7 +67,8 @@ Cel: gdy zapisana seria bije dotychczasowy wynik, klient widzi to od razu.
 - Na górze Treningu jedna karta: tytuł jednostki, liczba ćwiczeń, szacowany czas (`SET_SEC` + `restSec`, jak w `cutPlan`), przycisk „Zacznij” (przewija do pierwszego niezrobionego ćwiczenia). Dzień bez jednostki: „Dziś wolne” + najbliższa jednostka.
 - Pasek tygodnia (`weekBar`), `notesCard`, `readyBanner`, `helpCard` zostają pod spodem; do szkicu, czy mniejsze.
 - **Szkic pokazany 16.11** (pliki poza repo, do odtworzenia skryptem z atrapą: karta wstawiona przed `.wk`): karta z paskiem akcentu z lewej, nad paskiem tygodnia, etykieta „Dziś · pon 16.11”, tytuł jednostki. Wariant A = kafle Ćwiczenia / Serie / Czas, lista ćwiczeń (etykieta A/B/K, nazwa, serie×powt.), przycisk „Zacznij trening”; w trakcie: „Zrobione 6 z 17 serii · zostało ok. 25 min”, pasek postępu, zrobione przekreślone, następne pogrubione, przycisk „Dalej: <ćwiczenie>”. Wariant B = jeden wiersz „5 ćwiczeń · 17 serii · ok. 40 min” z przyciskiem „Zacznij”, pasek tygodnia bez podpowiedzi. Dzień wolny: „Dziś wolne”, najbliższy trening z datą i szacunkiem, „Otwórz trening” i „+ Własny trening” (tylko `cfg.own`).
-- Pytania do Damiana: wariant A czy B; czy w dzień wolny pokazywać „Dziś wolne” (dziś aplikacja sama otwiera najbliższą albo zaległą jednostkę); czy karta zostaje po zakończeniu jednostki (propozycja: znika, zostaje „zrobiona ✓” w nagłówku); czy przy jednostce z innego dnia etykieta „Zaległy · …” / „Zaplanowany · …” zamiast „Dziś”.
+- **Ustalone 16.11:** wariant B. Pozostałe pytania bez odpowiedzi, przyjęte ustawienia domyślne (szczegóły w `decyzje.md`). Zrobione w v45.
+- Pytania zadane 16.11: wariant A czy B; czy w dzień wolny pokazywać „Dziś wolne” (dziś aplikacja sama otwiera najbliższą albo zaległą jednostkę); czy karta zostaje po zakończeniu jednostki (propozycja: znika, zostaje „zrobiona ✓” w nagłówku); czy przy jednostce z innego dnia etykieta „Zaległy · …” / „Zaplanowany · …” zamiast „Dziś”.
 
 ### PR 6 · Dopracowanie ruchu i timera
 
@@ -130,7 +131,7 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 2 | Podsumowanie po treningu | zrobione (v40): układ A (kafle), porównanie z poprzednią taką samą jednostką; lib `unitSummary`, `doneSummary` / `openDone` |
 | 3 | Historia ćwiczenia w karcie | zrobione (v41): wariant A (wykres + 5 treningów), „Ostatnio” jako przycisk; lib `exHistory`, `openHist`, `effTxt` |
 | 4 | Rekord w chwili zapisu | zrobione (v44): wariant A, pasek „★ Rekord” pod najlepszą serią ćwiczenia głównego, PROSTY bez liczb; lib `unitRecord`, `recDraw`, `unitSets` |
-| 5 | Ekran „dziś” | szkic pokazany 16.11, czeka na wybór wariantu |
+| 5 | Ekran „dziś” | zrobione (v45): wariant B, karta `#today` nad paskiem tygodnia; lib `todayInfo`, `todayDraw` |
 | 6 | Ruch i timer | po decyzji |
 | 7 | Podpowiedzi przy pierwszym użyciu | po decyzji |
 | 8 | Tryb skupienia | po decyzji, osobny szkic |
