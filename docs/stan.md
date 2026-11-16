@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-15, aplikacja v44 (v44 w PR #66, czeka na scalenie; `main` = v43 po PR #65).
+Stan na 2026-11-16, aplikacja v44 (`main` = v44 po PR #66).
 
 ## Jak pracujemy
 
@@ -39,12 +39,12 @@ Stan na 2026-11-15, aplikacja v44 (v44 w PR #66, czeka na scalenie; `main` = v43
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 5 (ekran „dziś”), po decyzji Damiana, czy dalej chce; najpierw szkic. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 5 (ekran „dziś”): szkic pokazany 16.11, czeka na wybór wariantu; kod dopiero po akceptacji. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- Scalenie PR #66 (v44, rekord przy zapisie serii), założonego 15.11 za zgodą Damiana; potem próba na telefonie.
-- Decyzja, czy robimy PR 5 (ekran „dziś”).
+- PR 5 (ekran „dziś”): wybór wariantu ze szkicu z 16.11 (A duża karta z listą ćwiczeń / B wąski pasek) i odpowiedzi na pytania z `plan-v4.md`.
+- Próba na telefonie: pasek „★ Rekord” (v44).
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
 
