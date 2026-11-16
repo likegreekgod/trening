@@ -90,6 +90,8 @@ Cel: gdy zapisana seria bije dotychczasowy wynik, klient widzi to od razu.
 - Jedno ćwiczenie na ekranie, przesunięcie palcem do następnego, pasek postępu jednostki, obwód jako A1 → A2 → A3.
 - Najpierw szkic do porównania z obecnym widokiem. Proponowane jako **przełącznik** (lista / skupienie, zapamiętany w localStorage), a nie zamiana, żeby nie zmieniać nawyków klientom z dnia na dzień.
 - Ryzyko: prawie wszystkie testy UI zakładają, że wszystkie karty są w DOM. W trybie skupienia zostaw wszystkie karty w DOM i pokazuj jedną (CSS), wtedy logika i testy listy zostają.
+- **Szkic pokazany 16.11** (pliki poza repo, do odtworzenia skryptem z atrapą: ukrycie `#today`, `.wk`, banera dyspozycji, pozostałych kart i podsumowania, wstawiony pasek na górze `#main`). Wspólne: górny pasek aplikacji bez zmian; pod nim karta „Ćwiczenie 2 z 5” z przyciskiem „☰ Cała lista” (powrót do zwykłego widoku); niżej jedna, zawsze rozwinięta karta ćwiczenia bez zmian w środku; obwód = cała ramka (A1, A2…) jako jeden krok. Wariant A = pasek z pięciu odcinków (zrobione zielone, bieżące w kolorze akcentu) i pod kartą przyciski „‹” oraz „Następne: <ćwiczenie> ›”. Wariant B = zamiast odcinków przyciski 1 / 2 / A1 / A2 / 5 (zrobione z ✓), dotknięcie przeskakuje do ćwiczenia, bez przycisków pod kartą. W obu przesunięcie palcem w bok zmienia ćwiczenie.
+- Pytania zadane 16.11: A czy B; przełącznik (domyślnie lista, wybór zapamiętany) czy nowy domyślny widok; po zrobieniu ostatniej serii przejść samo do następnego ćwiczenia czy czekać na „Następne”; gdzie włączać tryb (propozycja: „⋯” w górnym pasku → „Tryb skupienia”, wyjście przez „☰ Cała lista”); ostatni krok = podsumowanie jednostki („Zakończ i zapisz”) jako osobny ekran po ostatnim ćwiczeniu (propozycja: tak).
 
 ### PR 9 · Funkcje wymagające arkusza
 
@@ -139,7 +141,7 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 5 | Ekran „dziś” | zrobione (v45): wariant B, karta `#today` nad paskiem tygodnia; lib `todayInfo`, `todayDraw` |
 | 6 | Ruch i timer | zrobione (v46): timer B (pasek u góry, czerwone ostatnie 10 s), puste stany jako karty (`emptyCard`), płynne zwijanie (`foldMove`) i ruch ✓ (`.ok.pop`) |
 | 7 | Podpowiedzi przy pierwszym użyciu | zrobione (v47): wariant A, dymek `#tip` przy elemencie, po kolei; lib `nextTip`, `tipDraw` / `tipPlace` / `tipOk`, stan w `tip_<klucz>` |
-| 8 | Tryb skupienia | po decyzji, osobny szkic |
+| 8 | Tryb skupienia | szkic pokazany 16.11 (warianty A / B), czeka na wybór; kodu nie ma |
 | 9 | Raport po bloku, notatka do jednostki | po decyzji |
 | 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zrobione (v42 + `apps-script/`): flaga Klienci N `edycja`, API `editPlan`, lib `planEdit`; szczegóły w `decyzje.md` |
 | 11 | Przypięta nazwa ćwiczenia przy przewijaniu; komentarz do ćwiczenia w osobnym oknie | zrobione (v43): nazwa przypięta w wariancie B (`stickDraw`, `.ch.stuck`), komentarz w oknie (`openNote`) |
