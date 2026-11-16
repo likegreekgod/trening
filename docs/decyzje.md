@@ -2,6 +2,13 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-16 · Ruch i timer (v46, plan v4 PR 6)
+
+- Timer przerwy: wybrany wariant B. Układ i duże cyfry bez zmian, pasek postępu 8 px na górnej krawędzi (było 3 px na dole); w ostatnich 10 s (`REST_END`) cyfry i pasek czerwone, etykieta „Zaraz koniec · <ćwiczenie>”; „+15” ponad 10 s wraca do zwykłego wyglądu. Odrzucony wariant A (koło z czasem w środku): cyfry 30 px zamiast 46, a telefon zwykle leży na podłodze.
+- Puste stany jako karta `.es` (`emptyCard`: ikona, nagłówek, zdanie, czasem przycisk): brak planu bez własnych treningów („Sprawdź ponownie” = ponowne `getData`), Postęp → Siła / Objętość / Dyspozycja („Przejdź do treningu” / „Przejdź do dyspozycji”), zakładka Trener (bez przycisku).
+- Ruch: karta zwija się i rozwija płynnie (0,2 s, `foldMove`: klasa `fold` zmienia się od razu, animuje się tylko wysokość karty, więc logika i testy nie czekają), ✓ przy zaliczeniu serii krótko „podskakuje” (`.ok.pop`). Pierwsze rysowanie ekranu bez animacji. Przy `prefers-reduced-motion` nic się nie animuje.
+- Testy UI domyślnie działają z ograniczeniem ruchu (stabilne pomiary); ruch sprawdza osobny test z `motion: true`.
+
 ## 2026-11-16 · Karta „dziś” na Treningu (v45, plan v4 PR 5)
 
 - Wybrany wariant B: wąska karta nad paskiem tygodnia (etykieta dnia, tytuł jednostki, „n ćwiczeń · n serii · ok. n min”, przycisk „Zacznij”), żeby pierwsze ćwiczenie było widać bez przewijania. Odrzucony wariant A (kafle i pełna lista ćwiczeń): zajmował cały pierwszy ekran.

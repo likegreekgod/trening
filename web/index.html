@@ -236,6 +236,10 @@
   .set[data-st="ok"] .ok{background:var(--ok);border-color:var(--ok);color:var(--surface)}
   .set[data-st="x"] .ok{background:var(--bad);border-color:var(--bad);color:var(--surface)}
   .ok.pend{background:var(--warn);border-color:var(--warn);color:var(--surface)}
+  @keyframes pop{0%{transform:scale(.8)}55%{transform:scale(1.14)}100%{transform:scale(1)}}
+  .ok.pop{animation:pop .26s ease-out}
+  .card.folding{overflow:hidden}
+  @media (prefers-reduced-motion:reduce){.ok.pop{animation:none}}
   /* numer serii jako przycisk typu: zwykła / drop / nieudana */
   .nt{width:100%;min-height:44px;border:0;background:transparent;padding:0;display:grid;place-items:center;align-content:center;
       font:700 21px/1 var(--f-display);color:var(--ink)}
@@ -409,6 +413,11 @@
   .prow .plbl,.q .plbl{font:700 18px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;color:var(--ink-2)}
   .prow .plbl small,.q .plbl small{font:400 13px var(--f-body);text-transform:none;letter-spacing:0;color:var(--muted)}
   .empty{color:var(--muted);text-align:center;padding:40px 0}
+  /* pusty stan: karta z ikoną, nagłówkiem, zdaniem i (czasem) przyciskiem */
+  .es{display:grid;justify-items:center;text-align:center;gap:8px;padding:28px 20px}
+  .es svg{color:var(--muted)}
+  .es .sub{margin:0;font-size:14px;max-width:30ch}
+  .es .btn{margin-top:8px}
   .askkey{margin-top:24px}.askkey .btn{width:100%;margin-top:6px}
 
   /* postęp: wykresy (jedna seria, siatka z cienkich linii, wartości tekstem w kolorze tekstu) */
@@ -566,15 +575,17 @@
   /* timer przerwy: ciemny pasek na całą szerokość nad dolnym menu, bursztynowe cyfry */
   #rest{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));          /* = wysokość menu: przerwa leży na menu */
        z-index:7;background:var(--panel);color:var(--light-white);
-        padding:8px 16px 0;display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center}
+        padding:0 16px 8px;display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center}
   .rtop{display:grid;min-width:0}
   .rlbl{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .rtime{font:800 46px/1 var(--f-display);letter-spacing:.04em;color:var(--light-amber);font-variant-numeric:tabular-nums}
   .rbtns{display:flex;gap:6px}
   .rbtns button{min-height:44px;min-width:52px;border:1px solid var(--light-off);background:transparent;color:var(--light-white);border-radius:var(--r);
                 font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;padding:0 8px}
-  .rbar{grid-column:1/-1;height:3px;background:var(--light-off);margin:6px -16px 0}
+  .rbar{grid-column:1/-1;grid-row:1;height:8px;background:var(--light-off);margin:0 -16px 6px}          /* gruby pasek na górnej krawędzi */
   .rbar i{display:block;height:100%;background:var(--light-amber);width:100%}
+  #rest.end .rtime{color:var(--light-red)}                                                              /* ostatnie 10 s */
+  #rest.end .rbar i{background:var(--light-red)}
   body.resting main{padding-bottom:calc(190px + env(safe-area-inset-bottom,0px))}
   body.resting #toast{bottom:calc(170px + env(safe-area-inset-bottom,0px))}
 
@@ -886,24 +897,26 @@ function askNotify(){
 function restSignal(){ beep(3); vib(END_VIB); flash(); notifyBg('Koniec przerwy', 'Czas na kolejną serię.'); }
 
 /* ---------- przerwa po serii (A 2:00, B 1:30, K 1:00): czas liczony z różnicy zegara, nie z liczby taktów ---------- */
-let REST = null;   // {end, total, pre, to}
+let REST = null;   // {end, total, pre, to, name, last}
+const REST_END = 10;
 function startRest(ex, sec, label){
   audioUnlock(); askNotify();
   const total = sec || restSec(ex.prio);
   if (REST) clearTimeout(REST.to);
-  REST = { end: Date.now() + total * 1000, total, pre: false };
+  REST = { end: Date.now() + total * 1000, total, pre: false, name: label || ex.name, last: null };
   REST.to = setTimeout(restTick, total * 1000 + 30);                  // pojedynczy budzik: w tle mniej przycinany niż interwał
-  $("#rlbl").textContent = "Przerwa · " + (label || ex.name);
   $("#rest").hidden = false; document.body.classList.add("resting");
   wake(true);
   restTick();
 }
-function stopRest(){ if (REST) clearTimeout(REST.to); REST = null; $("#rest").hidden = true; document.body.classList.remove("resting"); }
+function stopRest(){ if (REST) clearTimeout(REST.to); REST = null; $("#rest").hidden = true; $("#rest").classList.remove("end"); document.body.classList.remove("resting"); }
 function restTick(){
   if (!REST) return;
   const left = (REST.end - Date.now()) / 1000;
   if (left <= 0) { stopRest(); restSignal(); toast("Koniec przerwy."); return; }
   if (SG.pre && !REST.pre && left <= 10 && REST.total > 15) { REST.pre = true; vib(150); beep(1, 660, 0.12); }
+  const last = left <= REST_END;                                       // ostatnie 10 s: czerwone cyfry i pasek, „Zaraz koniec”
+  if (REST.last !== last) { REST.last = last; $("#rest").classList.toggle("end", last); $("#rlbl").textContent = (last ? "Zaraz koniec · " : "Przerwa · ") + REST.name; }
   $("#rtime").textContent = fmtClock(left);
   $("#rfill").style.width = Math.min(100, 100 * left / REST.total) + "%";
 }
@@ -1181,6 +1194,18 @@ function render(){
   if (TAB === 'plan') renderPlan(); else if (TAB === 'dysp') renderDysp(); else if (TAB === 'postep') renderPostep(); else if (TAB === 'trener') renderTrener(); else renderTrening();
   navDot();
 }
+/** pusty stan: karta z ikoną; btn = [id albo atrybut, napis] */
+const ES_ICON = {
+  plan: 'M5 24h38M12 15v18M36 15v18M18 19v10M30 19v10',
+  chart: 'M8 40V8M8 40h32M14 32l8-10 6 6 10-14',
+  pulse: 'M4 26h10l5-12 8 22 5-10h12',
+  note: 'M7 9h34v24H21l-10 8v-8H7z'
+};
+function emptyCard(icon, title, text, btn){
+  return `<section class="card first es"><svg viewBox="0 0 48 48" width="56" height="56" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"><path d="${ES_ICON[icon]}"/></svg>
+    <div class="cn">${title}</div><p class="sub">${text}</p>${btn ? `<button type="button" class="btn" ${btn[0]}>${btn[1]}</button>` : ''}</section>`;
+}
+const ES_GO = ['data-go="trening"', 'Przejdź do treningu'];
 function head(eyebrow, title, stats, extra){
   $('#eyebrow').textContent = eyebrow; $('#title').textContent = title; $('#stats').innerHTML = stats || ''; $('#hx').innerHTML = extra || '';
 }
@@ -1483,7 +1508,7 @@ function renderPostep(){
     const recs = records(sets);
     if (!recs.some(r => r.name === PEX)) PEX = recs.length ? recs[0].name : '';
     const r = recs.find(x => x.name === PEX), ser = r ? strengthSeries(sets, PEX) : [];
-    body = !recs.length ? '<p class="empty">Wykres pojawi się po pierwszych treningach: ćwiczenia główne z RPE albo zaliczone boje.</p>'
+    body = !recs.length ? emptyCard('chart', 'Tu będzie Twoja siła', 'Wykres pojawi się po pierwszych treningach: ćwiczenia główne z RPE albo zaliczone boje.', ES_GO)
       : `<section class="card first"><label class="fl">Ćwiczenie<select id="p-ex">${recs.map(x => `<option ${x.name === PEX ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
         <div class="stat"><span>${r.oly ? 'Najlepsze zaliczone' : 'Najlepsze e1RM'}</span><b>${kgTxt(r.best)}</b><small>kg · ${ddmm(r.date)}</small></div>
         ${chartLine(ser, { unit: 'kg', label: (r.oly ? 'Najlepsze zaliczone kg: ' : 'e1RM: ') + PEX })}
@@ -1495,7 +1520,7 @@ function renderPostep(){
     const hp = hardSetsByPart(sets, (DATA && DATA.parts) || {}, today), hpMax = Math.max(1, ...hp.map(x => Math.max(x.now, x.avg)));
     const ws = weeklyTonnage(sets, today, 12), z = zoneReps(sets), zt = ZONES.reduce((s, q) => s + z[q[0]], 0), cal = loadCalendar(
       ((DATA && DATA.sessions) || []).map(s => ({ date: dates[s.tydzien + '|' + s.jednostka] || dayOf(s.data), rpe: s.rpe_sesji, min: s.czas_min })), sets, today, 12);
-    body = !sets.length ? '<p class="empty">Objętość pojawi się po pierwszych zapisanych seriach.</p>'
+    body = !sets.length ? emptyCard('chart', 'Tu będzie Twoja objętość', 'Objętość pojawi się po pierwszych zapisanych seriach.', ES_GO)
       : `<section class="card first"><div class="cn">Tonaż tygodniowy</div><div class="sub">Ostatnie 12 tygodni, kg × powtórzenia, bez rozgrzewki.</div>
           ${chartBars(ws, { label: 'Tonaż tygodniowy, ostatnie 12 tygodni' })}<p class="tip" aria-live="polite">${TIP0}</p>
           ${tableOf(['Tydzień od', 'Tonaż kg'], ws.map(w => [ddmm(w.week), w.ton.toLocaleString('pl-PL')]))}</section>
@@ -1515,13 +1540,14 @@ function renderPostep(){
         <div class="stat"><span>Ostatnio</span><b>${ser[ser.length - 1].v.toLocaleString('pl-PL')}</b><small>${unit} · średnia ${(Math.round(mean(ser.map(p => p.v)) * 100) / 100).toLocaleString('pl-PL')}</small></div>
         ${chartLine(ser, { unit, band, label: title, dec })}<p class="tip" aria-live="polite">${TIP0}</p>
         ${tableOf(['Data', unit], ser.map(p => [ddmm(p.date) + '.' + p.date.slice(0, 4), p.v.toLocaleString('pl-PL')]))}</section>`;
-    body = !cmj.length && !vb.length ? '<p class="empty">Wykresy pojawią się po pierwszych zapisach na ekranie Dyspozycja.</p>'
+    body = !cmj.length && !vb.length ? emptyCard('pulse', 'Tu będzie Twoja dyspozycja', 'Wykresy pojawią się po pierwszych zapisach na ekranie Dyspozycja.', ['data-go="dysp"', 'Przejdź do dyspozycji'])
       : one(cmj, 'Skok CMJ', 'cm', cmj.length ? { mid: mean(cmj.map(p => p.v)), pct: 0.05 } : null, 'Średnia z 3 skoków w dniu. Szary pas: Twoja średnia ±5%.', 1) +
         one(vb, 'Prędkość na rozgrzewce', 'm/s', null, 'To samo ćwiczenie i ciężar, najlepsza próba.', 2);
   }
   $('#postep').innerHTML = `<div class="row tabs" role="tablist">${[['tyd', 'Tydzień'], ['sila', 'Siła'], ['obj', 'Objętość'], ['dys', 'Dyspozycja']].map(([k, n]) =>
     `<button class="chip ${PT === k ? 'on' : ''}" data-pt="${k}" role="tab" aria-selected="${PT === k}">${n}</button>`).join('')}</div>` + body;
   document.querySelectorAll('[data-pt]').forEach(b => b.onclick = () => { PT = b.dataset.pt; renderPostep(); });
+  document.querySelectorAll('#postep [data-go]').forEach(b => b.onclick = () => { TAB = b.dataset.go; WK = null; render(); window.scrollTo(0, 0); });
   const sel = $('#p-ex'); if (sel) sel.onchange = () => { PEX = sel.value; renderPostep(); };
   document.querySelectorAll('#postep [data-pw]').forEach(b => b.onclick = () => {
     const d = +b.dataset.pw, now = mondayOf(localDate()), m = d ? addDays(PWK || now, 7 * d) : now;
@@ -1880,7 +1906,7 @@ function renderTrener(){
   const range = w => w.from ? ddmm(w.from) + (w.to && w.to !== w.from ? '–' + ddmm(w.to) : '') : '';
   const unitHead = (w, u) => esc((PLAN.find(r => String(r.week) === w.week && String(r.day) === u.unit && r.title) || {}).title || 'Trening ' + u.unit) + (u.date ? ' · ' + weekday(u.date) + ' ' + ddmm(u.date) : '');
   $('#trener').innerHTML = !all.length
-    ? '<p class="empty">Tu pojawią się komentarze trenera do Twoich filmów i treningów.</p>'
+    ? emptyCard('note', 'Jeszcze bez komentarzy', 'Tu pojawią się komentarze trenera do Twoich filmów i treningów.')
     : weeks.map((w, i) => {
         const n = w.units.reduce((s, u) => s + u.notes.length, 0), nw = w.units.reduce((s, u) => s + u.notes.filter(isNew).length, 0);
         return `<details class="card cw ${i ? '' : 'first'}" ${!i || nw ? 'open' : ''}><summary><span><span class="cn">${esc(weekLabel(+w.week || w.week))}</span>
@@ -2075,8 +2101,9 @@ function renderTrening(){
     $('#main').innerHTML = ownOn()
       ? '<section class="card first noplan"><div class="cn">Jeszcze nie masz planu</div><p class="sub">Trener doda go wkrótce. Do tego czasu możesz zrobić własny trening: wybierasz ćwiczenia i zapisujesz serie jak zwykle, a trener je widzi.</p>' +
         '<button type="button" class="btn p" id="own-first">+ Własny trening</button></section>'
-      : '<div class="empty">Brak planu. Trener jeszcze go nie dodał.</div>';
+      : emptyCard('plan', 'Jeszcze nie masz planu', 'Trener doda go wkrótce. Gdy plan będzie gotowy, zobaczysz go tutaj.', ['id="es-again"', 'Sprawdź ponownie']);
     const f = $('#own-first'); if (f) f.onclick = () => openOwn(null);
+    const a = $('#es-again'); if (a) a.onclick = () => { a.disabled = true; refreshData().then(() => { if (!PLAN.length) toast('Planu jeszcze nie ma.'); }).catch(() => { a.disabled = false; toast('Brak sieci. Spróbuj za chwilę.'); }); };
     return;
   }
   const s0 = exs[0];
@@ -2657,9 +2684,19 @@ function foldSum(o){
   const w = work(o), done = w.filter(r => r.dataset.st), ton = done.reduce((a, r) => { const kg = num(fv(r.querySelector('.kg'))), n = num(fv(r.querySelector('.reps'))); return a + (r.dataset.st === 'ok' && isNum(kg) && isNum(n) && !(r.querySelector('.reps').dataset.u || '').match(/sek|min/) ? kg * n : 0); }, 0);
   s.textContent = done.length + ' z ' + w.length + ' ' + plural(w.length, 'serii', 'serii', 'serii') + (ton ? ' · ' + fmtKg(Math.round(ton)) + ' kg' : '') + (cardDone(o) ? ' · ✓' : '');
 }
+const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** płynna zmiana wysokości karty przy zwijaniu i rozwijaniu; stan (klasa fold) zmienia się od razu, animuje się tylko wysokość */
+function foldMove(c, h0){
+  const h1 = c.offsetHeight;
+  if (calm() || !c.animate || h0 === h1 || !h0) return;
+  c.classList.add('folding');
+  const a = c.animate([{ height: h0 + 'px' }, { height: h1 + 'px' }], { duration: 200, easing: 'ease-out' });
+  a.onfinish = a.oncancel = () => { c.classList.remove('folding'); stickDraw(); };
+}
 function setFold(o, on, keep = true){
   const c = document.querySelector(`.card[data-card="${o}"]`); if (!c) return;
-  c.classList.toggle('fold', on); c.querySelectorAll('[data-fold]').forEach(b => b.setAttribute('aria-expanded', String(!on)));
+  const h0 = keep && c.classList.contains('fold') !== on ? c.offsetHeight : 0;
+  c.classList.toggle('fold', on); foldMove(c, h0); c.querySelectorAll('[data-fold]').forEach(b => b.setAttribute('aria-expanded', String(!on)));
   if (on) { const ch = c.querySelector('.ch'); if (ch) { ch.classList.remove('stuck'); ch.style.marginBottom = ''; } }   // zwinięta karta nie ma przypiętej nazwy (bez czekania na przewinięcie)
   if (keep) { const m = foldGet(); m[foldKey(o)] = on ? 1 : 0; try { localStorage.setItem(FK, JSON.stringify(m)); } catch (e) {} }
 }
@@ -2713,6 +2750,7 @@ function bindRow(row, ex, s0){
     if (st) row.querySelectorAll('.kg, .reps').forEach(x => { if (x.value.trim() === '' && x.dataset.ph) x.value = x.dataset.ph; });   // ✓ przy pustym polu = wartość z propozycji
     if (lt) row.dataset.rate = st ? oc || '' : '';
     setState(row, st, true);
+    const okb = row.querySelector('.ok'); if (okb && st === 'ok' && was !== 'ok') { okb.classList.remove('pop'); void okb.offsetWidth; okb.classList.add('pop'); }   // krótki ruch ✓
     const p = payloadOf(row, ex, s0);
     const inGrp = !!grpOf(ex.order);                                   // obwód: przerwa dopiero po całej rundzie (grpAfter)
     if (!was && st && kind !== 'w' && !isEmom(ex) && !inGrp) startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce; EMOM ma zegar minut

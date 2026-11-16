@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-16, aplikacja v45 (`main` po PR #67).
+Stan na 2026-11-16, aplikacja v46 (na gałęzi, bez PR; `main` = v45 po PR #67).
 
 ## Jak pracujemy
 
@@ -18,6 +18,7 @@ Stan na 2026-11-16, aplikacja v45 (`main` po PR #67).
 
 ## Ostatnio zrobione
 
+- 16.11 (v46): plan v4 PR 6: timer przerwy z grubym paskiem u góry i czerwonymi ostatnimi 10 s, puste stany jako karty z ikoną, płynne zwijanie kart i krótki ruch ✓.
 - 16.11 (v45): plan v4 PR 5: karta „dziś” nad paskiem tygodnia (ile ćwiczeń, serii i minut, „Zacznij” / „Dalej” / „Zakończ”, postęp w trakcie).
 - 15.11 (v44): plan v4 PR 4: rekord w chwili zapisu serii, pasek „★ Rekord” pod najlepszą serią ćwiczenia głównego (PRO z liczbami, PROSTY bez).
 - 13.11 (v43): plan v4 PR 11: nazwa ćwiczenia przypięta u góry przy przewijaniu długiej karty; komentarz do ćwiczenia w osobnym oknie (poprawia istniejący).
@@ -40,11 +41,12 @@ Stan na 2026-11-16, aplikacja v45 (`main` po PR #67).
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 5 (v45), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 6 (ruch i timer): Damian zdecydował 16.11, że robimy; szkic timera i pustych stanów pokazany, czeka na wybór. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 5 (v45), PR 6 (v46), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 7 (podpowiedzi przy pierwszym użyciu), po decyzji Damiana, czy dalej chce; najpierw szkic. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- PR 6: wybór ze szkicu z 16.11: timer A (koło) czy B (gruby pasek u góry, czerwony w ostatnich 10 s); puste stany jako karta z ikoną (tak / nie); zgoda na animacje (zwijanie karty, ✓).
+- Zgoda na PR dla v46 (plan v4 PR 6, gałąź `ccr-0d9777f0-dw00rf`), potem próba na telefonie: timer, zwijanie kart, ✓.
+- Decyzja, czy robimy PR 7 (podpowiedzi przy pierwszym użyciu).
 - Próba na telefonie: karta „dziś” (v45, PR #67 scalony 16.11). Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
 - Próba na telefonie: pasek „★ Rekord” (v44).
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
