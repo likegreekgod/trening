@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-16, aplikacja v48 (v48 na gałęzi `claude/magical-tesla-fictat`, czeka na zgodę na PR; `main` = v47 po PR #69).
+Stan na 2026-11-16, aplikacja v48 (v48 w PR #70, czeka na scalenie; `main` = v47 po PR #69).
 
 ## Jak pracujemy
 
@@ -48,7 +48,7 @@ Stan na 2026-11-16, aplikacja v48 (v48 na gałęzi `claude/magical-tesla-fictat`
 
 ## Czeka na Damiana
 
-- PR 8 (v48, tryb skupienia): obejrzeć zrzuty i dać zgodę na PR z gałęzi `claude/magical-tesla-fictat`; po scaleniu próba na telefonie.
+- Scalenie PR #70 (v48, plan v4 PR 8, tryb skupienia), założonego 16.11 za zgodą Damiana; potem próba na telefonie.
 - Decyzja, czy robimy PR 9 (raport po bloku, notatka trenera do jednostki).
 - Próba na telefonie: podpowiedzi przy pierwszym użyciu (v47, PR #69 scalony 16.11; obecni klienci zobaczą cztery dymki raz).
 - Próba na telefonie: timer, zwijanie kart, ✓ (v46, PR #68 scalony 16.11).
