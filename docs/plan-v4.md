@@ -81,6 +81,8 @@ Cel: gdy zapisana seria bije dotychczasowy wynik, klient widzi to od razu.
 
 - Krótkie dymki zamiast długiej pomocy (`helpCard`, ok. 1055): pierwsza seria (✓ / ✕), kamera, przytrzymanie dnia w pasku tygodnia, „⋯” w karcie.
 - Każda pokazana raz, stan w localStorage (np. `tip_<klucz>`), z „Rozumiem”.
+- **Szkic pokazany 16.11** (pliki poza repo, do odtworzenia skryptem z atrapą: element wstawiony przy `.ok`, `[data-more]`, `.cam`, `.wk-d`). Wariant A = ciemny dymek ze strzałką nad ekranem, wskazany element w ramce akcentu, nagłówek + 1–2 zdania, licznik „1 z 4” i „Rozumiem”. Wariant B = jasny pasek z akcentem z lewej wstawiony w kartę pod elementem (przesuwa treść), z „Rozumiem”. Treści: ✓ („Szare liczby to plan… drugie dotknięcie = nieudana”), „⋯” (komentarz, zamiana, Pomiń), kamera (film do trenera, 720p, zasięg), dzień w pasku (przytrzymaj = przenieś).
+- Pytania zadane 16.11: A czy B; po kolei (następna po „Rozumiem”) czy każda dopiero przy pierwszym użyciu danego miejsca; co z długą ściągawką „Jak to działa?” w PROSTYM (propozycja: zostaje zwinięta na dole Treningu, nie otwiera się sama); czy podpowiedzi też w PRO (propozycja: tak); czy obecni klienci też je zobaczą raz (propozycja: tak).
 
 ### PR 8 · Tryb skupienia (największa zmiana, osobna decyzja)
 
@@ -135,7 +137,7 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 4 | Rekord w chwili zapisu | zrobione (v44): wariant A, pasek „★ Rekord” pod najlepszą serią ćwiczenia głównego, PROSTY bez liczb; lib `unitRecord`, `recDraw`, `unitSets` |
 | 5 | Ekran „dziś” | zrobione (v45): wariant B, karta `#today` nad paskiem tygodnia; lib `todayInfo`, `todayDraw` |
 | 6 | Ruch i timer | zrobione (v46): timer B (pasek u góry, czerwone ostatnie 10 s), puste stany jako karty (`emptyCard`), płynne zwijanie (`foldMove`) i ruch ✓ (`.ok.pop`) |
-| 7 | Podpowiedzi przy pierwszym użyciu | po decyzji |
+| 7 | Podpowiedzi przy pierwszym użyciu | szkic pokazany 16.11, czeka na wybór wariantu |
 | 8 | Tryb skupienia | po decyzji, osobny szkic |
 | 9 | Raport po bloku, notatka do jednostki | po decyzji |
 | 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zrobione (v42 + `apps-script/`): flaga Klienci N `edycja`, API `editPlan`, lib `planEdit`; szczegóły w `decyzje.md` |
