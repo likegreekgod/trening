@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-16, aplikacja v47 (v47 na gałęzi `claude/fervent-goldberg-4u0f11`, czeka na zgodę na PR; `main` = v46 po PR #68).
+Stan na 2026-11-16, aplikacja v47 (v47 w PR #69, czeka na scalenie; `main` = v46 po PR #68).
 
 ## Jak pracujemy
 
@@ -46,7 +46,7 @@ Stan na 2026-11-16, aplikacja v47 (v47 na gałęzi `claude/fervent-goldberg-4u0f
 
 ## Czeka na Damiana
 
-- Zgoda na PR z v47 (plan v4 PR 7, podpowiedzi), scalenie, potem próba na telefonie (obecni klienci zobaczą cztery dymki raz).
+- Scalenie PR #69 (v47, plan v4 PR 7, podpowiedzi), założonego 16.11 za zgodą Damiana; potem próba na telefonie (obecni klienci zobaczą cztery dymki raz).
 - Decyzja, czy robimy PR 8 (tryb skupienia).
 - Próba na telefonie: timer, zwijanie kart, ✓ (v46, PR #68 scalony 16.11).
 - Próba na telefonie: karta „dziś” (v45, PR #67 scalony 16.11). Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
