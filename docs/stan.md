@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-16, aplikacja v45 (v45 w PR #67, czeka na scalenie; `main` = v44 po PR #66).
+Stan na 2026-11-16, aplikacja v45 (`main` po PR #67).
 
 ## Jak pracujemy
 
@@ -40,12 +40,12 @@ Stan na 2026-11-16, aplikacja v45 (v45 w PR #67, czeka na scalenie; `main` = v44
 
 ## Do zrobienia
 
-- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 5 (v45), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 6 (ruch i timer), po decyzji Damiana, czy dalej chce; najpierw szkic. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
+- **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 5 (v45), PR 10 (v42) i PR 11 (v43) zrobione. Następny: PR 6 (ruch i timer): Damian zdecydował 16.11, że robimy; szkic timera i pustych stanów pokazany, czeka na wybór. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- Scalenie PR #67 (v45, karta „dziś”), założonego 16.11 za zgodą Damiana; potem próba na telefonie. Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
-- Decyzja, czy robimy PR 6 (ruch i timer).
+- PR 6: wybór ze szkicu z 16.11: timer A (koło) czy B (gruby pasek u góry, czerwony w ostatnich 10 s); puste stany jako karta z ikoną (tak / nie); zgoda na animacje (zwijanie karty, ✓).
+- Próba na telefonie: karta „dziś” (v45, PR #67 scalony 16.11). Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
 - Próba na telefonie: pasek „★ Rekord” (v44).
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
