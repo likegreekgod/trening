@@ -95,18 +95,24 @@ async function page(calls, opt = {}) {
     else if (b.fn === 'trUstawAI') { await new Promise(res => setTimeout(res, 150)); const k = String(b.args[0] || '').trim();
       if (k && !/^sk-ant-/.test(k)) out = { ok: false, error: 'To nie wygląda na klucz Claude API (zaczyna się od sk-ant-). Nic nie zmieniono.' };
       else { st.key = k; out = { ok: true, result: Object.assign(k ? { set: true, end: '…' + k.slice(-4), limit: 30, n: 0 } : { set: false, end: '', limit: 30, n: 0 }, { checked: true }) }; } }
-    else if (b.fn === 'trFilm') out = { ok: true, result: { token: 'tok-film', exp: Date.now() + 3e6 } };
+    else if (b.fn === 'trFilm') { st.nFilm = (st.nFilm || 0) + 1; if (st.nFilm > 1) st.fresh = true; out = { ok: true, result: { token: 'tok-film', exp: Date.now() + 3e6 } }; }
     else if (b.fn === 'trKomentarzFilm') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { text: String(b.args[5]).trim(), at: TODAY + 'T20:00:00.000Z' } }; }
     else out = { ok: false, error: 'Nieznana funkcja: ' + b.fn };
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
   });
   await ctx.route('https://accounts.google.com/**', r => r.fulfill({ status: 200, headers: { 'Content-Type': 'text/javascript' }, body: GSI }));
-  await ctx.route('https://www.googleapis.com/drive/v3/files/**', r => {               // film z Dysku: tylko z biletem trFilm
-    const u = new URL(r.request().url()), id = decodeURIComponent(u.pathname.split('/').pop());
-    st.drive = (st.drive || []).concat([{ id, auth: r.request().headers().authorization, alt: u.searchParams.get('alt') }]);
-    if (r.request().headers().authorization !== 'Bearer tok-film') return r.fulfill({ status: 401, body: '' });
-    if (opt.film404) return r.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': '*' }, body: '' });
-    return r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'video/webm', 'Content-Length': String(FILM.length) }, body: FILM });
+  await ctx.route('https://www.googleapis.com/drive/v3/files/**', r => {               // Dysk: rozmiar z nagłówkiem biletu, sam film strumieniem (bilet w adresie, Range)
+    const u = new URL(r.request().url()), id = decodeURIComponent(u.pathname.split('/').pop()), h = r.request().headers();
+    const tok = h.authorization ? h.authorization.replace(/^Bearer /, '') : u.searchParams.get('access_token');
+    st.drive = (st.drive || []).concat([{ id, tok, alt: u.searchParams.get('alt'), range: h.range || '' }]);
+    const cors = { 'Access-Control-Allow-Origin': '*' };
+    if (tok !== 'tok-film' || (opt.mediaExpired && u.searchParams.get('alt') === 'media' && !st.fresh)) return r.fulfill({ status: 401, headers: cors, body: '' });
+    if (opt.film404) return r.fulfill({ status: 404, headers: cors, body: '' });
+    if (u.searchParams.get('alt') !== 'media') return r.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify({ size: String(opt.filmSize || FILM.length), mimeType: 'video/webm' }) });
+    const m = /bytes=(\d+)-(\d*)/.exec(h.range || '');
+    if (!m) return r.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes', 'Content-Length': String(FILM.length) }, body: FILM });
+    const a = Number(m[1]), b = m[2] ? Math.min(Number(m[2]), FILM.length - 1) : FILM.length - 1;
+    return r.fulfill({ status: 206, headers: { ...cors, 'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes', 'Content-Range': 'bytes ' + a + '-' + b + '/' + FILM.length, 'Content-Length': String(b - a + 1) }, body: FILM.subarray(a, b + 1) });
   });
   await ctx.route('https://drive.google.com/**', r => r.fulfill({ status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: '<body style="margin:0;background:#222;color:#bbb;font:14px sans-serif;display:grid;place-items:center;height:100vh">podgląd filmu (atrapa)</body>' }));
   const exp = Math.floor(Date.now() / 1000) + 3600;
@@ -195,15 +201,19 @@ test('panel: karta klienta (przegląd, sesje, bloki, dyspozycja)', async () => {
 
 test('panel: filmy bez komentarza i bloki do zamknięcia', async () => {
   const calls = [];
-  const { ctx, p } = await page(calls, { loggedIn: true });
+  const { ctx, p } = await page(calls, { loggedIn: true, filmSize: 87 * 1048576 });
   await p.goto(base + 'trener.html#filmy'); await p.waitForSelector('.vi');
   assert.equal(await p.$$eval('.vi', a => a.length), 2);
   await p.waitForSelector('.pv[data-file="film1"] video');
-  assert.match(await p.getAttribute('.pv video', 'src'), /^blob:/);                  // film pobrany do przeglądarki, nie okienko Dysku
+  assert.match(await p.getAttribute('.pv video', 'src'), /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/film1\?alt=media&access_token=tok-film$/);   // strumień z Dysku, nie okienko Dysku
+  await p.waitForFunction(() => document.querySelector('#pvv').duration > 1);
+  assert.match(await p.textContent('#main'), /plik 87 MB/);                          // rozmiar pliku z Dysku
   assert.match(await p.textContent('#main'), /Komentarz klienta\s*Ostatnie powtórzenie wolne/);
   await p.click('.vi:nth-child(2)');
   await p.waitForSelector('.pv[data-file="film2"] video');
-  assert.deepEqual(p.st.drive.map(d => [d.id, d.auth, d.alt]), [['film1', 'Bearer tok-film', 'media'], ['film2', 'Bearer tok-film', 'media']]);
+  const meta = p.st.drive.filter(d => d.alt !== 'media'), media = p.st.drive.filter(d => d.alt === 'media');
+  assert.deepEqual(meta.map(d => [d.id, d.tok]), [['film1', 'tok-film'], ['film2', 'tok-film']]);   // przed filmem tylko pytanie o rozmiar
+  assert.ok(media.some(d => d.id === 'film1') && media.every(d => d.tok === 'tok-film'));
   assert.equal(calls.filter(c => c.fn === 'trFilm').length, 1);                     // bilet pobrany raz na kilka filmów
   await p.click('[data-vall="1"]');
   assert.equal(await p.$$eval('.vi', a => a.length), 4);
@@ -431,6 +441,14 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   await shot(s2.p, 'trener-filmy-odtwarzacz-jasny.png');
   assert.deepEqual(s2.p.errors, []);
   await s2.ctx.close();
+  // bilet wygasł w trakcie oglądania: nowy bilet i film gra dalej, bez komunikatu
+  const c4 = [], s4 = await page(c4, { loggedIn: true, mediaExpired: true });
+  await s4.p.goto(base + 'trener.html#filmy'); await s4.p.waitForSelector('.pv video');
+  await s4.p.waitForFunction(() => document.querySelector('#pvv') && document.querySelector('#pvv').duration > 1);
+  assert.equal(c4.filter(c => c.fn === 'trFilm').length, 2);
+  assert.equal(await s4.p.$('#pv-retry'), null);
+  assert.deepEqual(s4.p.errors, []);
+  await s4.ctx.close();
   const s3 = await page([], { loggedIn: true, film404: true });
   await s3.p.goto(base + 'trener.html#filmy'); await s3.p.waitForSelector('#pv-retry');
   assert.match(await s3.p.textContent('.pv .pmsg'), /Filmu nie ma już na Dysku/);
