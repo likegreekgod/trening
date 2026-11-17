@@ -747,6 +747,80 @@ test('zmiany klienta: poza wykonaniem planu w podsumowaniu i blokach; ponowne wc
   assert.deepEqual(m.rows.map(r => r.nr + ':' + (r.zrodlo || '')), ['1:', '2:usuniete', '51:dodane']);
 });
 
+/* ---------- panel trenera (Trener.gs) ---------- */
+test('trTokenOk_: bilet Google trenera – adres, aplikacja, wydawca, ważność', () => {
+  const cfg = { clientId: 'abc.apps.googleusercontent.com', emails: ['trener@example.com', 'drugi@example.com'] }, now = Date.parse('2026-11-17T12:00:00Z');
+  const ok = { aud: cfg.clientId, iss: 'https://accounts.google.com', email: 'Trener@Example.com', email_verified: 'true', exp: String(now / 1000 + 600) };
+  assert.equal(C.trTokenOk_(ok, cfg, now), '');
+  assert.equal(C.trTokenOk_(Object.assign({}, ok, { iss: 'accounts.google.com', email_verified: true }), cfg, now), '');
+  assert.match(C.trTokenOk_(Object.assign({}, ok, { email: 'klient@example.com' }), cfg, now), /nie ma dostępu/);
+  assert.match(C.trTokenOk_(Object.assign({}, ok, { aud: 'inna.apps.googleusercontent.com' }), cfg, now), /innej aplikacji/);
+  assert.match(C.trTokenOk_(Object.assign({}, ok, { iss: 'https://evil.example' }), cfg, now), /Google/);
+  assert.match(C.trTokenOk_(Object.assign({}, ok, { exp: String(now / 1000 - 1) }), cfg, now), /wygasł/);
+  assert.match(C.trTokenOk_(Object.assign({}, ok, { email_verified: 'false' }), cfg, now), /niepotwierdzony/);
+  assert.match(C.trTokenOk_(ok, { clientId: '', emails: [] }, now), /nie jest skonfigurowany/);
+  assert.match(C.trTokenOk_(null, cfg, now), /brak/);
+});
+
+test('doPost: funkcje trenera nie działają z kluczem klienta, a klient nie wywoła funkcji trenera', () => {
+  assert.ok(C.TR_FNS.trPulpit && C.TR_FNS.trKlient && C.TR_FNS.trConfig);
+  for (const k of Object.keys(C.TR_FNS)) assert.equal(C.API_FNS[k], undefined, k);
+  let authed = 0;
+  const saved = { trAuth_: C.trAuth_, ContentService: C.ContentService, TR_FNS: C.TR_FNS };
+  C.ContentService = { MimeType: { JSON: 'json' }, createTextOutput: s => ({ setMimeType: () => JSON.parse(s) }) };
+  C.trAuth_ = tok => { authed++; if (tok !== 'a.b.c') throw new Error(C.TR_AUTH + 'zaloguj się.'); return 'trener@example.com'; };
+  C.TR_FNS = Object.assign({}, saved.TR_FNS, { trPulpit: () => 'pulpit', trConfig: () => ({ clientId: 'x' }) });
+  const post = b => C.doPost({ postData: { contents: JSON.stringify(b) } });
+  try {
+    assert.deepEqual(post({ fn: 'trPulpit', token: 'a.b.c' }), { ok: true, result: 'pulpit' });
+    const bad = post({ fn: 'trPulpit', key: 'k0123456789a' });
+    assert.equal(bad.ok, false); assert.match(bad.error, /^Logowanie: /);
+    assert.deepEqual(post({ fn: 'trConfig' }), { ok: true, result: { clientId: 'x' } });   // bez biletu: tylko publiczny identyfikator
+    assert.equal(authed, 2);
+    assert.match(post({ fn: 'toString', key: 'k' }).error, /Nieznana funkcja/);           // bez dziedziczonych pól obiektu
+  } finally { Object.assign(C, saved); }
+});
+
+test('trPulpit_: klienci z Przeglądu, sygnały czerwone i pomarańczowe, 12 tygodni obciążenia, bloki i filmy', () => {
+  const today = '2026-11-17';
+  const t = {
+    klienci: [{ klient_id: 'anna', imie: 'Anna' }, { klient_id: 'bartek', imie: 'Bartek' }],
+    prz: [
+      { klient: 'anna', imie: 'Anna', pilnosc: 4, czerwone: 1, do_reakcji: 'ból kolano 5/10 (17.11); samopoczucie 2/5 (17.11)', ostatni_trening: '2026-11-17', dni_temu: 0,
+        ten_tydzien: '2/3', zalegle: '', status_tygodnia: '🔴 za dużo', uwagi_klienta: '17.11: kolano', filmy_7dni: 2, koniec_planu_dni: 30, filmy_bez_kom_7dni: 1 },
+      { klient: 'bartek', imie: 'Bartek', pilnosc: 0, czerwone: '', do_reakcji: '', ostatni_trening: '', dni_temu: '', ten_tydzien: '0/0', status_tygodnia: '' }
+    ],
+    sum: [{ klient: 'anna', tydzien_od: '2026-11-16', sRPE_TL_AU: 1420, tonaz_kg: 18200, status: '🔴 za dużo' },
+      { klient: 'anna', tydzien_od: '2026-11-09', sRPE_TL_AU: '1 000', status: '🟢 OK' }, { klient: 'anna', tydzien_od: '2026-08-03', sRPE_TL_AU: 900, status: '🟢 OK' }],
+    bloki: [{ klient: 'anna', blok: 'B3', od: '2026-10-06', do: '2026-11-20', wnioski: '', dla_klienta: '' },
+      { klient: 'anna', blok: 'B2', od: '2026-08-25', do: '2026-10-05', wnioski: 'dobrze', dla_klienta: '' },
+      { klient: 'bartek', blok: 'B1', od: '2026-11-01', do: '2026-12-20', wnioski: '' },
+      { klient: 'anna', blok: '(bez bloku)', od: '2026-01-01', do: '2026-01-02' }],
+    log: [
+      { klient: 'anna', zapisano: '2026-11-17T09:30:00Z', tydzien: 13, jednostka: 'T2', nr_cw: 1, cwiczenie: 'Przysiad', seria: 2, kg: 120, powt: 5, rpe: 8,
+        film_link: 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view', uwagi: 'kolano', komentarz_dysk: '', komentarz_trenera: '' },
+      { klient: 'anna', zapisano: '2026-11-12T09:30:00Z', tydzien: 12, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Rwanie', seria: 1, kg: 70, powt: 1, rpe: 8, ocena: 'S',
+        film_link: 'https://drive.google.com/file/d/1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765/view', komentarz_dysk: '0:03 łokcie', komentarz_trenera: 'lepiej' },
+      { klient: 'anna', zapisano: '2026-10-01T09:30:00Z', tydzien: 5, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Stary', seria: 1, film_link: 'https://drive.google.com/file/d/1OldOldOldOldOldOldOldOldOld0/view' },
+      { klient: 'anna', zapisano: '2026-11-17T09:31:00Z', tydzien: 13, jednostka: 'T2', nr_cw: 2, cwiczenie: 'Bez filmu', seria: 1, film_link: '' }
+    ]
+  };
+  const r = C.trPulpit_(t, { today, at: '2026-11-17T04:02:00Z' });
+  assert.equal(r.clients.length, 2);
+  const a = r.clients[0];
+  assert.equal(a.name, 'Anna'); assert.equal(a.urg, 4); assert.equal(a.status, 'za dużo'); assert.equal(a.filmsNew, 1); assert.equal(a.planLeft, 30);
+  assert.deepEqual(a.signals.map(s => s.lv), ['bad', 'warn']);
+  assert.equal(a.signals[0].t, 'ból kolano 5/10 (17.11)');
+  assert.equal(a.load.length, 12); assert.equal(r.weeks[11], '2026-11-16'); assert.equal(r.weeks[0], '2026-08-31');
+  assert.deepEqual([a.load[11].srpe, a.load[11].status, a.load[10].srpe, a.load[9].srpe], [1420, 'za dużo', 1000, null]);
+  assert.equal(r.clients[1].signals.length, 0); assert.equal(r.clients[1].ago, null);
+  assert.deepEqual(r.blocks.map(b => b.name + ' ' + b.block), ['Anna B3']);       // B2 ma wnioski, B1 Bartka kończy się za > 7 dni
+  assert.deepEqual(r.videos.map(v => v.ex), ['Przysiad', 'Rwanie']);             // bez filmu sprzed 14 dni i serii bez filmu
+  assert.equal(r.videos[0].file, '1AbCdEfGhIjKlMnOpQrStUvWxYz012345'); assert.equal(r.videos[0].kom, ''); assert.equal(r.videos[0].note, 'kolano');
+  assert.equal(r.videos[1].kom, '0:03 łokcie\nlepiej');
+  assert.equal(r.at, '2026-11-17T04:02:00Z');
+});
+
 test('doGet: stary link dostaje zwykły tekst (bez strony HtmlService, więc bez google.script.run)', () => {
   // Atrapy usług Google: doGet nie może sięgnąć po HtmlService, bo z takiej strony da się wywołać każdą funkcję skryptu.
   const out = [];

@@ -2,6 +2,16 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-17 · Panel trenera (plan, PR 1–2 na gałęzi)
+
+- Damian chce jednego miejsca do kontroli klientów, treningów i postępów, dostępnego zewsząd, z pomocą Claude API. Plan i szkice zaakceptowane, szczegóły i stan w `docs/plan-panel.md`.
+- Miejsce: `web/trener.html` na GitHub Pages + akcje trenera w Apps Script (wariant A). Odrzucone: osobny serwer (koszt i utrzymanie), panel w arkuszu (słaby na komputerze poza Arkuszami, brak filmów w jednym widoku).
+- Logowanie kontem Google: bilet (ID token) sprawdzany w skrypcie, dozwolone adresy i identyfikator klienta OAuth we właściwościach skryptu. Klucz klienta z linku nie daje dostępu do akcji trenera i odwrotnie.
+- Głównie komputer: układ z menu bocznym, tabelą klientów i mapą obciążenia; na telefonie też działa (jedna kolumna).
+- Filmy oglądane w panelu (podgląd z Dysku w ramce); komentarz z sekundą pisany w panelu w PR 3, własny odtwarzacz później.
+- AI: tylko szkice, zapisuje trener. Pierwsze zadanie: szkic komentarza do sesji (Damian bez preferencji). RODO: AI dopisane do informacji dla klientów, bez osobnej zgody. Koszt przy ok. 5 klientach (2 regularnie): ok. 2–4 USD/mies.
+- Panel nie trzyma danych klientów w przeglądarce (bez pamięci podręcznej i trybu offline), zapamiętuje tylko bilet logowania do jego wygaśnięcia.
+
 ## 2026-11-17 · Stara wersja wyłączona (bezpieczeństwo, `apps-script/`)
 
 - Przegląd repo i historii: danych klientów, prawdziwych kluczy, ID arkusza i Dysku ani sekretów nie ma. Adres `/exec` w `web/config.js` jest jawny z konieczności (aplikacja go używa); każda akcja `API_FNS` wymaga klucza klienta.
