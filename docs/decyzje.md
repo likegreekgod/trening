@@ -2,6 +2,15 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-17 · Animacja otwarcia po przerwie 30 minut (v55)
+
+- Po próbie v53 na telefonie Damian zgłosił, że animacja pokazała się tylko raz („raz dziennie” było propozycją z ostatniej rundy szkiców, której nie zauważył). Wybór z trzech opcji: **po przerwie 30 minut**. Odrzucone: przy każdym uruchomieniu (telefon potrafi przeładować stronę w trakcie treningu, animacja wyskakiwałaby między seriami) i raz dziennie.
+- Reguła: animacja idzie przy każdym wejściu, gdy aplikacji nie było na ekranie co najmniej 30 minut. „Wejście” to uruchomienie aplikacji albo powrót do aplikacji, którą telefon trzymał w tle bez przeładowania strony. Bez tego drugiego animacja zależałaby od tego, czy telefon akurat zamknął stronę, czyli znowu wyglądałaby na losową.
+- Pamięć telefonu `intro` to teraz chwila, w której aplikacja była ostatnio na ekranie (w v53: data). Aplikacja odświeża ją co minutę, gdy jest na ekranie, i w chwili schowania; schowana jej nie rusza. Dzięki temu przeładowanie strony w trakcie treningu nie pokazuje animacji, także gdy telefon zamknie stronę bez ostrzeżenia. Zapis z v53 liczy się jak „dawno temu”, więc pierwsze otwarcie po aktualizacji pokaże animację.
+- Przy powrocie do otwartej aplikacji liczy się czas od chwili schowania zapamiętany w samej stronie, a nie zegar co minutę: animacja nie może wyskoczyć z opóźnieniem, kiedy ktoś już coś wpisuje.
+- Schowanie aplikacji w trakcie animacji kończy ją od razu. Bez zmian: 3,3 s, dotknięcie albo klawisz pomija, przy ograniczeniu ruchu i bez działającej pamięci telefonu nie pokazuje się wcale.
+- Numer wersji: v54 ma gałąź panelu trenera, dlatego ta zmiana dostaje v55 (dwie gałęzie z tym samym numerem git scala bez konfliktu i telefony nie pobierają nowej wersji).
+
 ## 2026-11-17 · Marka „Siła z Ruchu” i animacja otwarcia (v53)
 
 - Damian zmienia markę na „Siła z Ruchu” (aplikacja, Instagram). Nowa nazwa jest tam, gdzie widzi ją klient: pod ikoną na ekranie głównym i w oknie instalacji (`manifest.json`: `name`, `short_name`; 12 znaków, tyle mieści się pod ikoną), `apple-mobile-web-app-title` (iPhone), karta przeglądarki („Siła z Ruchu – imię”), nagłówek przed wczytaniem planu i na ekranie wklejania linku.
@@ -11,7 +20,7 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Tor jest odrysowany z rysunku punkt po punkcie (6 krzywych Beziera, średnia odchyłka 0,4 px na 340 px wysokości). Tor rysowany „na oko” albo z opisu Damian odrzucił dwa razy: kształtu nie poprawiać bez rysunku.
 - Tempo jak w boju: wolny pierwszy ciąg, najszybciej w wybiciu, zawis na szczycie, chwyt. Kropka tańca trzyma wysokość talerza, nad szczytem robi łuk i kończy w talerzu. Pierścień talerza leży pod torem, żeby haczyk na szczycie był widoczny.
 - Czas: wersja 1,9 s odrzucona („za szybkie, nie zdąży przeczytać tekstu”; cały napis był widoczny ok. 0,3 s). Przyjęte: 0,15 s talerz stoi, 1,35 s ruch sztangi, napis wchodzi litera po literze pod koniec ruchu, cały napis zostaje 1,2 s, zgaszenie 0,3 s, razem 3,3 s.
-- Kiedy: tylko przy pierwszym otwarciu aplikacji danego dnia (żeby nie przeszkadzała w trakcie treningu), dotknięcie ekranu albo klawisz ją pomija, kolejne otwarcia tego dnia startują od razu. Przy ograniczeniu ruchu w systemie nie pokazuje się wcale. Dane ładują się w tym czasie pod zasłoną.
+- Kiedy (v53; od v55 po przerwie 30 minut, wpis wyżej): tylko przy pierwszym otwarciu aplikacji danego dnia (żeby nie przeszkadzała w trakcie treningu), dotknięcie ekranu albo klawisz ją pomija, kolejne otwarcia tego dnia startują od razu. Przy ograniczeniu ruchu w systemie nie pokazuje się wcale. Dane ładują się w tym czasie pod zasłoną.
 - Technika: bez biblioteki Motion (aplikacja działa offline, bez CDN): SVG, `requestAnimationFrame` dla toru i animacje przeglądarki (Web Animations API) dla napisu. Kolory zasłony stałe w obu motywach (`--intro-*`), tło takie jak ekran startowy z manifestu, więc przejście z ekranu startowego Androida jest w tym samym kolorze.
 - Szkice i nagrania wariantów są w plikach projektu (`marka-sila-z-ruchu/`), poza repozytorium.
 

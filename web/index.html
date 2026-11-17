@@ -742,7 +742,7 @@
 </style>
 </head>
 <body>
-<!-- animacja otwarcia „Siła z Ruchu”: zasłona na cały ekran; skrypt pod nią pokazuje ją tylko przy pierwszym otwarciu danego dnia, ruch prowadzi introRun -->
+<!-- animacja otwarcia „Siła z Ruchu”: zasłona na cały ekran; skrypt pod nią pokazuje ją przy wejściu po co najmniej 30 minutach bez aplikacji, ruch prowadzi introRun -->
 <div id="intro" hidden aria-hidden="true"><div class="in-box">
   <svg width="200" height="330" viewBox="0 0 200 330" focusable="false">
     <circle id="in-ring" cx="95" cy="306" r="16"/>
@@ -757,15 +757,18 @@
   <div class="in-tag">trening · plan · postęp</div>
 </div></div>
 <script>
-/* Animacja otwarcia tylko przy pierwszym otwarciu aplikacji danego dnia (pamięć telefonu: „intro” = RRRR-MM-DD w strefie telefonu), nigdy przy ograniczeniu ruchu.
-   Decyzja zapada tutaj, przed pierwszym rysowaniem strony: aplikacja nie mignie przed zasłoną, a zasłona nie mignie przy kolejnych otwarciach.
+/* Animacja otwarcia przy wejściu po przerwie: pokazuje się, gdy aplikacji nie było na ekranie co najmniej 30 minut (INTRO_GAP), nigdy przy ograniczeniu ruchu.
+   Pamięć telefonu „intro” = chwila (ms), w której aplikacja była ostatnio na ekranie. Odświeża ją introMark na końcu skryptu (co minutę i w chwili schowania aplikacji),
+   więc przeładowanie strony w trakcie treningu nie pokazuje animacji. Zapis z v53 (data zamiast chwili) liczy się jak „dawno temu”.
+   Przy uruchomieniu decyzja zapada tutaj, przed pierwszym rysowaniem strony: aplikacja nie mignie przed zasłoną, a zasłona nie mignie przy wejściu bez animacji.
+   Przy powrocie do otwartej aplikacji (bez przeładowania strony) introVis woła introShow() bez argumentu: zasłona jest wtedy świeżą kopią tej z HTML.
    Każdy błąd (np. zablokowana albo pełna pamięć) = bez animacji. */
-(function(){
-  var el = document.getElementById('intro');
+var INTRO_GAP = 30 * 60000, introTpl = document.getElementById('intro').cloneNode(true);
+function introShow(el){                                  // true = zasłona stoi na ekranie i czeka na introRun
   try {
-    var d = new Date(), day = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
-    if (!el.animate || matchMedia('(prefers-reduced-motion: reduce)').matches || localStorage.getItem('intro') === day) { el.remove(); return; }
-    localStorage.setItem('intro', day);
+    if (!introTpl.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    localStorage.setItem('intro', Date.now());          // od razu, także gdy ktoś zamknie aplikację w trakcie; gdy zapis się nie uda, animacji nie ma (wracałaby przy każdym otwarciu)
+    if (!el) { el = introTpl.cloneNode(true); document.body.insertBefore(el, document.body.firstChild); }
     el.hidden = false;
     // niski albo wąski ekran: całość proporcjonalnie mniejsza; podpis znika, gdy wyszedłby poniżej 12 px
     var box = el.firstElementChild, k = Math.min(1, (el.clientHeight - 40) / box.offsetHeight, (el.clientWidth - 32) / box.offsetWidth);
@@ -775,7 +778,13 @@
     m.content = getComputedStyle(document.documentElement).getPropertyValue('--intro-bg').trim();
     var first = document.querySelector('meta[name="theme-color"]');   // przeglądarka bierze pierwszy pasujący znacznik
     (first ? first.parentNode : document.head).insertBefore(m, first);
-  } catch (e) { el.remove(); }
+    return true;
+  } catch (e) { if (el) el.remove(); return false; }
+}
+(function(){
+  var el = document.getElementById('intro'), last;
+  try { last = Number(localStorage.getItem('intro')) || 0; } catch (e) { el.remove(); return; }
+  if (Date.now() - last < INTRO_GAP || !introShow(el)) el.remove();
 })();
 </script>
 <header>
@@ -3549,19 +3558,21 @@ function openCam(ex, row, s0){
 }
 
 /* ---------- animacja otwarcia „Siła z Ruchu” ----------
-   Zasłona #intro jest w HTML na samej górze; mały skrypt pod nią zostawia ją tylko przy pierwszym otwarciu danego dnia (i bez ograniczenia ruchu).
+   Zasłona #intro jest w HTML na samej górze; mały skrypt pod nią zostawia ją tylko przy wejściu po co najmniej 30 minutach bez aplikacji (i bez ograniczenia ruchu).
    Tu sam ruch: pomarańczowa linia = tor sztangi w rwaniu w tempie boju (lib introTempo), jasna linia = taniec na wysokości talerza (lib introDance),
    napis litera po literze, chwila na przeczytanie, zgaszenie (czasy: lib INTRO, introTimes). Dotknięcie albo klawisz pomija.
    Dane ładują się w tym czasie pod zasłoną (load nie czeka na animację). Każdy błąd = zasłona znika od razu. */
+let introEnd = null;                                   // kończy od razu trwającą animację (null = nic nie gra)
 function introRun(){
   const S = $('#intro'); if (!S) return;
   const I = TL.INTRO, tc = $('#intro-tc');
   let over = false, raf = 0, guard = 0;
   const end = () => {
-    if (over) return; over = true;
+    if (over) return; over = true; introEnd = null;
     cancelAnimationFrame(raf); clearTimeout(guard); removeEventListener('keydown', skip, true);
     S.remove(); if (tc) tc.remove();
   };
+  introEnd = end;
   function skip(){                                     // szybkie zgaszenie zamiast czekania do końca
     if (over || S.dataset.skip) return; S.dataset.skip = '1';
     try { S.animate([{ opacity: getComputedStyle(S).opacity }, { opacity: 0 }], { duration: I.SKIP, fill: 'forwards' }).onfinish = end; } catch (e) {}
@@ -3598,7 +3609,28 @@ function introRun(){
   } catch (e) { end(); }
 }
 
+/* Znacznik „ostatnio na ekranie” (pamięć telefonu „intro”) i powrót do otwartej aplikacji.
+   introMark odświeża znacznik przy starcie, co minutę, gdy aplikacja jest na ekranie (na wypadek, gdyby telefon zamknął stronę bez ostrzeżenia), i w chwili schowania.
+   Schowana aplikacja znacznika nie odświeża. Gdy wraca na ekran po przerwie ≥ INTRO_GAP bez przeładowania strony, animacja idzie jeszcze raz (introVis);
+   o powrocie decyduje chwila schowania zapamiętana w tej karcie, nie zegar co minutę, więc animacja nigdy nie wyskoczy z opóźnieniem w trakcie pracy.
+   Schowanie aplikacji w trakcie animacji kończy ją od razu: po powrocie jest aplikacja, a nie resztka zasłony. */
+let introHid = 0;                                      // kiedy aplikacja zeszła z ekranu (0 = jest na ekranie)
+const introMark = () => { try { localStorage.setItem('intro', Date.now()); } catch (e) {} };
+function introVis(){
+  if (document.hidden) {                                // liczy się pierwsze zgłoszenie schowania: kolejne (np. przy zamykaniu schowanej strony) nie przesuwają znacznika
+    if (!introHid) { introHid = Date.now(); introMark(); if (introEnd) introEnd(); }
+    return;
+  }
+  const away = introHid ? Date.now() - introHid : 0; introHid = 0;
+  introMark();
+  if (away >= INTRO_GAP && !$('#intro') && introShow()) introRun();
+}
+document.addEventListener('visibilitychange', introVis);
+addEventListener('pagehide', () => { if (!document.hidden) introMark(); });
+setInterval(() => { if (!document.hidden) introMark(); }, 60000);
+
 introRun();
+if (!document.hidden) introMark();
 load();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
