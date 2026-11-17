@@ -527,6 +527,13 @@
   .vbox video{display:block;max-width:100%;max-height:52vh}
   .fl select{min-height:48px;font:400 16px var(--f-body);text-transform:none;letter-spacing:0}
 
+  /* notatka trenera do jednostki (Plan.uwagi_jedn) nad treningiem */
+  .unote{background:var(--surface);border-radius:var(--rc);box-shadow:inset 5px 0 0 var(--accent),var(--shadow);padding:12px 16px 14px 20px;margin-top:var(--gap)}
+  .unote h3{margin:0;font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .unote p{margin:6px 0 0;font:500 16px/1.45 var(--f-body);color:var(--ink);white-space:pre-line;overflow-wrap:anywhere}
+  /* Postęp → Blok: notatka trenera do bloku (Bloki.dla_klienta) */
+  .bl-note{margin:6px 0 0;font:500 16px/1.45 var(--f-body);color:var(--ink);border-left:3px solid var(--accent);padding:2px 0 2px 10px;white-space:pre-line;overflow-wrap:anywhere}
+  .card .dn-t{margin-top:10px}
   /* zamiana ćwiczenia */
   .cnote{background:var(--surface);border:1px solid var(--accent);border-radius:var(--rc);box-shadow:inset 5px 0 0 var(--accent),var(--shadow);padding:14px 16px 16px 20px;margin-top:var(--gap)}
   .cnote h3{margin:0 0 6px;font:800 22px/1.1 var(--f-display);text-transform:uppercase;color:var(--ink-2)}
@@ -763,7 +770,7 @@ function applyCfg(c){
 }
 let DATA = null, PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
 let TAB = 'trening';   // ekran z dolnego menu: trening | dysp | plan | postep | trener
-let PT = 'tyd', PEX = '', PWK = null;   // zakładka, ćwiczenie i tydzień (poniedziałek; null = bieżący) na ekranie Postęp
+let PT = 'tyd', PEX = '', PWK = null, PBL = null;   // zakładka, ćwiczenie, tydzień (poniedziałek; null = bieżący) i blok (null = ostatni) na ekranie Postęp
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const RPE = ['', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10'];
 // tryb prosty: słowa zamiast RPE; w arkuszu nadal zapisuje się liczba RPE
@@ -777,7 +784,7 @@ const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsD
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
   doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
-  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart } = window.TL;
+  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart, blockReport } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -1577,12 +1584,53 @@ function weekCards(sets, dates, today){
   if (w.notes) out += `<button type="button" class="btn" id="pw-cn">Komentarze trenera z tego tygodnia: ${w.notes}</button>`;
   return out;
 }
+/** Postęp → Blok: raport po bloku (lib blockReport, jak zakładka Bloki w arkuszu), ◀ ▶ między blokami */
+function blockCards(sets, dates, today){
+  const all = blockReport({ plan: PLAN, logs: (DATA && DATA.logs) || [], sessions: (DATA && DATA.sessions) || [], ready: readyRows(), dates,
+    notes: (DATA && DATA.blockNotes) || {}, today });
+  const list = all.filter(b => b.state !== 'next' && (!b.empty || b.state === 'now' || b.note));
+  if (!list.length) return emptyCard('chart', 'Tu będzie raport z bloku', 'Raport pojawi się po pierwszym treningu z planu podzielonego na bloki.', ES_GO);
+  let i = list.findIndex(b => b.block === PBL); if (i < 0) { i = list.length - 1; PBL = null; }
+  const b = list[i], st = { done: 'zakończony', now: 'w trakcie' }[b.state];
+  const kv = (k, v, sm) => `<div class="kv"><span>${k}${sm ? `<small> · ${sm}</small>` : ''}</span><b>${v}</b></div>`;
+  const tile = (k, v, sm) => `<div><span>${k}</span><b>${v}</b>${sm ? `<small>${sm}</small>` : ''}</div>`;
+  const range = b.from ? ddmm(b.from) + (b.to && b.to !== b.from ? '–' + ddmm(b.to) : '') : '';
+  const wks = b.weeks ? (b.weeks[0] === b.weeks[1] ? 'tydz. ' + b.weeks[0] : 'tydz. ' + b.weeks[0] + '–' + b.weeks[1]) : '';
+  const nav = `<section class="wk" aria-label="Blok ${esc(b.block)}"><div class="wk-h"><button type="button" class="wk-a" ${i ? `data-pb="${esc(list[i - 1].block)}"` : 'disabled'} aria-label="Poprzedni blok">◀</button>
+      <div class="wk-t"><b>Blok ${esc(b.block)} · ${st}</b><small>${[range, wks].filter(Boolean).join(' · ')}</small></div>
+      <button type="button" class="wk-a" ${i < list.length - 1 ? `data-pb="${esc(list[i + 1].block)}"` : 'disabled'} aria-label="Następny blok">▶</button></div></section>`;
+  const t = b.ton >= 1000 ? kgTxt(b.ton / 1000) + '<i> t</i>' : b.ton + '<i> kg</i>';
+  const perW = b.state === 'done' && b.nWeeks > 1 && b.ton ? (b.ton / b.nWeeks >= 1000 ? kgTxt(b.ton / b.nWeeks / 1000) + ' t' : Math.round(b.ton / b.nWeeks) + ' kg') + ' / tydz.' : '';
+  const h = Math.floor(b.min / 60), m = Math.round(b.min % 60);
+  const tiles = `<div class="dn-t">${b.state === 'done' && b.pct !== null
+      ? tile('Wykonanie', b.pct + '<i> %</i>', b.units.done + ' z ' + b.units.plan + ' ' + plural(b.units.plan, 'treningu', 'treningów', 'treningów'))
+      : tile('Treningi', b.units.done + '<i> z ' + b.units.plan + '</i>', 'blok trwa')}
+    ${tile('Tonaż', t, perW)}
+    ${tile('Czas', b.min ? (h ? h + '<i> h </i>' + (m || '') : m + '<i> min</i>') : '–', b.minN ? b.minN + ' × ok. ' + Math.round(b.min / b.minN) + ' min' : '')}</div>`;
+  let out = nav + `<section class="card"><div class="cn">Podsumowanie bloku</div>${tiles}</section>`;
+  if (b.lifts.length) {
+    const main = b.lifts.find(x => !x.oly), ser = main ? strengthSeries(sets.filter(x => x.block === b.block), main.name) : [];
+    out += `<section class="card"><div class="cn">Siła</div><div class="sub">Ćwiczenia główne: początek → koniec bloku.</div>
+      ${b.lifts.map(x => x.oly ? kv('<i class="key pr"></i> ' + esc(x.name), kgTxt(x.best) + ' kg', 'najcięższe zaliczone')
+        : kv('<i class="key pr"></i> ' + esc(x.name), Math.round(x.from) + ' → ' + Math.round(x.to) + ' kg', 'e1RM, ' + (x.pct >= 0 ? '+' : '') + kgTxt(x.pct) + '%')).join('')}
+      ${ser.length > 1 ? chartLine(ser, { unit: 'kg', label: 'e1RM w bloku ' + b.block + ': ' + main.name }) + `<p class="tip" aria-live="polite">${TIP0}</p>` : ''}</section>`;
+  }
+  const rd = [['ok', 'dobra'], ['warn', 'uwaga'], ['bad', 'zmęczenie']].filter(q => b.ready[q[0]]).map(q => b.ready[q[0]] + '× ' + q[1]).join(' · ');
+  if (b.rpe.length || b.feel !== null || b.pain || rd) out += `<section class="card"><div class="cn">Jak było</div>
+    ${b.rpe.length ? kv('RPE sesji', 'śr. ' + kgTxt(b.rpeAvg), b.rpe.map(kgTxt).join(' · ')) : ''}
+    ${b.feel !== null ? kv('Samopoczucie', kgTxt(b.feel) + '/5', 'średnio') : ''}
+    ${b.pain ? kv('Ból', b.pain.v ? 'max ' + kgTxt(b.pain.v) + '/10' : 'bez bólu', b.pain.v ? [b.pain.place ? esc(b.pain.place) : '', b.painN + ' ' + plural(b.painN, 'raz', 'razy', 'razy')].filter(Boolean).join(', ') : '') : ''}
+    ${rd ? kv('Dyspozycja', rd) : ''}</section>`;
+  if (b.note) out += `<section class="card"><div class="cn">Od trenera</div><p class="bl-note">${esc(b.note)}</p></section>`;
+  return out;
+}
 function renderPostep(){
   const logs = (DATA && DATA.logs) || [], dates = unitDays();
   const sets = doneSets(logs, PLAN, dates), today = localDate();
   head(NAME ? 'Cała historia · ' + NAME : 'Cała historia', 'Postęp', '');
   let body = '';
   if (PT === 'tyd') body = weekCards(sets, dates, today);
+  else if (PT === 'blok') body = blockCards(sets, dates, today);
   else if (PT === 'sila') {
     const recs = records(sets);
     if (!recs.some(r => r.name === PEX)) PEX = recs.length ? recs[0].name : '';
@@ -1623,11 +1671,12 @@ function renderPostep(){
       : one(cmj, 'Skok CMJ', 'cm', cmj.length ? { mid: mean(cmj.map(p => p.v)), pct: 0.05 } : null, 'Średnia z 3 skoków w dniu. Szary pas: Twoja średnia ±5%.', 1) +
         one(vb, 'Prędkość na rozgrzewce', 'm/s', null, 'To samo ćwiczenie i ciężar, najlepsza próba.', 2);
   }
-  $('#postep').innerHTML = `<div class="row tabs" role="tablist">${[['tyd', 'Tydzień'], ['sila', 'Siła'], ['obj', 'Objętość'], ['dys', 'Dyspozycja']].map(([k, n]) =>
+  $('#postep').innerHTML = `<div class="row tabs" role="tablist">${[['tyd', 'Tydzień'], ['blok', 'Blok'], ['sila', 'Siła'], ['obj', 'Objętość'], ['dys', 'Dyspozycja']].map(([k, n]) =>
     `<button class="chip ${PT === k ? 'on' : ''}" data-pt="${k}" role="tab" aria-selected="${PT === k}">${n}</button>`).join('')}</div>` + body;
   document.querySelectorAll('[data-pt]').forEach(b => b.onclick = () => { PT = b.dataset.pt; renderPostep(); });
   document.querySelectorAll('#postep [data-go]').forEach(b => b.onclick = () => { TAB = b.dataset.go; WK = null; render(); window.scrollTo(0, 0); });
   const sel = $('#p-ex'); if (sel) sel.onchange = () => { PEX = sel.value; renderPostep(); };
+  document.querySelectorAll('#postep [data-pb]').forEach(b => b.onclick = () => { PBL = b.dataset.pb; renderPostep(); });
   document.querySelectorAll('#postep [data-pw]').forEach(b => b.onclick = () => {
     const d = +b.dataset.pw, now = mondayOf(localDate()), m = d ? addDays(PWK || now, 7 * d) : now;
     PWK = m >= now ? null : m; renderPostep();
@@ -2172,6 +2221,11 @@ function grpAfter(ex){
   }, 350);
 }
 const curExs = () => PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order).map(withSwap).map(withSkip);
+/** notatka trenera do całej jednostki (Plan.uwagi_jedn, pierwszy wiersz z treścią) */
+function unoteCard(exs){
+  const r = exs.slice().sort((a, b) => a.order - b.order).find(x => String(x.unote || '').trim());
+  return r ? `<section class="unote" id="unote" aria-label="Notatka trenera do tego treningu"><h3>✎ Od trenera do tego treningu</h3><p>${esc(String(r.unote).trim())}</p></section>` : '';
+}
 function renderTrening(){
   if (!PLAN.some(r => r.week === cur.week && r.day === cur.day)) pickDefault();
   const exs = curExs();
@@ -2197,7 +2251,7 @@ function renderTrening(){
   });
   const open = !sessDone(cur.week, cur.day);
   const fx = FX && exs.length > 1;
-  let h = sbNote() + (fx ? '<section class="fx" id="fx" aria-label="Tryb skupienia"></section>' : '') + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section>' : '') + weekBar('t') + notesCard() + readyBanner();
+  let h = sbNote() + (fx ? '<section class="fx" id="fx" aria-label="Tryb skupienia"></section>' : '') + unoteCard(exs) + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section>' : '') + weekBar('t') + notesCard() + readyBanner();
   const grps = circuitGroups(exs), gOf = o => grps.find(g => g.orders.includes(o));
   exs.forEach(ex => {
     const g = gOf(ex.order), i = g ? g.orders.indexOf(ex.order) : -1;
@@ -2811,7 +2865,7 @@ function fxDraw(){
   FXI = Math.max(0, Math.min(FXI, steps.length));
   const st = steps[FXI], show = st ? st.orders : [], pos = o => exs.findIndex(ex => ex.order === o) + 1;
   [...$('#main').children].forEach(e => {
-    const keep = e === bar || e.id === 'fx-nav' || (st ? e.matches('.card[data-card]') && show.includes(+e.dataset.card) || e.matches('.grp') && e.dataset.grp === st.grp
+    const keep = e === bar || e.id === 'fx-nav' || e.id === 'unote' && FXI === 0 || (st ? e.matches('.card[data-card]') && show.includes(+e.dataset.card) || e.matches('.grp') && e.dataset.grp === st.grp
       : e.matches('.card.sess, .own-add, .ed-rm'));
     e.classList.toggle('fx-off', !keep);
   });

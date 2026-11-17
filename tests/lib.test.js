@@ -641,3 +641,42 @@ test('focusSteps / focusStart: tryb skupienia – obwód jako jeden krok, start 
   assert.deepEqual(L.focusSteps([], []), []);
   assert.equal(L.focusStart([], null), 0);
 });
+
+test('blockReport: raport po bloku jak zakładka Bloki (wykonanie, tonaż, siła, odczucia, stan bloku, notatka trenera)', () => {
+  const d = w => '2026-09-' + String(w * 7).padStart(2, '0');
+  const plan = [], logs = [], sessions = [];
+  [[1, 'B1', 100], [2, 'B1', 105], [3, 'B2', 110]].forEach(([w, block, kg]) => {
+    plan.push({ week: w, day: 'T1', date: d(w), order: 1, name: 'Przysiad', prio: 'A', sets: 2, reps: '5', block },
+      { week: w, day: 'T1', date: d(w), order: 2, name: 'Rwanie', prio: 'A', sets: 1, reps: '1', block, group: 'R' },
+      { week: w, day: 'T1', date: d(w), order: 3, name: 'Face pull', prio: 'B', sets: 2, reps: '15', block },
+      { week: w, day: 'T1', date: d(w), order: 4, name: 'Plank', prio: 'K', sets: 1, reps: '30 s', block });
+    if (w === 3) return;                                                       // tydzień 3 jeszcze niezrobiony
+    for (let s = 1; s <= 2; s++) logs.push({ tydzien: w, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Przysiad', seria: s, kg, powt: 5, rpe: 8, wykonane: 'TAK' });
+    logs.push({ tydzien: w, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Przysiad', seria: 'R1', kg: 60, powt: 5, wykonane: 'TAK' },     // rozgrzewka się nie liczy
+      { tydzien: w, jednostka: 'T1', nr_cw: 2, cwiczenie: 'Rwanie', seria: 1, kg: kg - 20, powt: 1, rpe: 8, wykonane: 'TAK' },
+      { tydzien: w, jednostka: 'T1', nr_cw: 4, cwiczenie: 'Plank', seria: 1, kg: '', powt: 30, wykonane: 'TAK' });                 // na czas: bez tonażu
+    if (w === 1) logs.push({ tydzien: 1, jednostka: 'T1', nr_cw: 3, cwiczenie: 'Face pull', seria: 0, typ: 'SKIP', uwagi: 'brak czasu', wykonane: '' });
+    else for (let s = 1; s <= 2; s++) logs.push({ tydzien: w, jednostka: 'T1', nr_cw: 3, cwiczenie: 'Face pull', seria: s, kg: 10, powt: 15, rpe: 7, wykonane: 'TAK' });
+    sessions.push({ tydzien: w, jednostka: 'T1', data: d(w), samopoczucie: w + 2, czas_min: 60, rpe_sesji: 6 + w, bol: w === 2 ? 'kolano:2; bark:1' : '' });
+  });
+  // własny trening w bloku: tonaż tak, jednostki i wykonanie nie
+  plan.push({ week: 2, day: 'W1', date: d(2), order: 1, name: 'Wiosłowanie', prio: 'A', sets: 1, reps: '10', block: 'B1', own: true });
+  logs.push({ tydzien: 2, jednostka: 'W1', nr_cw: 1, cwiczenie: 'Wiosłowanie', seria: 1, kg: 20, powt: 10, rpe: 8, wykonane: 'TAK' });
+  const ready = [{ data: d(1), werdykt: 'Dobra dyspozycja' }, { data: d(2), werdykt: 'Uwaga' }, { data: d(3), werdykt: 'Zmęczenie' }];
+  const rep = L.blockReport({ plan, logs, sessions, ready, dates: { '2|T1': '2026-09-15' }, notes: { B1: ' Dobry blok ' }, today: '2026-09-20' });
+  assert.deepEqual(rep.map(b => b.block), ['B1', 'B2']);
+  const [b1, b2] = rep;
+  assert.deepEqual([b1.from, b1.to, b1.weeks, b1.nWeeks, b1.state], ['2026-09-07', '2026-09-15', [1, 2], 2, 'done']);   // faktyczny dzień z Sesji
+  assert.deepEqual(b1.units, { plan: 2, done: 2 });
+  assert.deepEqual(b1.sets, { plan: 2 + 1 + 1 + 2 * 2 + 1 + 1, done: 2 + 1 + 1 + 2 + 2 + 1 + 1 });  // pominięte B w tyg. 1 poza planem
+  assert.equal(b1.pct, 100);
+  assert.equal(b1.ton, 2 * 5 * 100 + 80 + 2 * 5 * 105 + 85 + 2 * 10 * 15 + 20 * 10);
+  assert.deepEqual(b1.lifts, [{ name: 'Przysiad', oly: false, from: 123.3, to: 129.5, pct: 5 }, { name: 'Rwanie', oly: true, best: 85 }]);
+  assert.deepEqual([b1.min, b1.minN, b1.rpe, b1.rpeAvg, b1.feel], [120, 2, [7, 8], 7.5, 3.5]);
+  assert.deepEqual([b1.pain, b1.painN], [{ place: 'kolano', v: 2 }, 1]);
+  assert.deepEqual(b1.ready, { ok: 1, warn: 1, bad: 0 });                       // dyspozycja tylko z dni bloku
+  assert.equal(b1.note, 'Dobry blok');
+  assert.deepEqual([b2.state, b2.units, b2.pct, b2.empty, b2.note, b2.lifts], ['next', { plan: 1, done: 0 }, 0, true, '', []]);
+  assert.equal(L.blockReport({ plan, logs, sessions, today: '2026-09-21' })[1].state, 'now');
+  assert.deepEqual(L.blockReport({ plan: [{ week: 1, day: 'T1', order: 1, sets: 3, block: '' }], today: '2026-09-21' }), []);   // plan bez bloków
+});

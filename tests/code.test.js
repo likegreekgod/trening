@@ -225,6 +225,28 @@ test('computeBlocks_ i keepNotes_: historia bloków z wnioskami trenera', () => 
   assert.equal(out.find(r => r[1] === 'B0')[W], 'stary blok');
 });
 
+test('Bloki „dla_klienta” i notatka do jednostki (uwagi_jedn): nagłówki, przenoszenie przy przeliczeniu, getData, walidacja planu', () => {
+  const H = C.BLOK_HEADERS, K = H.indexOf('dla_klienta'), W = H.indexOf('wnioski');
+  assert.deepEqual(Array.from(H.slice(-2)), ['wnioski', 'dla_klienta']);            // nowa kolumna na końcu
+  const row = b => { const r = H.map(() => ''); r[0] = 'robert'; r[1] = b; return r; };
+  const old = [{ klient: 'robert', blok: 'B1', wnioski: '', dla_klienta: 'Dobry blok, w B2 więcej rwania' },
+    { klient: 'robert', blok: 'B2', wnioski: 'tylko dla mnie', dla_klienta: '' }, { klient: 'robert', blok: 'B0', wnioski: '', dla_klienta: 'stary' }];
+  const out = C.keepNotes_([row('B1'), row('B2')], old), by = b => out.find(r => r[1] === b);
+  assert.equal(by('B1')[K], 'Dobry blok, w B2 więcej rwania'); assert.equal(by('B1')[W], '');
+  assert.equal(by('B2')[W], 'tylko dla mnie'); assert.equal(by('B2')[K], '');
+  assert.equal(by('B0')[K], 'stary');                                              // blok spoza planu zostaje z notatką
+  assert.ok(out.every(r => r.length === H.length));
+  // do aplikacji idzie tylko „dla_klienta” tego klienta, nigdy „wnioski”
+  const tab = old.concat([{ klient: 'Anna', blok: 'B1', dla_klienta: 'cudze' }, { klient: 'robert', blok: 'B3', dla_klienta: '   ' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(C.blockNotes_(tab, 'robert'))), { B1: 'Dobry blok, w B2 więcej rwania', B0: 'stary' });
+  assert.deepEqual(JSON.parse(JSON.stringify(C.blockNotes_([], 'robert'))), {});
+  // plan: uwagi_jedn opcjonalne, w jednej jednostce jedna treść
+  const R = (nr, o) => Object.assign({ klient: 'robert', tydzien: 1, jednostka: 'T1', nr, cwiczenie: 'Przysiad', serie: 3, powt: '5' }, o || {});
+  assert.deepEqual(Array.from(C.validatePlan_([R(1, { uwagi_jedn: 'Dziś lżej' }), R(2), R(1, { jednostka: 'T2', uwagi_jedn: 'Inna' })])), []);
+  assert.deepEqual(Array.from(C.validatePlan_([R(1, { uwagi_jedn: 'Dziś lżej' }), R(2, { uwagi_jedn: 'Dziś lżej ' })])), []);
+  assert.match(C.validatePlan_([R(1, { uwagi_jedn: 'A' }), R(2, { uwagi_jedn: 'B' })])[0], /uwagi_jedn różne/);
+});
+
 test('slugId_ i buildClientRow_: nowy klient z menu', () => {
   assert.equal(C.slugId_('Mikołaj Góral'), 'mikolaj-goral');
   assert.equal(C.slugId_('  Żaneta  '), 'zaneta');
@@ -469,7 +491,7 @@ test('ownRows_: walidacja i wiersze Planu własnej jednostki', () => {
   assert.equal(C.ownRows_('anna', Object.assign({}, u, { day: 'W1' }), [{ klient: 'anna', tydzien: 2, jednostka: 'W1' }]).error, 'Ta jednostka jest w planie trenera.');
   assert.equal(C.ownRows_('anna', Object.assign({}, u, { exercises: Array(21).fill({ name: 'X', sets: 1, reps: 1 }) }), plan).error, 'Najwyżej 20 ćwiczeń.');
   assert.ok(C.API_FNS.addOwnUnit);
-  assert.deepEqual(Array.from(C.PLAN_HEADERS.slice(-5)), ['zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod']);   // nowe kolumny na końcu
+  assert.deepEqual(Array.from(C.PLAN_HEADERS.slice(-6)), ['zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod', 'uwagi_jedn']);   // nowe kolumny na końcu
 });
 
 test('mergePlan_ zostawia własne treningi; podsumowanie i bloki liczą ich objętość, ale nie wykonanie planu', () => {
@@ -649,7 +671,7 @@ test('obwod: walidacja planu (litera, ≥ 2 ćwiczenia po sobie, bez EMOM) i wł
   assert.match(C.validatePlan_([R(1, { obwod: 'AB' }), R(2, { obwod: 'AB' })])[0], /jedna litera/);
   assert.match(C.validatePlan_([R(1, { obwod: 'A', tryb: 'EMOM' }), R(2, { obwod: 'A' })])[0], /EMOM/);
   assert.deepEqual(Array.from(C.validatePlan_([R(1, { obwod: 'A' }), R(2, { obwod: 'A' }), R(1, { jednostka: 'T2', obwod: 'A' }), R(2, { jednostka: 'T2', obwod: 'A' })])), []);   // litera liczy się w obrębie jednostki
-  assert.equal(C.PLAN_HEADERS[C.PLAN_HEADERS.length - 1], 'obwod');                // nowa kolumna na końcu
+  assert.equal(C.PLAN_HEADERS[C.PLAN_HEADERS.length - 2], 'obwod');                // nowe kolumny na końcu (potem uwagi_jedn)
   assert.deepEqual(['a', 'B ', 'AB', '', null, 1].map(C.circuit_), ['A', 'B', '', '', '', '']);
   const E = (name, circuit) => ({ name, sets: 3, reps: '10', kg: '', circuit });
   const own = C.ownRows_('robert', { week: 1, day: 'W1', date: d(1, 0), exercises: [E('Pompki', 'A'), E('Wiosłowanie', 'a'), E('Plank', 'B'), E('Curl'), E('Dipy', 'x1')] }, []);

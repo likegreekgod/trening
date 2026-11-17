@@ -1067,6 +1067,67 @@ test('Trening zrobiony bez sieci: okno z dopiskiem, zapis w kolejce; pierwsza je
   await ctx.close();
 });
 
+for (const scheme of ['light', 'dark']) test(`Postęp → Blok ${scheme}: raport po bloku, ◀ ▶ między blokami, notatka trenera do bloku`, async () => {
+  const data = Object.assign({}, PROG, { blockNotes: { B1: 'Dobry blok: przysiad rośnie równo.\nW B2 więcej rwania.' } });
+  const { ctx, p } = await page([], false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('#nav [data-tab="postep"]'); await p.click('[data-pt="blok"]'); await p.waitForSelector('#postep .dn-t');
+  const kv = () => p.$$eval('#postep .kv', r => r.map(x => x.querySelector('span').textContent + ' = ' + x.querySelector('b').textContent).join('\n'));
+  // domyślnie ostatni blok: B2, ostatni dzień planu (tydz. 8, wczoraj) minął bez treningu → zakończony, 3 z 4
+  assert.match(await p.textContent('#postep .wk-t'), /Blok B2 · zakończony.*tydz\. 5–8/s);
+  assert.match(await p.textContent('#postep .dn-t'), /Wykonanie\s*75 %\s*3 z 4 treningów/);
+  assert.equal(await p.$eval('[data-pb]', b => b.dataset.pb), 'B1');
+  assert.equal(await p.$eval('.wk-a[aria-label="Następny blok"]', b => b.disabled), true);
+  assert.equal(await p.$('#postep .bl-note'), null);                                 // B2 bez notatki trenera
+  await p.click('[data-pb="B1"]');
+  assert.match(await p.textContent('#postep .wk-t'), /Blok B1 · zakończony.*tydz\. 1–4/s);
+  assert.match(await p.textContent('#postep .dn-t'), /Wykonanie\s*100 %\s*4 z 4 treningów/);
+  assert.match(await p.textContent('#postep .dn-t'), /Czas\s*4 h 20\s*4 × ok\. 65 min/);   // 60 + 60 + 60 + 80 min
+  const t = await kv();
+  assert.match(t, /^ Przysiad tylny · e1RM, \+7,3% = 126 → 136 kg$/m);              // 102,5 → 110 kg × 5 @ 8
+  assert.match(t, /^ Rwanie · najcięższe zaliczone = 70 kg$/m);
+  assert.match(t, /^RPE sesji · 6 · 6 · 6 · 9 = śr\. 6,8$/m);
+  assert.match(t, /^Dyspozycja = 4× dobra$/m);
+  assert.equal((await p.$$('#postep svg.chart .pt')).length, 4);
+  assert.equal(await p.textContent('#postep .bl-note'), 'Dobry blok: przysiad rośnie równo.\nW B2 więcej rwania.');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, `postep-blok-${scheme}.png`), fullPage: true });
+  await p.click('[data-pt="sila"]'); await p.click('[data-pt="blok"]');
+  assert.match(await p.textContent('#postep .wk-t'), /Blok B1/);                     // wybrany blok zostaje przy zmianie zakładki
+  assert.deepEqual(p.external, []); assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Postęp → Blok: plan bez bloków = karta z przejściem do treningu', async () => {
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('#nav [data-tab="postep"]'); await p.click('[data-pt="blok"]');
+  assert.match(await p.textContent('#postep .es'), /Tu będzie raport z bloku/);
+  await p.click('#postep [data-go="trening"]'); await p.waitForSelector('.set');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+for (const scheme of ['light', 'dark']) test(`Notatka trenera do jednostki ${scheme}: karta „Od trenera” nad treningiem, w trybie skupienia tylko na pierwszym kroku`, async () => {
+  const note = 'Dziś lżej w przysiadzie.\nJeśli kolano boli > 3/10, zamień na goblet <b>.';
+  const data = Object.assign({}, PRO, { plan: PRO.plan.map(r => Object.assign({}, r, r.order === 2 ? { unote: note } : {})) });
+  const { ctx, p } = await page([], false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  assert.equal(await p.textContent('#unote p'), note);                                // tekst, nie HTML
+  assert.ok(await p.$eval('#unote', e => e.compareDocumentPosition(document.querySelector('#today')) & Node.DOCUMENT_POSITION_FOLLOWING));
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, `notatka-jednostki-${scheme}.png`) });
+  await p.click('#umore'); await p.click('#fx-sw'); await p.waitForSelector('#fx-next');
+  assert.equal(await p.isVisible('#unote'), true);
+  await p.click('#fx-next'); assert.equal(await p.isVisible('#unote'), false);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+  const { ctx: c2, p: p2 } = await page([], false, { data: PRO });                  // jednostka bez notatki: bez karty
+  await p2.goto(base + '?k=kabc'); await p2.waitForSelector('.set');
+  assert.equal(await p2.$('#unote'), null);
+  await c2.close();
+});
+
 for (const scheme of ['light', 'dark']) test(`Postęp → Tydzień ${scheme}: wykonanie, rekordy, odczucia, przełączanie tygodni`, async () => {
   // każdy tydzień kalendarzowy ma dokładnie jedną jednostkę PROG (co 7 dni); ostatnia zrobiona (tydz. 7) jest sprzed 8 dni,
   // czyli zwykle w poprzednim tygodniu kalendarzowym, a w poniedziałek dwa tygodnie wstecz (26.10 test przez to nie przechodził)
