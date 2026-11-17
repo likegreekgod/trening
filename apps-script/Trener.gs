@@ -5,11 +5,11 @@
  * z adresem trenera we właściwościach skryptu (TRENER_EMAIL, kilka po przecinku) i identyfikatorem
  * klienta OAuth (TRENER_CLIENT_ID). Obie wartości ustawia menu „Trening → Ustaw panel trenera”;
  * nie trafiają do repozytorium ani do arkusza. Bez nich panel odpowiada „nie jest skonfigurowany”.
- * Odczyt: trPulpit, trKlient, trPrzelicz. Zapis: trKomentarz (komentarz do sesji). Claude API: trSzkic (szkic komentarza,
+ * Odczyt: trPulpit, trKlient, trPrzelicz. Zapis: trKomentarz (komentarz do sesji), trKomentarzFilm (komentarz do serii z filmem). Filmy: trFilm (bilet do Drive API). Claude API: trSzkic (szkic komentarza,
  * klucz CLAUDE_API_KEY we właściwościach skryptu, dzienny limit, każde wywołanie w zakładce „AI”). AI tylko szkicuje, zapisuje trener.
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
-const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI };
+const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -134,7 +134,8 @@ function trPulpit_(t, o) {
     id: lc(l.klient), name: names[lc(l.klient)] || String(l.klient), at: d10(l.zapisano), week: l.tydzien, day: String(l.jednostka || ''),
     order: l.nr_cw, ex: String(l.cwiczenie || ''), set: String(l.seria), kg: l.kg === '' ? '' : l.kg, reps: String(l.powt === undefined ? '' : l.powt),
     rpe: l.rpe === '' ? '' : l.rpe, ocena: String(l.ocena || ''), typ: String(l.typ || ''), note: String(l.uwagi || ''),
-    file: fileIdOf_(l.film_link), link: String(l.film_link), kom: [l.komentarz_dysk, l.komentarz_trenera].filter(x => !blank_(x)).map(String).join('\n') }))
+    file: fileIdOf_(l.film_link), link: String(l.film_link), kom: [l.komentarz_dysk, l.komentarz_trenera].filter(x => !blank_(x)).map(String).join('\n'),
+    komT: blank_(l.komentarz_trenera) ? '' : String(l.komentarz_trenera), komD: blank_(l.komentarz_dysk) ? '' : String(l.komentarz_dysk) }))
     .filter(v => v.at && Math.round((day_(o.today) - day_(v.at)) / 864e5) < TR_FILM_DNI && Math.round((day_(o.today) - day_(v.at)) / 864e5) >= 0)
     .sort((a, b) => b.at.localeCompare(a.at) || a.name.localeCompare(b.name) || Number(a.order) - Number(b.order) || a.set.localeCompare(b.set));
 
@@ -187,6 +188,37 @@ function trKomentarz(id, week, day, text) {
   return { text: text, at: new Date().toISOString() };
 }
 
+/* ---------- filmy w panelu: odtwarzacz i komentarz do serii ----------
+ * trFilm: krótkotrwały bilet Google skryptu (właściciel arkusza), żeby przeglądarka trenera pobrała film z Drive API
+ * (alt=media) do własnego odtwarzacza. Dostaje go tylko zalogowany trener (trAuth_); panel trzyma go tylko w pamięci strony.
+ * trKomentarzFilm: komentarz trenera przy serii z filmem → Log.komentarz_trenera (klient widzi go w zakładce Trener).
+ * Linie „0:03 treść” = chwila filmu; komentarze z Dysku (komentarz_dysk) zostają bez zmian.
+ */
+function trFilm() {
+  return { token: ScriptApp.getOAuthToken(), exp: Date.now() + 50 * 60 * 1000 };
+}
+
+/** Id wiersza Logu dla serii (ten sam format co logSet). */
+const trLogId_ = (id, week, day, order, set) => [String(id || '').trim().toLowerCase(), Number(week), String(day), Number(order), String(set)].join('|');
+
+function trKomentarzFilm(id, week, day, order, set, text) {
+  id = String(id || '').trim().toLowerCase();
+  text = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n').trim();
+  if (text.length > TR_KOM_MAX) throw new Error('Komentarz jest za długi (najwyżej ' + TR_KOM_MAX + ' znaków).');
+  trRow_(id);
+  const lid = trLogId_(id, week, day, order, set);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Log', LOG_HEADERS);
+    const col = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].indexOf('komentarz_trenera') + 1;
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(lid).matchEntireCell(true).findNext();
+    if (!hit || col < 1) throw new Error('Nie ma tej serii w zakładce Log (' + lid + ').');
+    sh.getRange(hit.getRow(), col).setValue(text);
+  } finally { lock.releaseLock(); }
+  return { text: text, at: new Date().toISOString() };
+}
+
 /* ---------- Claude API: szkic komentarza do sesji ----------
  * Klucz: właściwość skryptu CLAUDE_API_KEY (menu „Trening → Ustaw klucz Claude API” albo edytor Apps Script). Nigdy w repo ani w arkuszu.
  * Do AI idą dane jednostki bez imienia i klucza klienta (trSzkicCtx_). Limit dzienny AI_LIMIT (właściwość AI_LIMIT nadpisuje),
@@ -206,9 +238,9 @@ const AI_SYSTEM = [
   'Jesteś asystentem trenera personalnego (trening siłowy, sylwetka, podnoszenie ciężarów). Piszesz szkic komentarza trenera do jednej zakończonej jednostki treningowej jego podopiecznego.',
   'Trener przeczyta szkic, poprawi go i dopiero wtedy wyśle klientowi do aplikacji.',
   'Zasady:',
-  '- Po polsku, w drugiej osobie, jak trener do swojego podopiecznego. 2–5 zdań, bez nagłówków, list, emoji i podpisu.',
-  '- Zacznij od konkretu z tej jednostki (ciężar, serie, porównanie z poprzednimi takimi samymi jednostkami). Bez ogólników typu „dobra robota”.',
-  '- Jedna rzecz do uwagi albo do poprawy na następną jednostkę, jeśli dane coś takiego pokazują (nieudana seria, wysokie RPE, pominięte ćwiczenie, uwaga klienta).',
+  '- Po polsku, w drugiej osobie, jak trener do swojego podopiecznego. Najwyżej 4 krótkie zdania, bez nagłówków, list, emoji i podpisu.',
+  '- Nie wyliczaj, co klient zrobił (on to wie). Wybierz jedną, najważniejszą rzecz z tej jednostki (rekord, nieudana seria, wysokie RPE, pominięte ćwiczenie, uwaga klienta) i powiedz, co z niej wynika. Bez ogólników typu „dobra robota”.',
+  '- Ostatnie zdanie to jedna konkretna decyzja na następną taką jednostkę, z liczbą (np. „W czwartek przysiad 85 kg, 3×5.”), oparta na planie i danych. Nie dawaj klientowi wyboru i nie asekuruj się („jeśli było za ciężko, zejdź trochę”).',
   '- Ból: przy bólu powyżej 3/10 albo powtarzającym się bólu napisz spokojnie, że trener chce o tym wiedzieć, i zaproponuj ostrożność (lżej, bez bólu). Nie stawiaj diagnoz i nie lecz.',
   '- Odpowiedz na uwagi i komentarze klienta, jeśli są.',
   '- Używaj tylko liczb z danych. Niczego nie dopisuj od siebie. Jeśli danych jest mało, napisz krócej.',

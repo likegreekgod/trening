@@ -7,6 +7,7 @@ const { chromium } = require('playwright');
 const WEB = path.join(__dirname, '..', 'web');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const SCREENS = path.join(__dirname, 'screens');
+const FILM = fs.readFileSync(path.join(__dirname, 'fixtures', 'film.webm'));   // syntetyczny film 2 s (ffmpeg testsrc2)
 const TODAY = '2026-11-17';
 const addDays = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const MON = addDays(TODAY, -1);                               // poniedziałek bieżącego tygodnia
@@ -26,8 +27,8 @@ const PULPIT = {
   videos: [
     { id: 'ania', name: 'Ania', at: TODAY, week: 12, day: 'T1', order: 1, ex: 'Przysiad tylny', set: 3, kg: 80, reps: 5, rpe: 8.5, ocena: '', typ: '', note: 'Ostatnie powtórzenie wolne', file: 'film1', link: 'https://drive.google.com/file/d/film1/view', kom: '' },
     { id: 'ania', name: 'Ania', at: TODAY, week: 12, day: 'T1', order: 1, ex: 'Przysiad tylny', set: 1, kg: 80, reps: 5, rpe: 7.5, ocena: '', typ: '', note: '', file: 'film2', link: 'https://drive.google.com/file/d/film2/view', kom: '' },
-    { id: 'ania', name: 'Ania', at: addDays(TODAY, -5), week: 11, day: 'T2', order: 2, ex: 'Wyciskanie na ławce', set: 2, kg: 45, reps: 6, rpe: 9, ocena: '', typ: 'FAIL', note: '', file: 'film3', link: 'https://drive.google.com/file/d/film3/view', kom: '0:04 łokcie za szeroko' },
-    { id: 'bartek', name: 'Bartek', at: addDays(TODAY, -6), week: 4, day: 'T1', order: 1, ex: 'Rwanie', set: 2, kg: 60, reps: 1, rpe: '', ocena: 'S', typ: '', note: '', file: 'film4', link: 'https://drive.google.com/file/d/film4/view', kom: 'Dobra pozycja startowa' }
+    { id: 'ania', name: 'Ania', at: addDays(TODAY, -5), week: 11, day: 'T2', order: 2, ex: 'Wyciskanie na ławce', set: 2, kg: 45, reps: 6, rpe: 9, ocena: '', typ: 'FAIL', note: '', file: 'film3', link: 'https://drive.google.com/file/d/film3/view', kom: '0:04 łokcie za szeroko', komD: '0:04 łokcie za szeroko', komT: '' },
+    { id: 'bartek', name: 'Bartek', at: addDays(TODAY, -6), week: 4, day: 'T1', order: 1, ex: 'Rwanie', set: 2, kg: 60, reps: 1, rpe: '', ocena: 'S', typ: '', note: '', file: 'film4', link: 'https://drive.google.com/file/d/film4/view', kom: 'Dobra pozycja startowa', komD: '', komT: 'Dobra pozycja startowa' }
   ]
 };
 const SZKIC = 'Przysiad 84 kg na 3×5 to Twój najlepszy wynik w tym bloku, a ostatnia seria była ciężka, ale czysta. W czwartek zostajemy przy tym ciężarze.\n\nKolano 5/10 traktuję poważnie: dłuższa rozgrzewka, a jeśli ból wróci powyżej 3/10, zejdź o 10% i napisz mi.';
@@ -94,10 +95,19 @@ async function page(calls, opt = {}) {
     else if (b.fn === 'trUstawAI') { await new Promise(res => setTimeout(res, 150)); const k = String(b.args[0] || '').trim();
       if (k && !/^sk-ant-/.test(k)) out = { ok: false, error: 'To nie wygląda na klucz Claude API (zaczyna się od sk-ant-). Nic nie zmieniono.' };
       else { st.key = k; out = { ok: true, result: Object.assign(k ? { set: true, end: '…' + k.slice(-4), limit: 30, n: 0 } : { set: false, end: '', limit: 30, n: 0 }, { checked: true }) }; } }
+    else if (b.fn === 'trFilm') out = { ok: true, result: { token: 'tok-film', exp: Date.now() + 3e6 } };
+    else if (b.fn === 'trKomentarzFilm') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { text: String(b.args[5]).trim(), at: TODAY + 'T20:00:00.000Z' } }; }
     else out = { ok: false, error: 'Nieznana funkcja: ' + b.fn };
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
   });
   await ctx.route('https://accounts.google.com/**', r => r.fulfill({ status: 200, headers: { 'Content-Type': 'text/javascript' }, body: GSI }));
+  await ctx.route('https://www.googleapis.com/drive/v3/files/**', r => {               // film z Dysku: tylko z biletem trFilm
+    const u = new URL(r.request().url()), id = decodeURIComponent(u.pathname.split('/').pop());
+    st.drive = (st.drive || []).concat([{ id, auth: r.request().headers().authorization, alt: u.searchParams.get('alt') }]);
+    if (r.request().headers().authorization !== 'Bearer tok-film') return r.fulfill({ status: 401, body: '' });
+    if (opt.film404) return r.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': '*' }, body: '' });
+    return r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'video/webm', 'Content-Length': String(FILM.length) }, body: FILM });
+  });
   await ctx.route('https://drive.google.com/**', r => r.fulfill({ status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: '<body style="margin:0;background:#222;color:#bbb;font:14px sans-serif;display:grid;place-items:center;height:100vh">podgląd filmu (atrapa)</body>' }));
   const exp = Math.floor(Date.now() / 1000) + 3600;
   await ctx.addInitScript(([j, tok]) => { window.__jwt = j; if (tok) try { localStorage.setItem('tr_tok', j); } catch (e) {} }, [JWT(exp), !!opt.loggedIn]);
@@ -188,14 +198,19 @@ test('panel: filmy bez komentarza i bloki do zamknięcia', async () => {
   const { ctx, p } = await page(calls, { loggedIn: true });
   await p.goto(base + 'trener.html#filmy'); await p.waitForSelector('.vi');
   assert.equal(await p.$$eval('.vi', a => a.length), 2);
-  assert.equal(await p.getAttribute('.player iframe', 'src'), 'https://drive.google.com/file/d/film1/preview');
+  await p.waitForSelector('.pv[data-file="film1"] video');
+  assert.match(await p.getAttribute('.pv video', 'src'), /^blob:/);                  // film pobrany do przeglądarki, nie okienko Dysku
   assert.match(await p.textContent('#main'), /Komentarz klienta\s*Ostatnie powtórzenie wolne/);
   await p.click('.vi:nth-child(2)');
-  assert.equal(await p.getAttribute('.player iframe', 'src'), 'https://drive.google.com/file/d/film2/preview');
+  await p.waitForSelector('.pv[data-file="film2"] video');
+  assert.deepEqual(p.st.drive.map(d => [d.id, d.auth, d.alt]), [['film1', 'Bearer tok-film', 'media'], ['film2', 'Bearer tok-film', 'media']]);
+  assert.equal(calls.filter(c => c.fn === 'trFilm').length, 1);                     // bilet pobrany raz na kilka filmów
   await p.click('[data-vall="1"]');
   assert.equal(await p.$$eval('.vi', a => a.length), 4);
   await p.click('.vi:nth-child(3)');
-  assert.match(await p.textContent('.kom'), /0:04 łokcie za szeroko/);
+  assert.match(await p.textContent('.kom'), /0:04 łokcie za szeroko/);                // komentarz z Dysku osobno, tylko do odczytu
+  assert.match(await p.textContent('#main'), /Z komentarzy na Dysku/);
+  assert.equal(await p.inputValue('#kf-txt'), '');
   assert.match(await p.textContent('#main'), /45 kg × 6 · RPE 9 · nieudana/);
   await shot(p, 'trener-filmy-jasny.png');
   // filmy jednego klienta
@@ -340,4 +355,86 @@ test('panel: Ustawienia, klucz Claude API wklejany w panelu (też na telefonie),
     assert.deepEqual(p.errors, []);
     await ctx.close();
   }
+});
+
+test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełny ekran) i komentarz z chwilą filmu', async () => {
+  // telefon, ciemny: przełącznik „Film n z m” zamiast listy
+  const calls = [];
+  const { ctx, p } = await page(calls, { loggedIn: true, scheme: 'dark', vp: { width: 390, height: 844 } });
+  await p.goto(base + 'trener.html#filmy'); await p.waitForSelector('.pv video');
+  await p.waitForFunction(() => document.querySelector('#pvv').duration > 1);
+  assert.equal(await p.isVisible('.vlist'), false);
+  assert.match(await p.textContent('.vsw'), /Film 1 z 2 · bez komentarza/);
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+  // klatka po klatce: pauza i krok 1/30 s
+  await p.click('[data-pv="fwd"]'); await p.click('[data-pv="fwd"]');
+  assert.ok(Math.abs(await p.$eval('#pvv', v => v.currentTime) - 2 / 30) < 0.005);
+  await p.click('[data-pv="back"]');
+  assert.ok(Math.abs(await p.$eval('#pvv', v => v.currentTime) - 1 / 30) < 0.005);
+  // prędkość i pętla
+  await p.click('[data-spd="0.25"]');
+  assert.equal(await p.$eval('#pvv', v => v.playbackRate), 0.25);
+  assert.equal(await p.getAttribute('[data-spd="0.25"]', 'aria-pressed'), 'true');
+  assert.equal(await p.$eval('#pvv', v => v.loop), true);
+  await p.click('[data-pv="loop"]');
+  assert.equal(await p.$eval('#pvv', v => v.loop), false);
+  // suwak → „Wstaw chwilę” dopisuje sekundę na początku linii
+  await p.$eval('#pvr', r => { r.value = '1.2'; r.dispatchEvent(new Event('input')); });
+  await p.waitForFunction(() => /0:01,2/.test(document.querySelector('#pvt').textContent));
+  assert.match(await p.textContent('#kf-ins'), /Wstaw chwilę 0:01/);
+  await p.click('#kf-ins');
+  await p.type('#kf-txt', 'Kolana na zewnątrz.');
+  assert.equal(await p.inputValue('#kf-txt'), '0:01 Kolana na zewnątrz.');
+  assert.equal(await p.$$eval('#pvm button', a => a.length), 1);                     // kreska na pasku w tej chwili
+  await p.$eval('#pvr', r => { r.value = '0'; r.dispatchEvent(new Event('input')); });
+  await p.click('#pvm button');
+  assert.ok(Math.abs(await p.$eval('#pvv', v => v.currentTime) - 1) < 0.05);       // kreska przewija film
+  await p.click('#kf-ins');                                                           // druga chwila w nowej linii
+  assert.equal(await p.inputValue('#kf-txt'), '0:01 Kolana na zewnątrz.\n0:01 ');
+  await p.fill('#kf-txt', '0:01 Kolana na zewnątrz.');
+  await shot(p, 'trener-filmy-telefon-ciemny.png');
+  await p.click('#kf-save'); await p.waitForSelector('#kfw .saved');
+  const save = calls.find(c => c.fn === 'trKomentarzFilm');
+  assert.deepEqual(save.args, ['ania', 12, 'T1', 1, 3, '0:01 Kolana na zewnątrz.']);   // klient, tydzień, jednostka, ćwiczenie, seria, tekst
+  assert.match(await p.textContent('.vsw'), /Film 1 z 2/);                           // skomentowany zostaje na liście do końca wizyty
+  // pełny ekran i powiększenie
+  await p.click('.fsb');
+  assert.ok(await p.$('.pv.fs'));
+  const box = await p.$eval('.pv.fs', e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; });
+  assert.deepEqual(box, [390, 844]);
+  await p.dispatchEvent('.pv .stage', 'wheel', { deltaY: -100 });
+  await p.dispatchEvent('.pv .stage', 'wheel', { deltaY: -100 });
+  await p.dispatchEvent('.pv .stage', 'wheel', { deltaY: -100 });
+  await p.dispatchEvent('.pv .stage', 'wheel', { deltaY: -100 });
+  assert.match(await p.textContent('.pv .zoom'), /^1,7× · dotknij dwa razy/);
+  assert.match(await p.$eval('#pvv', v => v.style.transform), /scale\(1\.7/);
+  await p.screenshot({ path: path.join(SCREENS, 'trener-filmy-pelny-ekran.png') });
+  for (let i = 0; i < 2; i++) { await p.dispatchEvent('.pv .stage', 'pointerdown', { pointerId: 1, clientX: 200, clientY: 300, isPrimary: true }); await p.dispatchEvent('.pv .stage', 'pointerup', { pointerId: 1, clientX: 200, clientY: 300, isPrimary: true }); }
+  assert.equal(await p.$eval('#pvv', v => v.style.transform), '');                  // dwa dotknięcia = 1×
+  await p.keyboard.press('Escape');
+  assert.equal(await p.$('.pv.fs'), null);
+  // następny film
+  await p.click('[data-vgo="1"]'); await p.waitForSelector('.pv[data-file="film2"] video');
+  assert.match(await p.textContent('.vsw'), /Film 2 z 2/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+  // komputer, jasny: lista, klawiatura; film, którego nie ma na Dysku = komunikat i link
+  const c2 = [], s2 = await page(c2, { loggedIn: true });
+  await s2.p.goto(base + 'trener.html#filmy'); await s2.p.waitForSelector('.pv video');
+  await s2.p.waitForFunction(() => document.querySelector('#pvv').duration > 1);
+  await s2.p.keyboard.press('ArrowRight'); await s2.p.keyboard.press('ArrowRight');
+  assert.ok(Math.abs(await s2.p.$eval('#pvv', v => v.currentTime) - 2 / 30) < 0.005);
+  await s2.p.keyboard.press('2');
+  assert.equal(await s2.p.$eval('#pvv', v => v.playbackRate), 0.5);
+  await s2.p.keyboard.press('f'); assert.ok(await s2.p.$('.pv.fs')); await s2.p.keyboard.press('f'); assert.equal(await s2.p.$('.pv.fs'), null);
+  assert.equal(await s2.p.isVisible('.vsw'), false);
+  await shot(s2.p, 'trener-filmy-odtwarzacz-jasny.png');
+  assert.deepEqual(s2.p.errors, []);
+  await s2.ctx.close();
+  const s3 = await page([], { loggedIn: true, film404: true });
+  await s3.p.goto(base + 'trener.html#filmy'); await s3.p.waitForSelector('#pv-retry');
+  assert.match(await s3.p.textContent('.pv .pmsg'), /Filmu nie ma już na Dysku/);
+  assert.equal(await s3.p.getAttribute('.pv .pmsg a', 'href'), 'https://drive.google.com/file/d/film1/view');
+  assert.deepEqual(s3.p.errors, []);
+  await s3.ctx.close();
 });

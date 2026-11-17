@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+
+## 2026-11-17 · Filmy w panelu: własny odtwarzacz i komentarz z sekundą (v61)
+
+- Damian: w okienku podglądu Dysku film słabo się ogląda na telefonie (nie da się powiększyć) i nie da się komentować. Szkic zaakceptowany: własny odtwarzacz (klatka po klatce co 1/30 s, ¼× / ½× / 1×, pętla, pełny ekran jako nakładka na całą stronę, bo iPhone nie daje pełnego ekranu elementom strony; powiększanie dwoma palcami, przesuwanie jednym, dwa dotknięcia = 1×), na telefonie przełącznik „Film n z m” zamiast listy.
+- Dostęp do pliku: `trFilm` oddaje zalogowanemu trenerowi bilet Google skryptu (`ScriptApp.getOAuthToken()`, konto właściciela arkusza, ważny ok. godzinę). Przeglądarka pobiera film z Drive API (`alt=media`) do pamięci strony (blob), bo element `<video>` nie wyśle nagłówka z biletem, a klatka po klatce wymaga całego pliku. Bez nowej zgody Google i bez ustawień po stronie Damiana. Odrzucone: osobny dostęp do Dysku w projekcie Google Cloud panelu (nowy ekran zgody, włączenie Drive API), przesyłanie filmu przez skrypt (limit 50 MB i wolno).
+- Komentarz do serii zapisuje się w `Log.komentarz_trenera` (klient widzi go jak dotąd w zakładce Trener), nie jako komentarz na Dysku. Linie „0:03 treść” = chwila filmu. Komentarze z Dysku (`komentarz_dysk`) zostają tylko do odczytu.
+- Szkic AI komentarza do sesji (uwagi Damiana po pierwszym prawdziwym szkicu: trafny, ale za długi i asekurancki): najwyżej 4 zdania, bez wyliczania, co klient zrobił, jedna najważniejsza rzecz, na koniec jedna decyzja z liczbą na następną taką jednostkę, bez „jeśli było za ciężko, zejdź trochę”.
+
 ## 2026-11-17 · Wysiłek serii = światło, jedna skala RPE w całej aplikacji (v59)
 
 - Zgłoszenie: dane RPE serii były bezużyteczne (wszystkie listopadowe serie z 7), a światła i RPE były dwoma osobnymi wpisami. W kodzie nie było domyślnej 7 dla zwykłych ćwiczeń (lista zaczynała się od „–”); 7 dawało „Łatwo” w bojach. Były trzy skale: PRO lista RPE, PROSTY `EFFORT` (Lekko 6 / Średnio 7,5 / Ciężko 9 / Max 10), boje `RATE` (7 / 8 / 9,5 / FAIL).

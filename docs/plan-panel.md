@@ -17,8 +17,9 @@ Panel w przeglądarce (głównie komputer), dostępny z każdego miejsca, do kon
 | 1 | Logowanie trenera i akcje odczytu: `trConfig`, `trPulpit` (klienci z Przeglądu, sygnały, obciążenie 12 tyg., filmy z 14 dni, bloki do zamknięcia), `trKlient` (dane jak `getData` + bloki + podsumowanie), `trPrzelicz` | scalony (PR #76) |
 | 2 | Panel do czytania: pulpit (5 liczników, tabela klientów, mapa obciążenia, „Do zrobienia”), karta klienta (Przegląd, Sesje, Bloki, Dyspozycja), Filmy (podgląd z Dysku w panelu), Bloki do zamknięcia; v52; poprawka telefonu (pasek u góry, wylogowanie) i przełącznik aplikacja ↔ panel („Panel trenera” na ekranie Trener tylko przy `tr_dev`, „Mój trening ›” w panelu) v54 | scalony (PR #76) |
 | 3 | Zapisy trenera: komentarz do sesji (`trKomentarz`, Sesje `komentarz_trenera`) | zrobione (v56, PR #81, razem z PR 4) |
-| 3b | Dalsze zapisy: komentarz do filmu z sekundą (komentarz na Dysku + `Log.komentarz_dysk`), wnioski i „dla klienta” bloku, notatka do jednostki | do zrobienia |
-| 4 | Claude API: „✦ Szkic AI” komentarza do sesji (`trSzkic`, `trSzkicCtx_`, `aiReq_`; poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic), limit dzienny, zakładka „AI” (tokeny, koszt w USD) | zrobione (v56, PR #81); bez zapytania do API, gdy sesja nie ma zapisanych serii (v58, PR #83); klucz wklejany w panelu → Ustawienia (v60, na gałęzi) |
+| 3b | Filmy: własny odtwarzacz (`trFilm`: bilet skryptu, film z Drive API `alt=media` jako blob; klatka, prędkość, pętla, pełny ekran, powiększenie) i komentarz do serii z sekundą (`trKomentarzFilm` → `Log.komentarz_trenera`, nie komentarz na Dysku) | zrobione na gałęzi (v61) |
+| 3c | Wnioski i „dla klienta” bloku, notatka do jednostki | do zrobienia |
+| 4 | Claude API: „✦ Szkic AI” komentarza do sesji (`trSzkic`, `trSzkicCtx_`, `aiReq_`; poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic), limit dzienny, zakładka „AI” (tokeny, koszt w USD) | zrobione (v56, PR #81); bez zapytania do API, gdy sesja nie ma zapisanych serii (v58, PR #83); klucz wklejany w panelu → Ustawienia (v60, PR #85); krótszy szkic: najwyżej 4 zdania, decyzja z liczbą (v61, na gałęzi) |
 | 5 | Asystent planu: szkic bloku jako JSON → `validatePlan_` → `_plany/` | do zrobienia |
 
 ## Uruchomienie (raz, po scaleniu PR 1–2)

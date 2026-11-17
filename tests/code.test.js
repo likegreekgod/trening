@@ -931,6 +931,9 @@ test('aiReq_, aiCost_, aiDay_: zapytanie do Claude API, koszt, dzienny limit', (
   assert.equal(r.fallbacks, 'default');
   assert.equal(r.output_config.effort, 'low');
   assert.equal(r.temperature, undefined);
+  assert.match(r.system, /Najwyżej 4 krótkie zdania/);                             // Damian 17.11: krócej, bez wyliczania, decyzja z liczbą
+  assert.match(r.system, /Nie wyliczaj, co klient zrobił/);
+  assert.match(r.system, /jedna konkretna decyzja .* z liczbą/);
   assert.match(r.messages[0].content, /KONTEKST[\s\S]*Napisz szkic/);
   assert.match(r.system, /po polsku|Po polsku/);
   const t = C.aiReq_('KONTEKST', { tweak: 'krocej', draft: 'Stary szkic.' });
@@ -945,6 +948,8 @@ test('aiReq_, aiCost_, aiDay_: zapytanie do Claude API, koszt, dzienny limit', (
   assert.equal(C.aiDay_('zepsute', '2026-11-17', 30).ok, true);
   assert.ok(C.TR_FNS.trKomentarz && C.TR_FNS.trSzkic && !C.API_FNS.trSzkic);
   assert.ok(C.TR_FNS.trAI && C.TR_FNS.trUstawAI && !C.API_FNS.trUstawAI);          // klucz ustawia tylko zalogowany trener
+  assert.ok(C.TR_FNS.trFilm && C.TR_FNS.trKomentarzFilm && !C.API_FNS.trFilm);       // bilet do filmów tylko dla trenera
+  assert.equal(C.trLogId_(' Ania ', '12', 'T1', '1', 3), 'ania|12|T1|1|3');           // ten sam format co id w logSet
   const key = 'sk-ant-api03-' + 'x'.repeat(40);
   assert.equal(C.aiKeyOk_(key), '');
   assert.equal(C.aiKeyOk_('  ' + key + '\n'), '');                             // wklejony ze spacją albo nową linią na końcu

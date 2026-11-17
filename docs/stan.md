@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, `main` = v59 (scalone PR #76: panel trenera PR 1–2, #77: marka „Siła z Ruchu”, #78: panel na telefonie i przełącznik aplikacja ↔ panel, #79: animacja po przerwie 30 minut i ikona „Duet”, #80: naprawa importu planu, #81: komentarz do sesji ze szkicem AI, #82: poprawka skoku CMJ, v57, #83: szkic AI tylko przy zapisanych seriach, v58, #84: światła RPE, v59); klucz Claude API w panelu (v60) na gałęzi `claude/project-thread-taywqw`.
+Stan na 2026-11-17, `main` = v60 (scalone PR #76: panel trenera PR 1–2, #77: marka „Siła z Ruchu”, #78: panel na telefonie i przełącznik aplikacja ↔ panel, #79: animacja po przerwie 30 minut i ikona „Duet”, #80: naprawa importu planu, #81: komentarz do sesji ze szkicem AI, #82: poprawka skoku CMJ, v57, #83: szkic AI tylko przy zapisanych seriach, v58, #84: światła RPE, v59); #85: klucz Claude API w panelu, v60); filmy w panelu (v61) na gałęzi `claude/project-thread-taywqw`.
 
 ## Jak pracujemy
 
@@ -18,7 +18,8 @@ Stan na 2026-11-17, `main` = v59 (scalone PR #76: panel trenera PR 1–2, #77: m
 
 ## Ostatnio zrobione
 
-- 17.11 (v60 + `apps-script/`, na gałęzi): panel trenera → Ustawienia (link na dole menu, też na telefonie): pole na klucz Claude API (`trAI`, `trUstawAI`). Klucz sprawdzany bezpłatnie w Anthropic przed zapisem, trafia do właściwości skryptu, panel pokazuje tylko 4 ostatnie znaki; „Usuń klucz” po drugim dotknięciu. Powód: menu „Trening” nie działa w Arkuszach na telefonie.
+- 17.11 (v61 + `apps-script/`, na gałęzi): panel trenera → Filmy: własny odtwarzacz zamiast okienka Dysku (film pobierany do przeglądarki przez `trFilm`, klatka po klatce, ¼× / ½× / 1×, pętla, pełny ekran, powiększanie palcami albo kółkiem myszy, skróty klawiszowe; na telefonie „‹ Film n z m ›” zamiast listy) i komentarz do serii z „⏱ Wstaw chwilę” (`trKomentarzFilm` → Log `komentarz_trenera`, klient widzi go w zakładce Trener; kreski na pasku przewijają film). Szkic AI komentarza do sesji krótszy: najwyżej 4 zdania, bez wyliczania zrobionych ćwiczeń, na koniec jedna decyzja z liczbą.
+- 17.11 (v60 + `apps-script/`, scalony PR #85): panel trenera → Ustawienia (link na dole menu, też na telefonie): pole na klucz Claude API (`trAI`, `trUstawAI`). Klucz sprawdzany bezpłatnie w Anthropic przed zapisem, trafia do właściwości skryptu, panel pokazuje tylko 4 ostatnie znaki; „Usuń klucz” po drugim dotknięciu. Powód: menu „Trening” nie działa w Arkuszach na telefonie.
 - 17.11 (v59, scalony PR #84): wysiłek serii jednym dotknięciem światła, jedna skala w całej aplikacji: Lekko = RPE 7, Średnio = 8, Ciężko = 9, Nieudana = FAIL (boje: Walka 9 zamiast 9,5; PROSTY bez „Max”). Bez wartości domyślnej: ✓ bez światła = puste RPE. W PRO „Dokładniej” (np. 8,5). Do dopisania w SKILL.md skilla trenera: tabela świateł i „puste RPE = brak danych” (przebuduj ZIP).
 - 17.11 (v58 + `apps-script/`, scalony PR #83): szkic AI nie wydaje pieniędzy na pustą sesję: gdy klient nie zapisał w jednostce żadnej serii (np. tylko „Zakończ”), panel nie pokazuje „✦ Szkic AI”, a skrypt i tak nie wyśle zapytania (`trSzkicSets_`). Komentarz można dalej napisać ręcznie.
 - 17.11 (v57, scalony PR #82): Dyspozycja, poprawka błędnego skoku CMJ: okno „Zmierz skok z filmu” ma wybór „Zapisz jako Skok 1 / 2 / 3” (przy trzech wpisanych domyślnie skok najdalej od mediany, czyli pomyłka), a komunikat o odstającym skoku mówi wprost, że pole można poprawić. Wcześniej pomiar z filmu przy pełnych polach zawsze nadpisywał Skok 1.
