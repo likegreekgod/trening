@@ -158,6 +158,7 @@
       <a href="#pulpit" data-v="pulpit">Pulpit</a>
       <a href="#filmy" data-v="filmy">Filmy <em id="n-filmy"></em></a>
       <a href="#bloki" data-v="bloki">Bloki <em id="n-bloki"></em></a>
+      <a href="./" id="mine">Mój trening ›</a>
     </nav>
     <div class="foot"><span id="at"></span><br><button id="recalc" type="button">Przelicz teraz</button> · <button id="logout" type="button">Wyloguj</button></div>
   </aside>
@@ -221,6 +222,7 @@ async function start(){
   $('#login').hidden = true; $('#app').hidden = false;
   $('#main').innerHTML = '<div class="pg"><div class="es">Ładowanie…</div></div>';
   try { PUL = await guard(api('trPulpit')); } catch (e) { if (!e.auth) $('#main').innerHTML = errBox(e); return; }
+  try { localStorage.setItem('tr_dev', '1'); } catch (e) {}   // to urządzenie trenera: aplikacja pokaże „Panel trenera” (zostaje po wylogowaniu)
   route();
 }
 function errBox(e){ return '<div class="pg"><div class="card es"><b>Nie udało się wczytać danych</b><span class="err">' + esc(e.message) + '</span><p><button class="b" data-retry>Spróbuj ponownie</button></p></div></div>'; }
