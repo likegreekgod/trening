@@ -2,6 +2,10 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-17 · „★ Pierwszy wynik” (v51)
+
+- Damian sprawdzał rekord na ćwiczeniu bez historii (Hang Power Clean; Clean to dla aplikacji inne ćwiczenie) i nic się nie pokazało. Ustalenie: pierwszy zapis ćwiczenia głównego (A) dostaje pasek „★ Pierwszy wynik” pod najlepszą serią (obrys w kolorze akcentu, bez wypełnienia, żeby nie mylił się z rekordem). PRO: „najlepsze zaliczone X kg” / „szacowane maks. X kg”, PROSTY: „Od niego liczymy rekordy”. Nie wchodzi do rekordów w oknie „Trening zrobiony” ani w Postępie.
+
 ## 2026-11-17 · Poprawki po próbie v44–v48 na telefonie (v50)
 
 - Damian sprawdził v45–v48: działają. v44 (rekord) nie pokazał się, bo seria w PRO była bez RPE, a e1RM bez RPE nie był liczony.

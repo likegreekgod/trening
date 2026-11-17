@@ -1373,7 +1373,7 @@ test('Karta ćwiczenia: wiersze „+”, kg → talerze, zmiana na kolejne serie
   await p.click('[data-all="1"]');
   assert.match(await p.textContent('#stats .clock'), /^00:0\d$/);                 // pierwsza zapisana seria liczy od teraz
   await p.waitForSelector('.card[data-card="1"].fold', { timeout: 3000 });        // ostatnia seria → ćwiczenie się zwija
-  assert.match(await p.textContent('.card[data-card="1"] .fsum'), /^3 z 3 serii · [\d ]+ kg · ✓$/);
+  assert.match(await p.textContent('.card[data-card="1"] .fsum'), /^3 z 3 serii · [\d ]+ kg · ✓ · ★ pierwszy wynik$/);
   assert.equal(await p.getAttribute('.card[data-card="1"] .fold-b', 'aria-expanded'), 'false');
   assert.equal(await p.isVisible('.set[data-o="1"][data-s="1"]'), false);
   assert.deepEqual(await a11y(p), []);
@@ -2128,6 +2128,28 @@ test(`podpowiedzi przy pierwszym użyciu (${mode}, ${scheme}): po kolei, każda 
   await p.reload(); await p.waitForSelector('.set[data-o="1"]');
   assert.equal(await p.$('#tip:not([hidden])'), null);
   assert.equal(calls.filter(c => c.fn !== 'getData').length, 0);             // podpowiedzi niczego nie zapisują na serwerze
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+for (const [mode, simple, scheme] of [['pro', false, 'light'], ['prosty', true, 'dark']])
+test(`„★ Pierwszy wynik” (${mode}, ${scheme}): ćwiczenie główne bez historii, bez porównania; nie trafia do rekordów w „Trening zrobiony”`, async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const R = (o, name, x) => Object.assign({ week: 1, day: 'T1', title: 'Boje', date: today, order: o, name, prio: 'A', sets: 2, reps: '3', pct: null, kg: 90, rpe: '', note: '', extra: 0, drop: 0 }, x || {});
+  const data = { cfg: { name: 'Robert', pain: false, simple, extra: 1 }, plan: [R(1, 'Hang Power Clean'), R(2, 'Wiosłowanie', { reps: '8', kg: 60 })], logs: [], sessions: [] };
+  const { ctx, p } = await page([], false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set.oly');
+  await p.fill('.set[data-o="1"][data-s="1"] .kg', '100'); await p.click('.set[data-o="1"][data-s="1"] .lt'); await p.click('.rate [data-q="L"]');
+  await p.waitForSelector('.rec.first');
+  const t = (await p.textContent('.rec.first')).replace(/\s+/g, ' ');
+  assert.match(t, simple ? /★ Pierwszy wynik.*Od niego liczymy rekordy/ : /★ Pierwszy wynik.*najlepsze zaliczone 100 kg/);
+  assert.doesNotMatch(t, /było|Rekord/);
+  assert.ok(await p.$eval('.set[data-o="1"][data-s="1"]', r => r.nextElementSibling.classList.contains('rec')));
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.$eval('.rec.first', e => e.scrollIntoView({ block: 'center' })); await p.waitForTimeout(100); await p.screenshot({ path: path.join(SCREENS, `pierwszy-wynik-${mode}-${scheme}.png`) }); }
+  await p.fill('.set[data-o="1"][data-s="2"] .kg', '100'); await p.click('.set[data-o="1"][data-s="2"] .lt'); await p.click('.rate [data-q="S"]');
+  await p.waitForSelector('.card[data-card="1"].fold');
+  assert.match(await p.textContent('.card[data-card="1"] .fsum'), /★ pierwszy wynik$/);
+  assert.deepEqual(await p.evaluate(() => doneSummary(30).records), []);           // pierwszy wynik to nie rekord
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });

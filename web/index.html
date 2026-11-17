@@ -589,6 +589,7 @@
   .lights i.r{background:var(--light-red)}
   .rec{display:flex;align-items:center;gap:8px;padding:2px 0 8px;border-bottom:1px solid var(--line);font:600 14px/1.3 var(--f-body);color:var(--ink-2)}
   .rec b{flex:none;font:700 13px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;background:var(--accent);color:var(--on-accent);padding:5px 8px;border-radius:999px}
+  .rec.first b{background:transparent;color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
   .set.isrec{border-bottom:0}
   .rate{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:6px 0;border-bottom:1px solid var(--line)}
   .rate button{min-height:56px;border:1px solid var(--light-off);border-radius:var(--r);background:var(--panel);color:var(--light-white);
@@ -2758,8 +2759,10 @@ function recDraw(ex){
   const row = r && document.querySelector(`.set[data-o="${ex.order}"][data-s="${r.set}"]`);
   if (!row) return;
   row.classList.add('isrec');
-  row.insertAdjacentHTML('afterend', `<div class="rec" data-o="${ex.order}" role="status"><b>★ Rekord</b><span>${
-    SIMPLE ? 'Najlepszy wynik w tym ćwiczeniu' : (r.oly ? 'najlepsze zaliczone ' : 'szacowane maks. ') + kgTxt(r.v) + ' kg · było ' + kgTxt(r.was)}</span></div>`);
+  const val = (r.oly ? 'najlepsze zaliczone ' : 'szacowane maks. ') + kgTxt(r.v) + ' kg';
+  row.insertAdjacentHTML('afterend', r.first
+    ? `<div class="rec first" data-o="${ex.order}" role="status"><b>★ Pierwszy wynik</b><span>${SIMPLE ? 'Od niego liczymy rekordy' : val}</span></div>`
+    : `<div class="rec" data-o="${ex.order}" role="status"><b>★ Rekord</b><span>${SIMPLE ? 'Najlepszy wynik w tym ćwiczeniu' : val + ' · było ' + kgTxt(r.was)}</span></div>`);
   recSum(ex);
 }
 /** „★ rekord” w wyniku zwiniętej karty: pasek pod serią chowa się razem z kartą */
@@ -2863,7 +2866,7 @@ function foldSum(o){
   const s = document.querySelector(`.card[data-card="${o}"] .fsum`); if (!s) return;
   if (s.closest('.card').classList.contains('skip')) { s.textContent = 'pominięte'; return; }
   const w = work(o), done = w.filter(r => r.dataset.st), ton = done.reduce((a, r) => { const kg = num(fv(r.querySelector('.kg'))), n = num(fv(r.querySelector('.reps'))); return a + (r.dataset.st === 'ok' && isNum(kg) && isNum(n) && !(r.querySelector('.reps').dataset.u || '').match(/sek|min/) ? kg * n : 0); }, 0);
-  s.textContent = done.length + ' z ' + w.length + ' ' + plural(w.length, 'serii', 'serii', 'serii') + (ton ? ' · ' + fmtKg(Math.round(ton)) + ' kg' : '') + (cardDone(o) ? ' · ✓' : '') + (document.querySelector(`.rec[data-o="${o}"]`) ? ' · ★ rekord' : '');
+  s.textContent = done.length + ' z ' + w.length + ' ' + plural(w.length, 'serii', 'serii', 'serii') + (ton ? ' · ' + fmtKg(Math.round(ton)) + ' kg' : '') + (cardDone(o) ? ' · ✓' : '') + (document.querySelector(`.rec[data-o="${o}"]`) ? (document.querySelector(`.rec.first[data-o="${o}"]`) ? ' · ★ pierwszy wynik' : ' · ★ rekord') : '');
 }
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 /** płynna zmiana wysokości karty przy zwijaniu i rozwijaniu; stan (klasa fold) zmienia się od razu, animuje się tylko wysokość */

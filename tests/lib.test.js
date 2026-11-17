@@ -545,7 +545,7 @@ test('unitRecord: rekord w chwili zapisu – która seria i o ile, tylko ćwicze
   assert.equal(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { timed: true })]), 'Przysiad'), null);         // na czas
   assert.deepEqual(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { rpe: '' })]), 'Przysiad'), { set: '1', v: 163.3, was: 123.3, oly: false });   // bez RPE = jak RPE 10
   assert.equal(L.unitRecord(d([S(1, 'Przysiad', 105, 5, { rpe: '' })]), 'Przysiad'), null);             // 105 × 5 bez RPE = 122,5 < 123,3
-  assert.equal(L.unitRecord(d([S(1, 'Wiosłowanie', 60, 8)]), 'Wiosłowanie'), null);                     // pierwszy raz = brak punktu odniesienia
+  assert.deepEqual(L.unitRecord(d([S(1, 'Wiosłowanie', 60, 8)]), 'Wiosłowanie'), { set: '1', v: 80, was: 0, oly: false, first: true });   // 60 × (1 + 10/30); pierwszy raz = „★ Pierwszy wynik”
   // boje: najcięższe zaliczone kg, RPE niepotrzebne
   assert.deepEqual(L.unitRecord(d([S(1, 'Rwanie', 72, 1, { group: 'R', rpe: '' }), S(2, 'Rwanie', 75, 1, { group: 'R', fail: true })]), 'Rwanie'), { set: '1', v: 72, was: 70, oly: true });
 });

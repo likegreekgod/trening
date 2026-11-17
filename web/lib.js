@@ -716,7 +716,8 @@
   /**
    * Rekord ćwiczenia głównego (prio A) w bieżącej jednostce: najlepsza zaliczona seria (e1RM, w bojach kg), jeśli bije całą
    * wcześniejszą historię (bez tej jednostki). d jak w unitSummary; sets: [{set, name, prio, group, kg, reps, rpe, fail, timed}].
-   * Zwraca {set, v, was, oly} albo null (brak historii = brak rekordu; przy remisie pierwsza z najlepszych serii).
+   * Zwraca {set, v, was, oly} albo null (przy remisie pierwsza z najlepszych serii); bez historii {set, v, was: 0, oly, first: true}
+   * = „★ Pierwszy wynik” (to nie rekord: unitSummary go pomija).
    */
   L.unitRecord = (d, name) => {
     const week = Number(d.week), day = String(d.day);
@@ -729,7 +730,8 @@
     now.forEach(x => { const v = oly ? x.kg : L.e1rm(x.kg, x.reps, x.rpe); if (v > 0 && (!top || v > top.v)) top = { set: x.set, v }; });
     if (!top) return null;
     const v = Math.round(top.v * 10) / 10;
-    return was > 0 && v > was ? { set: top.set, v, was, oly } : null;
+    if (!(was > 0)) return { set: top.set, v, was: 0, oly, first: true };   // pierwszy wynik w tym ćwiczeniu (ustalenie 17.11)
+    return v > was ? { set: top.set, v, was, oly } : null;
   };
   L.unitSummary = d => {
     const plan = d.plan || [], logs = d.logs || [], st = d.stats || {}, week = Number(d.week), day = String(d.day);
@@ -752,7 +754,7 @@
     }
     const recs = [...new Set((d.sets || []).filter(x => x.prio === 'A').map(x => x.name))].map(name => {
       const r = L.unitRecord(d, name);
-      return r && { name, v: r.v, delta: Math.round((r.v - r.was) * 10) / 10, oly: r.oly };
+      return r && !r.first && { name, v: r.v, delta: Math.round((r.v - r.was) * 10) / 10, oly: r.oly };
     }).filter(Boolean);
     const min = nf(d.minutes) > 0 ? Math.round(nf(d.minutes)) : null, ton = Number(st.ton) || 0;
     return { min, done: Number(st.done) || 0, all: Number(st.all) || 0, ton, prev,
