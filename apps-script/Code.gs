@@ -41,24 +41,18 @@ const OCENY = ['L', 'S', 'W', 'X'];   // boje: Łatwo / Średnio / Walka / Spalo
 
 /* ---------- WEB ---------- */
 
+/**
+ * Stara wersja (link /exec?k=…, Index.html + google.script.run) wyłączona 17.11.2026: wszyscy klienci są w aplikacji z GitHub Pages.
+ * Celowo zwykły tekst (ContentService), nie strona HtmlService: z każdej strony HtmlService tego wdrożenia da się przez
+ * google.script.run wywołać każdą funkcję skryptu bez „_” na końcu (np. dodajKlientaZapisz), także bez klucza klienta.
+ */
 function doGet(e) {
-  const key = String((e && e.parameter && e.parameter.k) || '').trim();
-  const client = findClient_(key);
-  if (!client) {
-    const why = key ? 'Nieznany klucz (' + key.slice(0, 4) + '…).' : 'W linku brakuje klucza (?k=…).';
-    return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:24px">Nieprawidłowy link. ' + why + ' Skontaktuj się z trenerem.</p>')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-  }
-  const t = HtmlService.createTemplateFromFile('Index');
-  t.clientName = client.name;
-  t.clientKey = key;
-  t.painTrack = client.pain;
-  t.simpleMode = client.simple;
-  t.extraSets = client.extra;
-  return t.evaluate()
-    .setTitle('Trening – ' + client.name)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return ContentService.createTextOutput(oldLinkText_(PropertiesService.getScriptProperties().getProperty('PWA_URL')));
+}
+/** Czysta funkcja: komunikat dla starego linku (adres aplikacji bez klucza; klucz klient ma w nowym linku od trenera). */
+function oldLinkText_(pwa) {
+  const url = String(pwa || '').trim();
+  return 'Ta wersja aplikacji jest wyłączona. Używaj nowego linku od trenera' + (/^https:\/\//.test(url) ? ' (aplikacja: ' + url + ')' : '') + '.';
 }
 
 /* ---------- API dla aplikacji na GitHub Pages ----------

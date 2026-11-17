@@ -820,3 +820,16 @@ test('trPulpit_: klienci z Przeglądu, sygnały czerwone i pomarańczowe, 12 tyg
   assert.equal(r.videos[1].kom, '0:03 łokcie\nlepiej');
   assert.equal(r.at, '2026-11-17T04:02:00Z');
 });
+
+test('doGet: stary link dostaje zwykły tekst (bez strony HtmlService, więc bez google.script.run)', () => {
+  // Atrapy usług Google: doGet nie może sięgnąć po HtmlService, bo z takiej strony da się wywołać każdą funkcję skryptu.
+  const out = [];
+  C.HtmlService = { createHtmlOutput() { throw new Error('HtmlService'); }, createTemplateFromFile() { throw new Error('HtmlService'); } };
+  C.ContentService = { createTextOutput(t) { out.push(t); return { text: t }; } };
+  C.PropertiesService = { getScriptProperties: () => ({ getProperty: k => k === 'PWA_URL' ? 'https://example.github.io/trening/' : null }) };
+  assert.deepEqual(JSON.parse(JSON.stringify(C.doGet({ parameter: { k: 'k0123456789a' } }))), { text: out[0] });
+  assert.match(out[0], /wyłączona.*https:\/\/example\.github\.io\/trening\//);
+  assert.doesNotMatch(out[0], /k0123456789a/);                          // klucz z linku nie wraca w odpowiedzi
+  assert.equal(C.oldLinkText_(''), 'Ta wersja aplikacji jest wyłączona. Używaj nowego linku od trenera.');
+  assert.equal(C.oldLinkText_('javascript:x'), 'Ta wersja aplikacji jest wyłączona. Używaj nowego linku od trenera.');
+});
