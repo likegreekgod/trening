@@ -37,14 +37,22 @@ async function page(calls, offline, opt = {}) {
   });
   // podpowiedzi przy pierwszym użyciu zasłaniają część karty: domyślnie obejrzane, opt.tips je włącza
   if (!opt.tips) await ctx.addInitScript(() => { try { ['kabc', 'k0123456789a', 'kABCDEF01234'].forEach(k => localStorage.setItem('tip_' + k, '["seria","wiecej","kamera","dzien"]')); } catch (e) {} });
-  // animacja otwarcia zasłania ekran przez 3 s: domyślnie „obejrzana dziś”, opt.intro ją włącza (pokazuje się tylko z opt.motion)
-  if (!opt.intro) await ctx.addInitScript(() => { try { const d = new Date(), z = n => String(n).padStart(2, '0'); localStorage.setItem('intro', d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate())); } catch (e) {} });
+  // animacja otwarcia zasłania ekran przez 3 s: domyślnie aplikacja „była na ekranie przed chwilą” (znacznik z roku 2100 działa też w testach z przestawionym zegarem),
+  // opt.intro ją włącza (pokazuje się tylko z opt.motion)
+  if (!opt.intro) await ctx.addInitScript(() => { try { localStorage.setItem('intro', '4102444800000'); } catch (e) {} });
   const p = await ctx.newPage(); p.errors = []; p.on('pageerror', e => p.errors.push(e.message));
   p.external = []; p.on('request', q => { if (!q.url().startsWith(base) && !/\/macros\//.test(q.url())) p.external.push(q.url()); });
   return { ctx, p };
 }
 // pole serii: wartość wpisana albo propozycja (placeholder z planu / poprzedniej serii)
 const fval = (p, sel) => p.$eval(sel, i => i.value || i.dataset.ph || '');
+// telefon chowa aplikację (inna aplikacja, blokada ekranu) albo pokazuje ją z powrotem: przeglądarka testowa sama tego nie robi,
+// więc podmieniamy stan widoczności strony i wysyłamy to samo zdarzenie, które wysyła telefon
+const setHidden = (p, hid) => p.evaluate(h => {
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => h ? 'hidden' : 'visible' });
+  document.dispatchEvent(new Event('visibilitychange'));
+}, hid);
 const PRO = Object.assign({}, DATA, { cfg: Object.assign({}, DATA.cfg, { simple: false }) });
 
 test('bez klucza (iOS z ekranu głównego): wklejenie linku od trenera → klucz zapamiętany, plan wczytany', async () => {
@@ -1342,7 +1350,8 @@ test('Film w kolejce: kawałki po 8 MB, przerwa w połowie, wznowienie po ponown
   await p.click('.set[data-o="1"][data-s="1"] .cam');
   const BIG = { name: 'duzy.mp4', mimeType: 'video/mp4', buffer: Buffer.alloc(9 * 1048576 + 123, 7) };
   await p.setInputFiles('#cam-file', BIG); await p.waitForSelector('#sheet', { state: 'hidden' });
-  await p.waitForTimeout(1500);
+  for (let i = 0; i < 100 && puts.length < 2; i++) await p.waitForTimeout(100);     // czeka na drugi kawałek (do 10 s) zamiast sztywnych 1,5 s: na wolniejszym komputerze 8 MB szło dłużej i test padał bez powodu
+  await p.waitForTimeout(300);                                                      // chwila na obsługę przerwanej wysyłki
   assert.deepEqual(puts, [['bytes 0-8388607/9437307', 8388608], ['bytes 8388608-9437306/9437307', 1048699]]);
   assert.equal(calls.filter(c => c.fn === 'logVideo').length, 0);
   assert.equal(await p.$eval('.set[data-o="1"][data-s="1"] .cam', b => b.classList.contains('pend')), true);
@@ -2109,9 +2118,64 @@ test('Marka „Siła z Ruchu”: nazwa pod ikoną na ekranie głównym, w karcie
   await ctx.close();
 });
 
+test('Ikona „Siła z Ruchu”: pliki mają rozmiary obiecane w manifeście i są tym, co rysuje tools/make-icons.js z toru animacji; znak wczytuje się w nagłówku w obu motywach', async () => {
+  const man = JSON.parse(fs.readFileSync(path.join(WEB, 'manifest.json'), 'utf8'));
+  const icon = f => fs.readFileSync(path.join(WEB, 'icons', f));
+  const size = f => { const b = icon(f); assert.equal(b.toString('latin1', 1, 4), 'PNG', f); return b.readUInt32BE(16) + 'x' + b.readUInt32BE(20); };   // szerokość i wysokość z nagłówka pliku PNG
+  // rozmiary: każdy plik PNG z manifestu ma tyle pikseli, ile manifest obiecuje telefonowi; do tego ikona iPhone'a i karty przeglądarki
+  for (const i of man.icons.filter(i => i.type === 'image/png')) assert.equal(size(i.src.replace('icons/', '')), i.sizes, i.src);
+  assert.deepEqual(['apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png'].map(size), ['180x180', '32x32', '16x16']);
+  assert.deepEqual(man.icons.map(i => i.purpose).sort(), ['any', 'any', 'maskable', 'maskable', 'monochrome']);
+  // pliki w repo są dokładnie tym, co rysuje narzędzie z krzywych animacji (nikt nie poprawił ikony ręcznie ani toru „na oko”)
+  const gen = require('../tools/make-icons.js').files();
+  for (const [name, text] of Object.entries(gen.svg)) assert.equal(icon(name).toString('utf8'), text, name + ' różni się od narzędzia: uruchom node tools/make-icons.js');
+  assert.deepEqual(gen.png.map(f => f[0]).sort(), fs.readdirSync(path.join(WEB, 'icons')).filter(f => f.endsWith('.png')).sort());
+  const html = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8');
+  const bar = /<path id="in-bar"[^>]*\sd="([^"]+)"/.exec(html)[1], dance = /<path id="in-dance"[^>]*\sd="([^"]+)"/.exec(html)[1];
+  assert.ok(icon('favicon.svg').includes(bar) && icon('icon-mono.svg').includes(bar) && icon('icon-mono.svg').includes(dance));
+  // ikona jednobarwna (Android koloruje ją sam i bierze tylko obrys): sam czarny kształt, bez przezroczystości
+  const mono = icon('icon-mono.svg').toString('utf8');
+  assert.deepEqual([...new Set(mono.match(/#[0-9a-f]{3,8}\b/gi))], ['#000']); assert.ok(!/opacity/.test(mono));
+  // obraz w plikach PNG: piksel po pikselu ten sam rysunek, który narzędzie rysuje teraz z toru animacji; kolory marki są na miejscu (tło, pomarańczowy tor,
+  // jasny talerz), ikony na ekran główny są pełnym kwadratem bez przezroczystości
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const px = await p.evaluate(async ([list, C]) => { const out = {};
+    for (const [name, n, markup] of list) {
+      const pix = async src => { const im = new Image(); im.src = src; await im.decode();
+        const c = document.createElement('canvas'); c.width = c.height = n; const g = c.getContext('2d'); g.drawImage(im, 0, 0);
+        return { nat: [im.naturalWidth, im.naturalHeight], d: g.getImageData(0, 0, n, n).data }; };
+      const { nat, d } = await pix('icons/' + name), w = (await pix('data:image/svg+xml,' + encodeURIComponent(markup))).d;   // d = plik z repo, w = rysunek narzędzia
+      const like = (i, k) => d[i + 3] === 255 && Math.abs(d[i] - k[0]) + Math.abs(d[i + 1] - k[1]) + Math.abs(d[i + 2] - k[2]) < 30;
+      const share = k => { let m = 0; for (let i = 0; i < d.length; i += 4) if (like(i, k)) m++; return m / (n * n); };
+      let off = 0; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - w[i]) + Math.abs(d[i + 1] - w[i + 1]) + Math.abs(d[i + 2] - w[i + 2]) + Math.abs(d[i + 3] - w[i + 3]) > 60) off++;
+      out[name] = { nat, corners: [0, n - 1, n * (n - 1), n * n - 1].map(q => d[q * 4 + 3]), bg: share(C.bg), acc: share(C.acc), ink: share(C.ink), off: off / (n * n) };
+    }
+    return out; }, [gen.png, { bg: rgb(gen.colors.bg), acc: rgb(gen.colors.acc), ink: rgb(gen.colors.ink) }]);
+  for (const [name, n] of gen.png) {
+    const q = px[name], small = /^favicon/.test(name);
+    assert.deepEqual(q.nat, [n, n], name);
+    assert.ok(q.off < 0.005, name + ' różni się od rysunku narzędzia (' + (q.off * 100).toFixed(2) + '% pikseli): uruchom node tools/make-icons.js');
+    assert.ok(q.bg > 0.5 && q.acc > 0.02 && q.ink > 0.004, name + ' ' + JSON.stringify(q));        // większość to tło, tor i talerz są widoczne
+    if (small) assert.ok(q.corners.every(a => a < 128), name + ' ' + q.corners);                   // znak w karcie przeglądarki ma zaokrąglone rogi
+    else assert.deepEqual(q.corners, [255, 255, 255, 255], name);                                  // telefon sam przycina rogi: przezroczystość dałaby czarne narożniki
+  }
+  await ctx.close();
+  // znak w nagłówku aplikacji: wczytany, 20 × 20 px, w jasnym i ciemnym motywie
+  for (const scheme of ['light', 'dark']) {
+    const a = await page([], false, { scheme });
+    await a.p.goto(base + '?k=kabc'); await a.p.waitForSelector('.set[data-o="1"]');
+    const logo = await a.p.$eval('header .logo', i => { const r = i.getBoundingClientRect(); return { ok: i.complete && i.naturalWidth > 0, src: i.getAttribute('src'), box: [r.width, r.height] }; });
+    assert.deepEqual(logo, { ok: true, src: 'icons/favicon.svg', box: [20, 20] }, scheme);
+    assert.deepEqual(a.p.errors, []);
+    await a.ctx.close();
+  }
+});
+
 const LIB = require('../web/lib.js');
 for (const scheme of ['light', 'dark'])
-test(`Animacja otwarcia (${scheme}): pierwsze otwarcie dnia pokazuje zasłonę z marką, talerz jedzie po torze, napis zostaje na czas czytania, potem zasłona znika; plan ładuje się pod spodem`, async () => {
+test(`Animacja otwarcia (${scheme}): pierwsze uruchomienie pokazuje zasłonę z marką, talerz jedzie po torze, napis zostaje na czas czytania, potem zasłona znika; plan ładuje się pod spodem`, async () => {
   const calls = [];
   const { ctx, p } = await page(calls, false, { motion: true, intro: true, scheme });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('#intro', { state: 'visible' });
@@ -2119,14 +2183,14 @@ test(`Animacja otwarcia (${scheme}): pierwsze otwarcie dnia pokazuje zasłonę z
   const look = await p.evaluate(() => { const S = document.getElementById('intro'), r = S.getBoundingClientRect(), cs = getComputedStyle(S);
     return { rect: [r.left, r.top, r.width, r.height], bg: cs.backgroundColor, acc: getComputedStyle(S.querySelector('.in-wm .a')).color, text: S.querySelector('.in-wm').innerText.replace(/\s+/g, ' '),
       tag: S.querySelector('.in-tag').textContent, tagPx: parseFloat(getComputedStyle(S.querySelector('.in-tag')).fontSize), hid: S.getAttribute('aria-hidden'),
-      theme: document.querySelector('meta[name="theme-color"]').content, day: localStorage.getItem('intro') }; });
+      theme: document.querySelector('meta[name="theme-color"]').content, mark: Number(localStorage.getItem('intro')) }; });
   assert.deepEqual(look.rect, [0, 0, 390, 844]);
   assert.deepEqual([look.bg, look.acc], ['rgb(23, 36, 29)', 'rgb(224, 163, 74)']);
   assert.equal(look.text, 'SIŁA Z RUCHU');
   assert.equal(look.tag, 'trening · plan · postęp'); assert.ok(look.tagPx >= 12);
   assert.equal(look.hid, 'true');                                              // ozdoba: czytnik ekranu od razu ma aplikację
   assert.equal(look.theme, '#17241d');
-  assert.equal(look.day, LIB.localDate());                                     // zapamiętane od razu, także gdy ktoś zamknie aplikację w trakcie
+  assert.ok(look.mark > Date.now() - 10000 && look.mark <= Date.now(), 'znacznik: ' + look.mark);   // „ostatnio na ekranie” zapamiętane od razu, także gdy ktoś zamknie aplikację w trakcie
   // plan wczytuje się w tym czasie pod zasłoną (animacja niczego nie wstrzymuje)
   await p.waitForSelector('.set[data-o="1"]', { state: 'attached' });
   assert.ok(await p.$('#intro'));
@@ -2175,7 +2239,7 @@ test(`Animacja otwarcia (${scheme}): pierwsze otwarcie dnia pokazuje zasłonę z
   await ctx.close();
 });
 
-test('Animacja otwarcia: dotknięcie albo klawisz pomija i nie trafia w przycisk pod spodem; drugie otwarcie tego samego dnia bez animacji, następnego dnia znowu', async () => {
+test('Animacja otwarcia: dotknięcie albo klawisz pomija i nie trafia w przycisk pod spodem; ponowne otwarcie zaraz potem bez animacji; zapis z v53 (data) liczy się jak dawno temu', async () => {
   const calls = [];
   const { ctx, p } = await page(calls, false, { motion: true, intro: true, touch: true });   // ekran dotykowy: na nim dotknięcie mogłoby „przelecieć” do przycisku pod zasłoną
   await p.goto(base + '?k=kabc'); await p.waitForSelector('#intro', { state: 'visible' });
@@ -2192,38 +2256,133 @@ test('Animacja otwarcia: dotknięcie albo klawisz pomija i nie trafia w przycisk
   assert.equal(await p.$('#intro-tc'), null);
   await p.touchscreen.tap(ok[0], ok[1]); await p.waitForTimeout(200);          // to samo miejsce po animacji: zwykłe ✓
   assert.equal(calls.filter(c => c.fn === 'logSet').length, 1);
-  // drugie otwarcie tego samego dnia: zasłony nie ma już w chwili, gdy strona jest gotowa
+  // ponowne otwarcie zaraz potem: zasłony nie ma już w chwili, gdy strona jest gotowa
   await p.reload({ waitUntil: 'domcontentloaded' });
   assert.equal(await p.$('#intro'), null);
   await p.waitForSelector('.set[data-o="1"]');
   assert.equal(await p.$('meta#intro-tc'), null);
-  // następny dzień (w pamięci telefonu wczorajsza data): animacja wraca; klawisz też ją pomija
-  await p.evaluate(() => localStorage.setItem('intro', '2026-01-01'));
+  // telefon z v53 ma w pamięci datę zamiast chwili: liczy się jak „dawno temu”, więc animacja wraca; klawisz też ją pomija
+  await setHidden(p, true);                                                    // aplikacja schowana: zamknięcie strony nie odświeży znacznika
+  await p.evaluate(() => localStorage.setItem('intro', '2026-11-16'));
   await p.reload(); await p.waitForSelector('#intro', { state: 'visible' });
   t0 = Date.now();
   await p.keyboard.press('Escape');
   await p.waitForSelector('#intro', { state: 'detached', timeout: 2000 });
   assert.ok(Date.now() - t0 < 1500);
-  assert.equal(await p.evaluate(() => localStorage.getItem('intro')), LIB.localDate());
+  const mark = Number(await p.evaluate(() => localStorage.getItem('intro')));
+  assert.ok(mark > Date.now() - 10000 && mark <= Date.now(), 'znacznik: ' + mark);   // data zastąpiona chwilą
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Animacja otwarcia po przerwie (uruchomienie aplikacji): 29 minut od schowania = bez animacji, 31 minut = animacja; schowana aplikacja nie odświeża znacznika', async () => {
+  const { ctx, p } = await page([], false, { motion: true, intro: true });
+  await p.clock.install({ time: new Date('2026-11-17T18:00:00') });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#intro', { state: 'visible' });   // pierwsze uruchomienie: animacja
+  assert.equal(await p.evaluate(() => INTRO_GAP), 30 * 60000);                 // próg wybrany przez trenera: 30 minut
+  await p.keyboard.press('Escape'); await p.waitForSelector('#intro', { state: 'detached' });
+  const age = () => p.evaluate(() => Date.now() - Number(localStorage.getItem('intro')));   // ile temu aplikacja była na ekranie wg pamięci telefonu
+  // telefon chowa aplikację: znacznik = chwila schowania i w tle stoi w miejscu
+  await setHidden(p, true);
+  assert.ok(await age() < 2000);
+  await p.clock.fastForward(29 * 60000);
+  const a29 = await age(); assert.ok(a29 >= 29 * 60000 && a29 < 29 * 60000 + 5000, 'znacznik sprzed ' + a29 + ' ms');
+  // w tym czasie telefon zamknął stronę; uruchomienie po 29 minutach: bez animacji, a znacznik znowu świeży
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  assert.equal(await p.$('#intro'), null);
+  await p.waitForSelector('.set[data-o="1"]');
+  assert.ok(await age() < 2000);
+  // to samo po 31 minutach: animacja
+  await setHidden(p, true); await p.clock.fastForward(31 * 60000);
+  await p.reload(); await p.waitForSelector('#intro', { state: 'visible' });
+  assert.ok(await age() < 2000);                                               // zapamiętane od razu
+  await p.keyboard.press('Escape'); await p.waitForSelector('#intro', { state: 'detached' });
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Animacja otwarcia po przerwie (powrót do otwartej aplikacji): po 29 minutach w tle nic, po 31 minutach animacja jeszcze raz i sama znika; schowanie aplikacji w trakcie animacji kończy ją', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { motion: true, intro: true });
+  await p.clock.install({ time: new Date('2026-11-17T18:00:00') });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#intro', { state: 'visible' });
+  await p.keyboard.press('Escape'); await p.waitForSelector('#intro', { state: 'detached' });
+  await p.waitForSelector('.set[data-o="1"]');
+  // 29 minut w tle, strona żyje dalej: powrót bez animacji
+  await setHidden(p, true); await p.clock.fastForward(29 * 60000); await setHidden(p, false);
+  await p.clock.runFor(200);
+  assert.equal(await p.$('#intro'), null);
+  // 31 minut w tle: ta sama zasłona co przy uruchomieniu, na samej górze strony, pasek systemowy w kolorze tła
+  await setHidden(p, true); await p.clock.fastForward(31 * 60000); await setHidden(p, false);
+  await p.waitForSelector('#intro', { state: 'visible' });
+  const look = await p.evaluate(() => { const S = document.getElementById('intro'), r = S.getBoundingClientRect();
+    return { rect: [r.left, r.top, r.width, r.height], first: document.body.firstElementChild === S, n: document.querySelectorAll('#intro').length,
+      theme: document.querySelector('meta[name="theme-color"]').content, text: S.querySelector('.in-wm').innerText.replace(/\s+/g, ' '),
+      age: Date.now() - Number(localStorage.getItem('intro')) }; });
+  assert.deepEqual([look.rect, look.first, look.n, look.theme, look.text], [[0, 0, 390, 844], true, 1, '#17241d', 'SIŁA Z RUCHU']);
+  assert.ok(look.age < 2000);
+  // animacja gra do końca i znika sama (zegar testu rusza klatki; napis i zgaszenie idą zegarem animacji przeglądarki)
+  await p.clock.runFor(300);
+  assert.equal(await p.evaluate(() => document.querySelectorAll('#intro .in-wm span').length), 11);
+  assert.equal(await p.evaluate(() => document.getElementById('intro').getAnimations().length), 1);   // zgaszenie zaplanowane: ruch ruszył
+  await p.waitForSelector('#intro', { state: 'detached', timeout: 8000 });
+  assert.equal(await p.$('#intro-tc'), null);
+  assert.equal(await p.$$eval('meta[name="theme-color"]', a => a.length), 2);
+  // trzeci raz, ale telefon chowa aplikację w trakcie animacji: zasłona znika od razu, po powrocie jest aplikacja
+  await setHidden(p, true); await p.clock.fastForward(45 * 60000); await setHidden(p, false);
+  await p.waitForSelector('#intro', { state: 'visible' });
+  await p.clock.runFor(300);
+  await setHidden(p, true);
+  assert.equal(await p.$('#intro'), null); assert.equal(await p.$('#intro-tc'), null);
+  await p.clock.fastForward(60000); await setHidden(p, false);                 // powrót po minucie: bez animacji
+  await p.clock.runFor(200);
+  assert.equal(await p.$('#intro'), null);
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.clock.runFor(300);
+  assert.equal(calls.filter(c => c.fn === 'logSet').length, 1);                // aplikacja pod spodem działa jak zwykle
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Animacja otwarcia: przeładowanie strony w trakcie treningu nie pokazuje animacji (aplikacja na ekranie odświeża znacznik co minutę)', async () => {
+  const { ctx, p } = await page([], false, { motion: true, intro: true });
+  await p.clock.install({ time: new Date('2026-11-17T18:00:00') });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#intro', { state: 'visible' });
+  await p.keyboard.press('Escape'); await p.waitForSelector('#intro', { state: 'detached' });
+  await p.waitForSelector('.set[data-o="1"]');
+  for (let i = 0; i < 40; i++) await p.clock.fastForward(60000);               // 40 minut treningu z aplikacją na ekranie, minuta po minucie
+  const age = await p.evaluate(() => Date.now() - Number(localStorage.getItem('intro')));
+  assert.ok(age >= 0 && age <= 61000, 'znacznik sprzed ' + age + ' ms');
+  // telefon zamyka stronę bez ostrzeżenia (żadne zdarzenie nie dociera do aplikacji) i wczytuje ją od nowa
+  await p.evaluate(() => ['pagehide', 'visibilitychange'].forEach(n => addEventListener(n, e => e.stopImmediatePropagation(), true)));
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  assert.equal(await p.$('#intro'), null);
+  await p.waitForSelector('.set[data-o="1"]');
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
 
 test('Animacja otwarcia: przy ograniczeniu ruchu i bez dostępu do pamięci telefonu nie pokazuje się wcale; na niskim ekranie mieści się pomniejszona', async () => {
-  // ograniczenie ruchu w systemie: bez zasłony, a „dziś” nie jest zużyte (pokaże się, gdy ktoś wyłączy ograniczenie)
+  // ograniczenie ruchu w systemie: bez zasłony przy uruchomieniu i przy powrocie po przerwie
   const a = await page([], false, { intro: true });
+  await a.p.clock.install({ time: new Date('2026-11-17T18:00:00') });
   await a.p.goto(base + '?k=kabc', { waitUntil: 'domcontentloaded' });
   assert.equal(await a.p.$('#intro'), null);
   await a.p.waitForSelector('.set[data-o="1"]');
-  assert.equal(await a.p.evaluate(() => localStorage.getItem('intro')), null);
+  await setHidden(a.p, true); await a.p.clock.fastForward(31 * 60000); await setHidden(a.p, false);
+  await a.p.clock.runFor(200);
+  assert.equal(await a.p.$('#intro'), null);
   assert.deepEqual(a.p.errors, []);
   await a.ctx.close();
-  // nie da się zapamiętać dnia (pełna albo zablokowana pamięć) → bez animacji, inaczej wracałaby przy każdym otwarciu
+  // nie da się zapamiętać chwili (pełna albo zablokowana pamięć) → bez animacji, inaczej wracałaby przy każdym otwarciu
   const b = await page([], false, { motion: true, intro: true });
   await b.ctx.addInitScript(() => { const set = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === 'intro') throw new Error('pełna pamięć'); return set.call(this, k, v); }; });
+  await b.p.clock.install({ time: new Date('2026-11-17T18:00:00') });
   await b.p.goto(base + '?k=kabc', { waitUntil: 'domcontentloaded' });
   assert.equal(await b.p.$('#intro'), null);
   await b.p.waitForSelector('.set[data-o="1"]');
+  await setHidden(b.p, true); await b.p.clock.fastForward(31 * 60000); await setHidden(b.p, false);
+  await b.p.clock.runFor(200);
+  assert.equal(await b.p.$('#intro'), null);
   assert.deepEqual(b.p.errors, []);
   await b.ctx.close();
   // telefon poziomo w przeglądarce (740×360): rysunek i napis pomniejszone mieszczą się na ekranie, podpis (byłby < 12 px) schowany

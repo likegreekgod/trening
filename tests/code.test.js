@@ -169,7 +169,10 @@ test('mergePlan_: zastepuje zamyka niezrobione jednostki bloku od pierwszej daty
   let m = C.mergePlan_(existing, inc, ses);
   assert.equal(m.errors.length, 0);
   assert.deepEqual(Array.from(m.notes), ['robert: zamknięto 2 jedn. bloku B1']);
-  assert.deepEqual(m.rows.map(r => r.klient + r.tydzien + r.jednostka), ['ewa1T1', 'robert1T1', 'robert2W1', 'robert3T1', 'robert3T2']);
+  // tyg. 1 T2 (B1, przed datą z pliku) zostaje: plik ma tylko blok B2, a zastepuje zamyka od daty pliku
+  assert.deepEqual(m.rows.map(r => r.klient + r.tydzien + r.jednostka), ['ewa1T1', 'robert1T1', 'robert1T2', 'robert2W1', 'robert3T1', 'robert3T2']);
+  assert.deepEqual(m.removed.map(g => g.text), ['usunięto: robert tydz. 2 jednostka T1 (blok B1)', 'usunięto: robert tydz. 2 jednostka T2 (blok B1)']);
+  assert.equal(C.importStatus_(m), 'OK (usunięto 2)');
   // nieistniejący blok = uwaga, nie błąd
   m = C.mergePlan_(existing, [R('robert', 3, 'T1', '2026-10-12', 'B2', { zastepuje: 'B9' })], ses);
   assert.deepEqual([m.errors.length, m.notes.length], [0, 0]);
@@ -492,6 +495,56 @@ test('ownRows_: walidacja i wiersze Planu własnej jednostki', () => {
   assert.equal(C.ownRows_('anna', Object.assign({}, u, { exercises: Array(21).fill({ name: 'X', sets: 1, reps: 1 }) }), plan).error, 'Najwyżej 20 ćwiczeń.');
   assert.ok(C.API_FNS.addOwnUnit);
   assert.deepEqual(Array.from(C.PLAN_HEADERS.slice(-6)), ['zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod', 'uwagi_jedn']);   // nowe kolumny na końcu
+});
+
+test('mergePlan_: plik usuwa niezrobione jednostki tylko z bloków, które sam zawiera; zrobiona = Sesje albo Log', () => {
+  const R = (w, j, blok, x) => Object.assign({ klient: 'damian', tydzien: w, jednostka: j, nr: 1, cwiczenie: 'Rwanie', serie: 3, powt: '2', blok }, x || {});
+  const H1 = [R(9, 'S1', 'H1'), R(9, 'S2', 'H1'), R(10, 'S1', 'H1'), R(10, 'S2', 'H1')];
+  const H2 = [11, 12, 13, 14, 15].flatMap(w => [R(w, 'S1', 'H2'), R(w, 'S2', 'H2'), R(w, 'S1', 'H2', { nr: 2, cwiczenie: 'Przysiad' })]);
+  const own = R(10, 'W1', '', { zrodlo: 'klient' }), ewa = Object.assign(R(1, 'T1', 'B1'), { klient: 'ewa' });
+  const plan = H1.concat(H2, [own, ewa]);
+  const ses = [{ klient: 'damian', tydzien: 9, jednostka: 'S1' }, { klient: 'damian', tydzien: 10, jednostka: 'S1' }];
+  const log = [{ klient: 'damian', tydzien: 9, jednostka: 'S2', seria: 1 }];          // serie w Logu, sesja niezakończona
+  const key = r => r.tydzien + r.jednostka + ':' + r.nr;
+  // 17.11: plik H1 z samą zrobioną tyg. 10 S1 → H2 zostaje w całości, usunięta tylko niezrobiona tyg. 10 S2 bloku H1
+  let m = C.mergePlan_(plan, [R(10, 'S1', 'H1')], ses, log);
+  assert.equal(m.errors.length, 0);
+  assert.equal(m.rows.filter(r => r.blok === 'H2').length, H2.length);
+  assert.deepEqual(m.rows.filter(r => r.blok === 'H1').map(key).sort(), ['10S1:1', '9S1:1', '9S2:1']);
+  assert.ok(m.rows.includes(own) && m.rows.includes(ewa));                            // własny trening i inny klient nietknięte
+  assert.deepEqual(m.removed.map(g => g.text), ['usunięto: damian tydz. 10 jednostka S2 (blok H1)']);
+  assert.equal(C.importStatus_(m), 'OK (usunięto 1, uwagi)');
+  // tyg. 9 S2 ma tylko serie w Logu → zrobiona: zostaje, z uwagą; tak samo zrobiona tyg. 9 S1 spoza pliku
+  assert.ok(m.warnings.some(w => /tyg\. 9 S2: zrobiona \(serie w Logu\), nie ma jej w pliku — zostaje/.test(w)));
+  assert.ok(m.warnings.some(w => /tyg\. 9 S1: zrobiona, nie ma jej w pliku — zostaje/.test(w)));
+  assert.ok(m.warnings.some(w => /tyg\. 10 S1: zrobiona, zostaje bez zmian/.test(w)));
+  // bez Logu ta sama jednostka byłaby niezrobiona i usunięta
+  assert.ok(C.mergePlan_(plan, [R(10, 'S1', 'H1')], ses).removed.some(g => g.tydzien === 9 && g.jednostka === 'S2'));
+  // plik z jednostką Logu w innym bloku → błąd jak przy zrobionej (tygodnie numeruj dalej)
+  assert.match(C.mergePlan_(plan, [R(9, 'S2', 'H3')], ses, log).errors.join(), /tyg\. 9 S2: już zrobiona w bloku H1/);
+  // dwa pliki tego samego klienta w jednym przebiegu (najpierw H2, potem H1) → oba bloki w Planie
+  const base = H1.concat([own]);
+  m = C.mergePlan_(base, H2, ses, log);
+  assert.equal(m.removed.length, 0);
+  m = C.mergePlan_(m.rows, H1, ses, log);
+  assert.deepEqual([m.rows.filter(r => r.blok === 'H1').length, m.rows.filter(r => r.blok === 'H2').length, m.removed.length], [4, H2.length, 0]);
+  assert.equal(C.importStatus_({ warnings: [], removed: [] }), 'OK');
+  // regresja: poprawka bieżącego bloku (cały plik H2 od nowa, bez tyg. 15) → nowe wiersze, tyg. 15 usunięty, H1 bez zmian
+  const H2b = H2.filter(r => r.tydzien < 15).map(r => Object.assign({}, r, { kg: 50 }));
+  m = C.mergePlan_(plan, H2b, ses, log);
+  assert.equal(m.rows.filter(r => r.blok === 'H2').every(r => r.kg === 50 && r.tydzien < 15), true);
+  assert.equal(m.rows.filter(r => r.blok === 'H2').length, H2b.length);
+  assert.equal(m.rows.filter(r => r.blok === 'H1').length, 4);
+  assert.deepEqual(m.removed.map(g => g.text), ['usunięto: damian tydz. 15 jednostka S1 (blok H2)', 'usunięto: damian tydz. 15 jednostka S2 (blok H2)']);
+  // jednostka z pliku o tym samym tygodniu i dniu, ale w innym bloku (niezrobiona) → zastąpiona, uwaga, bez duplikatu
+  m = C.mergePlan_(plan, [R(11, 'S1', 'H3')], ses, log);
+  assert.deepEqual(m.rows.filter(r => r.tydzien === 11 && r.jednostka === 'S1').map(r => r.blok), ['H3']);
+  assert.match(m.warnings.join(), /tyg\. 11 S1: niezrobiona jednostka bloku H2 zastąpiona jednostką z pliku \(blok H3\)/);
+  assert.equal(m.rows.filter(r => r.blok === 'H2').length, H2.length - 2);
+  // zmiany klienta w jednostce innego bloku zostają razem z nią
+  const ed = R(12, 'S1', 'H2', { nr: 51, cwiczenie: 'Wykroki', zrodlo: 'dodane' }), del = R(12, 'S2', 'H2', { nr: 3, cwiczenie: 'Plank', zrodlo: 'usuniete' });
+  m = C.mergePlan_(plan.concat([ed, del]), [R(10, 'S1', 'H1')], ses, log);
+  assert.ok(m.rows.includes(ed) && m.rows.includes(del));
 });
 
 test('mergePlan_ zostawia własne treningi; podsumowanie i bloki liczą ich objętość, ale nie wykonanie planu', () => {

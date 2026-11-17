@@ -7,7 +7,7 @@ Architektura, schemat danych i konwencje są opisane w **CLAUDE.md**.
 web/           aplikacja (GitHub Pages)
 apps-script/   Code.gs (API + arkusz + podsumowania + wczytywanie planów), Cwiczenia.gs, Podglad.gs, appsscript.json
 tests/         testy (npm test)
-tools/         validate-plan.js
+tools/         validate-plan.js (sprawdzenie planu), make-icons.js (ikony w web/icons/)
 plans/         przykładowy plan JSON
 ```
 
@@ -64,10 +64,12 @@ Wyślij klientom nowe linki z kolumny E. Stare linki (`…/exec?k=…`) działaj
 Zasady dla kolejnych bloków:
 - **Tygodnie numeruj u klienta ciągle** (blok 1 = tygodnie 1–6, blok 2 zaczyna się od 7). Numer tygodnia jest częścią identyfikatora serii w Logu, więc powtórzony numer nadpisałby stare wyniki.
 - Każdy wiersz planu ma kolumnę `blok` (np. `B2`). Aplikacja pokazuje klientowi „Blok B2 · tydz. 1”.
-- Jednostki już zrobione zostają w planie bez zmian. Plik, który nadpisałby zrobioną jednostkę innego bloku, jest odrzucany z podpowiedzią numeracji.
+- **Plik podmienia tylko bloki, które sam zawiera** (kolumna `blok`). Niezrobione jednostki tych bloków, których nie ma w pliku, znikają z Planu; inne bloki klienta zostają nietknięte. Każde usunięcie jest w zakładce Import („usunięto: klient tydz. X jednostka Y (blok Z)”, status „OK (usunięto N)”).
+- Jednostka zrobiona = wpis w Sesjach **albo** jakakolwiek seria w Logu. Takie zostają w planie bez zmian (także gdy nie ma ich w pliku: uwaga). Plik, który nadpisałby zrobioną jednostkę innego bloku, jest odrzucany z podpowiedzią numeracji.
+- Własne treningi klienta (`zrodlo` = klient) plik pomija.
 - `data` jest wstępna (klient może ją przesunąć), `zamienniki` to nazwy rozdzielone „;”.
 - `serie` od 1 do 40. Opcjonalnie: `tryb` = `EMOM` (licznik minut i „+ runda”; nazwa zaczynająca się od „EMOM” działa tak samo), `ciecie` (1 = tnij jako pierwsze przy „Skróć trening”; puste = nie tnij) i `serie_min` (do ilu serii można skrócić ćwiczenie, zanim się je usunie). Bez `ciecie` w jednostce aplikacja proponuje cięcie tylko ćwiczeń opcjonalnych (B) od końca.
-- `zastepuje` (opcjonalne, nazwa bloku, np. `"B1"`; wystarczy w jednym wierszu klienta, jedna wartość na klienta): import usuwa z Planu niezrobione jednostki tego bloku klienta (bez wpisu w Sesjach, bez własnych treningów) z datą od najwcześniejszej daty klienta w pliku. Log i Sesje bez zmian. Import zapisuje w uwagach „zamknięto n jedn. bloku B1”; nieistniejący blok to uwaga, nie błąd. Kolumna nie trafia do Planu.
+- `zastepuje` (opcjonalne, nazwa bloku, np. `"B1"`; wystarczy w jednym wierszu klienta, jedna wartość na klienta): import usuwa z Planu niezrobione jednostki tego bloku klienta (bez wpisu w Sesjach i serii w Logu, bez własnych treningów) z datą od najwcześniejszej daty klienta w pliku. Log i Sesje bez zmian. Import zapisuje w uwagach „zamknięto n jedn. bloku B1”; nieistniejący blok to uwaga, nie błąd. Kolumna nie trafia do Planu.
 
 ## Rozwój aplikacji w Claude Code
 

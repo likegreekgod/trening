@@ -6,6 +6,7 @@
     "test": "node --test tests/code.test.js tests/lib.test.js tests/ui.test.js tests/trener.test.js",
     "test:code": "node --test tests/code.test.js",
     "validate": "node tools/validate-plan.js",
+    "icons": "node tools/make-icons.js",
     "serve": "npx --yes serve web -l 8080",
     "gas:push": "clasp push",
     "gas:deploy": "clasp deploy -i $DEPLOYMENT_ID -d \"$(git log -1 --pretty=%s)\""
