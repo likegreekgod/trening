@@ -3,6 +3,12 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-17 · Filmy w panelu: strumień przez service worker (v63)
+
+- v62 nie odtwarzał żadnego filmu: Dysk nie przyjmuje biletu w adresie (`access_token`) przy pobieraniu treści pliku, a atrapa w testach go przyjmowała. Atrapa przyjmuje teraz bilet tylko w nagłówku, jak prawdziwy Dysk.
+- Teraz `trener.html` rejestruje ten sam `sw.js` co aplikacja; `<video>` gra z adresu na tej stronie (`film-strumien/<id>?t=…`), a service worker wysyła do Dysku bilet w nagłówku i przekazuje zapytania o kawałek (Range). Bilet nie wychodzi poza przeglądarkę trenera. Pierwsze wejście (service worker jeszcze nie działa) i błąd strumienia = pobranie całego pliku jak w v61, z paskiem postępu. Komunikaty błędów podają kod i powód Dysku albo typ pliku, żeby dało się zdiagnozować prawdziwy film.
+- Ten wpis zastępuje rozwiązanie v62 opisane niżej.
+
 ## 2026-11-17 · Filmy w panelu grają od razu, strumieniem (v62)
 
 - Damian: prawdziwe filmy „słabo się pobierają”. Przyczyna: v61 pobierał cały plik (film z telefonu to często 50–200 MB) i dopiero potem pokazywał odtwarzacz.

@@ -1,6 +1,6 @@
 // Service worker: pliki aplikacji w pamięci telefonu → start bez sieci.
 // Zmień VERSION przy każdej publikacji, żeby telefony pobrały nową wersję.
-const VERSION = 'v62';
+const VERSION = 'v63';
 const CACHE = 'trening-' + VERSION;
 const SHELL = ['./', 'index.html', 'config.js', 'lib.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon.svg', 'icons/favicon-32.png',
   'icons/apple-touch-icon.png', 'icons/icon-maskable-192.png', 'icons/icon-maskable-512.png', 'icons/icon-mono.svg',
@@ -23,6 +23,14 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+  // panel trenera: film z Dysku strumieniem. <video> nie wyśle nagłówka z biletem, a Dysk nie przyjmuje biletu w adresie,
+  // więc tu bilet z adresu tej strony idzie do nagłówka, a zapytanie o kawałek (Range) przechodzi bez zmian.
+  if (url.origin === location.origin && /\/film-strumien\/[^/]+$/.test(url.pathname)) {
+    const h = { Authorization: 'Bearer ' + (url.searchParams.get('t') || '') }, rg = e.request.headers.get('range');
+    if (rg) h.Range = rg;
+    e.respondWith(fetch('https://www.googleapis.com/drive/v3/files/' + url.pathname.split('/').pop() + '?alt=media', { headers: h }));
+    return;
+  }
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;   // API Google i Drive – zawsze sieć
   // sieć najpierw (świeża wersja), pamięć gdy brak sieci
   e.respondWith(

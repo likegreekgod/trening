@@ -101,9 +101,9 @@ async function page(calls, opt = {}) {
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
   });
   await ctx.route('https://accounts.google.com/**', r => r.fulfill({ status: 200, headers: { 'Content-Type': 'text/javascript' }, body: GSI }));
-  await ctx.route('https://www.googleapis.com/drive/v3/files/**', r => {               // Dysk: rozmiar z nagłówkiem biletu, sam film strumieniem (bilet w adresie, Range)
+  await ctx.route('https://www.googleapis.com/drive/v3/files/**', r => {               // Dysk: rozmiar i film, bilet w nagłówku, kawałki (Range)
     const u = new URL(r.request().url()), id = decodeURIComponent(u.pathname.split('/').pop()), h = r.request().headers();
-    const tok = h.authorization ? h.authorization.replace(/^Bearer /, '') : u.searchParams.get('access_token');
+    const tok = h.authorization ? h.authorization.replace(/^Bearer /, '') : '';      // jak prawdziwy Dysk: bilet tylko w nagłówku, nie w adresie
     st.drive = (st.drive || []).concat([{ id, tok, alt: u.searchParams.get('alt'), range: h.range || '' }]);
     const cors = { 'Access-Control-Allow-Origin': '*' };
     if (tok !== 'tok-film' || (opt.mediaExpired && u.searchParams.get('alt') === 'media' && !st.fresh)) return r.fulfill({ status: 401, headers: cors, body: '' });
@@ -205,7 +205,7 @@ test('panel: filmy bez komentarza i bloki do zamknięcia', async () => {
   await p.goto(base + 'trener.html#filmy'); await p.waitForSelector('.vi');
   assert.equal(await p.$$eval('.vi', a => a.length), 2);
   await p.waitForSelector('.pv[data-file="film1"] video');
-  assert.match(await p.getAttribute('.pv video', 'src'), /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/film1\?alt=media&access_token=tok-film$/);   // strumień z Dysku, nie okienko Dysku
+  assert.match(await p.getAttribute('.pv video', 'src'), /^(blob:|film-strumien\/film1\?t=tok-film$)/);   // film z Dysku, nie okienko Dysku
   await p.waitForFunction(() => document.querySelector('#pvv').duration > 1);
   assert.match(await p.textContent('#main'), /plik 87 MB/);                          // rozmiar pliku z Dysku
   assert.match(await p.textContent('#main'), /Komentarz klienta\s*Ostatnie powtórzenie wolne/);
@@ -441,6 +441,19 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   await shot(s2.p, 'trener-filmy-odtwarzacz-jasny.png');
   assert.deepEqual(s2.p.errors, []);
   await s2.ctx.close();
+  // drugie wejście (service worker już działa): film gra od razu z film-strumien/, sw.js dokłada nagłówek i przekazuje Range
+  const c5 = [], s5 = await page(c5, { loggedIn: true });
+  await s5.p.goto(base + 'trener.html#filmy'); await s5.p.evaluate(() => navigator.serviceWorker.ready);
+  await s5.p.reload(); await s5.p.waitForFunction(() => !!navigator.serviceWorker.controller);
+  await s5.p.waitForSelector('.pv video');
+  assert.match(await s5.p.getAttribute('.pv video', 'src'), /^film-strumien\/film1\?t=tok-film$/);
+  await s5.p.waitForFunction(() => document.querySelector('#pvv').duration > 1);
+  await s5.p.keyboard.press('ArrowRight'); await s5.p.keyboard.press('ArrowRight');
+  await s5.p.waitForFunction(() => Math.abs(document.querySelector('#pvv').currentTime - 2 / 30) < 0.005);
+  const sm = s5.p.st.drive.filter(d => d.alt === 'media');
+  assert.ok(sm.length && sm.every(d => d.tok === 'tok-film') && sm.some(d => d.range));   // bilet w nagłówku i zapytania o kawałek
+  assert.deepEqual(s5.p.errors, []);
+  await s5.ctx.close();
   // bilet wygasł w trakcie oglądania: nowy bilet i film gra dalej, bez komunikatu
   const c4 = [], s4 = await page(c4, { loggedIn: true, mediaExpired: true });
   await s4.p.goto(base + 'trener.html#filmy'); await s4.p.waitForSelector('.pv video');
