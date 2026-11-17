@@ -106,8 +106,11 @@ test('panel: logowanie przyciskiem Google → pulpit z klientami, sygnałami i l
   assert.equal(await p.isVisible('#app'), false);
   assert.deepEqual(calls.map(c => c.fn), ['trConfig']);           // przed zalogowaniem tylko konfiguracja
   assert.equal(await p.evaluate(() => window.__gcfg.client_id), 'test.apps.googleusercontent.com');
+  assert.equal(await p.evaluate(() => localStorage.getItem('tr_dev')), null);
   await p.click('#fake-g');
   await p.waitForSelector('tr.row[data-k="ania"]');
+  assert.equal(await p.evaluate(() => localStorage.getItem('tr_dev')), '1');   // urządzenie trenera: aplikacja pokaże „Panel trenera”
+  assert.equal(await p.getAttribute('#mine', 'href'), './');                   // „Mój trening” = aplikacja z kluczem zapamiętanym w telefonie
   const pul = calls.find(c => c.fn === 'trPulpit');
   assert.ok(pul.token && pul.token.split('.').length === 3, 'bilet idzie z każdym zapytaniem');
   assert.equal(pul.key, undefined, 'panel nie używa klucza klienta');
@@ -132,6 +135,7 @@ test('panel: logowanie przyciskiem Google → pulpit z klientami, sygnałami i l
   await p.click('#logout'); await p.waitForSelector('#login:not([hidden])');
   assert.match(await p.textContent('#login-msg'), /Wylogowano/);
   assert.equal(await p.evaluate(() => localStorage.getItem('tr_tok')), null);
+  assert.equal(await p.evaluate(() => localStorage.getItem('tr_dev')), '1');   // przycisk w aplikacji zostaje po wylogowaniu
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
@@ -222,4 +226,18 @@ test('panel: zrzuty w ciemnym motywie i na telefonie', async () => {
     assert.deepEqual(p.errors, []);
     await ctx.close();
   }
+});
+
+test('panel na telefonie: pasek u góry nie rozciąga się przy krótkiej stronie, puste filmy bez powtórzonego komunikatu', async () => {
+  const { ctx, p } = await page([], { loggedIn: true, vp: { width: 390, height: 844 }, scheme: 'dark' });
+  await p.route('**/macros/**', r => r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ok: true, result: Object.assign({}, PULPIT, { videos: [] }) }) }));
+  await p.goto(base + 'trener.html#filmy'); await p.waitForSelector('.vids');
+  const h = await p.$eval('aside', a => a.getBoundingClientRect().height);
+  assert.ok(h < 160, 'pasek ma ' + h + ' px');
+  assert.ok(await p.isVisible('#logout'), 'wylogowanie dostępne na telefonie');
+  assert.equal((await p.textContent('#main')).match(/Brak filmów/g).length, 1);
+  await shot(p, 'trener-filmy-puste-telefon-ciemny.png');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
 });

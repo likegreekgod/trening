@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, `main` = v52 (PR #76 scalony: panel trenera PR 1–2); v53 (marka „Siła z Ruchu” i animacja otwarcia) na gałęzi `claude/project-thread-ezlb23`.
+Stan na 2026-11-17, `main` = v53 (PR #76 panel trenera PR 1–2 i PR #77 marka „Siła z Ruchu” scalone); poprawka panelu na telefonie i przełącznik aplikacja ↔ panel (v54) na gałęzi `claude/project-thread-taywqw`.
 
 ## Jak pracujemy
 
@@ -18,6 +18,8 @@ Stan na 2026-11-17, `main` = v52 (PR #76 scalony: panel trenera PR 1–2); v53 (
 
 ## Ostatnio zrobione
 
+- 17.11 (v54, na gałęzi): przełącznik między aplikacją a panelem: w aplikacji na ekranie Trener przycisk „Panel trenera” tylko na urządzeniu, na którym ktoś raz zalogował się do panelu (`tr_dev` w localStorage, zostaje po wylogowaniu), w panelu „Mój trening ›” otwiera aplikację z kluczem zapamiętanym w tej przeglądarce. Klienci go nie widzą, bo do panelu wpuszcza tylko adres trenera.
+- 17.11 (v54, na gałęzi): panel trenera na telefonie: górny pasek nie rozciąga się na pół ekranu przy krótkiej stronie, „Przelicz teraz” i „Wyloguj” widoczne, pusta lista filmów bez podwójnego komunikatu. Logowanie Damiana działa (projekt Google Cloud „Panel trenera”, właściwości skryptu wpisane).
 - 17.11 (v53): marka „Siła z Ruchu”: nowa nazwa tam, gdzie widzi ją klient (pod ikoną, w karcie przeglądarki, w nagłówku przed planem), i animacja otwarcia (tor sztangi w rwaniu, linia tańca, napis; 3,3 s, tylko przy pierwszym otwarciu dnia, dotknięcie pomija).
 - 17.11 (v52 + `apps-script/`, scalony PR #76): panel trenera PR 1 i 2 (`docs/plan-panel.md`): logowanie Google, pulpit z klientami i sygnałami, karta klienta, filmy oglądane w panelu, bloki do zamknięcia. Tylko odczyt; zapisy w PR 3.
 - 17.11 (`apps-script/`): bezpieczeństwo: stara wersja aplikacji (link `/exec?k=`) wyłączona, `doGet` zwraca tylko tekst; przegląd repo bez danych klientów.
@@ -54,7 +56,7 @@ Stan na 2026-11-17, `main` = v52 (PR #76 scalony: panel trenera PR 1–2); v53 (
 
 ## Czeka na Damiana
 
-- Scalenie v53 (marka „Siła z Ruchu” i animacja otwarcia). Potem próba na telefonie: animacja przy pierwszym otwarciu dnia (kolejne otwarcia bez niej, dotknięcie pomija) i nazwa pod ikoną (Android zwykle podmienia sam w ciągu kilku dni, iPhone dopiero po usunięciu ikony i ponownym dodaniu do ekranu głównego).
+- Próba v53 (marka „Siła z Ruchu”) na telefonie: animacja przy pierwszym otwarciu dnia (kolejne otwarcia bez niej, dotknięcie pomija) i nazwa pod ikoną (Android zwykle podmienia sam w ciągu kilku dni, iPhone dopiero po usunięciu ikony i ponownym dodaniu do ekranu głównego).
 - Panel trenera (PR #76 scalony): identyfikator klienta OAuth w Google Cloud i menu „Ustaw panel trenera” (kroki w `docs/plan-panel.md`, „Uruchomienie”).
 - Dopisać `uwagi_jedn` i `dla_klienta` do SKILL.md skilla trenera i przebudować ZIP (PR #72 scalony).
 - Próba v51 („★ Pierwszy wynik”) na telefonie.

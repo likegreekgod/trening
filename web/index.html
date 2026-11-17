@@ -705,6 +705,7 @@
   .ct-l{margin:4px 0;padding-left:18px;font-size:15px}
   .ct-l li{padding:4px 0}
   .rbtns #r-set{min-width:44px;font-size:18px}
+  .trp{display:flex;align-items:center;justify-content:center;width:100%;margin:0 0 var(--gap);text-decoration:none}
   /* koniec przerwy: mocne mignięcie ekranu (sygnał wizualny, także przy wyciszonym telefonie) */
   #tip{position:absolute;z-index:4;background:var(--panel);color:var(--light-white);border:1px solid var(--bar-line);border-radius:14px;padding:12px 14px;
        box-shadow:0 8px 24px rgba(0,0,0,.28);font:500 14px/1.4 var(--f-body)}
@@ -2097,14 +2098,16 @@ function renderTrener(){
   head(NAME ? 'Komentarze trenera · ' + NAME : 'Komentarze trenera', 'Trener', fresh ? `<span><b>${fresh}</b> ${fresh === 1 ? 'nowy' : 'nowe'}</span>` : '');
   const range = w => w.from ? ddmm(w.from) + (w.to && w.to !== w.from ? '–' + ddmm(w.to) : '') : '';
   const unitHead = (w, u) => esc((PLAN.find(r => String(r.week) === w.week && String(r.day) === u.unit && r.title) || {}).title || 'Trening ' + u.unit) + (u.date ? ' · ' + weekday(u.date) + ' ' + ddmm(u.date) : '');
-  $('#trener').innerHTML = !all.length
+  // przejście do panelu: tylko na urządzeniu, na którym trener raz zalogował się do panelu (trener.html ustawia tr_dev)
+  let dev = false; try { dev = !!localStorage.getItem('tr_dev'); } catch (e) {}
+  $('#trener').innerHTML = (dev ? '<a class="btn trp" href="trener.html">Panel trenera ›</a>' : '') + (!all.length
     ? emptyCard('note', 'Jeszcze bez komentarzy', 'Tu pojawią się komentarze trenera do Twoich filmów i treningów.')
     : weeks.map((w, i) => {
         const n = w.units.reduce((s, u) => s + u.notes.length, 0), nw = w.units.reduce((s, u) => s + u.notes.filter(isNew).length, 0);
         return `<details class="card cw ${i ? '' : 'first'}" ${!i || nw ? 'open' : ''}><summary><span><span class="cn">${esc(weekLabel(+w.week || w.week))}</span>
           <span class="sub">${range(w)}${range(w) ? ' · ' : ''}${n} ${n === 1 ? 'komentarz' : n < 5 ? 'komentarze' : 'komentarzy'}${nw ? ' · ' + nw + ' ' + (nw === 1 ? 'nowy' : 'nowe') : ''}</span></span></summary>
           ${w.units.map(u => `<div class="cw-u">${unitHead(w, u)}</div>${cnList(u.notes, isNew, false)}`).join('')}</details>`;
-      }).join('') + '<p class="cn-s" style="margin-top:12px">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>';
+      }).join('') + '<p class="cn-s" style="margin-top:12px">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>');
   cnMark(all.filter(n => seen.indexOf(n.key) < 0).map(n => n.key));
 }
 /* ---------- własny trening klienta: składanie z ćwiczeń z bazy, zapis do Planu jako W1, W2… ---------- */

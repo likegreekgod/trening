@@ -2,6 +2,13 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-17 · Przełącznik aplikacja ↔ panel trenera (v54)
+
+- Damian trenuje w aplikacji jak klient i prowadzi klientów w panelu, na tym samym telefonie. Chce przechodzić jednym dotknięciem.
+- W aplikacji przycisk „Panel trenera” na ekranie Trener, tylko na urządzeniu, na którym ktoś raz zalogował się do panelu (panel zapisuje `tr_dev` w pamięci przeglądarki). W panelu „Mój trening ›” otwiera aplikację z kluczem zapamiętanym w tej przeglądarce.
+- Bez nowej kolumny w Klientach i bez zmiany w Apps Script: do panelu wpuszcza tylko adres trenera, więc klient nie ma jak dostać tej flagi. Gdyby ktoś ją sobie ustawił, zobaczy tylko ekran logowania panelu.
+- iPhone: aplikacja dodana do ekranu głównego ma osobną pamięć, więc przycisk pojawi się w niej dopiero po zalogowaniu do panelu z poziomu tej aplikacji (niesprawdzone).
+
 ## 2026-11-17 · Marka „Siła z Ruchu” i animacja otwarcia (v53)
 
 - Damian zmienia markę na „Siła z Ruchu” (aplikacja, Instagram). Nowa nazwa jest tam, gdzie widzi ją klient: pod ikoną na ekranie głównym i w oknie instalacji (`manifest.json`: `name`, `short_name`; 12 znaków, tyle mieści się pod ikoną), `apple-mobile-web-app-title` (iPhone), karta przeglądarki („Siła z Ruchu – imię”), nagłówek przed wczytaniem planu i na ekranie wklejania linku.
@@ -15,7 +22,7 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Technika: bez biblioteki Motion (aplikacja działa offline, bez CDN): SVG, `requestAnimationFrame` dla toru i animacje przeglądarki (Web Animations API) dla napisu. Kolory zasłony stałe w obu motywach (`--intro-*`), tło takie jak ekran startowy z manifestu, więc przejście z ekranu startowego Androida jest w tym samym kolorze.
 - Szkice i nagrania wariantów są w plikach projektu (`marka-sila-z-ruchu/`), poza repozytorium.
 
-## 2026-11-17 · Panel trenera (plan, PR 1–2 na gałęzi)
+## 2026-11-17 · Panel trenera (plan, PR 1–2 scalone w #76)
 
 - Damian chce jednego miejsca do kontroli klientów, treningów i postępów, dostępnego zewsząd, z pomocą Claude API. Plan i szkice zaakceptowane, szczegóły i stan w `docs/plan-panel.md`.
 - Miejsce: `web/trener.html` na GitHub Pages + akcje trenera w Apps Script (wariant A). Odrzucone: osobny serwer (koszt i utrzymanie), panel w arkuszu (słaby na komputerze poza Arkuszami, brak filmów w jednym widoku).
