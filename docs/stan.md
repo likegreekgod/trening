@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, `main` = v49 (PR #72 scalony); v50 (poprawki po próbie na telefonie) na gałęzi `claude/project-thread-mlzyqf`, czeka na akceptację szkicu i zgodę na PR.
+Stan na 2026-11-17, `main` = v49 (PR #72 scalony); v50 (poprawki po próbie na telefonie) w PR #73, czeka na scalenie.
 
 ## Jak pracujemy
 
@@ -50,7 +50,7 @@ Stan na 2026-11-17, `main` = v49 (PR #72 scalony); v50 (poprawki po próbie na t
 ## Czeka na Damiana
 
 - Scalenie PR #72 (v49 + `apps-script/`, plan v4 PR 9: raport po bloku, notatka do jednostki). Po scaleniu: w zakładce Bloki kolumna `dla_klienta` pojawi się przy najbliższym przeliczeniu podsumowania, a w Planie kolumna `uwagi_jedn` przy najbliższym imporcie planu; dopisać oba pola do SKILL.md skilla trenera i przebudować ZIP.
-- Akceptacja szkicu „Wyczyść trening” i zgoda na PR v50 (rekord bez RPE, licznik podpowiedzi, reset); potem próba rekordu na telefonie.
+- Scalenie PR #73 (v50: rekord bez RPE, licznik podpowiedzi, „Wyczyść trening”), potem próba rekordu i resetu na telefonie.
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
 
