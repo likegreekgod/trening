@@ -833,3 +833,59 @@ test('doGet: stary link dostaje zwykły tekst (bez strony HtmlService, więc bez
   assert.equal(C.oldLinkText_(''), 'Ta wersja aplikacji jest wyłączona. Używaj nowego linku od trenera.');
   assert.equal(C.oldLinkText_('javascript:x'), 'Ta wersja aplikacji jest wyłączona. Używaj nowego linku od trenera.');
 });
+
+// --- panel trenera: szkic komentarza do sesji (Claude API) ---
+function szkicData() {
+  const plan = [], logs = [], sessions = [];
+  [10, 11, 12].forEach((w, i) => {
+    const date = ['2026-11-03', '2026-11-10', '2026-11-17'][i];
+    plan.push({ week: w, day: 'T1', title: 'Nogi', date, order: 1, name: 'Przysiad tylny', prio: 'A', sets: 3, reps: '5', kg: 80 + i * 2, pct: null, rpe: 8, note: '', block: 'B2', own: false, unote: '' });
+    plan.push({ week: w, day: 'T1', title: 'Nogi', date, order: 2, name: 'Wiosłowanie hantlą', prio: 'B', sets: 3, reps: '8/str', kg: 20, pct: null, rpe: '', note: '', block: 'B2', own: false, unote: '' });
+    for (let s = 1; s <= 3; s++) logs.push({ tydzien: w, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Przysiad tylny', seria: String(s), kg: 80 + i * 2, powt: 5, rpe: 7 + s * 0.5, wykonane: 'TAK',
+      typ: w === 11 && s === 3 ? 'FAIL' : '', uwagi: w === 12 ? 'Ostatnie powtórzenie wolne' : '', zamiana: '', ocena: '', film_link: 'https://drive.google.com/file/d/tajne/view' });
+    logs.push({ tydzien: w, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Przysiad tylny', seria: 'R1', kg: 40, powt: 8, rpe: '', wykonane: 'TAK', typ: '', uwagi: '', zamiana: '', ocena: '' });
+    if (w === 12) logs.push({ tydzien: w, jednostka: 'T1', nr_cw: 2, cwiczenie: 'Wiosłowanie hantlą', seria: '0', kg: '', powt: '', rpe: '', wykonane: '', typ: 'SKIP', uwagi: 'brak czasu', zamiana: '', ocena: '' });
+    sessions.push({ tydzien: w, jednostka: 'T1', data: date, start: date + 'T16:00:00.000Z', czas_min: 55, samopoczucie: 4, rpe_sesji: w === 12 ? 8 : 7,
+      bol: w === 12 ? 'kolano:5' : '', bol_max: w === 12 ? 5 : 0, uwagi: w === 12 ? 'Kolano trochę ćmi' : '', komentarz_trenera: w === 10 ? 'Równe serie, tak trzymaj.' : '' });
+  });
+  plan.push({ week: 12, day: 'T2', title: 'Góra', date: '2026-11-19', order: 1, name: 'Wyciskanie na ławce', prio: 'A', sets: 3, reps: '5', kg: 47.5, rpe: 8, block: 'B2', own: false });
+  return { cfg: { name: 'Ania Testowa', simple: false, scale: 'RPE' }, plan, logs, sessions, readiness: [{ data: '2026-11-17', werdykt: 'Uwaga', powody: 'CMJ −6%' }] };
+}
+test('trSzkicCtx_: dane jednostki do szkicu AI (bez imienia i linków), poprzednie jednostki, następna, styl trenera', () => {
+  const t = C.trSzkicCtx_(szkicData(), 12, 'T1');
+  assert.doesNotMatch(t, /Ania|drive\.google|tajne/);                          // bez imienia i linków do filmów
+  assert.match(t, /tydzień 12, T1 „Nogi”, blok B2, trening 2026-11-17/);
+  assert.match(t, /Przysiad tylny \(A\) · plan 3×5 84 kg, RPE do 8 · zrobione: 84 kg×5 @7,5; 84 kg×5 @8; 84 kg×5 @8,5 · komentarz klienta: „Ostatnie powtórzenie wolne”/);
+  assert.doesNotMatch(t, /40 kg×8/);                                            // rozgrzewka pominięta
+  assert.match(t, /Wiosłowanie hantlą \(B\) · plan 3×8\/str 20 kg · pominięte \(brak czasu\)/);
+  assert.match(t, /55 min, RPE sesji 8\/10, samopoczucie 4\/5, ból: kolano 5\/10/);
+  assert.match(t, /Uwagi klienta do sesji: „Kolano trochę ćmi”/);
+  assert.match(t, /Dyspozycja tego dnia: Uwaga \(CMJ −6%\)/);
+  assert.match(t, /- tydzień 11 \(2026-11-10\), RPE sesji 7: Przysiad tylny: 82 kg×5 @7,5, 82 kg×5 @8, 82 kg×5 @8,5 nieudana/);
+  assert.ok(t.indexOf('tydzień 11') < t.indexOf('tydzień 10 ('), 'od najnowszej');
+  assert.match(t, /Następna jednostka: tydzień 12, T2 „Góra”, 2026-11-19: Wyciskanie na ławce 3×5 47,5 kg/);
+  assert.match(t, /Wcześniejsze komentarze trenera.*\n- „Równe serie, tak trzymaj\.”/);
+  assert.equal(C.trSzkicCtx_(szkicData(), 12, 'T2'), null);                     // jednostka bez sesji
+  const simple = szkicData(); simple.cfg.simple = true;
+  assert.match(C.trSzkicCtx_(simple, 12, 'T1'), /tryb PROSTY/);
+});
+test('aiReq_, aiCost_, aiDay_: zapytanie do Claude API, koszt, dzienny limit', () => {
+  const r = C.aiReq_('KONTEKST', {});
+  assert.equal(r.model, 'claude-opus-5-5');
+  assert.equal(r.fallbacks, 'default');
+  assert.equal(r.output_config.effort, 'low');
+  assert.equal(r.temperature, undefined);
+  assert.match(r.messages[0].content, /KONTEKST[\s\S]*Napisz szkic/);
+  assert.match(r.system, /po polsku|Po polsku/);
+  const t = C.aiReq_('KONTEKST', { tweak: 'krocej', draft: 'Stary szkic.' });
+  assert.match(t.messages[0].content, /Poprzedni szkic komentarza:\nStary szkic\.\n\nPopraw szkic: Skróć/);
+  assert.match(C.aiReq_('K', { tweak: 'zle', draft: 'x' }).messages[0].content, /Napisz szkic/);  // nieznana poprawka = zwykły szkic
+  assert.equal(C.aiCost_('claude-opus-5-5', { input_tokens: 3000, output_tokens: 500 }), 0.022);
+  assert.equal(C.aiCost_('nieznany', { input_tokens: 1e6, output_tokens: 0 }), 4);
+  assert.equal(C.aiCost_('claude-opus-5', { input_tokens: 0, output_tokens: 1000, cache_read_input_tokens: 1e6 }), 0.525);
+  assert.deepEqual(JSON.parse(JSON.stringify(C.aiDay_('', '2026-11-17', 30))), { n: 0, ok: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(C.aiDay_('{"d":"2026-11-17","n":30}', '2026-11-17', 30))), { n: 30, ok: false });
+  assert.deepEqual(JSON.parse(JSON.stringify(C.aiDay_('{"d":"2026-11-16","n":30}', '2026-11-17', 30))), { n: 0, ok: true });
+  assert.equal(C.aiDay_('zepsute', '2026-11-17', 30).ok, true);
+  assert.ok(C.TR_FNS.trKomentarz && C.TR_FNS.trSzkic && !C.API_FNS.trSzkic);
+});

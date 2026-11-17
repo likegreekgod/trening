@@ -30,6 +30,7 @@ const PULPIT = {
     { id: 'bartek', name: 'Bartek', at: addDays(TODAY, -6), week: 4, day: 'T1', order: 1, ex: 'Rwanie', set: 2, kg: 60, reps: 1, rpe: '', ocena: 'S', typ: '', note: '', file: 'film4', link: 'https://drive.google.com/file/d/film4/view', kom: 'Dobra pozycja startowa' }
   ]
 };
+const SZKIC = 'Przysiad 84 kg na 3×5 to Twój najlepszy wynik w tym bloku, a ostatnia seria była ciężka, ale czysta. W czwartek zostajemy przy tym ciężarze.\n\nKolano 5/10 traktuję poważnie: dłuższa rozgrzewka, a jeśli ból wróci powyżej 3/10, zejdź o 10% i napisz mi.';
 function klient() {
   const plan = [], logs = [], sessions = [], readiness = [], summary = [];
   WEEKS.forEach((mon, i) => {
@@ -85,6 +86,10 @@ async function page(calls, opt = {}) {
     else if (st.authFail > 0) { st.authFail--; out = { ok: false, error: 'Logowanie: bilet wygasł' }; }
     else if (b.fn === 'trPulpit' || b.fn === 'trPrzelicz') out = { ok: true, result: Object.assign({}, PULPIT, b.fn === 'trPrzelicz' ? { at: TODAY + 'T09:30:00.000Z' } : {}) };
     else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: klient() } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
+    else if (b.fn === 'trKomentarz') out = { ok: true, result: { text: String(b.args[3]).trim(), at: TODAY + 'T19:52:00.000Z' } };
+    else if (b.fn === 'trSzkic') { st.ai = (st.ai || 0) + 1; await new Promise(res => setTimeout(res, 150));
+      out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: w arkuszu wybierz Trening → Ustaw klucz Claude API (klucz z console.anthropic.com).' }
+        : { ok: true, result: { text: (b.args[3] && b.args[3].tweak === 'krocej' ? 'Krótko: ' : '') + SZKIC, cost: 0.024, n: st.ai, limit: 30, model: 'claude-opus-5-5' } }; }
     else out = { ok: false, error: 'Nieznana funkcja: ' + b.fn };
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
   });
@@ -238,6 +243,58 @@ test('panel na telefonie: pasek u góry nie rozciąga się przy krótkiej stroni
   assert.ok(await p.isVisible('#logout'), 'wylogowanie dostępne na telefonie');
   assert.equal((await p.textContent('#main')).match(/Brak filmów/g).length, 1);
   await shot(p, 'trener-filmy-puste-telefon-ciemny.png');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('panel: komentarz do sesji ze szkicem AI (szkic, poprawka „Krócej”, zapis, edycja) i bez klucza AI', async () => {
+  for (const scheme of ['light', 'dark']) {
+    const calls = [];
+    const { ctx, p } = await page(calls, { loggedIn: true, scheme });
+    await p.goto(base + 'trener.html#k/ania/sesje'); await p.waitForSelector('details.ses[open] .kedit textarea');
+    const box = 'details.ses[open] .kedit';
+    assert.equal(await p.$(box + ' .aiflag'), null);
+    await p.click(box + ' button.ai');
+    await p.waitForSelector(box + ' .aiflag');
+    const sz = calls.find(c => c.fn === 'trSzkic');
+    assert.deepEqual(sz.args.slice(0, 3), ['ania', 12, 'T1']);                 // ostatnia sesja: tydz. 12, T1
+    assert.deepEqual(sz.args[3], { tweak: '', draft: '' });
+    assert.match(await p.inputValue(box + ' textarea'), /^Przysiad 84 kg/);
+    assert.match(await p.textContent(box), /koszt szkicu 0,024 \$ · dziś 1 z 30/);
+    assert.equal(calls.filter(c => c.fn === 'trKomentarz').length, 0);          // szkic nie trafia do klienta bez „Zapisz”
+    if (scheme === 'light') await shot(p, 'trener-szkic-ai-jasny.png'); else await shot(p, 'trener-szkic-ai-ciemny.png');
+    // ręczna poprawka zostaje w szkicu wysyłanym do „Krócej”
+    await p.fill(box + ' textarea', 'Mój poprawiony szkic.');
+    await p.click(box + ' .chip[data-t="krocej"]');
+    await p.waitForFunction(b => /^Krótko:/.test(document.querySelector(b + ' textarea').value), box);
+    assert.deepEqual(calls.filter(c => c.fn === 'trSzkic')[1].args[3], { tweak: 'krocej', draft: 'Mój poprawiony szkic.' });
+    await p.fill(box + ' textarea', '  Dobra sesja, kolano obserwujemy.  ');
+    await p.click(box + ' button[data-k="save"]');
+    await p.waitForSelector(box + ' .saved');
+    assert.deepEqual(calls.find(c => c.fn === 'trKomentarz').args, ['ania', 12, 'T1', '  Dobra sesja, kolano obserwujemy.  ']);
+    assert.equal(await p.textContent(box + ' .kom'), 'Dobra sesja, kolano obserwujemy.');
+    if (scheme === 'light') await shot(p, 'trener-komentarz-zapisany.png');
+    await p.click(box + ' button[data-k="edit"]');
+    assert.equal(await p.inputValue(box + ' textarea'), 'Dobra sesja, kolano obserwujemy.');
+    await p.click(box + ' button[data-k="cancel"]');
+    await p.waitForSelector(box + ' .kom');
+    // sesja z komentarzem w danych: od razu tekst i „Edytuj”
+    await p.click('details.ses:has-text("tydz. 10 · T1") summary');
+    assert.match(await p.textContent('details.ses:has-text("tydz. 10 · T1") .kedit .kom'), /Bardzo równe serie/);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+  // telefon i brak klucza Claude API: czytelny komunikat w polu, bez zgubienia tekstu
+  const { ctx, p } = await page([], { loggedIn: true, ai: false, vp: { width: 390, height: 844 }, scheme: 'dark' });
+  await p.goto(base + 'trener.html#k/ania/sesje'); await p.waitForSelector('details.ses[open] .kedit textarea');
+  await p.fill('details.ses[open] .kedit textarea', 'Mój tekst');
+  await p.click('details.ses[open] .kedit button.ai');
+  await p.waitForSelector('details.ses[open] .kedit .err');
+  assert.match(await p.textContent('details.ses[open] .kedit .err'), /Ustaw klucz Claude API/);
+  assert.equal(await p.inputValue('details.ses[open] .kedit textarea'), 'Mój tekst');
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+  await p.$eval('details.ses[open] .kedit', e => e.scrollIntoView());
+  await p.screenshot({ path: path.join(SCREENS, 'trener-szkic-ai-telefon-ciemny.png') });
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });

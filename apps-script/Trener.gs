@@ -5,9 +5,10 @@
  * z adresem trenera we właściwościach skryptu (TRENER_EMAIL, kilka po przecinku) i identyfikatorem
  * klienta OAuth (TRENER_CLIENT_ID). Obie wartości ustawia menu „Trening → Ustaw panel trenera”;
  * nie trafiają do repozytorium ani do arkusza. Bez nich panel odpowiada „nie jest skonfigurowany”.
- * PR 1 panelu: tylko odczyt (trPulpit, trKlient, trPrzelicz). Zapisy trenera i Claude API w kolejnych PR-ach.
+ * Odczyt: trPulpit, trKlient, trPrzelicz. Zapis: trKomentarz (komentarz do sesji). Claude API: trSzkic (szkic komentarza,
+ * klucz CLAUDE_API_KEY we właściwościach skryptu, dzienny limit, każde wywołanie w zakładce „AI”). AI tylko szkicuje, zapisuje trener.
  */
-const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz };
+const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -142,9 +143,7 @@ function trPulpit_(t, o) {
 /** Karta klienta: to samo co getData klienta (bez klucza), plus jego Bloki z wnioskami i tygodnie z Podsumowania. */
 function trKlient(id) {
   id = String(id || '').trim().toLowerCase();
-  const v = SpreadsheetApp.getActive().getSheetByName('Klienci').getDataRange().getValues();
-  const row = v.slice(1).find(r => String(r[1]).trim().toLowerCase() === id);
-  if (!id || !row) throw new Error('Nie ma klienta „' + id + '”.');
+  const row = trRow_(id);
   const c = clientOf_(row), d = clientData_(c, Date.now()), lc = x => String(x === undefined || x === null ? '' : x).toLowerCase();
   const tz = Session.getScriptTimeZone(), day = x => x instanceof Date ? Utilities.formatDate(x, tz, 'yyyy-MM-dd') : String(x || '').slice(0, 10);
   d.cfg.id = c.id;
@@ -154,4 +153,215 @@ function trKlient(id) {
   d.summary = tableOf_('Podsumowanie').filter(s => lc(s.klient) === c.id).map(s => ({ week: day(s.tydzien_od), srpe: s.sRPE_TL_AU, acwr: s.ACWR,
     ton: s.tonaz_kg, done: s['wykonanie_%'], hard: s.serie_twarde, status: String(s.status || ''), why: String(s.powody || '') }));
   return d;
+}
+
+/** Wiersz klienta z zakładki Klienci po klient_id (małe litery). */
+function trRow_(id) {
+  const v = SpreadsheetApp.getActive().getSheetByName('Klienci').getDataRange().getValues();
+  const row = v.slice(1).find(r => String(r[1]).trim().toLowerCase() === id);
+  if (!id || !row) throw new Error('Nie ma klienta „' + id + '”.');
+  return row;
+}
+
+/* ---------- zapis: komentarz trenera do sesji (Sesje.komentarz_trenera; klient widzi go w zakładce Trener) ---------- */
+
+const TR_KOM_MAX = 3000;
+
+/** Zapisuje (albo czyści, gdy tekst pusty) komentarz trenera do zakończonej jednostki klienta. */
+function trKomentarz(id, week, day, text) {
+  id = String(id || '').trim().toLowerCase();
+  text = String(text === undefined || text === null ? '' : text).replace(/\r\n?/g, '\n').trim();
+  if (text.length > TR_KOM_MAX) throw new Error('Komentarz jest za długi (najwyżej ' + TR_KOM_MAX + ' znaków).');
+  trRow_(id);
+  const sid = [id, Number(week), String(day)].join('|');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Sesje', SES_HEADERS);
+    const col = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].indexOf('komentarz_trenera') + 1;
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(sid).matchEntireCell(true).findNext();
+    if (!hit || col < 1) throw new Error('Nie ma tej jednostki w zakładce Sesje (' + sid + '). Komentarz da się dodać po „Zakończ i zapisz” u klienta.');
+    sh.getRange(hit.getRow(), col).setValue(text);
+  } finally { lock.releaseLock(); }
+  return { text: text, at: new Date().toISOString() };
+}
+
+/* ---------- Claude API: szkic komentarza do sesji ----------
+ * Klucz: właściwość skryptu CLAUDE_API_KEY (menu „Trening → Ustaw klucz Claude API” albo edytor Apps Script). Nigdy w repo ani w arkuszu.
+ * Do AI idą dane jednostki bez imienia i klucza klienta (trSzkicCtx_). Limit dzienny AI_LIMIT (właściwość AI_LIMIT nadpisuje),
+ * licznik dnia we właściwości AI_DZIEN, każde wywołanie (tokeny, koszt w USD) w zakładce „AI”.
+ */
+const AI_MODEL = 'claude-opus-5-5';
+const AI_LIMIT = 30;
+const AI_CENY = { 'claude-opus-5-5': [4, 20], 'claude-opus-5': [5, 25], 'claude-opus-4-8': [5, 25], 'claude-sonnet-5-5': [2, 10] };   // USD za 1 mln tokenów: wejście, wyjście
+const AI_HEADERS = ['czas', 'akcja', 'klient', 'tydzien', 'jednostka', 'model', 'tokeny_we', 'tokeny_wy', 'koszt_usd'];
+const AI_POPRAW = {
+  krocej: 'Skróć szkic do 2–3 zdań, zostaw najważniejsze.',
+  cieplej: 'Napisz to cieplej i bardziej motywująco, bez lukru i bez wykrzykników w każdym zdaniu.',
+  technicznie: 'Napisz bardziej technicznie: konkretne liczby, technika, RPE i co zmienić w następnej jednostce.',
+  inny: 'Napisz zupełnie inną wersję, z innym początkiem i innym akcentem.'
+};
+const AI_SYSTEM = [
+  'Jesteś asystentem trenera personalnego (trening siłowy, sylwetka, podnoszenie ciężarów). Piszesz szkic komentarza trenera do jednej zakończonej jednostki treningowej jego podopiecznego.',
+  'Trener przeczyta szkic, poprawi go i dopiero wtedy wyśle klientowi do aplikacji.',
+  'Zasady:',
+  '- Po polsku, w drugiej osobie, jak trener do swojego podopiecznego. 2–5 zdań, bez nagłówków, list, emoji i podpisu.',
+  '- Zacznij od konkretu z tej jednostki (ciężar, serie, porównanie z poprzednimi takimi samymi jednostkami). Bez ogólników typu „dobra robota”.',
+  '- Jedna rzecz do uwagi albo do poprawy na następną jednostkę, jeśli dane coś takiego pokazują (nieudana seria, wysokie RPE, pominięte ćwiczenie, uwaga klienta).',
+  '- Ból: przy bólu powyżej 3/10 albo powtarzającym się bólu napisz spokojnie, że trener chce o tym wiedzieć, i zaproponuj ostrożność (lżej, bez bólu). Nie stawiaj diagnoz i nie lecz.',
+  '- Odpowiedz na uwagi i komentarze klienta, jeśli są.',
+  '- Używaj tylko liczb z danych. Niczego nie dopisuj od siebie. Jeśli danych jest mało, napisz krócej.',
+  '- Jeśli są wcześniejsze komentarze trenera, pisz w ich stylu (długość, ton, słownictwo).',
+  '- Zwróć wyłącznie treść komentarza.'
+].join('\n');
+
+/** Czy dzisiejszy limit pozwala na kolejny szkic. raw: zawartość AI_DZIEN ({d, n}) → {n: zużyte dziś, ok}. */
+function aiDay_(raw, today, limit) {
+  let st = {}; try { st = JSON.parse(raw || '{}') || {}; } catch (e) { st = {}; }
+  const n = st.d === today ? Number(st.n) || 0 : 0;
+  return { n: n, ok: n < limit };
+}
+
+/** Koszt wywołania w USD z usage odpowiedzi (cache: zapis ×1,25, odczyt ×0,1 ceny wejścia). */
+function aiCost_(model, u) {
+  const c = AI_CENY[model] || AI_CENY[String(model || '').replace(/-\d{8}$/, '')] || AI_CENY[AI_MODEL];
+  u = u || {};
+  const inp = (Number(u.input_tokens) || 0) + 1.25 * (Number(u.cache_creation_input_tokens) || 0) + 0.1 * (Number(u.cache_read_input_tokens) || 0);
+  return Math.round((inp * c[0] + (Number(u.output_tokens) || 0) * c[1]) / 1e6 * 10000) / 10000;
+}
+
+/** Treść zapytania do Messages API (czysta). opt: {tweak: krocej|cieplej|technicznie|inny, draft: poprzedni szkic}. */
+function aiReq_(ctx, opt) {
+  opt = opt || {};
+  let msg = 'Dane jednostki:\n\n' + ctx;
+  const tw = AI_POPRAW[opt.tweak];
+  if (tw) msg += (String(opt.draft || '').trim() ? '\n\nPoprzedni szkic komentarza:\n' + String(opt.draft).trim().slice(0, TR_KOM_MAX) : '') + '\n\nPopraw szkic: ' + tw;
+  else msg += '\n\nNapisz szkic komentarza trenera do tej jednostki.';
+  return { model: AI_MODEL, max_tokens: 4000, system: AI_SYSTEM, messages: [{ role: 'user', content: msg }],
+    output_config: { effort: 'low' }, fallbacks: 'default' };
+}
+
+/**
+ * Dane jednej jednostki do szkicu (czysta). d: wynik clientData_; week, day → tekst albo null (brak sesji).
+ * Bez imienia, klucza i linków do filmów: tryb, jednostka, plan i wykonanie, sesja, ból, dyspozycja dnia,
+ * 3 poprzednie takie same jednostki, następna jednostka, 5 ostatnich komentarzy trenera do tej osoby.
+ */
+function trSzkicCtx_(d, week, day) {
+  const W = Number(week), D = String(day), str = v => v === undefined || v === null ? '' : String(v).trim();
+  const ses = (d.sessions || []).find(s => Number(s.tydzien) === W && String(s.jednostka) === D);
+  if (!ses) return null;
+  const dayOf = s => /T/.test(str(s.start)) ? str(s.start).slice(0, 10) : str(s.data).slice(0, 10);
+  const numTxt = v => str(v).replace('.', ',');
+  const OC = { L: 'łatwo', S: 'średnio', W: 'walka', X: 'spalone' };
+  const setTxt = l => {
+    const kg = str(l.kg), rp = str(l.rpe), oc = OC[str(l.ocena).toUpperCase()];
+    return (/^D/i.test(str(l.seria)) || /DROP/.test(str(l.typ)) ? 'drop ' : '') + (kg && kg !== '0' ? numTxt(kg) + (isFinite(Number(kg.replace(',', '.'))) ? ' kg' : '') + '×' : '') + str(l.powt) +
+      (oc ? ' (' + oc + ')' : rp ? ' @' + numTxt(rp) : '') + (/FAIL/.test(str(l.typ)) ? ' nieudana' : '');
+  };
+  const planOf = w => (d.plan || []).filter(r => r.week === w && r.day === D).sort((a, b) => a.order - b.order);
+  const exOf = (w, full) => {
+    const P = {}; planOf(w).forEach(r => { P[r.order] = r; });
+    const by = {};
+    (d.logs || []).filter(l => Number(l.tydzien) === w && String(l.jednostka) === D).forEach(l => {
+      const k = Number(l.nr_cw); (by[k] = by[k] || []).push(l); });
+    const keys = Object.keys(P).map(Number).concat(Object.keys(by).map(Number)).filter((k, i, a) => a.indexOf(k) === i).sort((a, b) => a - b);
+    return keys.map(k => {
+      const r = P[k] || {}, ls = (by[k] || []).sort((a, b) => String(a.seria).localeCompare(String(b.seria), 'pl', { numeric: true }));
+      const skip = ls.find(l => String(l.seria) === '0' || /SKIP/.test(str(l.typ)));
+      const work = ls.filter(l => str(l.wykonane) === 'TAK' && !/^R/i.test(str(l.seria)) && String(l.seria) !== '0');
+      const swap = ls.map(l => str(l.zamiana)).filter(Boolean)[0] || '', note = ls.map(l => str(l.uwagi)).filter(Boolean)[0] || '';
+      const name = swap ? swap.split('|')[0].trim() : str(r.name) || str((ls[0] || {}).cwiczenie);
+      if (!full) return work.length ? name + ': ' + work.map(setTxt).join(', ') : '';
+      const plan = r.name ? 'plan ' + r.sets + '×' + str(r.reps) + (r.kg !== '' && r.kg !== null && r.kg !== undefined && str(r.kg) !== '' ? ' ' + numTxt(r.kg) + (typeof r.kg === 'number' ? ' kg' : '') : '') +
+        (r.pct ? ' (' + Math.round(r.pct * 100) + '% max)' : '') + (r.rpe !== '' && r.rpe !== null && r.rpe !== undefined && str(r.rpe) !== '' ? ', RPE do ' + numTxt(r.rpe) : '') : 'poza planem';
+      return '- ' + name + (r.prio ? ' (' + r.prio + ')' : '') + ' · ' + plan + ' · ' +
+        (work.length ? 'zrobione: ' + work.map(setTxt).join('; ') : skip ? 'pominięte' : 'brak zapisanych serii') +
+        (skip && work.length ? ' · skrócone' : '') + (skip && str(skip.uwagi) ? ' (' + str(skip.uwagi) + ')' : '') +
+        (swap ? ' · zamiana: ' + swap : '') + (note && !(skip && note === str(skip.uwagi)) ? ' · komentarz klienta: „' + note + '”' : '') +
+        (str(r.note) ? ' · uwagi w planie: ' + str(r.note) : '');
+    }).filter(Boolean);
+  };
+  const p0 = planOf(W)[0] || {}, sd = dayOf(ses);
+  const pain = str(ses.bol) ? str(ses.bol).split(';').map(x => x.split(':')).filter(x => str(x[0]) || str(x[1])).map(x => (str(x[0]) || 'bez miejsca') + ' ' + numTxt(x[1]) + '/10').join(', ')
+    : Number(ses.bol_max) > 0 ? numTxt(ses.bol_max) + '/10' : '';
+  const out = [];
+  out.push('Osoba: tryb ' + (d.cfg && d.cfg.simple ? 'PROSTY (zapisuje wysiłek słowami: lekko/średnio/ciężko/max)' : 'PRO') + ', skala ' + (d.cfg && d.cfg.scale || 'RPE') + (d.cfg && d.cfg.masters ? ', masters' : '') + '.');
+  out.push('Jednostka: tydzień ' + W + ', ' + D + (p0.title ? ' „' + p0.title + '”' : '') + (p0.block ? ', blok ' + p0.block : '') + (sd ? ', trening ' + sd : '') + (p0.own ? ' (własny trening klienta)' : '') + '.');
+  if (p0.unote) out.push('Notatka trenera do jednostki: ' + p0.unote);
+  out.push('', 'Plan i wykonanie (seria: kg×powtórzenia @RPE):');
+  exOf(W, true).forEach(x => out.push(x));
+  out.push('', 'Sesja: ' + [str(ses.czas_min) ? str(ses.czas_min) + ' min' : '', str(ses.rpe_sesji) !== '' ? 'RPE sesji ' + numTxt(ses.rpe_sesji) + '/10' : '',
+    Number(ses.samopoczucie) > 0 ? 'samopoczucie ' + ses.samopoczucie + '/5' : '', pain ? 'ból: ' + pain : 'bez bólu'].filter(Boolean).join(', ') + '.');
+  if (str(ses.uwagi)) out.push('Uwagi klienta do sesji: „' + str(ses.uwagi) + '”');
+  const rd = (d.readiness || []).find(r => str(r.data).slice(0, 10) === sd);
+  if (rd && str(rd.werdykt)) out.push('Dyspozycja tego dnia: ' + str(rd.werdykt) + (str(rd.powody) ? ' (' + str(rd.powody) + ')' : '') + '.');
+  const prev = (d.sessions || []).filter(s => String(s.jednostka) === D && Number(s.tydzien) < W).sort((a, b) => Number(b.tydzien) - Number(a.tydzien)).slice(0, 3);
+  if (prev.length) {
+    out.push('', 'Poprzednie jednostki ' + D + ' (od najnowszej):');
+    prev.forEach(s => { const ex = exOf(Number(s.tydzien), false).filter(Boolean);
+      out.push('- tydzień ' + s.tydzien + (dayOf(s) ? ' (' + dayOf(s) + ')' : '') + (str(s.rpe_sesji) !== '' ? ', RPE sesji ' + numTxt(s.rpe_sesji) : '') + ': ' + (ex.join('; ') || 'brak serii')); });
+  }
+  const done = {}; (d.sessions || []).forEach(s => { done[Number(s.tydzien) + '|' + s.jednostka] = 1; });
+  const next = (d.plan || []).filter(r => !r.own && !done[r.week + '|' + r.day] && str(r.date) && (!sd || str(r.date) > sd))
+    .sort((a, b) => str(a.date).localeCompare(str(b.date)) || a.order - b.order)[0];
+  if (next) {
+    const nx = (d.plan || []).filter(r => r.week === next.week && r.day === next.day).sort((a, b) => a.order - b.order);
+    out.push('', 'Następna jednostka: tydzień ' + next.week + ', ' + next.day + (next.title ? ' „' + next.title + '”' : '') + ', ' + next.date + ': ' +
+      nx.map(r => r.name + ' ' + r.sets + '×' + str(r.reps) + (str(r.kg) ? ' ' + numTxt(r.kg) + (typeof r.kg === 'number' ? ' kg' : '') : '')).join(', ') + '.');
+  }
+  const kom = (d.sessions || []).filter(s => str(s.komentarz_trenera) && !(Number(s.tydzien) === W && String(s.jednostka) === D))
+    .sort((a, b) => dayOf(b).localeCompare(dayOf(a)) || Number(b.tydzien) - Number(a.tydzien)).slice(0, 5);
+  if (kom.length) { out.push('', 'Wcześniejsze komentarze trenera do tej osoby (styl):'); kom.forEach(s => out.push('- „' + str(s.komentarz_trenera) + '”')); }
+  return out.join('\n');
+}
+
+/** Szkic komentarza do sesji przez Claude API. → {text, cost (USD), n (szkice dziś), limit, model} */
+function trSzkic(id, week, day, opt) {
+  id = String(id || '').trim().toLowerCase();
+  const props = PropertiesService.getScriptProperties(), key = String(props.getProperty('CLAUDE_API_KEY') || '').trim();
+  if (!key) throw new Error('Szkic AI nie jest jeszcze włączony: w arkuszu wybierz Trening → Ustaw klucz Claude API (klucz z console.anthropic.com).');
+  const limit = Number(props.getProperty('AI_LIMIT')) || AI_LIMIT, today = today_();
+  if (!aiDay_(props.getProperty('AI_DZIEN'), today, limit).ok) throw new Error('Dzisiejszy limit szkiców AI (' + limit + ') wyczerpany. Jutro znowu.');
+  const row = trRow_(id), d = clientData_(clientOf_(row), Date.now());
+  d.cfg.masters = String(row[8] || '').trim().toUpperCase() === 'TAK';
+  const ctx = trSzkicCtx_(d, week, day);
+  if (!ctx) throw new Error('Nie ma tej jednostki w zakładce Sesje.');
+  const r = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { 'x-api-key': key, 'anthropic-version': '2026-10-21', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+    payload: JSON.stringify(aiReq_(ctx, opt)) });
+  const code = r.getResponseCode();
+  let j = {}; try { j = JSON.parse(r.getContentText()); } catch (e) { j = {}; }
+  if (code !== 200) {
+    const m = String(j.error && j.error.message || r.getContentText()).slice(0, 300);
+    if (code === 401) throw new Error('Klucz Claude API jest nieprawidłowy. Ustaw go ponownie (Trening → Ustaw klucz Claude API).');
+    if (code === 429 || code === 529 || code >= 500) throw new Error('AI jest teraz zajęte, spróbuj za chwilę.');
+    if (/credit|balance/i.test(m)) throw new Error('Brak środków na koncie Claude API (console.anthropic.com → Billing).');
+    throw new Error('AI: ' + m);
+  }
+  if (j.stop_reason === 'refusal') throw new Error('AI nie napisało szkicu do tej sesji. Napisz komentarz sam.');
+  const text = (j.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+  if (!text) throw new Error('AI zwróciło pusty szkic. Spróbuj ponownie.');
+  const cost = aiCost_(j.model || AI_MODEL, j.usage), u = j.usage || {};
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  let n;
+  try {
+    n = aiDay_(props.getProperty('AI_DZIEN'), today, limit).n + 1;
+    props.setProperty('AI_DZIEN', JSON.stringify({ d: today, n: n }));
+    sheet_('AI', AI_HEADERS).appendRow([new Date(), 'szkic komentarza' + (opt && AI_POPRAW[opt.tweak] ? ' · ' + opt.tweak : ''), id, Number(week), String(day),
+      String(j.model || AI_MODEL), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0, cost]);
+  } finally { lock.releaseLock(); }
+  return { text: text, cost: cost, n: n, limit: limit, model: String(j.model || AI_MODEL) };
+}
+
+/** Menu Trening → Ustaw klucz Claude API: klucz we właściwościach skryptu (puste = szkice AI wyłączone). */
+function ustawAI() {
+  const ui = SpreadsheetApp.getUi(), p = PropertiesService.getScriptProperties(), has = !!p.getProperty('CLAUDE_API_KEY');
+  const a = ui.prompt('Klucz Claude API', 'Wklej klucz z console.anthropic.com (zaczyna się od sk-ant-). Puste = szkice AI wyłączone.\n\nTeraz: ' + (has ? 'ustawiony' : 'brak'), ui.ButtonSet.OK_CANCEL);
+  if (a.getSelectedButton() !== ui.Button.OK) return;
+  const k = a.getResponseText().trim();
+  if (!k) { p.deleteProperty('CLAUDE_API_KEY'); alert_('Klucz Claude API', 'Szkice AI wyłączone.'); return; }
+  if (!/^sk-ant-[\w-]{20,}$/.test(k)) { alert_('Klucz Claude API', 'To nie wygląda na klucz Claude API (sk-ant-…). Nic nie zmieniono.'); return; }
+  p.setProperty('CLAUDE_API_KEY', k);
+  alert_('Klucz Claude API', 'Zapisano. W panelu trenera działa teraz „Szkic AI”.');
 }

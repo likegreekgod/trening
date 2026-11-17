@@ -699,6 +699,7 @@ function onOpen() {
     .addItem('Zainstaluj wyzwalacze', 'menuWyzwalacze')
     .addItem('Ustaw adres alertu', 'ustawAlert')
     .addItem('Ustaw panel trenera', 'ustawPanel')
+    .addItem('Ustaw klucz Claude API', 'ustawAI')
     .addToUi();
 }
 

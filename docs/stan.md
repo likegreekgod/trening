@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, `main` = v53 (PR #76 panel trenera PR 1–2 i PR #77 marka „Siła z Ruchu” scalone); poprawka panelu na telefonie i przełącznik aplikacja ↔ panel (v54) na gałęzi `claude/project-thread-taywqw`.
+Stan na 2026-11-17, `main` = v54 (PR #76 panel trenera PR 1–2, PR #77 marka „Siła z Ruchu”, PR #78 panel na telefonie i przełącznik aplikacja ↔ panel scalone); komentarz do sesji ze szkicem AI w panelu (v56) na gałęzi `claude/project-thread-taywqw`.
 
 ## Jak pracujemy
 
@@ -18,8 +18,9 @@ Stan na 2026-11-17, `main` = v53 (PR #76 panel trenera PR 1–2 i PR #77 marka �
 
 ## Ostatnio zrobione
 
-- 17.11 (v54, na gałęzi): przełącznik między aplikacją a panelem: w aplikacji na ekranie Trener przycisk „Panel trenera” tylko na urządzeniu, na którym ktoś raz zalogował się do panelu (`tr_dev` w localStorage, zostaje po wylogowaniu), w panelu „Mój trening ›” otwiera aplikację z kluczem zapamiętanym w tej przeglądarce. Klienci go nie widzą, bo do panelu wpuszcza tylko adres trenera.
-- 17.11 (v54, na gałęzi): panel trenera na telefonie: górny pasek nie rozciąga się na pół ekranu przy krótkiej stronie, „Przelicz teraz” i „Wyloguj” widoczne, pusta lista filmów bez podwójnego komunikatu. Logowanie Damiana działa (projekt Google Cloud „Panel trenera”, właściwości skryptu wpisane).
+- 17.11 (v56 + `apps-script/`, na gałęzi): panel trenera: komentarz do sesji wpisywany w karcie klienta → Sesje (`trKomentarz`, kolumna Sesje `komentarz_trenera`, klient widzi go w zakładce Trener) i „✦ Szkic AI” przez Claude API (`trSzkic`, poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic, limit 30 dziennie, koszt każdego szkicu w zakładce „AI”). AI tylko szkicuje, zapisuje trener.
+- 17.11 (v54, PR #78): przełącznik między aplikacją a panelem: w aplikacji na ekranie Trener przycisk „Panel trenera” tylko na urządzeniu, na którym ktoś raz zalogował się do panelu (`tr_dev` w localStorage, zostaje po wylogowaniu), w panelu „Mój trening ›” otwiera aplikację z kluczem zapamiętanym w tej przeglądarce. Klienci go nie widzą, bo do panelu wpuszcza tylko adres trenera.
+- 17.11 (v54, PR #78): panel trenera na telefonie: górny pasek nie rozciąga się na pół ekranu przy krótkiej stronie, „Przelicz teraz” i „Wyloguj” widoczne, pusta lista filmów bez podwójnego komunikatu. Logowanie Damiana działa (projekt Google Cloud „Panel trenera”, właściwości skryptu wpisane).
 - 17.11 (v53): marka „Siła z Ruchu”: nowa nazwa tam, gdzie widzi ją klient (pod ikoną, w karcie przeglądarki, w nagłówku przed planem), i animacja otwarcia (tor sztangi w rwaniu, linia tańca, napis; 3,3 s, tylko przy pierwszym otwarciu dnia, dotknięcie pomija).
 - 17.11 (v52 + `apps-script/`, scalony PR #76): panel trenera PR 1 i 2 (`docs/plan-panel.md`): logowanie Google, pulpit z klientami i sygnałami, karta klienta, filmy oglądane w panelu, bloki do zamknięcia. Tylko odczyt; zapisy w PR 3.
 - 17.11 (`apps-script/`): bezpieczeństwo: stara wersja aplikacji (link `/exec?k=`) wyłączona, `doGet` zwraca tylko tekst; przegląd repo bez danych klientów.
@@ -57,8 +58,7 @@ Stan na 2026-11-17, `main` = v53 (PR #76 panel trenera PR 1–2 i PR #77 marka �
 ## Czeka na Damiana
 
 - Próba v53 (marka „Siła z Ruchu”) na telefonie: animacja przy pierwszym otwarciu dnia (kolejne otwarcia bez niej, dotknięcie pomija) i nazwa pod ikoną (Android zwykle podmienia sam w ciągu kilku dni, iPhone dopiero po usunięciu ikony i ponownym dodaniu do ekranu głównego).
-- Panel trenera (PR #76 scalony): identyfikator klienta OAuth w Google Cloud i menu „Ustaw panel trenera” (kroki w `docs/plan-panel.md`, „Uruchomienie”).
-- Dopisać `uwagi_jedn` i `dla_klienta` do SKILL.md skilla trenera i przebudować ZIP (PR #72 scalony).
+- Szkic AI (po scaleniu v56): klucz Claude API z console.anthropic.com wpisać przez menu „Trening → Ustaw klucz Claude API” albo w edytorze Apps Script jako właściwość `CLAUDE_API_KEY` (kroki w `docs/plan-panel.md`, „Szkic AI”). Bez klucza panel działa, a przycisk „Szkic AI” pokazuje, co zrobić.
 - Próba v51 („★ Pierwszy wynik”) na telefonie.
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.

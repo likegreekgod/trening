@@ -2,6 +2,13 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-17 · Szkic AI komentarza do sesji (v56)
+
+- Damian zaakceptował szkic wyglądu: pole „Twój komentarz do sesji” pod otwartą sesją w karcie klienta → Sesje, przycisk „✦ Szkic AI”, ramka „Szkic AI. Przeczytaj i popraw”, poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic. Klient widzi komentarz dopiero po „Zapisz” (ta sama kolumna Sesje `komentarz_trenera`, którą aplikacja już pokazuje w zakładce Trener).
+- Zapis komentarza do sesji (z planu PR 3) idzie razem ze szkicem AI (PR 4), bo bez zapisu szkic nie ma dokąd trafić. Komentarze do filmów i notatki bloków: następny PR.
+- Model `claude-opus-5-5` z niskim wysiłkiem (`effort: low`): krótki tekst, koszt ok. 0,02–0,03 USD za szkic. Klucz we właściwości skryptu `CLAUDE_API_KEY`, limit 30 szkiców dziennie (`AI_LIMIT`), każde wywołanie w zakładce „AI”. Damian ma kredyt API (100 USD).
+- Do AI nie idzie imię, klucz klienta ani linki do filmów; idą liczby z jednostki, ból i uwagi klienta. Informacja o AI dla klientów (RODO) ustalona wcześniej.
+
 ## 2026-11-17 · Przełącznik aplikacja ↔ panel trenera (v54)
 
 - Damian trenuje w aplikacji jak klient i prowadzi klientów w panelu, na tym samym telefonie. Chce przechodzić jednym dotknięciem.
