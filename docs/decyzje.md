@@ -2,6 +2,19 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-17 · Marka „Siła z Ruchu” i animacja otwarcia (v53)
+
+- Damian zmienia markę na „Siła z Ruchu” (aplikacja, Instagram). Nowa nazwa jest tam, gdzie widzi ją klient: pod ikoną na ekranie głównym i w oknie instalacji (`manifest.json`: `name`, `short_name`; 12 znaków, tyle mieści się pod ikoną), `apple-mobile-web-app-title` (iPhone), karta przeglądarki („Siła z Ruchu – imię”), nagłówek przed wczytaniem planu i na ekranie wklejania linku.
+- Bez zmian: repozytorium i adres strony (są w linkach klientów), `id` w manifeście (telefon ma to dalej traktować jako tę samą aplikację), arkusz, foldery Drive „Trening – Klienci” (nazwa jest w `ROOT_FOLDER_NAME` i w skillu trenera; zmiana zepsułaby wczytywanie planów i filmów), plik podglądu, menu arkusza „Trening”, temat alertu mailowego (widzi go tylko trener), panel trenera („Trening – panel trenera”, też tylko dla trenera), zakładka „Trening” w dolnym menu (nazwa ekranu, nie marka), nazwy pamięci w telefonie. Ikona i kolory zostają na razie bez zmian (Logo A „Kolumna-sztanga”, zieleń i pomarańcz); nowe logo i kolory marki są do ustalenia.
+- Nazwa pod ikoną u osób, które już mają aplikację: Android zwykle podmienia ją sam w ciągu kilku dni (może zapytać o zgodę), iPhone trzyma nazwę z chwili dodania do ekranu głównego (nowa dopiero po usunięciu ikony i dodaniu jej jeszcze raz; aplikacja poprosi wtedy o link albo kod). Niesprawdzone na telefonach, do próby.
+- Animacja otwarcia, wybory Damiana na szkicach po kolei: kierunek „ścieżka sztangi” → z ruchem tanecznym → „Duet” (pomarańczowy tor sztangi i jasna linia tańca, która go owija) → tor ma być wzorcowym torem rwania, dokładnie jak rysunek „D” z artykułu Torokhtiya o torze sztangi (torokhtiy.com/blogs/guides/bar-path; zawodnik po prawej: start na linii pionowej, w prawo do ok. połowy wysokości, ostre przejście w lewo przez linię, pionowo w górę, haczyk w prawo i lekko w dół).
+- Tor jest odrysowany z rysunku punkt po punkcie (6 krzywych Beziera, średnia odchyłka 0,4 px na 340 px wysokości). Tor rysowany „na oko” albo z opisu Damian odrzucił dwa razy: kształtu nie poprawiać bez rysunku.
+- Tempo jak w boju: wolny pierwszy ciąg, najszybciej w wybiciu, zawis na szczycie, chwyt. Kropka tańca trzyma wysokość talerza, nad szczytem robi łuk i kończy w talerzu. Pierścień talerza leży pod torem, żeby haczyk na szczycie był widoczny.
+- Czas: wersja 1,9 s odrzucona („za szybkie, nie zdąży przeczytać tekstu”; cały napis był widoczny ok. 0,3 s). Przyjęte: 0,15 s talerz stoi, 1,35 s ruch sztangi, napis wchodzi litera po literze pod koniec ruchu, cały napis zostaje 1,2 s, zgaszenie 0,3 s, razem 3,3 s.
+- Kiedy: tylko przy pierwszym otwarciu aplikacji danego dnia (żeby nie przeszkadzała w trakcie treningu), dotknięcie ekranu albo klawisz ją pomija, kolejne otwarcia tego dnia startują od razu. Przy ograniczeniu ruchu w systemie nie pokazuje się wcale. Dane ładują się w tym czasie pod zasłoną.
+- Technika: bez biblioteki Motion (aplikacja działa offline, bez CDN): SVG, `requestAnimationFrame` dla toru i animacje przeglądarki (Web Animations API) dla napisu. Kolory zasłony stałe w obu motywach (`--intro-*`), tło takie jak ekran startowy z manifestu, więc przejście z ekranu startowego Androida jest w tym samym kolorze.
+- Szkice i nagrania wariantów są w plikach projektu (`marka-sila-z-ruchu/`), poza repozytorium.
+
 ## 2026-11-17 · Panel trenera (plan, PR 1–2 scalone w #76)
 
 - Damian chce jednego miejsca do kontroli klientów, treningów i postępów, dostępnego zewsząd, z pomocą Claude API. Plan i szkice zaakceptowane, szczegóły i stan w `docs/plan-panel.md`.

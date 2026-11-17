@@ -33,6 +33,7 @@ Docelowy styl: **Pomost** (przełącznik „Styl” w prototypie; wariant „Obe
 | --ok / --warn / --bad | #296c45 / #8f5d0e / #b5483b | #62b07a / #e0a34a / #e3826b | statusy |
 | --panel, --light-off, --light-white, --light-red, --light-amber | #17221c, #38443d, #f7f7f2, #e5392d, #f0b54f | #050806, #26302a, (bez zmian) | światła sędziowskie, timer |
 | --p25 --p20 --p15 --p10 --p5 | #c8372d #2a5ea8 #d9ad1f #3f8a4a #f4f4f0 | | kolory talerzy (strefy %, kalkulator talerzy) |
+| --intro-bg, --intro-ink, --intro-acc, --intro-muted | #17241d, #f3f1e8, #e0a34a, #a3ab86 | (bez zmian) | animacja otwarcia „Siła z Ruchu”: tło (jak ekran startowy z manifestu), talerz / linia tańca / „Siła z”, tor sztangi / „Ruchu”, podpis |
 
 ## Typografia
 
