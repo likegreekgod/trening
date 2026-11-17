@@ -85,7 +85,7 @@ async function page(calls, opt = {}) {
     else if (!b.token) out = { ok: false, error: 'Logowanie: brak biletu' };
     else if (st.authFail > 0) { st.authFail--; out = { ok: false, error: 'Logowanie: bilet wygasł' }; }
     else if (b.fn === 'trPulpit' || b.fn === 'trPrzelicz') out = { ok: true, result: Object.assign({}, PULPIT, b.fn === 'trPrzelicz' ? { at: TODAY + 'T09:30:00.000Z' } : {}) };
-    else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: klient() } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
+    else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: opt.noSets ? Object.assign(klient(), { logs: [] }) : klient() } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
     else if (b.fn === 'trKomentarz') out = { ok: true, result: { text: String(b.args[3]).trim(), at: TODAY + 'T19:52:00.000Z' } };
     else if (b.fn === 'trSzkic') { st.ai = (st.ai || 0) + 1; await new Promise(res => setTimeout(res, 150));
       out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: w arkuszu wybierz Trening → Ustaw klucz Claude API (klucz z console.anthropic.com).' }
@@ -297,4 +297,13 @@ test('panel: komentarz do sesji ze szkicem AI (szkic, poprawka „Krócej”, za
   await p.screenshot({ path: path.join(SCREENS, 'trener-szkic-ai-telefon-ciemny.png') });
   assert.deepEqual(p.errors, []);
   await ctx.close();
+  // sesja bez zapisanych serii (klient tylko kliknął „Zakończ”): bez przycisku AI, więc bez zapytania i opłaty; komentarz da się zapisać
+  const c2 = [], s2 = await page(c2, { loggedIn: true, noSets: true });
+  await s2.p.goto(base + 'trener.html#k/ania/sesje'); await s2.p.waitForSelector('details.ses[open] .kedit textarea');
+  assert.equal(await s2.p.$('details.ses[open] .kedit button.ai'), null);
+  assert.match(await s2.p.textContent('details.ses[open] .kedit .hint'), /Brak zapisanych serii, więc bez szkicu AI/);
+  assert.ok(await s2.p.$('details.ses[open] .kedit button[data-k="save"]'));
+  assert.equal(c2.filter(c => c.fn === 'trSzkic').length, 0);
+  assert.deepEqual(s2.p.errors, []);
+  await s2.ctx.close();
 });

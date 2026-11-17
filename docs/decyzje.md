@@ -2,6 +2,11 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+
+## 2026-11-17 · Szkic AI tylko przy zapisanych seriach (v58)
+
+Damian: jeśli klient nie uzupełnił treningu, szkic AI nie powinien się generować, bo szkoda pieniędzy. Szkic i tak powstaje tylko po kliknięciu trenera, ale przy sesji bez żadnej zapisanej serii roboczej panel chowa „✦ Szkic AI”, a `trSzkic` odmawia przed wywołaniem Claude API (`trSzkicSets_`). Komentarz ręczny zostaje możliwy.
+
 ## 2026-11-17 · Szkic AI komentarza do sesji (v56)
 
 - Damian zaakceptował szkic wyglądu: pole „Twój komentarz do sesji” pod otwartą sesją w karcie klienta → Sesje, przycisk „✦ Szkic AI”, ramka „Szkic AI. Przeczytaj i popraw”, poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic. Klient widzi komentarz dopiero po „Zapisz” (ta sama kolumna Sesje `komentarz_trenera`, którą aplikacja już pokazuje w zakładce Trener).
