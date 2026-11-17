@@ -18,6 +18,7 @@ Stan na 2026-11-17, `main` = v51 (PR #74 scalony); panel trenera PR 1–2 (v52 +
 
 ## Ostatnio zrobione
 
+- 17.11 (v54, na gałęzi): panel trenera na telefonie: górny pasek nie rozciąga się na pół ekranu przy krótkiej stronie, „Przelicz teraz” i „Wyloguj” widoczne, pusta lista filmów bez podwójnego komunikatu. Logowanie Damiana działa (projekt Google Cloud „Panel trenera”, właściwości skryptu wpisane).
 - 17.11 (v52 + `apps-script/`, na gałęzi): panel trenera PR 1 i 2 (`docs/plan-panel.md`): logowanie Google, pulpit z klientami i sygnałami, karta klienta, filmy oglądane w panelu, bloki do zamknięcia. Tylko odczyt; zapisy w PR 3.
 - 17.11 (`apps-script/`): bezpieczeństwo: stara wersja aplikacji (link `/exec?k=`) wyłączona, `doGet` zwraca tylko tekst; przegląd repo bez danych klientów.
 - 17.11 (v51): pierwszy zapis ćwiczenia głównego bez historii pokazuje „★ Pierwszy wynik” zamiast niczego.

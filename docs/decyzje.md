@@ -2,7 +2,7 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
-## 2026-11-17 · Panel trenera (plan, PR 1–2 na gałęzi)
+## 2026-11-17 · Panel trenera (plan, PR 1–2 scalone w #76)
 
 - Damian chce jednego miejsca do kontroli klientów, treningów i postępów, dostępnego zewsząd, z pomocą Claude API. Plan i szkice zaakceptowane, szczegóły i stan w `docs/plan-panel.md`.
 - Miejsce: `web/trener.html` na GitHub Pages + akcje trenera w Apps Script (wariant A). Odrzucone: osobny serwer (koszt i utrzymanie), panel w arkuszu (słaby na komputerze poza Arkuszami, brak filmów w jednym widoku).

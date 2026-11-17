@@ -223,3 +223,17 @@ test('panel: zrzuty w ciemnym motywie i na telefonie', async () => {
     await ctx.close();
   }
 });
+
+test('panel na telefonie: pasek u góry nie rozciąga się przy krótkiej stronie, puste filmy bez powtórzonego komunikatu', async () => {
+  const { ctx, p } = await page([], { loggedIn: true, vp: { width: 390, height: 844 }, scheme: 'dark' });
+  await p.route('**/macros/**', r => r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ok: true, result: Object.assign({}, PULPIT, { videos: [] }) }) }));
+  await p.goto(base + 'trener.html#filmy'); await p.waitForSelector('.vids');
+  const h = await p.$eval('aside', a => a.getBoundingClientRect().height);
+  assert.ok(h < 160, 'pasek ma ' + h + ' px');
+  assert.ok(await p.isVisible('#logout'), 'wylogowanie dostępne na telefonie');
+  assert.equal((await p.textContent('#main')).match(/Brak filmów/g).length, 1);
+  await shot(p, 'trener-filmy-puste-telefon-ciemny.png');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
