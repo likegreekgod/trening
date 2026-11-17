@@ -3,6 +3,13 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-17 · Zamknięcie bloku w panelu ze szkicem AI (v64)
+
+- Damian (7 bloków do zamknięcia): wnioski i notatkę „dla klienta” pisze w panelu, w karcie klienta → Bloki, zamiast w arkuszu. Szkic wyglądu zaakceptowany.
+- Jeden „✦ Szkic AI” pisze oba teksty w jednym zapytaniu (taniej niż dwa); odpowiedź ma znaczniki WNIOSKI: / DLA KLIENTA: (`aiBlokParse_`, bez znaczników całość trafia do wniosków). Wnioski: najwyżej 5 zdań z liczbami, ostatnie = decyzja na następny blok (jeśli plan następnego bloku już jest, AI go ocenia). Dla klienta: 3–4 zdania bez żargonu. Dane nie mają płci klienta, więc AI pisze bez form zależnych od płci („masz za sobą”, nie „zrobiłeś”).
+- Do AI idą liczby bloku z Bloków, tydzień po tygodniu, ćwiczenia A (najlepsza seria pierwszego i ostatniego tygodnia), nieudane, pominięte, niezrobione jednostki, komentarze klienta, ból, poprzedni blok z wnioskami trenera (styl) i pierwszy tydzień następnego bloku. Bez imienia i linków. Blok bez serii = bez zapytania (bez opłaty).
+- Wspólne `aiPre_` / `aiCall_` dla obu szkiców (klucz, limit dzienny, zakładka „AI”).
+
 ## 2026-11-17 · Filmy w panelu: strumień przez service worker (v63)
 
 - v62 nie odtwarzał żadnego filmu: Dysk nie przyjmuje biletu w adresie (`access_token`) przy pobieraniu treści pliku, a atrapa w testach go przyjmowała. Atrapa przyjmuje teraz bilet tylko w nagłówku, jak prawdziwy Dysk.

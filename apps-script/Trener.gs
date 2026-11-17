@@ -7,9 +7,10 @@
  * nie trafiają do repozytorium ani do arkusza. Bez nich panel odpowiada „nie jest skonfigurowany”.
  * Odczyt: trPulpit, trKlient, trPrzelicz. Zapis: trKomentarz (komentarz do sesji), trKomentarzFilm (komentarz do serii z filmem). Filmy: trFilm (bilet do Drive API). Claude API: trSzkic (szkic komentarza,
  * klucz CLAUDE_API_KEY we właściwościach skryptu, dzienny limit, każde wywołanie w zakładce „AI”). AI tylko szkicuje, zapisuje trener.
+ * Zamknięcie bloku: trBlok (Bloki.wnioski i dla_klienta), trBlokSzkic (szkic AI obu naraz).
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
-const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm };
+const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -357,28 +358,40 @@ function trSzkicCtx_(d, week, day) {
 /** Szkic komentarza do sesji przez Claude API. → {text, cost (USD), n (szkice dziś), limit, model} */
 function trSzkic(id, week, day, opt) {
   id = String(id || '').trim().toLowerCase();
-  const props = PropertiesService.getScriptProperties(), key = String(props.getProperty('CLAUDE_API_KEY') || '').trim();
-  if (!key) throw new Error('Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).');
-  const limit = Number(props.getProperty('AI_LIMIT')) || AI_LIMIT, today = today_();
-  if (!aiDay_(props.getProperty('AI_DZIEN'), today, limit).ok) throw new Error('Dzisiejszy limit szkiców AI (' + limit + ') wyczerpany. Jutro znowu.');
+  aiPre_();
   const row = trRow_(id), d = clientData_(clientOf_(row), Date.now());
   d.cfg.masters = String(row[8] || '').trim().toUpperCase() === 'TAK';
   const ctx = trSzkicCtx_(d, week, day);
   if (!ctx) throw new Error('Nie ma tej jednostki w zakładce Sesje.');
   if (!trSzkicSets_(d, week, day)) throw new Error('Klient nie zapisał w tej jednostce żadnej serii, więc szkic AI nie ma z czego pisać (bez opłaty).');
+  return aiCall_(aiReq_(ctx, opt), ['szkic komentarza' + (opt && AI_POPRAW[opt.tweak] ? ' · ' + opt.tweak : ''), id, Number(week), String(day)]);
+}
+
+/** Klucz i dzienny limit przed zapytaniem do AI (wspólne dla szkiców). → {key, limit, today} */
+function aiPre_() {
+  const props = PropertiesService.getScriptProperties(), key = String(props.getProperty('CLAUDE_API_KEY') || '').trim();
+  if (!key) throw new Error('Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).');
+  const limit = Number(props.getProperty('AI_LIMIT')) || AI_LIMIT, today = today_();
+  if (!aiDay_(props.getProperty('AI_DZIEN'), today, limit).ok) throw new Error('Dzisiejszy limit szkiców AI (' + limit + ') wyczerpany. Jutro znowu.');
+  return { key: key, limit: limit, today: today };
+}
+
+/** Zapytanie do Messages API, licznik dnia i wiersz w zakładce „AI”. log: [akcja, klient, tydzien, jednostka]. → {text, cost, n, limit, model} */
+function aiCall_(req, log) {
+  const pre = aiPre_(), props = PropertiesService.getScriptProperties();
   const r = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-    headers: { 'x-api-key': key, 'anthropic-version': '2026-10-21', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
-    payload: JSON.stringify(aiReq_(ctx, opt)) });
+    headers: { 'x-api-key': pre.key, 'anthropic-version': '2026-10-21', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+    payload: JSON.stringify(req) });
   const code = r.getResponseCode();
   let j = {}; try { j = JSON.parse(r.getContentText()); } catch (e) { j = {}; }
   if (code !== 200) {
     const m = String(j.error && j.error.message || r.getContentText()).slice(0, 300);
-    if (code === 401) throw new Error('Klucz Claude API jest nieprawidłowy. Ustaw go ponownie (Trening → Ustaw klucz Claude API).');
+    if (code === 401) throw new Error('Klucz Claude API jest nieprawidłowy. Ustaw go ponownie w panelu → Ustawienia.');
     if (code === 429 || code === 529 || code >= 500) throw new Error('AI jest teraz zajęte, spróbuj za chwilę.');
     if (/credit|balance/i.test(m)) throw new Error('Brak środków na koncie Claude API (console.anthropic.com → Billing).');
     throw new Error('AI: ' + m);
   }
-  if (j.stop_reason === 'refusal') throw new Error('AI nie napisało szkicu do tej sesji. Napisz komentarz sam.');
+  if (j.stop_reason === 'refusal') throw new Error('AI nie napisało szkicu. Napisz tekst sam.');
   const text = (j.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
   if (!text) throw new Error('AI zwróciło pusty szkic. Spróbuj ponownie.');
   const cost = aiCost_(j.model || AI_MODEL, j.usage), u = j.usage || {};
@@ -386,12 +399,11 @@ function trSzkic(id, week, day, opt) {
   lock.waitLock(20000);
   let n;
   try {
-    n = aiDay_(props.getProperty('AI_DZIEN'), today, limit).n + 1;
-    props.setProperty('AI_DZIEN', JSON.stringify({ d: today, n: n }));
-    sheet_('AI', AI_HEADERS).appendRow([new Date(), 'szkic komentarza' + (opt && AI_POPRAW[opt.tweak] ? ' · ' + opt.tweak : ''), id, Number(week), String(day),
-      String(j.model || AI_MODEL), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0, cost]);
+    n = aiDay_(props.getProperty('AI_DZIEN'), pre.today, pre.limit).n + 1;
+    props.setProperty('AI_DZIEN', JSON.stringify({ d: pre.today, n: n }));
+    sheet_('AI', AI_HEADERS).appendRow([new Date()].concat(log, [String(j.model || AI_MODEL), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0, cost]));
   } finally { lock.releaseLock(); }
-  return { text: text, cost: cost, n: n, limit: limit, model: String(j.model || AI_MODEL) };
+  return { text: text, cost: cost, n: n, limit: pre.limit, model: String(j.model || AI_MODEL) };
 }
 
 /** Czy tekst wygląda na klucz Claude API → '' albo powód odmowy (czysta, z testem). */
@@ -438,4 +450,161 @@ function ustawAI() {
   if (aiKeyOk_(k)) { alert_('Klucz Claude API', aiKeyOk_(k) + ' Nic nie zmieniono.'); return; }
   p.setProperty('CLAUDE_API_KEY', k);
   alert_('Klucz Claude API', 'Zapisano. W panelu trenera działa teraz „Szkic AI”.');
+}
+
+/* ---------- zamknięcie bloku: wnioski (tylko trener) i notatka dla klienta (aplikacja: Postęp → Blok) ----------
+ * trBlok zapisuje obie kolumny w zakładce Bloki (keepNotes_ przenosi je przy przeliczaniu).
+ * trBlokSzkic pisze szkic obu naraz (jedno zapytanie): dane bloku bez imienia (trBlokCtx_), odpowiedź z dwoma znacznikami (aiBlokParse_).
+ */
+function trBlok(id, blok, wnioski, dla) {
+  id = String(id || '').trim().toLowerCase(); blok = String(blok || '').trim();
+  const clean = v => String(v === undefined || v === null ? '' : v).replace(/\r\n?/g, '\n').trim();
+  wnioski = clean(wnioski); dla = clean(dla);
+  if (wnioski.length > TR_KOM_MAX || dla.length > TR_KOM_MAX) throw new Error('Tekst jest za długi (najwyżej ' + TR_KOM_MAX + ' znaków w polu).');
+  trRow_(id);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = SpreadsheetApp.getActive().getSheetByName('Bloki');
+    if (!sh) throw new Error('Nie ma zakładki Bloki. Kliknij „Przelicz teraz”.');
+    const v = sh.getDataRange().getValues(), h = v[0].map(String), ck = h.indexOf('klient'), cb = h.indexOf('blok'), cw = h.indexOf('wnioski'), cd = h.indexOf('dla_klienta');
+    if (ck < 0 || cb < 0 || cw < 0 || cd < 0) throw new Error('Zakładka Bloki nie ma kolumn wnioski i dla_klienta. Kliknij „Przelicz teraz”.');
+    const i = v.findIndex((r, k) => k > 0 && String(r[ck]).trim().toLowerCase() === id && String(r[cb]).trim() === blok);
+    if (i < 1) throw new Error('Nie ma bloku ' + blok + ' tego klienta w zakładce Bloki. Kliknij „Przelicz teraz”.');
+    sh.getRange(i + 1, cw + 1).setValue(wnioski);
+    sh.getRange(i + 1, cd + 1).setValue(dla);
+  } finally { lock.releaseLock(); }
+  return { wnioski: wnioski, dla_klienta: dla };
+}
+
+const AI_POPRAW_BLOK = {
+  krocej: 'Skróć oba teksty: wnioski do 3 zdań, tekst dla klienta do 2 zdań. Zostaw najważniejsze liczby i decyzję.',
+  cieplej: 'Tekst dla klienta napisz cieplej i bardziej motywująco, bez lukru i bez wykrzykników w każdym zdaniu. Wnioski zostaw bez zmian.',
+  inny: 'Napisz zupełnie inną wersję obu tekstów, z innym akcentem.'
+};
+const AI_SYSTEM_BLOK = [
+  'Jesteś asystentem trenera personalnego (trening siłowy, sylwetka, podnoszenie ciężarów). Piszesz szkic dwóch tekstów po zakończonym bloku treningowym (kilka tygodni) jego podopiecznego.',
+  'Trener przeczyta oba teksty, poprawi je i dopiero wtedy zapisze. Klient zobaczy tylko drugi tekst.',
+  'Odpowiedz dokładnie w tym układzie, bez niczego przed i po:',
+  'WNIOSKI:',
+  '<tekst dla trenera>',
+  'DLA KLIENTA:',
+  '<tekst dla klienta>',
+  'Wnioski (tylko dla trenera): najwyżej 5 krótkich zdań, rzeczowo, z liczbami z danych. Co urosło, co stoi albo spadło i co prawdopodobnie za tym stoi (obciążenie, ból, dyspozycja, pominięcia, nieudane serie). Ostatnie zdanie to jedna konkretna decyzja na następny blok z liczbami (ciężary zaokrąglone w dół do 2,5 kg, serie×powtórzenia). Jeśli w danych jest już plan następnego bloku, oceń go w tym zdaniu zamiast wymyślać nowy. Bez asekuracji.',
+  'Dla klienta: 3–4 zdania, ciepło i konkretnie, bez żargonu (bez e1RM, sRPE, ACWR, RPE), w drugiej osobie. Nie znasz płci klienta: nie używaj form zależnych od płci (pisz „masz za sobą 11 treningów”, „zrobione wszystkie treningi”, a nie „zrobiłeś”, „zrobiłaś”). Jedna rzecz, z której klient może być dumny, jedna, nad którą pracujecie, i co czeka w następnym bloku.',
+  'Ból: przy bólu powyżej 3/10 we wnioskach nazwij go z liczbą i miejscem, w tekście dla klienta spokojnie i bez diagnoz.',
+  'Używaj tylko liczb z danych, niczego nie dopisuj. Bez nagłówków poza dwoma znacznikami, bez list, emoji i podpisu. Jeśli są wcześniejsze wnioski trenera, pisz we wnioskach w ich stylu.'
+].join('\n');
+
+/** Dwa teksty z odpowiedzi AI (czysta). Bez znaczników całość trafia do wniosków. → {wnioski, dla_klienta} */
+function aiBlokParse_(t) {
+  t = String(t || '').replace(/\r\n?/g, '\n');
+  const m = /(?:^|\n)[\s*#_]*WNIOSKI[\s*#_]*:[\s*#_]*([\s\S]*?)\n[\s*#_]*DLA KLIENTA[\s*#_]*:[\s*#_]*([\s\S]*)$/i.exec(t);
+  if (!m) return { wnioski: t.trim(), dla_klienta: '' };
+  return { wnioski: m[1].trim(), dla_klienta: m[2].trim() };
+}
+
+/** Treść zapytania o szkic bloku (czysta). opt: {tweak, draft: {w, k}}. */
+function aiBlokReq_(ctx, opt) {
+  opt = opt || {};
+  let msg = 'Dane bloku:\n\n' + ctx;
+  const tw = AI_POPRAW_BLOK[opt.tweak], dr = opt.draft || {};
+  if (tw) msg += (String(dr.w || dr.k || '').trim() ? '\n\nPoprzedni szkic:\nWNIOSKI:\n' + String(dr.w || '').trim().slice(0, TR_KOM_MAX) + '\nDLA KLIENTA:\n' + String(dr.k || '').trim().slice(0, TR_KOM_MAX) : '') + '\n\nPopraw szkic: ' + tw;
+  else msg += '\n\nNapisz szkic wniosków i tekstu dla klienta po tym bloku.';
+  return { model: AI_MODEL, max_tokens: 4000, system: AI_SYSTEM_BLOK, messages: [{ role: 'user', content: msg }],
+    output_config: { effort: 'low' }, fallbacks: 'default' };
+}
+
+/** Zapisane serie robocze w tygodniach bloku (0 = nie ma z czego pisać, bez zapytania do AI). */
+function trBlokSets_(d, blok) {
+  const W = {}; (d.plan || []).forEach(r => { if (String(r.block || '') === String(blok) && !r.own) W[Number(r.week)] = 1; });
+  return (d.logs || []).filter(l => W[Number(l.tydzien)] && String(l.wykonane || '').trim() === 'TAK' && !/^R/i.test(String(l.seria)) && String(l.seria) !== '0').length;
+}
+
+/**
+ * Dane bloku do szkicu (czysta). d: wynik clientData_ z blocks (wiersze Bloków) → tekst albo null (brak bloku).
+ * Bez imienia, klucza i linków: wiersz Bloków, tydzień po tygodniu, ćwiczenia A (najlepsza seria pierwszego i ostatniego tygodnia),
+ * nieudane i pominięte, komentarze klienta, poprzedni blok z wnioskami trenera (styl), pierwszy tydzień następnego bloku.
+ */
+function trBlokCtx_(d, blok) {
+  const str = v => v === undefined || v === null ? '' : String(v).trim(), num = v => str(v).replace('.', ','), B = String(blok);
+  const rows = (d.blocks || []).filter(b => str(b.blok) && str(b.blok) !== NO_BLOCK).sort((a, b) => str(a.od).localeCompare(str(b.od)));
+  const bi = rows.findIndex(b => str(b.blok) === B); if (bi < 0) return null;
+  const b = rows[bi], prev = rows[bi - 1], next = rows[bi + 1];
+  const line = x => [str(x.od) && str(x.do) ? str(x.od) + '–' + str(x.do) : '', str(x.tygodnie) ? 'tygodnie ' + str(x.tygodnie) : '', str(x.jednostki) ? 'jednostki zrobione/plan ' + str(x.jednostki) : '',
+    str(x['wykonanie_%']) ? 'wykonanie serii z planu ' + str(x['wykonanie_%']) + '%' : '', Number(x.tonaz_kg) > 0 ? 'tonaż ' + Math.round(Number(x.tonaz_kg)) + ' kg' : '',
+    str(x.e1RM_zm) ? 'szacowane maksimum (e1RM): ' + str(x.e1RM_zm) : '', str(x.najlepsze_boje) ? 'najlepsze boje: ' + str(x.najlepsze_boje) : '',
+    str(x.sRPE_sr) ? 'średnie RPE sesji ' + num(x.sRPE_sr) : '', str(x.samopocz_sr) ? 'samopoczucie śr. ' + num(x.samopocz_sr) + '/5' : '',
+    str(x.dyspozycja) ? 'dyspozycja: ' + str(x.dyspozycja) : '', str(x.bol_max) !== '' ? 'ból max ' + num(x.bol_max) + '/10' : '', str(x.statusy) ? 'statusy tygodni: ' + str(x.statusy) : ''].filter(Boolean).join(', ');
+  const plan = (d.plan || []).filter(r => str(r.block) === B && !r.own);
+  const weeks = plan.map(r => Number(r.week)).filter((w, i, a) => a.indexOf(w) === i).sort((x, y) => x - y), inB = w => weeks.indexOf(Number(w)) >= 0;
+  const P = {}; plan.forEach(r => { P[r.week + '|' + r.day + '|' + r.order] = r; });
+  const logs = (d.logs || []).filter(l => inB(l.tydzien)), work = l => str(l.wykonane) === 'TAK' && !/^R/i.test(str(l.seria)) && str(l.seria) !== '0';
+  const ses = (d.sessions || []).filter(s => inB(s.tydzien));
+  const out = [];
+  out.push('Osoba: tryb ' + (d.cfg && d.cfg.simple ? 'PROSTY' : 'PRO') + ', skala ' + (d.cfg && d.cfg.scale || 'RPE') + (d.cfg && d.cfg.masters ? ', masters' : '') + '.');
+  out.push('Blok ' + B + ': ' + line(b) + '.');
+  if (weeks.length) {
+    out.push('', 'Tydzień po tygodniu:');
+    weeks.forEach(w => {
+      const days = plan.filter(r => Number(r.week) === w).map(r => r.day).filter((x, i, a) => a.indexOf(x) === i);
+      const sw = ses.filter(s => Number(s.tydzien) === w), lw = logs.filter(l => Number(l.tydzien) === w && work(l));
+      const ton = lw.reduce((a, l) => { const kg = Number(str(l.kg).replace(',', '.')), r = Number(str(l.powt).replace(',', '.')); return a + (kg > 0 && r > 0 && !/s$/.test(str(l.powt)) ? kg * r : 0); }, 0);
+      const rp = sw.map(s => Number(s.rpe_sesji)).filter(x => x >= 0 && str(x) !== ''), fe = sw.map(s => Number(s.samopoczucie)).filter(x => x > 0), pm = sw.map(s => Number(s.bol_max)).filter(x => x >= 0);
+      const avg = a => num(Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10);
+      out.push('- tydzień ' + w + ': jednostki ' + sw.filter(s => days.indexOf(s.jednostka) >= 0).length + '/' + days.length + (ton ? ', tonaż ' + Math.round(ton) + ' kg' : '') +
+        (rp.length ? ', RPE sesji śr. ' + avg(rp) : '') + (fe.length ? ', samopoczucie ' + avg(fe) + '/5' : '') + (pm.length && Math.max(...pm) > 0 ? ', ból max ' + num(Math.max(...pm)) + '/10' : ''));
+    });
+  }
+  const setTxt = l => num(l.kg) + (isFinite(Number(str(l.kg).replace(',', '.'))) ? ' kg' : '') + '×' + str(l.powt) + (str(l.rpe) ? ' @' + num(l.rpe) : '');
+  const e1 = l => { const kg = Number(str(l.kg).replace(',', '.')), r = Number(str(l.powt).replace(',', '.')), rp = Number(str(l.rpe).replace(',', '.')) || 10; return kg > 0 && r > 0 ? kg * (1 + (r + 10 - rp) / 30) : 0; };
+  const A = {}; plan.filter(r => str(r.prio) === 'A').forEach(r => { A[str(r.name)] = 1; });
+  const aLines = Object.keys(A).map(n => {
+    const ls = logs.filter(l => work(l) && !/FAIL/.test(str(l.typ)) && str(l.cwiczenie) === n), ws = ls.map(l => Number(l.tydzien)).filter((w, i, a) => a.indexOf(w) === i).sort((x, y) => x - y);
+    if (!ws.length) return '';
+    const top = w => ls.filter(l => Number(l.tydzien) === w).sort((x, y) => e1(y) - e1(x))[0];
+    const f = top(ws[0]), t = top(ws[ws.length - 1]);
+    return '- ' + n + ': ' + setTxt(f) + ' (tydz. ' + ws[0] + ')' + (ws.length > 1 ? ' → ' + setTxt(t) + ' (tydz. ' + ws[ws.length - 1] + ')' : '');
+  }).filter(Boolean);
+  if (aLines.length) { out.push('', 'Ćwiczenia główne (A), najlepsza seria pierwszego → ostatniego tygodnia:'); aLines.forEach(x => out.push(x)); }
+  const fails = {}; logs.filter(l => /FAIL/.test(str(l.typ))).forEach(l => { fails[str(l.cwiczenie)] = (fails[str(l.cwiczenie)] || 0) + 1; });
+  if (Object.keys(fails).length) out.push('', 'Nieudane serie/podejścia: ' + Object.keys(fails).map(k => k + ' ' + fails[k]).join(', ') + '.');
+  const skips = logs.filter(l => str(l.seria) === '0' || /SKIP/.test(str(l.typ))).map(l => (P[l.tydzien + '|' + l.jednostka + '|' + l.nr_cw] || {}).name || str(l.cwiczenie));
+  if (skips.length) out.push('Pominięte albo skrócone ćwiczenia: ' + skips.join(', ') + '.');
+  const unPlanned = weeks.map(w => plan.filter(r => Number(r.week) === w).map(r => r.day).filter((x, i, a) => a.indexOf(x) === i).filter(dd => !ses.some(s => Number(s.tydzien) === w && s.jednostka === dd) && !logs.some(l => Number(l.tydzien) === w && l.jednostka === dd)).map(dd => 'tydz. ' + w + ' ' + dd)).reduce((a, x) => a.concat(x), []);
+  if (unPlanned.length) out.push('Niezrobione jednostki: ' + unPlanned.join(', ') + '.');
+  const notes = [];
+  logs.forEach(l => { const t = str(l.uwagi); if (t && !/SKIP/.test(str(l.typ)) && str(l.seria) !== '0' && notes.indexOf(str(l.cwiczenie) + ': „' + t + '”') < 0) notes.push(str(l.cwiczenie) + ': „' + t + '”'); });
+  ses.forEach(s => { if (str(s.uwagi)) notes.push('sesja tydz. ' + s.tydzien + ' ' + s.jednostka + ': „' + str(s.uwagi) + '”'); });
+  if (notes.length) { out.push('', 'Komentarze klienta:'); notes.slice(-8).forEach(x => out.push('- ' + x)); }
+  const pains = ses.filter(s => str(s.bol)).map(s => 'tydz. ' + s.tydzien + ' ' + s.jednostka + ': ' + str(s.bol).split(';').map(x => x.split(':')).filter(x => Number(x[1]) > 0).map(x => (str(x[0]) || 'bez miejsca') + ' ' + num(x[1]) + '/10').join(', ')).filter(x => !/: $/.test(x));
+  if (pains.length) out.push('Ból zgłoszony: ' + pains.join('; ') + '.');
+  if (prev) {
+    out.push('', 'Poprzedni blok ' + str(prev.blok) + ': ' + line(prev) + '.');
+    if (str(prev.wnioski)) out.push('Wnioski trenera po bloku ' + str(prev.blok) + ' (styl): „' + str(prev.wnioski) + '”');
+  }
+  const nb = next ? str(next.blok) : '', np = (d.plan || []).filter(r => !r.own && str(r.block) && str(r.block) !== B && Number(r.week) > Math.max(0, ...weeks));
+  const nBlok = nb || (np[0] ? str(np[0].block) : '');
+  if (nBlok) {
+    const nw = (d.plan || []).filter(r => str(r.block) === nBlok && !r.own), w0 = Math.min(...nw.map(r => Number(r.week)));
+    if (isFinite(w0)) out.push('', 'Plan następnego bloku ' + nBlok + ', pierwszy tydzień (' + w0 + '): ' + nw.filter(r => Number(r.week) === w0).sort((x, y) => str(x.day).localeCompare(str(y.day)) || x.order - y.order)
+      .map(r => r.day + ' ' + r.name + ' ' + r.sets + '×' + str(r.reps) + (str(r.kg) ? ' ' + num(r.kg) + (typeof r.kg === 'number' ? ' kg' : '') : '')).join(', ') + '.');
+  } else out.push('', 'Planu następnego bloku jeszcze nie ma.');
+  return out.join('\n');
+}
+
+/** Szkic wniosków i tekstu dla klienta po bloku. → {wnioski, dla_klienta, cost, n, limit, model} */
+function trBlokSzkic(id, blok, opt) {
+  id = String(id || '').trim().toLowerCase(); blok = String(blok || '').trim();
+  aiPre_();
+  const row = trRow_(id), c = clientOf_(row), d = clientData_(c, Date.now());
+  d.cfg.masters = String(row[8] || '').trim().toUpperCase() === 'TAK';
+  const tz = Session.getScriptTimeZone(), day = x => x instanceof Date ? Utilities.formatDate(x, tz, 'yyyy-MM-dd') : String(x || '').slice(0, 10);
+  d.blocks = tableOf_('Bloki').filter(b => String(b.klient).trim().toLowerCase() === c.id).map(b => Object.assign({}, b, { od: day(b.od), do: day(b.do) }));
+  const ctx = trBlokCtx_(d, blok);
+  if (!ctx) throw new Error('Nie ma bloku ' + blok + ' tego klienta w zakładce Bloki. Kliknij „Przelicz teraz”.');
+  if (!trBlokSets_(d, blok)) throw new Error('W tym bloku nie ma zapisanych serii, więc szkic AI nie ma z czego pisać (bez opłaty).');
+  const r = aiCall_(aiBlokReq_(ctx, opt), ['szkic bloku' + (opt && AI_POPRAW_BLOK[opt.tweak] ? ' · ' + opt.tweak : ''), id, '', blok]);
+  const p = aiBlokParse_(r.text);
+  return { wnioski: p.wnioski, dla_klienta: p.dla_klienta, cost: r.cost, n: r.n, limit: r.limit, model: r.model };
 }
