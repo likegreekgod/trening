@@ -61,6 +61,7 @@
   aside nav em:empty{display:none}
   aside .foot{margin-top:auto;font-size:12px;color:var(--bar-muted);padding:0 12px;line-height:1.5}
   aside .foot button{background:none;border:0;color:var(--bar-ink);text-decoration:underline;padding:0;font-size:12px}
+  aside .foot #set{color:var(--bar-ink);text-decoration:underline}
   .top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding:18px 24px 8px;flex-wrap:wrap}
   .top .tools{display:flex;gap:8px;align-items:center}
   .search{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:0 14px;min-height:44px;width:260px}
@@ -132,6 +133,10 @@
   #gbtn{display:flex;justify-content:center;min-height:44px;margin-top:16px}
   /* komentarz do sesji i szkic AI (karta klienta → Sesje) */
   .kedit{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px}
+  .keyf{display:flex;flex-direction:column;gap:6px;margin:12px 0 8px}.keyf label{font-size:13px;font-weight:600;color:var(--ink-2)}
+  .keyf input{width:100%;min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px 12px;font:500 15px/1.3 var(--f-mono)}
+  .kstat{display:flex;gap:8px;align-items:center;font-size:15px}.kstat .dot{width:10px;height:10px;border-radius:50%;background:var(--muted)}.kstat .dot.on{background:var(--ok)}
+  #aikey-card .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}#aikey-card .legend{font-size:13px;line-height:1.5}
   .kedit textarea{width:100%;min-height:118px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px 12px;font-size:15px;line-height:1.45;resize:vertical}
   .kedit .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
   .kedit .row .sp{flex:1}
@@ -155,7 +160,7 @@
   .vids.one{grid-template-columns:minmax(0,1fr)}
   @media (max-width:760px){.app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr;align-content:start}
     aside{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:10px 12px;border-right:0;border-bottom:3px solid var(--accent)}
-    aside .brand{margin:0 12px 0 4px;font-size:18px}aside nav{flex-direction:row;flex-wrap:wrap}aside .foot{margin:0 0 0 auto;padding:0 4px;display:flex;gap:12px;align-items:center}aside .foot #at{display:none}aside .foot button{min-height:44px;font-size:13px}
+    aside .brand{margin:0 12px 0 4px;font-size:18px}aside nav{flex-direction:row;flex-wrap:wrap}aside .foot{margin:0 0 0 auto;padding:0 4px;display:flex;gap:12px;align-items:center}aside .foot #at{display:none}aside .foot #set{min-height:44px;display:inline-flex;align-items:center;font-size:13px}aside .foot button{min-height:44px;font-size:13px}
     .top,.pg{padding-left:16px;padding-right:16px}.tabs{padding:0 16px}.search{width:100%}}
 </style>
 </head>
@@ -178,7 +183,7 @@
       <a href="#bloki" data-v="bloki">Bloki <em id="n-bloki"></em></a>
       <a href="./" id="mine">Mój trening ›</a>
     </nav>
-    <div class="foot"><span id="at"></span><br><button id="recalc" type="button">Przelicz teraz</button> · <button id="logout" type="button">Wyloguj</button></div>
+    <div class="foot"><span id="at"></span><br><a id="set" href="#ustawienia">Ustawienia</a> · <button id="recalc" type="button">Przelicz teraz</button> · <button id="logout" type="button">Wyloguj</button></div>
   </aside>
   <main id="main"></main>
 </div>
@@ -254,6 +259,7 @@ function route(){
   if (v === 'k') return renderKlient(decodeURIComponent(h[1] || ''), h[2] || 'przeglad');
   if (v === 'filmy') return renderFilmy(h[1] || '');
   if (v === 'bloki') return renderBloki();
+  if (v === 'ustawienia') return renderUstawienia();
   renderPulpit();
 }
 window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
@@ -373,6 +379,32 @@ function renderBloki(){
       : '<div class="es"><b>Wszystkie bloki zamknięte</b>Wnioski są wpisane.</div>') + '</div></div>';
 }
 
+/* ---------- ustawienia: klucz Claude API (trAI, trUstawAI); panel widzi tylko końcówkę klucza ---------- */
+let AIS = null, AIM = { ok: '', err: '', busy: false, del: false };
+async function renderUstawienia(){
+  if (!AIS) { $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
+    try { AIS = await guard(api('trAI')); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + errBox(e); return; }
+    if (!location.hash.startsWith('#ustawienia')) return; }
+  const a = AIS, m = AIM, dis = m.busy ? ' disabled' : '';
+  $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="card" id="aikey-card" style="max-width:640px"><h2>Szkic AI · klucz Claude API</h2>' +
+    '<p class="kstat"><span class="dot' + (a.set ? ' on' : '') + '"></span>' + (a.set ? '<span>Klucz ustawiony <span class="mono">' + esc(a.end) + '</span> · dziś ' + a.n + ' z ' + a.limit + ' szkiców</span>' : '<span>Brak klucza: „✦ Szkic AI” jest wyłączony.</span>') + '</p>' +
+    '<div class="keyf"><label for="aikey">' + (a.set ? 'Nowy klucz (zastąpi obecny)' : 'Klucz') + '</label><input id="aikey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"' + dis + '></div>' +
+    '<div class="row"><button class="b p" type="button" id="aikey-save"' + dis + '>' + (m.busy ? 'Sprawdzam klucz…' : 'Zapisz klucz') + '</button>' +
+    (a.set ? '<button class="b" type="button" id="aikey-del"' + dis + '>' + (m.del ? 'Na pewno usunąć?' : 'Usuń klucz') + '</button>' : '') + '</div>' +
+    (m.ok ? '<p class="saved" role="status">' + esc(m.ok) + '</p>' : '') + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '') +
+    '<p class="legend">Klucz założysz na <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> → API Keys → Create Key. Przed zapisem sprawdzam go w Anthropic (bez opłaty). ' +
+    'Klucz trafia do ustawień skryptu arkusza, nie do arkusza ani do tej strony: tutaj widać tylko 4 ostatnie znaki.</p></div></div>';
+  const save = async key => {
+    Object.assign(AIM, { busy: true, ok: '', err: '', del: false }); renderUstawienia();
+    try { const r = await guard(api('trUstawAI', key)); AIS = r;
+      AIM.ok = !key ? 'Klucz usunięty. Szkic AI jest wyłączony.' : r.checked ? '✓ Zapisano. Klucz działa, możesz robić szkice.' : 'Zapisano, ale Anthropic nie odpowiedział, więc klucza nie udało się sprawdzić. Spróbuj szkicu.'; }
+    catch (e) { if (!e.auth) AIM.err = e.message; }
+    AIM.busy = false; if (location.hash.startsWith('#ustawienia')) renderUstawienia();
+  };
+  $('#aikey-save').onclick = () => { const k = $('#aikey').value.trim(); if (!k) { Object.assign(AIM, { err: 'Wklej klucz.', ok: '' }); renderUstawienia(); return; } save(k); };
+  const del = $('#aikey-del'); if (del) del.onclick = () => { if (!AIM.del) { Object.assign(AIM, { del: true, ok: '', err: '' }); renderUstawienia(); return; } save(''); };
+}
+
 /* ---------- karta klienta ---------- */
 async function renderKlient(id, tab){
   const c = PUL.clients.find(x => x.id === id) || { id, name: id, signals: [], load: [], week: '' };
@@ -466,7 +498,7 @@ const kdKey = s => CID + '|' + s.tydzien + '|' + s.jednostka;
 function komBox(s, nSets){
   if (nSets === undefined) nSets = setsOf(CUR, s.tydzien + '|' + s.jednostka).length;
   const u = s.tydzien + '|' + s.jednostka, st = KD[kdKey(s)] || {}, saved = String(s.komentarz_trenera || '');
-  const box = inner => '<div class="kedit" data-u="' + esc(u) + '"><div class="eb" style="margin-bottom:6px">Twój komentarz do sesji</div>' + inner + (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') + '</div>';
+  const box = inner => '<div class="kedit" data-u="' + esc(u) + '"><div class="eb" style="margin-bottom:6px">Twój komentarz do sesji</div>' + inner + (st.err ? '<p class="err" role="alert">' + esc(st.err) + (/Ustawienia/.test(st.err) ? ' <a href="#ustawienia">Otwórz Ustawienia</a>' : '') + '</p>' : '') + '</div>';
   if (saved && !st.edit) return box('<p class="kom" style="margin:0">' + esc(saved) + '</p><div class="row">' +
     (st.ok ? '<span class="saved">✓ Zapisano · klient zobaczy komentarz w aplikacji, w zakładce Trener</span>' : '') + '<span class="sp"></span><button class="b" type="button" data-k="edit">Edytuj</button></div>');
   const text = st.text !== undefined ? st.text : saved, dis = st.busy ? ' disabled' : '';

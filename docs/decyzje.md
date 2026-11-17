@@ -10,6 +10,11 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Puste RPE = brak danych w arkuszu (tak było: `n_` daje NaN). Wyjątek, wybrany przez Damiana na karcie: w aplikacji rekord i wykres Siły dalej liczą serię bez RPE jak RPE 10 (ustalenie z v50), bo po zmianie wiele serii będzie zapisywanych samym ✓.
 - Skutek w arkuszu: Lekko = 7 zamiast 6 w PROSTYM, więc takie serie liczą się jako twarde (RPE ≥ 7).
 
+
+## 2026-11-17 · Klucz Claude API wklejany w panelu (v60)
+
+Damian nie mógł ustawić klucza, bo menu „Trening” nie pokazuje się w Arkuszach na telefonie; chciał wkleić klucz na czacie. Odrzucone: klucz w czacie (zostaje w historii, a Claude nie ma dostępu do skryptu). Zamiast tego panel → Ustawienia: pole hasła, zapis tylko dla zalogowanego trenera (`trUstawAI` w `TR_FNS`), sprawdzenie klucza bezpłatną listą modeli przed zapisem, w panelu widać tylko 4 ostatnie znaki. Menu w arkuszu zostaje.
+
 ## 2026-11-17 · Szkic AI tylko przy zapisanych seriach (v58)
 
 Damian: jeśli klient nie uzupełnił treningu, szkic AI nie powinien się generować, bo szkoda pieniędzy. Szkic i tak powstaje tylko po kliknięciu trenera, ale przy sesji bez żadnej zapisanej serii roboczej panel chowa „✦ Szkic AI”, a `trSzkic` odmawia przed wywołaniem Claude API (`trSzkicSets_`). Komentarz ręczny zostaje możliwy.

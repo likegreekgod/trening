@@ -7,8 +7,9 @@
  * nie trafiają do repozytorium ani do arkusza. Bez nich panel odpowiada „nie jest skonfigurowany”.
  * Odczyt: trPulpit, trKlient, trPrzelicz. Zapis: trKomentarz (komentarz do sesji). Claude API: trSzkic (szkic komentarza,
  * klucz CLAUDE_API_KEY we właściwościach skryptu, dzienny limit, każde wywołanie w zakładce „AI”). AI tylko szkicuje, zapisuje trener.
+ * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
-const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic };
+const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -325,7 +326,7 @@ function trSzkicCtx_(d, week, day) {
 function trSzkic(id, week, day, opt) {
   id = String(id || '').trim().toLowerCase();
   const props = PropertiesService.getScriptProperties(), key = String(props.getProperty('CLAUDE_API_KEY') || '').trim();
-  if (!key) throw new Error('Szkic AI nie jest jeszcze włączony: w arkuszu wybierz Trening → Ustaw klucz Claude API (klucz z console.anthropic.com).');
+  if (!key) throw new Error('Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).');
   const limit = Number(props.getProperty('AI_LIMIT')) || AI_LIMIT, today = today_();
   if (!aiDay_(props.getProperty('AI_DZIEN'), today, limit).ok) throw new Error('Dzisiejszy limit szkiców AI (' + limit + ') wyczerpany. Jutro znowu.');
   const row = trRow_(id), d = clientData_(clientOf_(row), Date.now());
@@ -361,6 +362,40 @@ function trSzkic(id, week, day, opt) {
   return { text: text, cost: cost, n: n, limit: limit, model: String(j.model || AI_MODEL) };
 }
 
+/** Czy tekst wygląda na klucz Claude API → '' albo powód odmowy (czysta, z testem). */
+function aiKeyOk_(k) {
+  k = String(k || '').trim();
+  if (!k) return 'Wklej klucz.';
+  if (/\s/.test(k)) return 'Klucz nie może mieć spacji ani nowych linii.';
+  if (!/^sk-ant-[\w-]{20,}$/.test(k)) return 'To nie wygląda na klucz Claude API (zaczyna się od sk-ant-).';
+  return '';
+}
+/** Końcówka klucza do pokazania w panelu („…AbCd”); całego klucza panel nigdy nie dostaje. */
+const aiKeyEnd_ = k => { k = String(k || '').trim(); return k ? '…' + k.slice(-4) : ''; };
+
+/** Panel → Ustawienia: stan szkiców AI (bez klucza). */
+function trAI() {
+  const p = PropertiesService.getScriptProperties(), k = String(p.getProperty('CLAUDE_API_KEY') || '').trim();
+  const limit = Number(p.getProperty('AI_LIMIT')) || AI_LIMIT;
+  return { set: !!k, end: aiKeyEnd_(k), limit: limit, n: aiDay_(p.getProperty('AI_DZIEN'), today_(), limit).n, model: AI_MODEL };
+}
+
+/** Panel → Ustawienia: zapis klucza (puste = usuń). Klucz sprawdzany bezpłatnie listą modeli, zanim trafi do właściwości. */
+function trUstawAI(key) {
+  const p = PropertiesService.getScriptProperties(), k = String(key || '').trim();
+  if (!k) { p.deleteProperty('CLAUDE_API_KEY'); return trAI(); }
+  const bad = aiKeyOk_(k);
+  if (bad) throw new Error(bad + ' Nic nie zmieniono.');
+  const r = UrlFetchApp.fetch('https://api.anthropic.com/v1/models?limit=1', { method: 'get', muteHttpExceptions: true,
+    headers: { 'x-api-key': k, 'anthropic-version': '2026-10-21' } });
+  const code = r.getResponseCode();
+  if (code === 401 || code === 403) throw new Error('Anthropic odrzucił ten klucz (wyłączony albo przepisany z błędem). Nic nie zmieniono.');
+  p.setProperty('CLAUDE_API_KEY', k);
+  const out = trAI();
+  out.checked = code === 200;          // inna odpowiedź (np. chwilowa awaria) = zapisany, ale niesprawdzony
+  return out;
+}
+
 /** Menu Trening → Ustaw klucz Claude API: klucz we właściwościach skryptu (puste = szkice AI wyłączone). */
 function ustawAI() {
   const ui = SpreadsheetApp.getUi(), p = PropertiesService.getScriptProperties(), has = !!p.getProperty('CLAUDE_API_KEY');
@@ -368,7 +403,7 @@ function ustawAI() {
   if (a.getSelectedButton() !== ui.Button.OK) return;
   const k = a.getResponseText().trim();
   if (!k) { p.deleteProperty('CLAUDE_API_KEY'); alert_('Klucz Claude API', 'Szkice AI wyłączone.'); return; }
-  if (!/^sk-ant-[\w-]{20,}$/.test(k)) { alert_('Klucz Claude API', 'To nie wygląda na klucz Claude API (sk-ant-…). Nic nie zmieniono.'); return; }
+  if (aiKeyOk_(k)) { alert_('Klucz Claude API', aiKeyOk_(k) + ' Nic nie zmieniono.'); return; }
   p.setProperty('CLAUDE_API_KEY', k);
   alert_('Klucz Claude API', 'Zapisano. W panelu trenera działa teraz „Szkic AI”.');
 }
