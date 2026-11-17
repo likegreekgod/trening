@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, aplikacja v49 na gałęzi (PR 9 planu v4, czeka na zgodę na PR; `main` = v48 po PR #70).
+Stan na 2026-11-17, aplikacja v49 w PR #72 (plan v4 PR 9, czeka na scalenie; `main` = v48 po PR #70, scalonym 16.11).
 
 ## Jak pracujemy
 
@@ -20,7 +20,6 @@ Stan na 2026-11-17, aplikacja v49 na gałęzi (PR 9 planu v4, czeka na zgodę na
 
 - 17.11 (v49 + `apps-script/`): plan v4 PR 9: raport po bloku w Postęp → Blok (wykonanie, tonaż, czas, siła, jak było, notatka trenera z kolumny Bloków `dla_klienta`) i notatka trenera do jednostki (kolumna Planu `uwagi_jedn`, karta „Od trenera” nad treningiem).
 - 16.11 (v48): plan v4 PR 8: tryb skupienia, jedno ćwiczenie na ekranie (włączany pod „⋯” w górnym pasku, pasek „Ćwiczenie n z m”, „Następne”, przesunięcie palcem, podsumowanie jako ostatni krok).
-
 - 16.11 (v47): plan v4 PR 7: podpowiedzi przy pierwszym użyciu, cztery dymki po kolei (✓, „⋯”, kamera, dzień w pasku), każdy raz; długa ściągawka w PROSTYM zwinięta na dole Treningu.
 - 16.11 (v46): plan v4 PR 6: timer przerwy z grubym paskiem u góry i czerwonymi ostatnimi 10 s, puste stany jako karty z ikoną, płynne zwijanie kart i krótki ruch ✓.
 - 16.11 (v45): plan v4 PR 5: karta „dziś” nad paskiem tygodnia (ile ćwiczeń, serii i minut, „Zacznij” / „Dalej” / „Zakończ”, postęp w trakcie).
@@ -49,8 +48,8 @@ Stan na 2026-11-17, aplikacja v49 na gałęzi (PR 9 planu v4, czeka na zgodę na
 
 ## Czeka na Damiana
 
-- Zgoda na PR z v49 (plan v4 PR 9: raport po bloku, notatka do jednostki). Po scaleniu: w zakładce Bloki kolumna `dla_klienta` pojawi się przy najbliższym przeliczeniu podsumowania, a w Planie kolumna `uwagi_jedn` przy najbliższym imporcie planu; dopisać oba pola do SKILL.md skilla trenera i przebudować ZIP.
-- Próba na telefonie: tryb skupienia (v48, PR #70 scalony).
+- Scalenie PR #72 (v49 + `apps-script/`, plan v4 PR 9: raport po bloku, notatka do jednostki). Po scaleniu: w zakładce Bloki kolumna `dla_klienta` pojawi się przy najbliższym przeliczeniu podsumowania, a w Planie kolumna `uwagi_jedn` przy najbliższym imporcie planu; dopisać oba pola do SKILL.md skilla trenera i przebudować ZIP.
+- Próba na telefonie: tryb skupienia (v48, PR #70 scalony 16.11; włączany pod „⋯” w górnym pasku Treningu).
 - Próba na telefonie: podpowiedzi przy pierwszym użyciu (v47, PR #69 scalony 16.11; obecni klienci zobaczą cztery dymki raz).
 - Próba na telefonie: timer, zwijanie kart, ✓ (v46, PR #68 scalony 16.11).
 - Próba na telefonie: karta „dziś” (v45, PR #67 scalony 16.11). Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
@@ -68,7 +67,6 @@ Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPho
 
 ## Propozycje (do wyboru)
 
-- Krótkie podpowiedzi przy pierwszym użyciu zamiast długiej pomocy.
 - Przegląd trenera na telefonie (osobna strona).
 - Porządek w bazie ćwiczeń: lista podejrzanych duplikatów Catalyst / free-exercise-db do decyzji.
 
