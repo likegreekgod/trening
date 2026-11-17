@@ -16,8 +16,9 @@ Panel w przeglądarce (głównie komputer), dostępny z każdego miejsca, do kon
 |---|---|---|
 | 1 | Logowanie trenera i akcje odczytu: `trConfig`, `trPulpit` (klienci z Przeglądu, sygnały, obciążenie 12 tyg., filmy z 14 dni, bloki do zamknięcia), `trKlient` (dane jak `getData` + bloki + podsumowanie), `trPrzelicz` | scalony (PR #76) |
 | 2 | Panel do czytania: pulpit (5 liczników, tabela klientów, mapa obciążenia, „Do zrobienia”), karta klienta (Przegląd, Sesje, Bloki, Dyspozycja), Filmy (podgląd z Dysku w panelu), Bloki do zamknięcia; v52; poprawka telefonu (pasek u góry, wylogowanie) i przełącznik aplikacja ↔ panel („Panel trenera” na ekranie Trener tylko przy `tr_dev`, „Mój trening ›” w panelu) v54 | scalony (PR #76) |
-| 3 | Zapisy trenera: komentarz do filmu z sekundą (komentarz na Dysku + `Log.komentarz_dysk`), komentarz do sesji, wnioski i „dla klienta” bloku, notatka do jednostki | do zrobienia |
-| 4 | Claude API: szkic komentarza do sesji (pierwsze zadanie), zakładka „AI” (tokeny, koszt, limit) | do zrobienia |
+| 3 | Zapisy trenera: komentarz do sesji (`trKomentarz`, Sesje `komentarz_trenera`) | zrobione na gałęzi (v56, razem z PR 4) |
+| 3b | Dalsze zapisy: komentarz do filmu z sekundą (komentarz na Dysku + `Log.komentarz_dysk`), wnioski i „dla klienta” bloku, notatka do jednostki | do zrobienia |
+| 4 | Claude API: „✦ Szkic AI” komentarza do sesji (`trSzkic`, `trSzkicCtx_`, `aiReq_`; poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic), limit dzienny, zakładka „AI” (tokeny, koszt w USD) | zrobione na gałęzi (v56) |
 | 5 | Asystent planu: szkic bloku jako JSON → `validatePlan_` → `_plany/` | do zrobienia |
 
 ## Uruchomienie (raz, po scaleniu PR 1–2)
@@ -26,6 +27,14 @@ Panel w przeglądarce (głównie komputer), dostępny z każdego miejsca, do kon
 2. W arkuszu: menu „Trening → Ustaw panel trenera”: wklej identyfikator klienta (kończy się na `.apps.googleusercontent.com`) i adres Gmail trenera (kilka po przecinku).
 3. Panel: `https://likegreekgod.github.io/trening/trener.html`.
 
+## Szkic AI (raz, po scaleniu v56)
+
+1. console.anthropic.com → Settings → API Keys → Create Key. Sprawdź w Billing, że konto ma środki (kredyt API jest osobny od subskrypcji claude.ai).
+2. W arkuszu na komputerze: menu „Trening → Ustaw klucz Claude API” i wklej klucz (`sk-ant-…`). Na telefonie: edytor Apps Script → Ustawienia projektu → Właściwości skryptu → `CLAUDE_API_KEY`.
+3. Opcjonalnie właściwość `AI_LIMIT` (domyślnie 30 szkiców dziennie).
+
+Co idzie do AI (`trSzkicCtx_`): tryb i skala, jednostka (plan i wykonane serie bez rozgrzewki, pominięcia, zamiany, komentarze klienta, uwagi z planu), czas, RPE sesji, samopoczucie, ból z miejscem, uwagi do sesji, dyspozycja dnia, 3 poprzednie takie same jednostki, następna jednostka, 5 ostatnich komentarzy trenera do tej osoby. Bez imienia, klucza i linków do filmów. Model `claude-opus-5-5` (effort `low`, bez temperatury), awaryjny model przy odmowie (`fallbacks: "default"`). Szkic ok. 0,02–0,03 USD.
+
 ## Testy
 
-`tests/trener.test.js` (Playwright): logowanie przez atrapę Google, pulpit, karta klienta, filmy, bloki, wygasły bilet, brak konfiguracji; zrzuty 1440×900 i 390×844, jasny i ciemny motyw (`tests/screens/trener-*.png`, poza repo). Logika serwera: `tests/code.test.js` (`trTokenOk_`, rozdział akcji trenera i klientów w `doPost`, `trPulpit_`).
+`tests/trener.test.js` (Playwright): logowanie przez atrapę Google, pulpit, karta klienta, filmy, bloki, wygasły bilet, brak konfiguracji, komentarz do sesji ze szkicem AI (atrapa `trSzkic`, bez prawdziwego API); zrzuty 1440×900 i 390×844, jasny i ciemny motyw (`tests/screens/trener-*.png`, poza repo). Logika serwera: `tests/code.test.js` (`trTokenOk_`, rozdział akcji trenera i klientów w `doPost`, `trPulpit_`).
