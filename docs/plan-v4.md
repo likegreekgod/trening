@@ -98,6 +98,9 @@ Cel: gdy zapisana seria bije dotychczasowy wynik, klient widzi to od razu.
 
 - **Raport po bloku dla klienta:** karta w Postępie z danych `computeBlocks_` (wykonanie, tonaż, zmiana e1RM, najlepsze boje). `getData` musiałby zwracać wiersze Bloków klienta; bez „wniosków” trenera, chyba że Damian zdecyduje inaczej.
 - **Notatka trenera do jednostki:** nowa kolumna Planu na końcu nagłówków (np. `uwagi_jedn`, wypełniana w pierwszym wierszu jednostki), pokazana na górze Treningu. Wymaga wpisu w SKILL.md skilla trenera.
+- **Szkic pokazany 17.11** (pliki poza repo, do odtworzenia skryptem z atrapą: podmiana treści `#postep`, element wstawiony przy `#today`). Raport: wariant A = piąta zakładka „Blok” w Postępie z ◀ ▶ między blokami („Blok B1 · zakończony”, tygodnie i daty), karty Wykonanie (kafle jak w „Trening zrobiony”: jednostki, serie z planu %, tonaż wobec poprzedniego bloku), Siła (ćwiczenie · e1RM początek → koniec, zmiana w %), Najlepsze boje, Jak było (RPE sesji, samopoczucie, ból max), „Wnioski trenera” w ramce akcentu; wariant B = karta „Raport z bloku” z przyciskiem „Zobacz” na górze Postęp → Tydzień po zakończeniu bloku, ta sama treść w oknie `#sheet`. Notatka: wariant A = osobna karta „Od trenera na dziś” w ramce akcentu pod kartą „dziś”; wariant B = sekcja „Od trenera” wewnątrz karty „dziś”.
+- Propozycja techniczna: liczby raportu liczyć w telefonie (czysta funkcja w `lib.js` z `DATA.logs`, planu i sesji, jak Postęp → Tydzień), bo zakładka Bloki odświeża się tylko przy porannym podsumowaniu; z arkusza `getData` dokłada wyłącznie „wnioski” (jeśli klient ma je widzieć).
+- Pytania zadane 17.11: raport A czy B; czy klient widzi „wnioski”; czy raport tylko dla bloków zakończonych, czy też bieżący „w trakcie”; czy pokazywać ból w raporcie; notatka A czy B; czy notatka zostaje widoczna po zapisaniu jednostki (karta „dziś” wtedy znika) i czy ma być też w zakładce Plan.
 
 ### PR 10 · Zmiany w jednostce na miejscu, dla wybranych osób (zgłoszone 13.11)
 
@@ -143,6 +146,6 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 6 | Ruch i timer | zrobione (v46): timer B (pasek u góry, czerwone ostatnie 10 s), puste stany jako karty (`emptyCard`), płynne zwijanie (`foldMove`) i ruch ✓ (`.ok.pop`) |
 | 7 | Podpowiedzi przy pierwszym użyciu | zrobione (v47): wariant A, dymek `#tip` przy elemencie, po kolei; lib `nextTip`, `tipDraw` / `tipPlace` / `tipOk`, stan w `tip_<klucz>` |
 | 8 | Tryb skupienia | zrobione (v48): wariant A, przełącznik pod „⋯” górnego paska; lib `focusSteps`, `focusStart`, `fxDraw` / `fxGo` / `fxSet`, stan w `fx_<klucz>` |
-| 9 | Raport po bloku, notatka do jednostki | po decyzji |
+| 9 | Raport po bloku, notatka do jednostki | szkic pokazany 17.11, czeka na wybór wariantów |
 | 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zrobione (v42 + `apps-script/`): flaga Klienci N `edycja`, API `editPlan`, lib `planEdit`; szczegóły w `decyzje.md` |
 | 11 | Przypięta nazwa ćwiczenia przy przewijaniu; komentarz do ćwiczenia w osobnym oknie | zrobione (v43): nazwa przypięta w wariancie B (`stickDraw`, `.ch.stuck`), komentarz w oknie (`openNote`) |
