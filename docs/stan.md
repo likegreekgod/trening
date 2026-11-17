@@ -18,6 +18,7 @@ Stan na 2026-11-17, `main` = v50 (PR #73 scalony); v51 („★ Pierwszy wynik”
 
 ## Ostatnio zrobione
 
+- 17.11 (`apps-script/`): bezpieczeństwo: stara wersja aplikacji (link `/exec?k=`) wyłączona, `doGet` zwraca tylko tekst; przegląd repo bez danych klientów.
 - 17.11 (v51): pierwszy zapis ćwiczenia głównego bez historii pokazuje „★ Pierwszy wynik” zamiast niczego.
 - 17.11 (v50): poprawki po próbie v44–v48: seria bez RPE liczona do rekordu jak RPE 10, „★ rekord” w zwiniętej karcie, licznik podpowiedzi tylko z niewidzianych, „Wyczyść trening” pod „⋯” górnego paska.
 - 17.11 (v49 + `apps-script/`): plan v4 PR 9: raport po bloku w Postęp → Blok (wykonanie, tonaż, czas, siła, jak było, notatka trenera z kolumny Bloków `dla_klienta`) i notatka trenera do jednostki (kolumna Planu `uwagi_jedn`, karta „Od trenera” nad treningiem).

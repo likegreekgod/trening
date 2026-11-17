@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-17 · Stara wersja wyłączona (bezpieczeństwo, `apps-script/`)
+
+- Przegląd repo i historii: danych klientów, prawdziwych kluczy, ID arkusza i Dysku ani sekretów nie ma. Adres `/exec` w `web/config.js` jest jawny z konieczności (aplikacja go używa); każda akcja `API_FNS` wymaga klucza klienta.
+- Słabość: `doGet` pokazywał stronę HtmlService (także bez klucza, jako komunikat o błędzie), a z takiej strony `google.script.run` wywołuje każdą funkcję skryptu bez „_” na końcu (np. `dodajKlientaZapisz`, `podsumowanie`, `setup`). Cudzych danych nie zwracały, ale dało się dopisać klienta i uruchamiać przeliczenia.
+- Ustalenie: wszyscy klienci są w aplikacji z GitHub Pages, więc stara wersja (`Index.html`) usunięta, a `doGet` zwraca zwykły tekst (`ContentService`, bez google.script.run). Repo zostaje publiczne; czyszczenie historii i zmiana kluczy niepotrzebne.
+
 ## 2026-11-17 · „★ Pierwszy wynik” (v51)
 
 - Damian sprawdzał rekord na ćwiczeniu bez historii (Hang Power Clean; Clean to dla aplikacji inne ćwiczenie) i nic się nie pokazało. Ustalenie: pierwszy zapis ćwiczenia głównego (A) dostaje pasek „★ Pierwszy wynik” pod najlepszą serią (obrys w kolorze akcentu, bez wypełnienia, żeby nie mylił się z rekordem). PRO: „najlepsze zaliczone X kg” / „szacowane maks. X kg”, PROSTY: „Od niego liczymy rekordy”. Nie wchodzi do rekordów w oknie „Trening zrobiony” ani w Postępie.
