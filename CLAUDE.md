@@ -121,18 +121,27 @@ Konwencje Damiana:
 
 - `Index.html` jest wspólny dla wszystkich klientów. Różnice między klientami robi się przez `cfg` z getData (pain, simple, extra) albo przez kolumny planu, **nigdy** przez warunki na konkretne imię.
 - Tryb prosty (`SIMPLE`):
-  - „jak ciężko?”: Lekko / Średnio / Ciężko / Max, zapisywane jako RPE 6 / 7,5 / 9 / 10;
+  - „jak ciężko?”: te same światła co w PRO (Lekko / Średnio / Ciężko / Nieudana), słowem zamiast liczby, bez dokładnego RPE;
   - „✓ Wszystko jak w planie”;
   - podpowiedź RIR;
   - ukryte VBT i %.
 - Pola kg / powt.: propozycja (plan, poprzednia seria, drop) to placeholder (`data-ph`, klasa `ph`), pole puste; wartość czytaj przez `fv(input)`, nową propozycję ustawiaj `setPh`. ✓ przy pustym polu wpisuje propozycję. Pole z wartością zaznacza się przy fokusie.
 - Serie:
-  - dodatkowe przyciski „+ Rozgrzewka”, „⇣ Jak 1. seria”, „+ Seria (N)” i „+ Drop” (~80% ciężaru, w dół do 2,5 kg);
+  - dodatkowe przyciski „+ rozgrzewka”, „+ seria (N)” i „+ drop set” (~80% ciężaru, w dół do 2,5 kg; „⇣ Jak 1. seria” usunięte w v4);
   - ✕ usuwa ostatni dodany wiersz w dwóch dotknięciach;
   - pole odhaczenia (`data-st`): puste → ✓ zrobiona → ✕ nieudana (typ FAIL, rpe puste) → puste; żółte (`pend`) = czeka w kolejce;
   - dotknięcie numeru serii roboczej/dodatkowej: zwykła → drop (typ DROP) → nieudana;
   - zmiana kg/powt./RPE w zapisanej serii zapisuje ją od razu;
-  - PRO: lista RPE albo RIR (0…5+) wg `cfg.scale` i przełącznika w nagłówku (`sc_<klucz>`); zapis zawsze w RPE;
+  - **wysiłek serii = światło** (v59, jedna skala w całej aplikacji, lib `EFF`, `lightOf`, `EFF_FINE`): w wierszu przycisk `.ef` („oceń”), dotknięcie → pod wierszem `.efp` z czterema światłami, wybór od razu zapisuje serię (`save(st, oc, rpe)`, RPE w `row.dataset.rpe`):
+
+    | Światło | `rpe` w Logu | `typ` | Podpis |
+    |---|---|---|---|
+    | 🟢 Lekko | 7 | – | Szybko, czysto, zapas ≥ 3 |
+    | 🟡 Średnio | 8 | – | Wolniej albo z poprawką, zapas 2 |
+    | 🔴 Ciężko | 9 | – | Walka, zapas 0–1 |
+    | ✖ Nieudana | puste | FAIL | Seria nie wyszła |
+
+    Odczyt (też stare wpisy, `lightOf`): ≤ 7,5 → 🟢, 8–8,5 → 🟡, ≥ 9 → 🔴, FAIL → ✖, puste → „oceń”. **Bez wartości domyślnej**: ✓ bez światła zapisuje puste RPE, nigdy 7; „✓ Wszystko jak w planie” nie ustawia światła; rozgrzewka bez świateł; „Bez oceny (zostaje ✓)” czyści RPE. W Logu tylko liczba RPE (+ FAIL); światło to jej widok. PRO: w wierszu liczba RPE albo „RIR n” wg `cfg.scale` i przełącznika w nagłówku (`sc_<klucz>`), w okienku przy zaznaczonym świetle „Dokładniej” z wartościami `EFF_FINE` (zakres światła i krok do sąsiedniego, np. 🟡 7,5 / 8 / 8,5 / 9; przy RIR w RIR), zapis zawsze w RPE; PROSTY: słowo, bez „Dokładniej”. **Puste RPE = brak danych** w arkuszu (`n_` → NaN: bez e1RM, bez RPE względem planu, nie seria twarda); wyjątek tylko w aplikacji: rekord i wykres Siły liczą serię bez RPE jak RPE 10 (`L.e1rm`, ustalenie 17.11);
   - recepta: kwadrat w kolorze talerza wg % 1RM, „RIR ≥ n” przy skali RIR; „Ostatnio: kg × powt. · RPE” z poprzedniej jednostki (`lastTop`) jest przyciskiem (`button.last`, `data-hist`) i otwiera okno „Historia” (`openHist`, lib `exHistory`): wykres siły z `strengthSeries` (ostatnie 5 punktów, rekordy z całej historii) i 5 ostatnich jednostek z tym ćwiczeniem bez bieżącej (serie w skrócie, najlepsza seria, wysiłek przez `effTxt`); jeden trening albo ćwiczenie na czas = bez wykresu.
   - rekord w chwili zapisu (`recDraw`, lib `unitRecord`, serie z `unitSets`): pasek `.rec` „★ Rekord” pod najlepszą zaliczoną serią ćwiczenia głównego (A), gdy bije całą historię sprzed tej jednostki (e1RM, w bojach kg; nie FAIL, nie na czas; pierwszy wynik ćwiczenia bez historii = pasek `.rec.first` „★ Pierwszy wynik” (obrys zamiast wypełnienia, PRO z wartością bez „było”, PROSTY „Od niego liczymy rekordy”, w zwiniętej karcie „★ pierwszy wynik”; `unitRecord` zwraca `first: true`, `unitSummary` go pomija); seria bez RPE liczy się w aplikacji jak RPE 10, `L.e1rm`, arkusz bez zmian); jeden na ćwiczenie, PRO „szacowane maks. X kg · było Y”, PROSTY bez liczb; rysowany przy zapisie serii i w `refreshDel`, bez toastu i dźwięku; zwinięta karta ma w wyniku „★ rekord” (`recSum`);
   - „✓ Wszystko jak w planie” (PROSTY) widoczne tylko przy niezapisanych seriach z planu (`refreshAll`);
@@ -140,7 +149,7 @@ Konwencje Damiana:
   - po zaliczeniu serii (✓/✕, nie rozgrzewka) timer przerwy nad dolnym menu: A 2:00, B 1:30, K 1:00 (`restSec`), −15 / +15 / Pomiń, wibracja na koniec; pasek postępu 8 px na górnej krawędzi, w ostatnich 10 s (`REST_END`) klasa `#rest.end` (czerwone cyfry i pasek, „Zaraz koniec · …”);
   - Wake Lock od pierwszego wpisu do „Zakończ” (ponownie po powrocie do aplikacji);
   - „Talerze”: okno `#sheet` z rozkładem na stronę (`plates`), gryf 20/15 kg i zamki 2 × 2,5 kg zapamiętane w `pl_<klucz>`.
-  - boje (grupa R/P z kolumny `grupa` albo po nazwie, `isOly`): zamiast RPE i ✓ światła sędziowskie; ocena Łatwo / Średnio / Walka / Spalone → `rpe` 7 / 8 / 9,5 / FAIL + `ocena` L/S/W/X; propozycja ciężaru pod ostatnio ocenionym podejściem (`sugOly`, „Ustaw X kg”); w recepcie „max dziś” = `olyCap` (plan + `sufit_oly` × 1RM, przy dyspozycji „Uwaga”/„Zmęczenie” = plan).
+  - boje (grupa R/P z kolumny `grupa` albo po nazwie, `isOly`): zamiast RPE i ✓ światła sędziowskie; ocena Łatwo / Średnio / Walka / Spalone → `rpe` 7 / 8 / 9 / FAIL (te same stopnie co światła, `RATE` z `EFF`; do v55 Walka = 9,5) + `ocena` L/S/W/X, w PRO też „Dokładniej”; propozycja ciężaru pod ostatnio ocenionym podejściem (`sugOly`, „Ustaw X kg”); w recepcie „max dziś” = `olyCap` (plan + `sufit_oly` × 1RM, przy dyspozycji „Uwaga”/„Zmęczenie” = plan).
   - „Zamień ćwiczenie” (tylko `cfg.swap`): TRENER = zamienniki z kolumny planu `zamienniki`, bazy albo wg wzorca ruchu (`swapOptions`), bez własnej nazwy; DOWOLNA = też wyszukiwarka całej bazy (`getExNames`, `exSearch`) i własna nazwa; powód z listy; zamiana w telefonie (`sw_<klucz>`) i w Logu (`zamiana` = „oryginał → zamiennik | powód”, `cwiczenie` = zamiennik); na innym telefonie odtwarzana z Logu.
   - kamera przy każdej serii roboczej, dodatkowej i drop (`openCam`): film wgrywany do tej serii (Drive, bez zmian w wysyłce), bez sieci komunikat zamiast błędu (film nie trafia do kolejki); w PRO pole „Prędkość z urządzenia (m/s)” → `vbt_ms` (kolumny VBT w wierszu już nie ma);
   - każdy zapis serii buduje `payloadOf(row, ex, s0)` (stan ✓/✕, ocena, typ, zamiana, film i prędkość z dotychczasowego wpisu), więc kolejne zapisy niczego nie kasują.
