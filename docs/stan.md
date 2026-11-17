@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, `main` = v50 (PR #73 scalony); v51 („★ Pierwszy wynik”) na gałęzi `claude/project-thread-mlzyqf`.
+Stan na 2026-11-17, `main` = v51 (PR #74 scalony); panel trenera PR 1–2 (v52 + `apps-script/`) na gałęzi `claude/project-thread-taywqw`.
 
 ## Jak pracujemy
 
@@ -18,6 +18,7 @@ Stan na 2026-11-17, `main` = v50 (PR #73 scalony); v51 („★ Pierwszy wynik”
 
 ## Ostatnio zrobione
 
+- 17.11 (v52 + `apps-script/`, na gałęzi): panel trenera PR 1 i 2 (`docs/plan-panel.md`): logowanie Google, pulpit z klientami i sygnałami, karta klienta, filmy oglądane w panelu, bloki do zamknięcia. Tylko odczyt; zapisy w PR 3.
 - 17.11 (v51): pierwszy zapis ćwiczenia głównego bez historii pokazuje „★ Pierwszy wynik” zamiast niczego.
 - 17.11 (v50): poprawki po próbie v44–v48: seria bez RPE liczona do rekordu jak RPE 10, „★ rekord” w zwiniętej karcie, licznik podpowiedzi tylko z niewidzianych, „Wyczyść trening” pod „⋯” górnego paska.
 - 17.11 (v49 + `apps-script/`): plan v4 PR 9: raport po bloku w Postęp → Blok (wykonanie, tonaż, czas, siła, jak było, notatka trenera z kolumny Bloków `dla_klienta`) i notatka trenera do jednostki (kolumna Planu `uwagi_jedn`, karta „Od trenera” nad treningiem).
@@ -46,12 +47,14 @@ Stan na 2026-11-17, `main` = v50 (PR #73 scalony); v51 („★ Pierwszy wynik”
 
 ## Do zrobienia
 
+- **Panel trenera (`docs/plan-panel.md`)**: PR 1 i 2 zrobione na gałęzi, dalej PR 3 (zapisy trenera), PR 4 (Claude API: szkic komentarza do sesji), PR 5 (asystent planu).
 - **Plan v4 (`docs/plan-v4.md`): odświeżenie wyglądu i nowe funkcje.** PR 1 (v38, v39), PR 2 (v40), PR 3 (v41), PR 4 (v44), PR 5 (v45), PR 6 (v46), PR 7 (v47), PR 8 (v48), PR 9 (v49), PR 10 (v42) i PR 11 (v43) zrobione. Plan v4 zamknięty; następne zadanie do wyboru z „Propozycji”. Kolejność, zakres, miejsca w kodzie i pytania do Damiana są w tym pliku.
 
 ## Czeka na Damiana
 
-- Scalenie PR #72 (v49 + `apps-script/`, plan v4 PR 9: raport po bloku, notatka do jednostki). Po scaleniu: w zakładce Bloki kolumna `dla_klienta` pojawi się przy najbliższym przeliczeniu podsumowania, a w Planie kolumna `uwagi_jedn` przy najbliższym imporcie planu; dopisać oba pola do SKILL.md skilla trenera i przebudować ZIP.
-- Scalenie v51 („★ Pierwszy wynik”), potem próba na telefonie.
+- Panel trenera: zgoda na PR 1–2, po scaleniu identyfikator klienta OAuth w Google Cloud i menu „Ustaw panel trenera” (kroki w `docs/plan-panel.md`, „Uruchomienie”).
+- Dopisać `uwagi_jedn` i `dla_klienta` do SKILL.md skilla trenera i przebudować ZIP (PR #72 scalony).
+- Próba v51 („★ Pierwszy wynik”) na telefonie.
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
 
