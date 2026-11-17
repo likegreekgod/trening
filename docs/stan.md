@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, `main` = v50 (PR #73 scalony); v51 („★ Pierwszy wynik”) na gałęzi `claude/project-thread-mlzyqf`.
+Stan na 2026-11-17, `main` = v51 (PR #75 scalony); v52 (marka „Siła z Ruchu” i animacja otwarcia) na gałęzi `claude/project-thread-ezlb23`.
 
 ## Jak pracujemy
 
@@ -18,6 +18,7 @@ Stan na 2026-11-17, `main` = v50 (PR #73 scalony); v51 („★ Pierwszy wynik”
 
 ## Ostatnio zrobione
 
+- 17.11 (v52): marka „Siła z Ruchu”: nowa nazwa tam, gdzie widzi ją klient (pod ikoną, w karcie przeglądarki, w nagłówku przed planem), i animacja otwarcia (tor sztangi w rwaniu, linia tańca, napis; 3,3 s, tylko przy pierwszym otwarciu dnia, dotknięcie pomija).
 - 17.11 (`apps-script/`): bezpieczeństwo: stara wersja aplikacji (link `/exec?k=`) wyłączona, `doGet` zwraca tylko tekst; przegląd repo bez danych klientów.
 - 17.11 (v51): pierwszy zapis ćwiczenia głównego bez historii pokazuje „★ Pierwszy wynik” zamiast niczego.
 - 17.11 (v50): poprawki po próbie v44–v48: seria bez RPE liczona do rekordu jak RPE 10, „★ rekord” w zwiniętej karcie, licznik podpowiedzi tylko z niewidzianych, „Wyczyść trening” pod „⋯” górnego paska.
@@ -51,8 +52,9 @@ Stan na 2026-11-17, `main` = v50 (PR #73 scalony); v51 („★ Pierwszy wynik”
 
 ## Czeka na Damiana
 
-- Scalenie PR #72 (v49 + `apps-script/`, plan v4 PR 9: raport po bloku, notatka do jednostki). Po scaleniu: w zakładce Bloki kolumna `dla_klienta` pojawi się przy najbliższym przeliczeniu podsumowania, a w Planie kolumna `uwagi_jedn` przy najbliższym imporcie planu; dopisać oba pola do SKILL.md skilla trenera i przebudować ZIP.
-- Scalenie v51 („★ Pierwszy wynik”), potem próba na telefonie.
+- Scalenie v52 (marka „Siła z Ruchu” i animacja otwarcia). Potem próba na telefonie: animacja przy pierwszym otwarciu dnia (kolejne otwarcia bez niej, dotknięcie pomija) i nazwa pod ikoną (Android zwykle podmienia sam w ciągu kilku dni, iPhone dopiero po usunięciu ikony i ponownym dodaniu do ekranu głównego).
+- Po PR #72 (scalony 17.11): w zakładce Bloki kolumna `dla_klienta` pojawia się przy najbliższym przeliczeniu podsumowania, a w Planie kolumna `uwagi_jedn` przy najbliższym imporcie planu; dopisać oba pola do SKILL.md skilla trenera i przebudować ZIP.
+- Próba v51 na telefonie („★ Pierwszy wynik” przy ćwiczeniu głównym bez historii).
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
 

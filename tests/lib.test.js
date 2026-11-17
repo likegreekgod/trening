@@ -683,3 +683,44 @@ test('blockReport: raport po bloku jak zakładka Bloki (wykonanie, tonaż, siła
   assert.equal(L.blockReport({ plan, logs, sessions, today: '2026-09-21' })[1].state, 'now');
   assert.deepEqual(L.blockReport({ plan: [{ week: 1, day: 'T1', order: 1, sets: 3, block: '' }], today: '2026-09-21' }), []);   // plan bez bloków
 });
+
+test('animacja otwarcia: tempo boju (wolny pierwszy ciąg, najszybsze wybicie, zwolnienie na szczycie), sztanga się nie cofa', () => {
+  const I = L.INTRO;
+  assert.equal(L.introTempo(0), 0);
+  assert.equal(L.introTempo(1), 1);
+  assert.deepEqual([L.introTempo(-0.5), L.introTempo(2), L.introTempo('x')], [0, 1, 0]);       // poza zakresem = początek albo koniec toru
+  I.TEMPO.forEach(([t, s]) => assert.ok(Math.abs(L.introTempo(t) - s) < 1e-9));                 // krzywa przechodzi przez punkty boju
+  let prev = 0;
+  for (let i = 1; i <= 1000; i++) { const s = L.introTempo(i / 1000); assert.ok(s >= prev, 'cofnięcie przy ' + i / 1000); prev = s; }
+  const v = t => (L.introTempo(t + 0.005) - L.introTempo(t - 0.005)) / 0.01;                    // prędkość po torze
+  let top = 0, fast = 0;
+  for (let t = 0.01; t < 1; t += 0.005) if (v(t) > fast) { fast = v(t); top = t; }
+  assert.ok(top > I.TEMPO[1][0] && top < I.TEMPO[2][0], 'najszybciej przy ' + top.toFixed(3)); // najszybszy moment wypada w wybiciu
+  assert.ok(v(0.05) < v(0.3) && v(0.3) < v(0.5) && v(0.5) < fast);                              // pierwszy ciąg przyspiesza od zera, ale wolniej niż wybicie
+  assert.ok(v(I.TEMPO[3][0]) < 0.25 * fast);                                                    // zawis na szczycie
+  assert.ok(I.TEMPO[2][0] - I.TEMPO[1][0] < 0.1);                                               // wybicie to krótka chwila między pozycją mocy a końcem wyprostu
+});
+
+test('animacja otwarcia: czasy; cały napis zostaje na ekranie co najmniej 1,2 s i całość mieści się w 3,5 s', () => {
+  const I = L.INTRO, t = L.introTimes(11);                                                      // „Siła z Ruchu” = 11 znaków z odstępem
+  assert.deepEqual(t, { grab: 1500, text: 1200, full: 1780, fade: 2980, end: 3280 });
+  assert.ok(t.fade - t.full >= 1200);                                                           // czas na przeczytanie (wersja z 0,3 s była za szybka)
+  assert.ok(t.end <= 3500);
+  assert.ok(t.text < t.grab && t.full > t.grab);                                                // napis zaczyna wchodzić tuż przed chwytem, kończy po nim
+  assert.equal(L.introTimes(1).full, t.text + I.LETTER_IN);
+  assert.equal(L.introTimes(0).full, t.text + I.LETTER_IN);
+});
+
+test('animacja otwarcia: linia tańca trzyma wysokość talerza, na szczycie robi łuk i kończy razem ze sztangą', () => {
+  // linia tańca w 10 równych odcinkach: wznosi się ze 100 do 10 (szczyt w 9/10 długości), potem schodzi do 25; sztanga wznosi się ze 100 do 30
+  const dy = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 25], at = L.introDance(dy, 30), sApex = L.INTRO.TEMPO[3][1];
+  assert.equal(at(0, 100), 0);                                                                  // start: oba punkty na pomoście
+  assert.ok(Math.abs(at(0.4, 65) - 0.45) < 1e-9);                                               // sztanga w połowie drogi w górę → taniec w połowie swojej (wysokość 55)
+  assert.ok(Math.abs(at(sApex - 1e-9, 30.0000001) - 0.9) < 1e-6);                               // tuż przed szczytem sztangi: szczyt linii tańca
+  assert.equal(at(sApex, 30), 0.9);                                                             // bez skoku w chwili przejścia
+  assert.equal(at(1, 43), 1);                                                                   // chwyt: koniec linii
+  assert.ok(Math.abs(at((sApex + 1) / 2, 35) - 0.95) < 1e-9);                                   // zejście do chwytu równo ze sztangą
+  let prev = -1;
+  for (let i = 0; i <= 70; i++) { const f = at(0.9 * i / 70, 100 - i); assert.ok(f >= prev && f <= 0.9 + 1e-9); prev = f; }   // nigdy się nie cofa
+  assert.equal(L.introDance([5, 5, 5], 5)(0.2, 5), 0);                                          // płaska linia: bez dzielenia przez zero
+});

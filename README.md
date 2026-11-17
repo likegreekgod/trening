@@ -1,4 +1,4 @@
-# Trening – aplikacja dla klientów
+# Siła z Ruchu – aplikacja dla klientów (repozytorium `trening`)
 
 Klient instaluje aplikację z linku (Android i iPhone). Aplikacja pokazuje plan, a klient zapisuje w niej serie, filmy, ból i samopoczucie. Dane trafiają do arkusza i na Drive trenera.
 Architektura, schemat danych i konwencje są opisane w **CLAUDE.md**.
