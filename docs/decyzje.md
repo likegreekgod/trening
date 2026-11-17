@@ -3,6 +3,12 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-17 · Filmy w panelu grają od razu, strumieniem (v62)
+
+- Damian: prawdziwe filmy „słabo się pobierają”. Przyczyna: v61 pobierał cały plik (film z telefonu to często 50–200 MB) i dopiero potem pokazywał odtwarzacz.
+- Teraz `<video>` dostaje adres Drive API `alt=media` z biletem w adresie (`access_token`) i gra od razu; przy przewijaniu i krokach o klatkę przeglądarka sama dociąga potrzebny kawałek (Range). Przed startem tylko krótkie pytanie o rozmiar pliku (z biletem w nagłówku), żeby od razu pokazać „Filmu nie ma już na Dysku”. Bilet wygasły w trakcie oglądania = jeden nowy bilet i ta sama chwila filmu.
+- Bilet w adresie widzi tylko strona panelu zalogowanego trenera (to ten sam bilet co dotąd w pamięci strony, ważny ok. godzinę); nie trafia do historii przeglądarki ani do repo. Odrzucone: wstrzykiwanie nagłówka przez service worker (działa dopiero po przeładowaniu strony i komplikuje `sw.js` wspólny z aplikacją klientów), mniejsza kopia filmu na Dysku (przeliczanie po stronie Google, opóźnienie).
+
 ## 2026-11-17 · Filmy w panelu: własny odtwarzacz i komentarz z sekundą (v61)
 
 - Damian: w okienku podglądu Dysku film słabo się ogląda na telefonie (nie da się powiększyć) i nie da się komentować. Szkic zaakceptowany: własny odtwarzacz (klatka po klatce co 1/30 s, ¼× / ½× / 1×, pętla, pełny ekran jako nakładka na całą stronę, bo iPhone nie daje pełnego ekranu elementom strony; powiększanie dwoma palcami, przesuwanie jednym, dwa dotknięcia = 1×), na telefonie przełącznik „Film n z m” zamiast listy.
