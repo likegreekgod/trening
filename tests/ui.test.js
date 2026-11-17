@@ -1350,7 +1350,8 @@ test('Film w kolejce: kawałki po 8 MB, przerwa w połowie, wznowienie po ponown
   await p.click('.set[data-o="1"][data-s="1"] .cam');
   const BIG = { name: 'duzy.mp4', mimeType: 'video/mp4', buffer: Buffer.alloc(9 * 1048576 + 123, 7) };
   await p.setInputFiles('#cam-file', BIG); await p.waitForSelector('#sheet', { state: 'hidden' });
-  await p.waitForTimeout(1500);
+  for (let i = 0; i < 100 && puts.length < 2; i++) await p.waitForTimeout(100);     // czeka na drugi kawałek (do 10 s) zamiast sztywnych 1,5 s: na wolniejszym komputerze 8 MB szło dłużej i test padał bez powodu
+  await p.waitForTimeout(300);                                                      // chwila na obsługę przerwanej wysyłki
   assert.deepEqual(puts, [['bytes 0-8388607/9437307', 8388608], ['bytes 8388608-9437306/9437307', 1048699]]);
   assert.equal(calls.filter(c => c.fn === 'logVideo').length, 0);
   assert.equal(await p.$eval('.set[data-o="1"][data-s="1"] .cam', b => b.classList.contains('pend')), true);
@@ -2115,6 +2116,61 @@ test('Marka „Siła z Ruchu”: nazwa pod ikoną na ekranie głównym, w karcie
   assert.equal(await p.getAttribute('meta[name="apple-mobile-web-app-title"]', 'content'), 'Siła z Ruchu');   // nazwa pod ikoną na iPhonie
   assert.deepEqual(p.errors, []);
   await ctx.close();
+});
+
+test('Ikona „Siła z Ruchu”: pliki mają rozmiary obiecane w manifeście i są tym, co rysuje tools/make-icons.js z toru animacji; znak wczytuje się w nagłówku w obu motywach', async () => {
+  const man = JSON.parse(fs.readFileSync(path.join(WEB, 'manifest.json'), 'utf8'));
+  const icon = f => fs.readFileSync(path.join(WEB, 'icons', f));
+  const size = f => { const b = icon(f); assert.equal(b.toString('latin1', 1, 4), 'PNG', f); return b.readUInt32BE(16) + 'x' + b.readUInt32BE(20); };   // szerokość i wysokość z nagłówka pliku PNG
+  // rozmiary: każdy plik PNG z manifestu ma tyle pikseli, ile manifest obiecuje telefonowi; do tego ikona iPhone'a i karty przeglądarki
+  for (const i of man.icons.filter(i => i.type === 'image/png')) assert.equal(size(i.src.replace('icons/', '')), i.sizes, i.src);
+  assert.deepEqual(['apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png'].map(size), ['180x180', '32x32', '16x16']);
+  assert.deepEqual(man.icons.map(i => i.purpose).sort(), ['any', 'any', 'maskable', 'maskable', 'monochrome']);
+  // pliki w repo są dokładnie tym, co rysuje narzędzie z krzywych animacji (nikt nie poprawił ikony ręcznie ani toru „na oko”)
+  const gen = require('../tools/make-icons.js').files();
+  for (const [name, text] of Object.entries(gen.svg)) assert.equal(icon(name).toString('utf8'), text, name + ' różni się od narzędzia: uruchom node tools/make-icons.js');
+  assert.deepEqual(gen.png.map(f => f[0]).sort(), fs.readdirSync(path.join(WEB, 'icons')).filter(f => f.endsWith('.png')).sort());
+  const html = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8');
+  const bar = /<path id="in-bar"[^>]*\sd="([^"]+)"/.exec(html)[1], dance = /<path id="in-dance"[^>]*\sd="([^"]+)"/.exec(html)[1];
+  assert.ok(icon('favicon.svg').includes(bar) && icon('icon-mono.svg').includes(bar) && icon('icon-mono.svg').includes(dance));
+  // ikona jednobarwna (Android koloruje ją sam i bierze tylko obrys): sam czarny kształt, bez przezroczystości
+  const mono = icon('icon-mono.svg').toString('utf8');
+  assert.deepEqual([...new Set(mono.match(/#[0-9a-f]{3,8}\b/gi))], ['#000']); assert.ok(!/opacity/.test(mono));
+  // obraz w plikach PNG: piksel po pikselu ten sam rysunek, który narzędzie rysuje teraz z toru animacji; kolory marki są na miejscu (tło, pomarańczowy tor,
+  // jasny talerz), ikony na ekran główny są pełnym kwadratem bez przezroczystości
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const px = await p.evaluate(async ([list, C]) => { const out = {};
+    for (const [name, n, markup] of list) {
+      const pix = async src => { const im = new Image(); im.src = src; await im.decode();
+        const c = document.createElement('canvas'); c.width = c.height = n; const g = c.getContext('2d'); g.drawImage(im, 0, 0);
+        return { nat: [im.naturalWidth, im.naturalHeight], d: g.getImageData(0, 0, n, n).data }; };
+      const { nat, d } = await pix('icons/' + name), w = (await pix('data:image/svg+xml,' + encodeURIComponent(markup))).d;   // d = plik z repo, w = rysunek narzędzia
+      const like = (i, k) => d[i + 3] === 255 && Math.abs(d[i] - k[0]) + Math.abs(d[i + 1] - k[1]) + Math.abs(d[i + 2] - k[2]) < 30;
+      const share = k => { let m = 0; for (let i = 0; i < d.length; i += 4) if (like(i, k)) m++; return m / (n * n); };
+      let off = 0; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - w[i]) + Math.abs(d[i + 1] - w[i + 1]) + Math.abs(d[i + 2] - w[i + 2]) + Math.abs(d[i + 3] - w[i + 3]) > 60) off++;
+      out[name] = { nat, corners: [0, n - 1, n * (n - 1), n * n - 1].map(q => d[q * 4 + 3]), bg: share(C.bg), acc: share(C.acc), ink: share(C.ink), off: off / (n * n) };
+    }
+    return out; }, [gen.png, { bg: rgb(gen.colors.bg), acc: rgb(gen.colors.acc), ink: rgb(gen.colors.ink) }]);
+  for (const [name, n] of gen.png) {
+    const q = px[name], small = /^favicon/.test(name);
+    assert.deepEqual(q.nat, [n, n], name);
+    assert.ok(q.off < 0.005, name + ' różni się od rysunku narzędzia (' + (q.off * 100).toFixed(2) + '% pikseli): uruchom node tools/make-icons.js');
+    assert.ok(q.bg > 0.5 && q.acc > 0.02 && q.ink > 0.004, name + ' ' + JSON.stringify(q));        // większość to tło, tor i talerz są widoczne
+    if (small) assert.ok(q.corners.every(a => a < 128), name + ' ' + q.corners);                   // znak w karcie przeglądarki ma zaokrąglone rogi
+    else assert.deepEqual(q.corners, [255, 255, 255, 255], name);                                  // telefon sam przycina rogi: przezroczystość dałaby czarne narożniki
+  }
+  await ctx.close();
+  // znak w nagłówku aplikacji: wczytany, 20 × 20 px, w jasnym i ciemnym motywie
+  for (const scheme of ['light', 'dark']) {
+    const a = await page([], false, { scheme });
+    await a.p.goto(base + '?k=kabc'); await a.p.waitForSelector('.set[data-o="1"]');
+    const logo = await a.p.$eval('header .logo', i => { const r = i.getBoundingClientRect(); return { ok: i.complete && i.naturalWidth > 0, src: i.getAttribute('src'), box: [r.width, r.height] }; });
+    assert.deepEqual(logo, { ok: true, src: 'icons/favicon.svg', box: [20, 20] }, scheme);
+    assert.deepEqual(a.p.errors, []);
+    await a.ctx.close();
+  }
 });
 
 const LIB = require('../web/lib.js');

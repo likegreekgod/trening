@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, `main` = v54 (scalone PR #76: panel trenera PR 1–2, PR #77: marka „Siła z Ruchu” z animacją otwarcia, PR #78: panel na telefonie i przełącznik aplikacja ↔ panel); v55 (animacja otwarcia po przerwie 30 minut; nowa ikona w przygotowaniu) na gałęzi `claude/project-thread-ezlb23`.
+Stan na 2026-11-17, `main` = v54 (scalone PR #76: panel trenera PR 1–2, PR #77: marka „Siła z Ruchu” z animacją otwarcia, PR #78: panel na telefonie i przełącznik aplikacja ↔ panel); v55 (animacja otwarcia po przerwie 30 minut i nowa ikona „Duet”) na gałęzi `claude/project-thread-ezlb23`, czeka na scalenie.
 
 ## Jak pracujemy
 
@@ -18,7 +18,7 @@ Stan na 2026-11-17, `main` = v54 (scalone PR #76: panel trenera PR 1–2, PR #77
 
 ## Ostatnio zrobione
 
-- 17.11 (v55): animacja otwarcia przy każdym wejściu po co najmniej 30 minutach bez aplikacji (uruchomienie albo powrót do aplikacji z tła) zamiast raz dziennie; w trakcie treningu się nie pokazuje.
+- 17.11 (v55): animacja otwarcia przy każdym wejściu po co najmniej 30 minutach bez aplikacji (uruchomienie albo powrót do aplikacji z tła) zamiast raz dziennie; w trakcie treningu się nie pokazuje. Nowa ikona „Duet” (tor sztangi, linia tańca i talerz z animacji) na ekranie głównym, w karcie przeglądarki i w nagłówku aplikacji; pliki rysuje `tools/make-icons.js`.
 - 17.11 (v54, scalony PR #78): przełącznik między aplikacją a panelem: w aplikacji na ekranie Trener przycisk „Panel trenera” tylko na urządzeniu, na którym ktoś raz zalogował się do panelu (`tr_dev` w localStorage, zostaje po wylogowaniu), w panelu „Mój trening ›” otwiera aplikację z kluczem zapamiętanym w tej przeglądarce. Klienci go nie widzą, bo do panelu wpuszcza tylko adres trenera.
 - 17.11 (v54, scalony PR #78): panel trenera na telefonie: górny pasek nie rozciąga się na pół ekranu przy krótkiej stronie, „Przelicz teraz” i „Wyloguj” widoczne, pusta lista filmów bez podwójnego komunikatu. Logowanie Damiana działa (projekt Google Cloud „Panel trenera”, właściwości skryptu wpisane).
 - 17.11 (v53, scalony PR #77): marka „Siła z Ruchu”: nowa nazwa tam, gdzie widzi ją klient (pod ikoną, w karcie przeglądarki, w nagłówku przed planem), i animacja otwarcia (tor sztangi w rwaniu, linia tańca, napis; 3,3 s, dotknięcie pomija).
@@ -57,8 +57,8 @@ Stan na 2026-11-17, `main` = v54 (scalone PR #76: panel trenera PR 1–2, PR #77
 
 ## Czeka na Damiana
 
-- Wybór nowej ikony (trzy szkice z toru sztangi i linii tańca wysłane 17.11); potem jeden PR z ikoną i animacją po przerwie (v55).
-- Po scaleniu v55 próba na telefonie: animacja po przerwie 30 minut (zaraz po zamknięciu i otwarciu jej nie ma) oraz nazwa i ikona na ekranie głównym (Android zwykle podmienia sam w ciągu kilku dni, iPhone dopiero po usunięciu ikony i ponownym dodaniu do ekranu głównego).
+- Scalenie v55 (animacja otwarcia po przerwie 30 minut i nowa ikona „Duet”).
+- Po scaleniu v55 próba na telefonie: animacja po przerwie 30 minut (zaraz po zamknięciu i otwarciu jej nie ma), nowy znak w nagłówku aplikacji oraz nazwa i ikona na ekranie głównym (Android zwykle podmienia sam w ciągu kilku dni, iPhone dopiero po usunięciu ikony i ponownym dodaniu do ekranu głównego; aplikacja poprosi wtedy o link albo kod).
 - Panel trenera (PR #76 scalony): identyfikator klienta OAuth w Google Cloud i menu „Ustaw panel trenera” (kroki w `docs/plan-panel.md`, „Uruchomienie”).
 - Dopisać `uwagi_jedn` i `dla_klienta` do SKILL.md skilla trenera i przebudować ZIP (PR #72 scalony).
 - Próba v51 („★ Pierwszy wynik”) na telefonie.
