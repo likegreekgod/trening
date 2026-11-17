@@ -81,8 +81,17 @@ const GSI = `window.google = { accounts: { id: {
   renderButton(el){ el.innerHTML = '<button id="fake-g" type="button">Zaloguj (atrapa)</button>'; el.querySelector('button').onclick = () => window.__gcb({ credential: window.__jwt }); },
   prompt(){}, disableAutoSelect(){ window.__noauto = true; } } } };`;
 
+// klient nagrał / wpisał serie dzisiejszej sesji, ale żadnej nie odhaczył (wykonane puste, jak po samym filmie)
+const untick = d => { d.logs.forEach(l => { if (l.data === TODAY) { l.wykonane = ''; if (l.film_link) { l.kg = ''; l.powt = ''; l.rpe = ''; } } }); return d; };
+// syntetyczny fragment „moov” MP4: tabela stsd z jednym wpisem wideo (fourcc, szerokość, wysokość), opcjonalnie hvcC (profil) i colr nclx (krzywa)
+const mp4Stsd = (cc, w, h, prof, tr) => {
+  const e = Buffer.alloc(120); e.write('stsd', 0); e.writeUInt32BE(1, 8); e.writeUInt32BE(110, 12); e.write(cc, 16); e.writeUInt16BE(w, 44); e.writeUInt16BE(h, 46);
+  if (prof) { e.write('hvcC', 90); e[94] = 1; e[95] = prof; }
+  if (tr) { e.write('colrnclx', 100); e.writeUInt16BE(9, 108); e.writeUInt16BE(tr, 110); e.writeUInt16BE(9, 112); }
+  return Buffer.concat([Buffer.from('....ftypisomavc1mp41....mdat'), Buffer.alloc(64), e]);   // „avc1” w ftyp nie może zmylić
+};
 async function page(calls, opt = {}) {
-  const ctx = await browser.newContext({ viewport: opt.vp || { width: 1440, height: 900 }, colorScheme: opt.scheme || 'light', reducedMotion: 'reduce' });
+  const ctx = await browser.newContext({ viewport: opt.vp || { width: 1440, height: 900 }, colorScheme: opt.scheme || 'light', reducedMotion: 'reduce', ...(opt.ua ? { userAgent: opt.ua } : {}) });
   const st = { authFail: 0 };
   await ctx.route('**/macros/**', async r => {
     const b = JSON.parse(r.request().postData() || '{}'); calls.push(b);
@@ -91,7 +100,7 @@ async function page(calls, opt = {}) {
     else if (!b.token) out = { ok: false, error: 'Logowanie: brak biletu' };
     else if (st.authFail > 0) { st.authFail--; out = { ok: false, error: 'Logowanie: bilet wygasł' }; }
     else if (b.fn === 'trPulpit' || b.fn === 'trPrzelicz') out = { ok: true, result: Object.assign({}, PULPIT, b.fn === 'trPrzelicz' ? { at: TODAY + 'T09:30:00.000Z' } : {}) };
-    else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: opt.noSets ? Object.assign(klient(), { logs: [] }) : klient() } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
+    else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: opt.noSets ? Object.assign(klient(), { logs: [] }) : opt.unticked ? untick(klient()) : klient() } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
     else if (b.fn === 'trKomentarz') out = { ok: true, result: { text: String(b.args[3]).trim(), at: TODAY + 'T19:52:00.000Z' } };
     else if (b.fn === 'trSzkic') { st.ai = (st.ai || 0) + 1; await new Promise(res => setTimeout(res, 150));
       out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).' }
@@ -116,6 +125,7 @@ async function page(calls, opt = {}) {
     const cors = { 'Access-Control-Allow-Origin': '*' };
     if (tok !== 'tok-film' || (opt.mediaExpired && u.searchParams.get('alt') === 'media' && !st.fresh)) return r.fulfill({ status: 401, headers: cors, body: '' });
     if (opt.film404) return r.fulfill({ status: 404, headers: cors, body: '' });
+    if (opt.sniff && h.range === 'bytes=0-262143') return r.fulfill({ status: 206, headers: { ...cors, 'Content-Type': 'video/mp4' }, body: opt.sniff });   // początek pliku do odczytu formatu
     if (u.searchParams.get('alt') !== 'media') return r.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify({ size: String(opt.filmSize || FILM.length), mimeType: 'video/webm' }) });
     const m = /bytes=(\d+)-(\d*)/.exec(h.range || '');
     if (!m) return r.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes', 'Content-Length': String(FILM.length) }, body: FILM });
@@ -124,6 +134,7 @@ async function page(calls, opt = {}) {
   });
   await ctx.route('https://drive.google.com/**', r => r.fulfill({ status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: '<body style="margin:0;background:#222;color:#bbb;font:14px sans-serif;display:grid;place-items:center;height:100vh">podgląd filmu (atrapa)</body>' }));
   const exp = Math.floor(Date.now() / 1000) + 3600;
+  if (opt.noPic) await ctx.addInitScript(() => { for (const k of ['videoWidth', 'videoHeight']) Object.defineProperty(HTMLVideoElement.prototype, k, { get: () => 0 }); });
   await ctx.addInitScript(([j, tok]) => { window.__jwt = j; if (tok) try { localStorage.setItem('tr_tok', j); } catch (e) {} }, [JWT(exp), !!opt.loggedIn]);
   const p = await ctx.newPage(); p.errors = []; p.on('pageerror', e => p.errors.push(e.message));
   p.st = st;
@@ -344,6 +355,15 @@ test('panel: komentarz do sesji ze szkicem AI (szkic, poprawka „Krócej”, za
   assert.equal(c2.filter(c => c.fn === 'trSzkic').length, 0);
   assert.deepEqual(s2.p.errors, []);
   await s2.ctx.close();
+  // serie nagrane albo wpisane bez ✓ (np. boje z filmem): widać je na szaro z objaśnieniem, a szkic AI jest dostępny
+  const s3 = await page([], { loggedIn: true, unticked: true });
+  await s3.p.goto(base + 'trener.html#k/ania/sesje'); await s3.p.waitForSelector('details.ses[open] .kedit textarea');
+  assert.ok(await s3.p.$('details.ses[open] .kedit button.ai'));
+  assert.ok((await s3.p.$$('details.ses[open] .sets .nd')).length >= 3);
+  assert.match(await s3.p.textContent('details.ses[open]'), /s\. 1 ▶[\s\S]*klient nagrał albo wpisał serię, ale jej nie odhaczył/);
+  await s3.p.goto(base + 'trener.html#k/ania/przeglad'); await s3.p.waitForSelector('.sets');
+  assert.deepEqual(s3.p.errors, []);
+  await s3.ctx.close();
 });
 
 test('panel: Ustawienia, klucz Claude API wklejany w panelu (też na telefonie), bez pokazywania całego klucza', async () => {
@@ -489,6 +509,9 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   await s5.p.waitForFunction(() => Math.abs(document.querySelector('#pvv').currentTime - 2 / 30) < 0.005);
   const sm = s5.p.st.drive.filter(d => d.alt === 'media');
   assert.ok(sm.length && sm.every(d => d.tok === 'tok-film') && sm.some(d => d.range));   // bilet w nagłówku i zapytania o kawałek
+  // „Czarny obraz, a słychać dźwięk?”: format z pliku i wymiary obrazu w przeglądarce, porady
+  await s5.p.click('#pvh summary'); await s5.p.waitForFunction(() => /Plik:/.test(document.querySelector('#pvh-b').textContent));
+  assert.match(await s5.p.textContent('#pvh-b'), /Plik: VP8\. Przeglądarka widzi obraz \d+×\d+[\s\S]*przyspieszenie graficzne[\s\S]*Otwórz na Dysku/);
   assert.deepEqual(s5.p.errors, []);
   await s5.ctx.close();
   // bilet wygasł w trakcie oglądania: nowy bilet i film gra dalej, bez komunikatu
@@ -499,6 +522,24 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   assert.equal(await s4.p.$('#pv-retry'), null);
   assert.deepEqual(s4.p.errors, []);
   await s4.ctx.close();
+  // dźwięk bez obrazu (HEVC bez dekodera): komunikat z „Otwórz na Dysku”, bez „Spróbuj ponownie”
+  const s6 = await page([], { loggedIn: true, noPic: true });
+  await s6.p.goto(base + 'trener.html#filmy'); await s6.p.waitForSelector('.pv .pmsg a');
+  assert.match(await s6.p.textContent('.pv .pmsg'), /Słychać dźwięk, ale ta przeglądarka nie pokaże obrazu tego filmu\.Format: VP8\.Przeglądarka nie dekoduje obrazu tego filmu\.Przyspieszenie sprzętowe: w Edge.*Na Dysku film zagra/);
+  assert.equal(await s6.p.$('#pv-retry'), null);
+  assert.doesNotMatch(await s6.p.textContent('.pv .pmsg'), /Sklepu Microsoft/);   // podpowiedź o rozszerzeniu tylko w Edge
+  assert.equal(await s6.p.getAttribute('.pv .pmsg a', 'href'), 'https://drive.google.com/file/d/film1/view');
+  assert.deepEqual(await s6.p.evaluate(() => [tFmt(9.96, true), tFmt(69.97, true), tFmt(70.04, true), tFmt(59.99)]), ['0:10,0', '1:10,0', '1:10,0', '0:59']);
+  assert.deepEqual(s6.p.errors, []);
+  await s6.ctx.close();
+  // Edge na Windows bez dekodera HEVC: podpowiedź o rozszerzeniu ze Sklepu Microsoft
+  const s7 = await page([], { loggedIn: true, noPic: true, sniff: mp4Stsd('hvc1', 3840, 2160, 2, 18), ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0' });
+  await s7.p.addInitScript(() => { if (window.MediaSource) MediaSource.isTypeSupported = t => !/hvc1/.test(t); });
+  await s7.p.goto(base + 'trener.html#filmy'); await s7.p.waitForSelector('.pv .pmsg a');
+  await s7.p.screenshot({ path: path.join(SCREENS, 'trener-film-bez-obrazu.png') });
+  assert.match(await s7.p.textContent('.pv .pmsg'), /Format: HEVC \(H\.265\), 3840×2160 \(4K\), 10 bitów, HDR \(HLG\)\.Ta przeglądarka nie obsługuje HEVC\. W Edge pomaga rozszerzenie „HEVC Video Extensions”.*Na Dysku film zagra.*wideo 1080p, bez „wydajnego wideo”/);
+  assert.deepEqual(s7.p.errors, []);
+  await s7.ctx.close();
   const s3 = await page([], { loggedIn: true, film404: true });
   await s3.p.goto(base + 'trener.html#filmy'); await s3.p.waitForSelector('#pv-retry');
   assert.match(await s3.p.textContent('.pv .pmsg'), /Filmu nie ma już na Dysku/);

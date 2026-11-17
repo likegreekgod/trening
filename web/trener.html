@@ -106,6 +106,7 @@
   .tabs a[aria-current="page"]{color:var(--ink);box-shadow:inset 0 -3px 0 var(--accent)}
   .g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--gap)}
   .sets{font:500 12.5px/1.5 var(--f-mono);color:var(--ink-2)}
+  .nd{color:var(--muted);text-decoration:underline dotted;text-underline-offset:3px}
   svg.ch{display:block;width:100%;height:auto}
   svg.ch text{font:500 11px var(--f-mono);fill:var(--muted)}
   .chips{display:flex;gap:8px;flex-wrap:wrap}
@@ -121,7 +122,8 @@
   .pv video{max-width:100%;max-height:100%;width:auto;height:100%;display:block;transform-origin:50% 50%;background:var(--pv-bg)}
   .pv .zoom{position:absolute;top:10px;left:10px;background:var(--pv-glass);color:var(--pv-white);font:600 12.5px/1 var(--f-body);padding:7px 10px;border-radius:999px;pointer-events:none}
   .pv .fsb{position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:12px;border:0;background:var(--pv-glass);color:var(--pv-white);font-size:20px}
-  .pv .pmsg{display:grid;gap:12px;justify-items:center;text-align:center;color:var(--pv-ink);padding:24px;max-width:340px}.pv .pmsg .hint{color:var(--pv-muted)}
+  .pv .pmsg{display:grid;gap:12px;justify-items:center;text-align:center;color:var(--pv-ink);padding:24px;max-width:340px}.pv .pmsg .hint{color:var(--pv-muted)}.pv .pmsg .more{display:grid;gap:8px;font-size:14px;line-height:1.45;color:var(--pv-muted);max-width:460px}.pv .pmsg .more b{color:var(--pv-ink)}.pv .pmsg a.b,.pv .pmsg button.b{color:var(--ink)}.pv .pmsg:has(.more){max-width:500px}
+  .pvh{margin:8px 0 4px}.pvh summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600;color:var(--ink-2)}.pvh p,.pvh ul{margin:4px 0 8px}.pvh li{margin:4px 0}
   .pv .ld{display:block;width:220px;height:6px;border-radius:3px;background:var(--pv-line);overflow:hidden}.pv .ld b{display:block;height:100%;background:var(--accent);transition:width .15s}
   .pv .buf{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--pv-glass);color:var(--pv-white);font:600 13px/1 var(--f-body);padding:9px 14px;border-radius:999px;pointer-events:none}
   .pv .ctl{background:var(--surface-2);padding:10px 12px 12px;display:grid;gap:10px}
@@ -401,7 +403,7 @@ const KF = {};                                   // seria → szkic komentarza (
 const KEEP = {};                                 // seria skomentowana w tej sesji: zostaje na liście „Bez komentarza”
 let VSPD = 1, VLOOP = true;
 const vKey = v => v.file + '|' + v.set;
-const tFmt = (s, tenth) => { s = Math.max(0, s || 0); const m = Math.floor(s / 60), x = s - m * 60; return m + ':' + (tenth ? (x < 10 ? '0' : '') + x.toFixed(1).replace('.', ',') : String(Math.floor(x)).padStart(2, '0')); };
+const tFmt = (s, tenth) => { s = Math.max(0, s || 0); if (tenth) s = Math.round(s * 10) / 10; const m = Math.floor(s / 60), x = s - m * 60; return m + ':' + (tenth ? (x < 10 ? '0' : '') + x.toFixed(1).replace('.', ',') : String(Math.floor(x)).padStart(2, '0')); };
 const komTimes = t => String(t || '').split('\n').map(l => /^\s*(\d{1,2}):([0-5]\d)(?:[.,](\d))?\b/.exec(l)).filter(Boolean).map(m => Number(m[1]) * 60 + Number(m[2]) + (m[3] ? Number(m[3]) / 10 : 0));
 async function filmToken(force){
   if (!force && FT.token && FT.exp > Date.now() + 60000) return FT.token;
@@ -455,6 +457,7 @@ function renderFilmy(who){
   const sw = cur && list.length > 1 ? '<div class="vsw"><button class="ib" type="button" data-vgo="-1" aria-label="Poprzedni film"' + (ix ? '' : ' disabled') + '>‹</button><div class="t"><b>Film ' + (ix + 1) + ' z ' + list.length + (cur.kom ? '' : ' · bez komentarza') + '</b><span>' + esc(cur.name) + ' · ' + esc(cur.ex) + ' · seria ' + esc(cur.set) + '</span></div><button class="ib" type="button" data-vgo="1" aria-label="Następny film"' + (ix < list.length - 1 ? '' : ' disabled') + '>›</button></div>' : '';
   const view = cur ? '<div class="card">' + playerHtml(cur) +
     '<h2 style="margin-top:14px">' + esc(cur.name) + ' · ' + esc(cur.ex) + '</h2><p class="muted">' + esc(dowDm(cur.at)) + ' · tydz. ' + esc(cur.week) + ' · ' + esc(cur.day) + ' · seria ' + esc(cur.set) + ' · ' + what(cur) + (FB[cur.file] && FB[cur.file].size ? ' · plik ' + pl((FB[cur.file].size / 1048576).toFixed(FB[cur.file].size < 10485760 ? 1 : 0)) + ' MB' : '') + '</p>' +
+    (FB[cur.file] && FB[cur.file].st === 'ok' ? '<details class="pvh" id="pvh"><summary>Czarny obraz, a słychać dźwięk?</summary><div id="pvh-b" class="hint">Sprawdzam plik…</div></details>' : '') +
     (cur.note ? '<div class="eb">Komentarz klienta</div><p class="note">' + esc(cur.note) + '</p>' : '') +
     (cur.komD ? '<div class="eb">Z komentarzy na Dysku</div><p class="kom">' + esc(cur.komD) + '</p>' : '') +
     '<div class="kfw" id="kfw"></div>' +
@@ -472,12 +475,40 @@ function renderFilmy(who){
   if (!f) filmLoad(cur.file, redraw);
   else if (f.st === 'ok') playerBind(cur, redraw);
   else if (f.st === 'err') { const r = $('#pv-retry'); if (r) r.onclick = () => { delete FB[cur.file]; filmLoad(cur.file, redraw); }; }
+  const ph = $('#pvh'); if (ph) ph.ontoggle = async () => { if (!ph.open) return;
+    const fmt = await filmFmt(cur.file, (FB[cur.file] || {}).size || 0), vid = $('#pvv'), b = $('#pvh-b'); if (!b) return;
+    const hevc = /HEVC/.test(fmt.codec);
+    b.innerHTML = '<p>Plik: ' + esc(fmtTxt(fmt) || 'formatu nie udało się odczytać') + '. ' + (vid && vid.videoWidth ? 'Przeglądarka widzi obraz ' + vid.videoWidth + '×' + vid.videoHeight + ', więc go dekoduje, a czarny ekran to zwykle grafika komputera.' : 'Przeglądarka nie widzi obrazu.') + '</p><ul>' +
+      (hevc ? '<li>Film jest w HEVC (H.265). W Edge pomaga rozszerzenie „HEVC Video Extensions” ze Sklepu Microsoft.</li>' : '') + '<li>' + esc(HWTIP) + '</li><li>„Otwórz na Dysku” zawsze pokaże film.</li></ul>'; };
   komFilmDraw(cur, who);
+}
+/** format obrazu z początku (256 KB) i końca (3 MB) pliku na Dysku: kodek, wymiary, 10 bitów, HDR (TL.videoCodec); pamięć na czas wizyty */
+const FMT = {};
+async function filmFmt(file, size){
+  if (FMT[file]) return FMT[file];
+  const head = 262144, tail = 3145728;
+  const part = async rg => { try { const r = await filmGet(file, 'alt=media', { Range: 'bytes=' + rg }); return r.ok ? new Uint8Array(await r.arrayBuffer()) : null; } catch (e) { return null; } };
+  return (FMT[file] = TL.videoCodec(await part('0-' + (head - 1)), size > head ? await part((size > tail ? size - tail : head) + '-') : null));
+}
+const fmtTxt = fmt => [fmt.codec, fmt.w && fmt.h ? fmt.w + '×' + fmt.h + (Math.max(fmt.w, fmt.h) >= 3840 ? ' (4K)' : '') : '', fmt.bits10 ? '10 bitów' : '', fmt.hdr ? 'HDR (' + fmt.hdr + ')' : ''].filter(Boolean).join(', ');
+const HWTIP = 'Przyspieszenie sprzętowe: w Edge Ustawienia → System i wydajność → wyłącz przyspieszenie graficzne (sprzętowe), uruchom Edge ponownie i sprawdź film jeszcze raz. To częsta przyczyna czarnego obrazu z dźwiękiem.';
+/** komunikat „dźwięk bez obrazu” z formatem filmu (TL.videoCodec) i podpowiedzią, co zrobić */
+function picMsg(fmt){
+  const ms = t => !!(window.MediaSource && MediaSource.isTypeSupported && MediaSource.isTypeSupported(t)), edge = /Edg\//.test(navigator.userAgent);
+  const hevc = /HEVC/.test(fmt.codec), big = fmt.w * fmt.h > 2073600;
+  const what = fmtTxt(fmt);
+  const why = hevc ? (ms('video/mp4; codecs="hvc1.1.6.L93.B0"') ? (fmt.bits10 || fmt.hdr ? 'Ta przeglądarka zna HEVC, ale nie dekoduje wersji 10-bitowej / HDR.' : 'Ta przeglądarka zna HEVC, ale karta graficzna nie dekoduje tego filmu' + (big ? ' w tej rozdzielczości' : '') + '.')
+        : 'Ta przeglądarka nie obsługuje HEVC.' + (edge ? ' W Edge pomaga rozszerzenie „HEVC Video Extensions” ze Sklepu Microsoft (potem uruchom Edge ponownie).' : ''))
+    : fmt.codec ? 'Przeglądarka nie dekoduje obrazu tego filmu' + (big ? ' w tej rozdzielczości' : '') + (fmt.bits10 || fmt.hdr ? ' (10 bitów / HDR)' : '') + '.'
+    : 'Nie udało się odczytać formatu pliku.';
+  return { err: 'Słychać dźwięk, ale ta przeglądarka nie pokaże obrazu tego filmu.',
+    more: [what ? 'Format: ' + what + '.' : '', why, hevc ? '' : HWTIP, 'Na Dysku film zagra: Dysk sam go przekonwertuje.',
+      hevc || big || fmt.bits10 || fmt.hdr ? 'Na przyszłość: w aparacie telefonu klienta wideo 1080p, bez „wydajnego wideo” (HEVC) i bez HDR. Filmy będą mniejsze i zagrają wszędzie.' : ''].filter(Boolean) };
 }
 function playerHtml(v){
   const f = FB[v.file] || { st: 'load', pct: 0 };
   const stage = f.st === 'ok' ? '<video id="pvv" src="' + esc(filmUrl(v.file)) + '" playsinline preload="auto"' + (VLOOP ? ' loop' : '') + '></video><span class="zoom" hidden></span><span class="buf" hidden>Wczytuję…</span><button class="fsb" type="button" data-pv="fs" aria-label="Pełny ekran">⤢</button>'
-    : f.st === 'err' ? '<div class="pmsg"><b>' + esc(f.err) + '</b><span><button class="b" type="button" id="pv-retry">Spróbuj ponownie</button> <a class="b" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(v.link) + '">Otwórz na Dysku</a></span></div>'
+    : f.st === 'err' ? '<div class="pmsg"><b>' + esc(f.err) + '</b>' + (f.more ? '<div class="more">' + f.more.map(x => '<span>' + esc(x) + '</span>').join('') + '</div>' : '') + '<span>' + (f.codec ? '' : '<button class="b" type="button" id="pv-retry">Spróbuj ponownie</button> ') + '<a class="b" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(v.link) + '">Otwórz na Dysku</a></span></div>'
     : '<div class="pmsg"><b>' + (f.pct ? 'Pobieram film…' : 'Łączę z Dyskiem…') + '</b><span class="ld"><b style="width:' + (f.pct || 0) + '%"></b></span></div>';
   const dis = f.st === 'ok' ? '' : ' disabled';
   return '<div class="pv" data-file="' + esc(v.file) + '"><div class="stage">' + stage + '</div><div class="ctl">' +
@@ -499,7 +530,8 @@ function playerBind(v, redraw){
     pv.querySelector('[data-pv="play"]').textContent = vid.paused ? '▶' : '❚❚'; pv.querySelector('[data-pv="play"]').setAttribute('aria-label', vid.paused ? 'Odtwarzaj' : 'Pauza');
     const w = $('#kf-ins'); if (w) w.textContent = '⏱ Wstaw chwilę ' + tFmt(vid.currentTime); };
   let raf = 0; const loop = () => { tick(); raf = vid.paused ? 0 : requestAnimationFrame(loop); };
-  vid.addEventListener('loadedmetadata', () => { $('#pvd').textContent = tFmt(vid.duration, true); marks(); tick(); });
+  vid.addEventListener('loadedmetadata', () => { $('#pvd').textContent = tFmt(vid.duration, true); marks(); tick(); noPic(); });
+  vid.addEventListener('loadeddata', noPic);
   vid.addEventListener('play', () => { if (!raf) raf = requestAnimationFrame(loop); tick(); });
   vid.addEventListener('pause', tick); vid.addEventListener('seeked', tick);
   // strumień: „Wczytuję…” przy czekaniu na kawałek; zły bilet (po godzinie) = nowy bilet i ta sama chwila; inny błąd = komunikat
@@ -515,6 +547,16 @@ function playerBind(v, redraw){
     FB[v.file] = { st: 'err', size: f.size, err: 'Przeglądarka nie odtwarza tego filmu' + (f.mime ? ' (' + f.mime + ')' : '') + ', kod ' + code + '. Otwórz go na Dysku.' };
     redraw();
   });
+  // dźwięk bez obrazu: przeglądarka nie ma dekodera ścieżki wideo (zwykle HEVC / 10 bitów / HDR z telefonu), wymiary obrazu = 0;
+  // format odczytany z początku i końca pliku (TL.videoCodec), żeby komunikat mówił, co dokładnie nie gra
+  let picChecked = false;
+  async function noPic(){
+    if (picChecked || vid.videoWidth || vid.videoHeight || !(vid.duration > 0) || !FB[v.file] || FB[v.file].st !== 'ok') return;
+    picChecked = true; vid.pause();
+    const f = FB[v.file], fmt = await filmFmt(v.file, f.size);
+    FB[v.file] = Object.assign({ st: 'err', codec: true, size: f.size }, picMsg(fmt));
+    if (location.hash.startsWith('#filmy')) redraw();
+  }
   rng.oninput = () => { vid.pause(); vid.currentTime = Number(rng.value); tick(); };
   const step = n => { vid.pause(); vid.currentTime = Math.min(vid.duration || 0, Math.max(0, vid.currentTime + n / FPS)); };
   const fs = on => { pv.classList.toggle('fs', on === undefined ? !pv.classList.contains('fs') : on); document.body.classList.toggle('pvfs', pv.classList.contains('fs')); Z.s = 1; apply(); };
@@ -625,9 +667,9 @@ async function renderKlient(id, tab){
   }
   CUR = CK[id];
   const d = CUR, today = PUL.today, dates = {};
-  (d.sessions || []).forEach(s => { if (/T/.test(String(s.start || ''))) dates[s.tydzien + '|' + s.jednostka] = TL.localDate(new Date(s.start)); });
+  (d.sessions || []).forEach(s => { if (/T/.test(String(s.start || ''))) dates[uKey(s.tydzien, s.jednostka)] = TL.localDate(new Date(s.start)); });
   const sets = TL.doneSets(d.logs || [], d.plan || [], dates);
-  const cur = (d.plan || []).filter(r => !r.own).map(r => ({ r, dt: dates[r.week + '|' + r.day] || r.date })).filter(x => x.dt && x.dt <= today).sort((a, b) => a.dt.localeCompare(b.dt)).pop();
+  const cur = (d.plan || []).filter(r => !r.own).map(r => ({ r, dt: dates[uKey(r.week, r.day)] || r.date })).filter(x => x.dt && x.dt <= today).sort((a, b) => a.dt.localeCompare(b.dt)).pop();
   const blk = cur && cur.r.block, bw = blk ? [...new Set((d.plan || []).filter(r => r.block === blk && !r.own).map(r => r.week))].sort((a, b) => a - b) : [];
   const eb = [blk ? 'Blok ' + esc(blk) + ' · tydz. ' + (bw.indexOf(cur.r.week) + 1) + ' z ' + bw.length : 'Bez bloku', d.cfg.simple ? 'tryb PROSTY' : 'tryb PRO', 'skala ' + esc(d.cfg.scale || 'RPE')]
     .concat(d.cfg.masters ? ['masters'] : []).concat(d.cfg.active === false ? ['nieaktywny'] : []).join(' · ');
@@ -647,18 +689,25 @@ function painOf(s){
   return top;
 }
 function sessRows(d, dates){
-  const P = {}; (d.plan || []).forEach(r => { P[r.week + '|' + r.day] = P[r.week + '|' + r.day] || r; });
-  return (d.sessions || []).map(s => { const u = s.tydzien + '|' + s.jednostka; return { s, u, day: dates[u] || String(s.data || '').slice(0, 10), title: (P[u] || {}).title || '' }; })
+  const P = {}; (d.plan || []).forEach(r => { const k = uKey(r.week, r.day); P[k] = P[k] || r; });
+  return (d.sessions || []).map(s => { const u = uKey(s.tydzien, s.jednostka); return { s, u, day: dates[u] || String(s.data || '').slice(0, 10), title: (P[u] || {}).title || '' }; })
     .sort((a, b) => b.day.localeCompare(a.day) || String(b.s.tydzien).localeCompare(String(a.s.tydzien)));
 }
+// seria robocza w Logu: odhaczona albo nagrana / wpisana bez ✓ (jak trLogged_ w Trener.gs); bez rozgrzewki i pominięć
+const sv = v => v === undefined || v === null ? '' : String(v).trim();
+const ticked = l => sv(l.wykonane).toUpperCase() === 'TAK';
+const logged = l => { const se = sv(l.seria); return !!se && se !== '0' && !/^R/i.test(se) && !/SKIP/.test(sv(l.typ)) && (ticked(l) || sv(l.kg) !== '' || sv(l.powt) !== '' || sv(l.film_link) !== ''); };
+const uKey = (w, j) => Number(w) + '|' + sv(j);
 function setsOf(d, u){
-  const P = {}; (d.plan || []).forEach(r => { P[r.week + '|' + r.day + '|' + r.order] = r; });
+  const P = {}; (d.plan || []).forEach(r => { P[uKey(r.week, r.day) + '|' + r.order] = r; });
   const by = {};
-  (d.logs || []).filter(l => l.tydzien + '|' + l.jednostka === u && l.wykonane === 'TAK' && !/^R/i.test(String(l.seria))).forEach(l => {
+  (d.logs || []).filter(l => uKey(l.tydzien, l.jednostka) === u && logged(l)).forEach(l => {
     const k = l.nr_cw, r = P[u + '|' + k] || {}; (by[k] = by[k] || { name: String(l.cwiczenie || r.name || ''), prio: r.prio || '', sets: [], note: String(l.uwagi || '') }).sets.push(l); });
   return Object.keys(by).sort((a, b) => a - b).map(k => by[k]);
 }
-const setTxt = l => (nf(l.kg) > 0 ? pl(l.kg) + '×' : '') + esc(l.powt) + (l.ocena ? ' ' + esc(l.ocena) : nf(l.rpe) >= 0 ? ' @' + pl(l.rpe) : '') + (/FAIL/.test(l.typ || '') ? ' ✕' : '') + (l.film_link ? ' ▶' : '');
+const setTxt = l => { const t = (nf(l.kg) > 0 ? pl(l.kg) + '×' : '') + esc(l.powt) + (l.ocena ? ' ' + esc(l.ocena) : nf(l.rpe) >= 0 ? ' @' + pl(l.rpe) : '') + (/FAIL/.test(l.typ || '') ? ' ✕' : '');
+  return ticked(l) ? t + (l.film_link ? ' ▶' : '') : '<span class="nd" title="Seria nie odhaczona w aplikacji">' + (t || 's. ' + esc(sv(l.seria))) + (l.film_link ? ' ▶' : '') + '</span>'; };
+const ndNote = ex => ex.some(e => e.sets.some(l => !ticked(l))) ? '<p class="hint" style="margin:6px 0 0"><span class="nd">szare</span> = klient nagrał albo wpisał serię, ale jej nie odhaczył w aplikacji.</p>' : '';
 function przeglad(d, c, sets, dates, today){
   const ss = sessRows(d, dates), wk = ss.filter(x => x.day >= TL.addDays(today, -6) && x.day <= today);
   let pain = ['', NaN, '']; wk.forEach(x => { const p = painOf(x.s); if (p[1] > (isFinite(pain[1]) ? pain[1] : -1)) pain = [p[0], p[1], x.s.jednostka]; });
@@ -695,7 +744,7 @@ function sesList(d, dates){
     const p = painOf(x.s), ex = setsOf(d, x.u);
     return '<details class="ses"' + (i === 0 ? ' open' : '') + '><summary><b>' + esc(dowDm(x.day)) + ' · tydz. ' + esc(x.s.tydzien) + ' · ' + esc(x.s.jednostka) + (x.title ? ' · ' + esc(x.title) : '') + '</b>' +
       '<span class="muted">' + [x.s.czas_min ? x.s.czas_min + ' min' : '', nf(x.s.rpe_sesji) >= 0 ? 'RPE ' + pl(x.s.rpe_sesji) : '', nf(x.s.samopoczucie) > 0 ? 'samopoczucie ' + x.s.samopoczucie + '/5' : '', isFinite(p[1]) && p[1] > 0 ? 'ból ' + pl(p[1]) + (p[0] ? ' ' + p[0] : '') : ''].filter(Boolean).map(esc).join(' · ') + '</span></summary>' +
-      '<div class="tw"><table><tbody>' + ex.map(e => '<tr><td><b>' + esc(e.name) + '</b> <span class="muted">' + esc(e.prio) + '</span></td><td class="sets">' + e.sets.map(setTxt).join(', ') + '</td><td>' + esc(e.note) + '</td></tr>').join('') + '</tbody></table></div>' +
+      '<div class="tw"><table><tbody>' + ex.map(e => '<tr><td><b>' + esc(e.name) + '</b> <span class="muted">' + esc(e.prio) + '</span></td><td class="sets">' + e.sets.map(setTxt).join(', ') + '</td><td>' + esc(e.note) + '</td></tr>').join('') + '</tbody></table></div>' + ndNote(ex) +
       (x.s.uwagi ? '<p class="note"><span class="eb">Uwagi klienta</span><br>' + esc(x.s.uwagi) + '</p>' : '') +
       komBox(x.s, ex.length) + '</details>';
   }).join('') + '</div>';
@@ -705,7 +754,7 @@ const KD = {};                  // klient|tydzień|jednostka → {text, edit, ai
 const SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" fill="currentColor"/></svg>';
 const kdKey = s => CID + '|' + s.tydzien + '|' + s.jednostka;
 function komBox(s, nSets){
-  if (nSets === undefined) nSets = setsOf(CUR, s.tydzien + '|' + s.jednostka).length;
+  if (nSets === undefined) nSets = setsOf(CUR, uKey(s.tydzien, s.jednostka)).length;
   const u = s.tydzien + '|' + s.jednostka, st = KD[kdKey(s)] || {}, saved = String(s.komentarz_trenera || '');
   const box = inner => '<div class="kedit" data-u="' + esc(u) + '"><div class="eb" style="margin-bottom:6px">Twój komentarz do sesji</div>' + inner + (st.err ? '<p class="err" role="alert">' + esc(st.err) + (/Ustawienia/.test(st.err) ? ' <a href="#ustawienia">Otwórz Ustawienia</a>' : '') + '</p>' : '') + '</div>';
   if (saved && !st.edit) return box('<p class="kom" style="margin:0">' + esc(saved) + '</p><div class="row">' +

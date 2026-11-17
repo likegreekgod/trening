@@ -1037,6 +1037,33 @@
     };
   };
 
+  /**
+   * Format obrazu z kawałków pliku filmu (początek i koniec: MP4 z telefonu ma opis ścieżek „moov” często na końcu).
+   * Szuka wpisu ścieżki wideo (hvc1/hev1/dvh1 = HEVC, avc1 = H.264, av01, vp09; w WebM V_VP8/V_VP9/V_AV1),
+   * przy HEVC profilu z hvcC (2 = Main 10 → 10 bitów) i krzywej z „colr nclx” (16 = PQ / HDR10, 18 = HLG).
+   * → { codec: 'HEVC (H.265)' | 'H.264' | 'AV1' | 'VP9' | 'VP8' | '', bits10, hdr: 'HDR10' | 'HLG' | '', w, h (MP4: wymiary z wpisu ścieżki, inaczej 0) }
+   */
+  L.videoCodec = (...parts) => {
+    const out = { codec: '', bits10: false, hdr: '', w: 0, h: 0 };
+    const NAMES = [['hvc1', 'HEVC (H.265)'], ['hev1', 'HEVC (H.265)'], ['dvh1', 'HEVC (H.265)'], ['dvhe', 'HEVC (H.265)'], ['avc1', 'H.264'], ['avc3', 'H.264'], ['av01', 'AV1'], ['vp09', 'VP9'],
+      ['V_MPEGH/ISO/HEVC', 'HEVC (H.265)'], ['V_MPEG4/ISO/AVC', 'H.264'], ['V_AV1', 'AV1'], ['V_VP9', 'VP9'], ['V_VP8', 'VP8']];
+    const find = (b, s, from) => { const n = s.length; outer: for (let i = from || 0; i + n <= b.length; i++) { for (let j = 0; j < n; j++) if (b[i + j] !== s.charCodeAt(j)) continue outer; return i; } return -1; };
+    for (const b of parts) {
+      if (!b || !b.length) continue;
+      // MP4: każda tabela „stsd” ścieżki (wideo i dźwięk), fourcc pierwszego wpisu leży 16 bajtów za nią, wymiary 44 bajty za nią; WebM: identyfikator kodeka w nagłówku
+      for (let st = find(b, 'stsd'); st >= 0 && st + 20 <= b.length; st = find(b, 'stsd', st + 4)) {
+        const cc = String.fromCharCode(b[st + 16], b[st + 17], b[st + 18], b[st + 19]), hit = NAMES.find(x => x[0] === cc);
+        if (!hit) continue;
+        if (!out.codec) { out.codec = hit[1]; if (st + 48 <= b.length) { out.w = (b[st + 44] << 8) | b[st + 45]; out.h = (b[st + 46] << 8) | b[st + 47]; } }
+        const box = b.subarray(st, Math.min(b.length, st + 1024));
+        const h = find(box, 'hvcC'); if (h >= 0 && h + 6 < box.length && (box[h + 5] & 0x1f) === 2) out.bits10 = true;
+        const c = find(box, 'colrnclx'); if (c >= 0 && c + 12 <= box.length) { const tr = (box[c + 10] << 8) | box[c + 11]; if (tr === 16) out.hdr = 'HDR10'; if (tr === 18) out.hdr = 'HLG'; }
+      }
+      if (!out.codec && (find(b, 'webm') >= 0 || find(b, 'matroska') >= 0)) NAMES.filter(x => x[0].startsWith('V_')).some(([k, name]) => find(b, k) >= 0 && (out.codec = out.codec || name));
+    }
+    return out;
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);

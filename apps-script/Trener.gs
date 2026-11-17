@@ -281,14 +281,24 @@ function aiReq_(ctx, opt) {
  * 3 poprzednie takie same jednostki, następna jednostka, 5 ostatnich komentarzy trenera do tej osoby.
  */
 /** Liczba zapisanych serii roboczych jednostki (bez rozgrzewki i pominięć). 0 = szkic AI nie ma z czego pisać, więc nie wołamy API. */
+/**
+ * Seria robocza zapisana w Logu (czysta): odhaczona (wykonane = TAK) albo nieodhaczona, ale z ciężarem, powtórzeniami albo filmem
+ * (klient nagrał serię i nie dotknął ✓). Bez rozgrzewki, pominięć (seria 0, SKIP) i serii odznaczonych bez śladu.
+ */
+function trLogged_(l) {
+  const s = v => v === undefined || v === null ? '' : String(v).trim(), se = s(l.seria);
+  if (!se || se === '0' || /^R/i.test(se) || /SKIP/.test(s(l.typ))) return false;
+  return s(l.wykonane).toUpperCase() === 'TAK' || s(l.kg) !== '' || s(l.powt) !== '' || s(l.film_link) !== '';
+}
+const trTicked_ = l => String(l.wykonane === undefined || l.wykonane === null ? '' : l.wykonane).trim().toUpperCase() === 'TAK';
+
 function trSzkicSets_(d, week, day) {
-  return (d.logs || []).filter(l => Number(l.tydzien) === Number(week) && String(l.jednostka) === String(day) &&
-    String(l.wykonane || '').trim() === 'TAK' && !/^R/i.test(String(l.seria)) && String(l.seria) !== '0').length;
+  return (d.logs || []).filter(l => Number(l.tydzien) === Number(week) && String(l.jednostka).trim() === String(day).trim() && trLogged_(l)).length;
 }
 
 function trSzkicCtx_(d, week, day) {
   const W = Number(week), D = String(day), str = v => v === undefined || v === null ? '' : String(v).trim();
-  const ses = (d.sessions || []).find(s => Number(s.tydzien) === W && String(s.jednostka) === D);
+  const ses = (d.sessions || []).find(s => Number(s.tydzien) === W && String(s.jednostka).trim() === D.trim());
   if (!ses) return null;
   const dayOf = s => /T/.test(str(s.start)) ? str(s.start).slice(0, 10) : str(s.data).slice(0, 10);
   const numTxt = v => str(v).replace('.', ',');
@@ -296,19 +306,20 @@ function trSzkicCtx_(d, week, day) {
   const setTxt = l => {
     const kg = str(l.kg), rp = str(l.rpe), oc = OC[str(l.ocena).toUpperCase()];
     return (/^D/i.test(str(l.seria)) || /DROP/.test(str(l.typ)) ? 'drop ' : '') + (kg && kg !== '0' ? numTxt(kg) + (isFinite(Number(kg.replace(',', '.'))) ? ' kg' : '') + '×' : '') + str(l.powt) +
-      (oc ? ' (' + oc + ')' : rp ? ' @' + numTxt(rp) : '') + (/FAIL/.test(str(l.typ)) ? ' nieudana' : '');
+      (oc ? ' (' + oc + ')' : rp ? ' @' + numTxt(rp) : '') + (/FAIL/.test(str(l.typ)) ? ' nieudana' : '') +
+      (trTicked_(l) ? '' : str(l.kg) || str(l.powt) ? ' (nieodhaczona)' : 'seria ' + str(l.seria) + ' tylko z filmem, bez wpisu');
   };
   const planOf = w => (d.plan || []).filter(r => r.week === w && r.day === D).sort((a, b) => a.order - b.order);
   const exOf = (w, full) => {
     const P = {}; planOf(w).forEach(r => { P[r.order] = r; });
     const by = {};
-    (d.logs || []).filter(l => Number(l.tydzien) === w && String(l.jednostka) === D).forEach(l => {
+    (d.logs || []).filter(l => Number(l.tydzien) === w && String(l.jednostka).trim() === D.trim()).forEach(l => {
       const k = Number(l.nr_cw); (by[k] = by[k] || []).push(l); });
     const keys = Object.keys(P).map(Number).concat(Object.keys(by).map(Number)).filter((k, i, a) => a.indexOf(k) === i).sort((a, b) => a - b);
     return keys.map(k => {
       const r = P[k] || {}, ls = (by[k] || []).sort((a, b) => String(a.seria).localeCompare(String(b.seria), 'pl', { numeric: true }));
       const skip = ls.find(l => String(l.seria) === '0' || /SKIP/.test(str(l.typ)));
-      const work = ls.filter(l => str(l.wykonane) === 'TAK' && !/^R/i.test(str(l.seria)) && String(l.seria) !== '0');
+      const work = ls.filter(trLogged_);
       const swap = ls.map(l => str(l.zamiana)).filter(Boolean)[0] || '', note = ls.map(l => str(l.uwagi)).filter(Boolean)[0] || '';
       const name = swap ? swap.split('|')[0].trim() : str(r.name) || str((ls[0] || {}).cwiczenie);
       if (!full) return work.length ? name + ': ' + work.map(setTxt).join(', ') : '';
@@ -330,6 +341,8 @@ function trSzkicCtx_(d, week, day) {
   if (p0.unote) out.push('Notatka trenera do jednostki: ' + p0.unote);
   out.push('', 'Plan i wykonanie (seria: kg×powtórzenia @RPE):');
   exOf(W, true).forEach(x => out.push(x));
+  if ((d.logs || []).some(l => Number(l.tydzien) === W && String(l.jednostka).trim() === D.trim() && trLogged_(l) && !trTicked_(l)))
+    out.push('Uwaga: część serii klient nagrał albo wpisał, ale nie odhaczył w aplikacji. Traktuj je jako zrobione, bez zgadywania wysiłku, którego nie ma.');
   out.push('', 'Sesja: ' + [str(ses.czas_min) ? str(ses.czas_min) + ' min' : '', str(ses.rpe_sesji) !== '' ? 'RPE sesji ' + numTxt(ses.rpe_sesji) + '/10' : '',
     Number(ses.samopoczucie) > 0 ? 'samopoczucie ' + ses.samopoczucie + '/5' : '', pain ? 'ból: ' + pain : 'bez bólu'].filter(Boolean).join(', ') + '.');
   if (str(ses.uwagi)) out.push('Uwagi klienta do sesji: „' + str(ses.uwagi) + '”');
@@ -518,7 +531,7 @@ function aiBlokReq_(ctx, opt) {
 /** Zapisane serie robocze w tygodniach bloku (0 = nie ma z czego pisać, bez zapytania do AI). */
 function trBlokSets_(d, blok) {
   const W = {}; (d.plan || []).forEach(r => { if (String(r.block || '') === String(blok) && !r.own) W[Number(r.week)] = 1; });
-  return (d.logs || []).filter(l => W[Number(l.tydzien)] && String(l.wykonane || '').trim() === 'TAK' && !/^R/i.test(String(l.seria)) && String(l.seria) !== '0').length;
+  return (d.logs || []).filter(l => W[Number(l.tydzien)] && trLogged_(l)).length;
 }
 
 /**
