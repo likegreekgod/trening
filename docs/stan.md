@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, `main` = v54 (scalone PR #76: panel trenera PR 1–2, PR #77: marka „Siła z Ruchu” z animacją otwarcia, PR #78: panel na telefonie i przełącznik aplikacja ↔ panel); v55 (animacja otwarcia po przerwie 30 minut i nowa ikona „Duet”) na gałęzi `claude/project-thread-ezlb23`, czeka na scalenie.
+Stan na 2026-11-17, `main` = v55 (scalone PR #76: panel trenera PR 1–2, #77: marka „Siła z Ruchu”, #78: panel na telefonie i przełącznik aplikacja ↔ panel, #79: animacja po przerwie 30 minut i ikona „Duet”); naprawa importu planu (`apps-script/`, bez zmian w `web/`) na gałęzi `claude/project-thread-bmtgk4`.
 
 ## Jak pracujemy
 
@@ -18,7 +18,8 @@ Stan na 2026-11-17, `main` = v54 (scalone PR #76: panel trenera PR 1–2, PR #77
 
 ## Ostatnio zrobione
 
-- 17.11 (v55): animacja otwarcia przy każdym wejściu po co najmniej 30 minutach bez aplikacji (uruchomienie albo powrót do aplikacji z tła) zamiast raz dziennie; w trakcie treningu się nie pokazuje. Nowa ikona „Duet” (tor sztangi, linia tańca i talerz z animacji) na ekranie głównym, w karcie przeglądarki i w nagłówku aplikacji; pliki rysuje `tools/make-icons.js`.
+- 17.11 (`apps-script/`, na gałęzi): naprawa importu planu: plik usuwa niezrobione jednostki tylko z bloków, które sam zawiera (wcześniej kasował niezrobione jednostki innych bloków klienta), jednostka z serią w Logu liczy się jako zrobiona, każde usunięcie jest w Import („usunięto: …”, status „OK (usunięto N)”). Do dopisania w SKILL.md skilla trenera (przebuduj ZIP).
+- 17.11 (v55, scalony PR #79): animacja otwarcia przy każdym wejściu po co najmniej 30 minutach bez aplikacji (uruchomienie albo powrót do aplikacji z tła) zamiast raz dziennie; w trakcie treningu się nie pokazuje. Nowa ikona „Duet” (tor sztangi, linia tańca i talerz z animacji) na ekranie głównym, w karcie przeglądarki i w nagłówku aplikacji; pliki rysuje `tools/make-icons.js`.
 - 17.11 (v54, scalony PR #78): przełącznik między aplikacją a panelem: w aplikacji na ekranie Trener przycisk „Panel trenera” tylko na urządzeniu, na którym ktoś raz zalogował się do panelu (`tr_dev` w localStorage, zostaje po wylogowaniu), w panelu „Mój trening ›” otwiera aplikację z kluczem zapamiętanym w tej przeglądarce. Klienci go nie widzą, bo do panelu wpuszcza tylko adres trenera.
 - 17.11 (v54, scalony PR #78): panel trenera na telefonie: górny pasek nie rozciąga się na pół ekranu przy krótkiej stronie, „Przelicz teraz” i „Wyloguj” widoczne, pusta lista filmów bez podwójnego komunikatu. Logowanie Damiana działa (projekt Google Cloud „Panel trenera”, właściwości skryptu wpisane).
 - 17.11 (v53, scalony PR #77): marka „Siła z Ruchu”: nowa nazwa tam, gdzie widzi ją klient (pod ikoną, w karcie przeglądarki, w nagłówku przed planem), i animacja otwarcia (tor sztangi w rwaniu, linia tańca, napis; 3,3 s, dotknięcie pomija).
