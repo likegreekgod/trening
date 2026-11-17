@@ -32,6 +32,7 @@
         --primary:#31473a;--on-primary:#ffffff;--accent:#a9542a;--on-accent:#ffffff;
         --ok:#296c45;--warn:#8f5d0e;--bad:#b5483b;
         --panel:#17221c;--light-off:#38443d;--light-white:#f7f7f2;--light-red:#e5392d;--light-amber:#f0b54f;
+        --e-g:#2f8a4f;--e-y:#d99a00;--e-r:#d23c2e;
         --p25:#c8372d;--p20:#2a5ea8;--p15:#d9ad1f;--p10:#3f8a4a;--p5:#f4f4f0;
         --h1:#9da783;--h2:#7c8363;--h3:#5d6447;--h4:#3f452e;
         --intro-bg:#17241d;--intro-ink:#f3f1e8;--intro-acc:#e0a34a;--intro-muted:#a3ab86;
@@ -44,7 +45,7 @@
     :root{--bg:#0f1612;--surface:#18221c;--surface-2:#223029;--line:#2f3f36;
           --ink:#edf4f2;--ink-2:#cfdcd5;--muted:#a3ab86;
           --primary:#c5cfa9;--on-primary:#0f1612;--accent:#e0a34a;--on-accent:#0f1612;
-          --ok:#62b07a;--warn:#e0a34a;--bad:#e3826b;
+          --ok:#62b07a;--warn:#e0a34a;--bad:#e3826b;--e-g:#62b07a;--e-y:#f0b54f;--e-r:#ee5a4a;
           --panel:#050806;--light-off:#26302a;--h1:#535b3f;--h2:#747c59;--h3:#99a17a;--h4:#c5cfa9;--shadow:0 0 0 transparent;--bar:#2e4a3b;--bar-ink:#ffffff;--bar-muted:#cfdcd5;--bar-line:#4c6555;color-scheme:dark}
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -274,7 +275,6 @@
   .set.k-w input{color:var(--muted)}
   .set.k-x .n{color:var(--ink-2)}
   .set.k-d .n{color:var(--accent);font-size:17px}
-  .set.fail .rpe{color:var(--bad)}
   .set.fail .kg,.set.fail .reps{color:var(--bad);text-decoration:line-through;text-decoration-thickness:2px}
   /* ✕ przy ostatnim dodanym wierszu: cała komórka numeru to cel dotyku 44 px */
   .del{position:absolute;inset:0;border:0;background:transparent;color:var(--bad);padding:2px;
@@ -580,6 +580,27 @@
   .opt[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
   .btn:disabled{opacity:.45;cursor:not-allowed}
 
+  /* wysiłek serii = światło (lib EFF): przycisk w wierszu i wybór pod wierszem */
+  .ef{min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--ink);display:grid;justify-items:center;align-content:center;gap:3px;padding:2px 4px;min-width:0}
+  .ef .d,.efp .d{display:block;border-radius:50%}
+  .ef .d{width:14px;height:14px;box-shadow:inset 0 0 0 2px var(--muted)}
+  .ef .d.g,.efp .d.g{background:var(--e-g);box-shadow:none}.ef .d.y,.efp .d.y{background:var(--e-y);box-shadow:none}.ef .d.r,.efp .d.r{background:var(--e-r);box-shadow:none}
+  .ef .d.x{box-shadow:none;color:var(--bad);font:900 15px/14px var(--f-body);text-align:center;font-style:normal}
+  .ef b{font:700 16px/1 var(--f-display)}
+  .set.simple .ef b{font:600 13px/1 var(--f-body)}
+  .ef small{font:600 12px/1 var(--f-body);letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
+  .ef.open{outline:2px solid var(--accent);outline-offset:-2px}
+  .efp{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .efp > button{min-height:60px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);color:var(--ink);display:grid;grid-template-columns:22px 1fr;column-gap:8px;align-items:center;text-align:left;padding:6px 10px}
+  .efp > button[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:-3px}
+  .efp .d{grid-row:span 2;width:20px;height:20px}
+  .efp .d.x{color:var(--bad);font:900 20px/20px var(--f-body);text-align:center;font-style:normal}
+  .efp b{font:700 17px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.03em}
+  .efp small{font-size:12px;color:var(--ink-2);line-height:1.25}
+  .efp .rclr{grid-column:1/-1;min-height:44px;display:block;text-align:center;background:transparent;color:var(--ink-2)}
+  .efp .fine,.rate .fine{grid-column:1/-1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font:600 13px var(--f-body);color:var(--ink-2)}
+  .efp .fine button,.rate .fine button{min-width:52px;min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);font:700 17px var(--f-display)}
+  .efp .fine button[aria-pressed="true"],.rate .fine button[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
   /* boje: światła sędziowskie, wybór oceny, propozycja ciężaru */
   .set .lt,.set-head .hl2{grid-column:span 2}
   .lt{min-height:44px;border:0;border-radius:var(--r);background:var(--panel);color:var(--light-white);display:flex;align-items:center;justify-content:center;gap:8px;padding:0 8px}
@@ -843,12 +864,9 @@ let DATA = null, PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
 let TAB = 'trening';   // ekran z dolnego menu: trening | dysp | plan | postep | trener
 let PT = 'tyd', PEX = '', PWK = null, PBL = null;   // zakładka, ćwiczenie, tydzień (poniedziałek; null = bieżący) i blok (null = ostatni) na ekranie Postęp
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
-const RPE = ['', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10'];
-// tryb prosty: słowa zamiast RPE; w arkuszu nadal zapisuje się liczba RPE
-const EFFORT = [['', '–'], ['6', 'Lekko'], ['7.5', 'Średnio'], ['9', 'Ciężko'], ['10', 'Max']];
 const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
-const { fmtKg, num, esc, blank, plural, effortVal, floor25, isNum, setKey, repsDefault, localDate,
+const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
   RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, planEdit, restSec, fmtClock, plates,
   isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
@@ -2395,9 +2413,9 @@ function capOf(ex){
 const maxToday = ex => { const c = capOf(ex).cap; return c ? ` · max dziś <b>${fmtKg(c)} kg</b>` : ''; };
 const lightsHtml = q => `<span class="lights" aria-hidden="true">${[...(RATE[q] ? RATE[q].lights : 'ooo')].map(c => `<i class="${c}"></i>`).join('')}</span>`;
 const RATE_HINT = { L: '3 białe', S: '2 białe, 1 czerwone', W: '1 białe, 2 czerwone', X: '3 czerwone' };
-const rateHtml = cur => `<div class="rate" role="group" aria-label="Ocena podejścia">` +
+const rateHtml = (cur, rpe) => `<div class="rate" role="group" aria-label="Ocena podejścia">` +
   ['L', 'S', 'W', 'X'].map(q => `<button type="button" data-q="${q}" aria-pressed="${cur === q}">${lightsHtml(q)}<b>${RATE[q].label}</b><small>${RATE_HINT[q]}</small></button>`).join('') +
-  (cur ? '<button type="button" class="rclr" data-q="">Wyczyść ocenę</button>' : '') + '</div>';
+  (cur && cur !== 'X' ? fineHtml(cur, rpe) : '') + (cur ? '<button type="button" class="rclr" data-q="">Wyczyść ocenę</button>' : '') + '</div>';
 /** propozycja ciężaru pod ostatnio ocenionym podejściem (tylko gdy zostały serie) */
 function updateSug(ex){
   if (!isOly(ex)) return;
@@ -2428,7 +2446,7 @@ function lastLine(ex){
 }
 /** wysiłek serii słownie: ocena podejścia w bojach, PROSTY słownie, PRO jako RPE albo RIR wg przełącznika */
 function effTxt(ex, t){
-  return isOly(ex) && RATE[t.ocena] ? RATE[t.ocena].label : blank(t.rpe) ? '' : SIMPLE ? (EFFORT.find(e => e[0] === effortVal(t.rpe)) || ['', ''])[1]
+  return isOly(ex) && RATE[t.ocena] ? RATE[t.ocena].label : blank(t.rpe) ? '' : SIMPLE ? (EFF[lightOf(t.rpe)] || { label: '' }).label
     : SCALE === 'RIR' ? 'RIR ' + fmtKg(rirOfRpe(t.rpe)) : 'RPE ' + fmtKg(t.rpe);
 }
 /** okno „Historia”: wykres siły (jak Postęp → Siła) i 5 ostatnich jednostek z tym ćwiczeniem, bez bieżącej */
@@ -2604,24 +2622,26 @@ function loggedSets(ex){
   });
   return { warm, extra, drop };
 }
-/** lista „jak ciężko”: PROSTY słownie, PRO w RPE albo RIR (0…5+); arkusz zawsze dostaje RPE. FAIL jest w polu ✓/✕. */
-function effortSel(l){
-  const v = /FAIL/.test(l.typ || '') ? '' : l.rpe;
-  if (SIMPLE) return `<select class="rpe" aria-label="Jak ciężko">` +
-    EFFORT.map(([x, t]) => `<option ${effortVal(v) === x ? 'selected' : ''} value="${x}">${t}</option>`).join('') + `</select>`;
-  if (SCALE === 'RIR') {
-    const r = blank(v) ? '' : String(rirOfRpe(v)), opts = [['', '–']].concat(RIR_OPTS.map(x => [String(x), x === 5 ? '5+' : String(x)]));
-    if (r !== '' && !opts.some(o => o[0] === r)) opts.push([r, fmtKg(+r)]);       // np. RPE 8,5 → RIR 1,5
-    return `<select class="rpe" data-sc="RIR" aria-label="RIR">` + opts.map(([x, t]) => `<option ${r === x ? 'selected' : ''} value="${x}">${t}</option>`).join('') + `</select>`;
-  }
-  return `<select class="rpe" aria-label="RPE">` + RPE.map(x => `<option ${String(v) === x ? 'selected' : ''} value="${x}">${x || '–'}</option>`).join('') + `</select>`;
+/** wysiłek serii = światło (lib EFF): PRO pokazuje liczbę RPE albo RIR, PROSTY słowo; bez światła „oceń” (RPE puste) */
+function effInner(rpe, st){
+  if (st === 'x') return `<i class="d x" aria-hidden="true">✕</i><small>${SIMPLE ? 'nieudana' : 'fail'}</small>`;
+  const q = st ? lightOf(rpe) : '';
+  if (!q) return '<i class="d" aria-hidden="true"></i><small>oceń</small>';
+  const txt = SIMPLE ? EFF[q].label : SCALE === 'RIR' ? 'RIR ' + fmtKg(rirOfRpe(rpe)) : fmtKg(num(rpe));
+  return `<i class="d ${EFF[q].c}" aria-hidden="true"></i><b>${esc(txt)}</b>`;
 }
-/** RPE z listy wiersza (RIR → RPE) */
-function rpeOf(row){
-  const sel = row.querySelector('.rpe');
-  if (!sel || sel.value === '') return '';
-  return sel.dataset.sc === 'RIR' ? rpeOfRir(sel.value) : sel.value;
+const effLabel = (rpe, st) => st === 'x' ? 'nieudana' : st && lightOf(rpe) ? EFF[lightOf(rpe)].label + (SIMPLE ? '' : ', RPE ' + fmtKg(num(rpe))) : 'bez oceny';
+const effBtn = (rpe, st) => `<button type="button" class="ef" aria-label="Jak ciężko: ${effLabel(rpe, st)} – dotknij, aby ocenić">${effInner(rpe, st)}</button>`;
+/** dokładne RPE w zakresie światła (tylko PRO, przy zaznaczonym świetle); RIR = 10 − RPE */
+function fineHtml(q, rpe){
+  if (SIMPLE || !EFF_FINE[q]) return '';
+  const rir = SCALE === 'RIR';
+  return `<div class="fine">Dokładniej, ${rir ? 'RIR' : 'RPE'}: ${EFF_FINE[q].map(v => `<button type="button" data-v="${v}" aria-pressed="${num(rpe) === v}">${fmtKg(rir ? 10 - v : v)}</button>`).join('')}</div>`;
 }
+/** wybór światła pod wierszem: dotknięcie = seria zapisana z tym RPE */
+const effPick = (q, rpe) => `<div class="efp" role="group" aria-label="Jak ciężko">` +
+  ['L', 'S', 'W', 'X'].map(k => `<button type="button" data-q="${k}" aria-pressed="${q === k}"><i class="d ${EFF[k].c}" aria-hidden="true">${k === 'X' ? '✕' : ''}</i><b>${EFF[k].label}</b><small>${EFF[k].hint}</small></button>`).join('') +
+  (q && q !== 'X' ? fineHtml(q, rpe) + '<button type="button" class="rclr" data-q="">Bez oceny (zostaje ✓)</button>' : '') + '</div>';
 /** seria czeka w kolejce offline → pole żółte także po ponownym otwarciu */
 const queued = (ex, set) => qGet().some(it => it.fn === 'logSet' && it.payload.week === cur.week && it.payload.day === cur.day && it.payload.order === ex.order && String(it.payload.set) === String(set));
 const STATE_TXT = { '': 'niezapisana – dotknij: zrobiona', ok: 'zrobiona – dotknij: nieudana', x: 'nieudana – dotknij: wyczyść' };
@@ -2639,7 +2659,8 @@ function rowHtml(ex, set, kind, def){
   const kgIn = `<input inputmode="decimal" class="kg${blank(kgP) ? '' : ' ph'}" value="${esc(fmtKg(kg))}"${phAttr(kgP, 'kg')} aria-label="kg">`;
   const rl = repsLabel(ex.reps);                                               // ćwiczenie na czas („30 s”): w polu sekundy zamiast powtórzeń
   const repsIn = `<input inputmode="decimal" class="reps${blank(repsP) ? '' : ' ph'}" value="${esc(fmtKg(reps))}"${phAttr(repsP, rl)} data-u="${rl}" aria-label="${rl === 'powt.' ? 'powtórzenia' : rl === 'min' ? 'minuty' : 'sekundy'}">`;
-  const rpeCell = kind === 'w' ? `<div class="lbl">${SIMPLE ? 'rozgrzewka' : 'rozgrz.'}</div>` : effortSel(l);
+  const rpe0 = st === 'ok' && isNum(num(l.rpe)) ? num(l.rpe) : '';                    // światło = widok RPE z Logu; bez wpisu brak oceny
+  const rpeCell = kind === 'w' ? `<div class="lbl">${SIMPLE ? 'rozgrzewka' : 'rozgrz.'}</div>` : effBtn(rpe0, st);
   const oly = isOly(ex) && kind !== 'w', q = oly ? rateOf(l) : '';
   // kamera przy serii roboczej, dodatkowej i drop (nie przy rozgrzewce); wypełniona = jest film albo prędkość
   const has = !!l.film_link || !blank(l.vbt_ms) || !!l.sciezka;
@@ -2649,14 +2670,14 @@ function rowHtml(ex, set, kind, def){
   const num0 = !oly && (kind === 'p' || kind === 'x')
     ? `<button type="button" class="nt" aria-label="Seria ${setLabel(set, kind)}: ${fail ? 'nieudana' : drop ? 'drop' : 'zwykła'}, dotknij, aby zmienić typ">${setLabel(set, kind)}<small></small></button>`
     : `<span>${setLabel(set, kind)}</span>`;
-  if (oly) return `<div class="set ${cls} oly k-${kind} ${fail ? 'fail' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}" data-st="${st}" data-rate="${q}">
+  if (oly) return `<div class="set ${cls} oly k-${kind} ${fail ? 'fail' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}" data-st="${st}" data-rate="${q}" data-rpe="${esc(String(rpe0))}">
       <div class="n">${num0}</div>
       ${kgIn}
       ${repsIn}
       <button type="button" class="lt ${queued(ex, set) ? 'pend' : ''}" aria-label="Ocena: ${q ? RATE[q].label : 'brak'} – dotknij, aby ocenić">${lightsHtml(q)}<small>${q ? RATE[q].label : 'oceń'}</small></button>
       ${camCell}
     </div>`;
-  return `<div class="set ${cls} k-${kind} ${fail ? 'fail' : ''} ${drop ? 't-d' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}" data-st="${st}">
+  return `<div class="set ${cls} k-${kind} ${fail ? 'fail' : ''} ${drop ? 't-d' : ''}" data-o="${ex.order}" data-s="${set}" data-k="${kind}" data-st="${st}" data-rpe="${esc(String(rpe0))}">
       <div class="n">${num0}</div>
       ${kgIn}
       ${repsIn}
@@ -3024,6 +3045,8 @@ function setState(row, st, pend){
     lt.setAttribute('aria-label', 'Ocena: ' + (q ? RATE[q].label : 'brak') + (pend ? ' (czeka na zapis)' : '') + ' – dotknij, aby ocenić');
     return;
   }
+  const ef = row.querySelector('.ef');
+  if (ef) { ef.innerHTML = effInner(row.dataset.rpe, st); ef.setAttribute('aria-label', 'Jak ciężko: ' + effLabel(row.dataset.rpe, st) + ' – dotknij, aby ocenić'); }
   btn.textContent = st === 'x' ? '✕' : '✓';
   btn.classList.toggle('pend', !!pend);
   btn.setAttribute('aria-label', 'Seria ' + STATE_TXT[st] + (pend ? ' (czeka na zapis)' : ''));
@@ -3036,7 +3059,7 @@ function payloadOf(row, ex, s0){
   const ocena = lt && st ? row.dataset.rate || '' : '';
   return { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name: ex.name, set,
     kg: num(fv(row.querySelector('.kg'))), reps: num(fv(row.querySelector('.reps'))),
-    rpe: fail ? '' : lt ? (ocena ? RATE[ocena].rpe : '') : rpeOf(row), vbt: blank(prev.vbt_ms) ? '' : prev.vbt_ms,
+    rpe: fail || !st || !isNum(num(row.dataset.rpe)) ? '' : num(row.dataset.rpe), vbt: blank(prev.vbt_ms) ? '' : prev.vbt_ms,
     vbtPeak: blank(prev.vbt_peak) ? '' : prev.vbt_peak, height: blank(prev.wysokosc_cm) ? '' : prev.wysokosc_cm, path: prev.sciezka || '',
     done: st !== '', video: prev.film_link || '', typ: [drop ? 'DROP' : '', fail ? 'FAIL' : ''].filter(Boolean).join('+'), ocena, swap: swapText(ex.swap), note: exNote(ex) };
 }
@@ -3048,7 +3071,8 @@ function putLocal(ex, p){
 function bindRow(row, ex, s0){
   const kind = row.dataset.k;
   const btn = row.querySelector('.ok'), nt = row.querySelector('.nt'), lt = row.querySelector('.lt'), cam = row.querySelector('.cam');
-  const save = (st, oc) => {
+  // st: '' / ok / x; oc: ocena boju (L/S/W/X); rpe: nowe RPE (undefined = bez zmiany, '' = bez oceny)
+  const save = (st, oc, rpe) => {
     // start dawno temu, a to pierwsza zapisana seria: trening był włączony przypadkiem albo za wcześnie
     const t0 = tGet()[skey()];
     if (st && t0 && !curSess().id && (Date.now() - t0 > STALE_H * 3600000 || Date.now() - t0 > LATE_START_MIN * 60000 && !document.querySelector('.set[data-st]:not([data-st=""])'))) {
@@ -3058,6 +3082,8 @@ function bindRow(row, ex, s0){
     const was = row.dataset.st, wasDone = cardDone(ex.order);
     if (st) row.querySelectorAll('.kg, .reps').forEach(x => { if (x.value.trim() === '' && x.dataset.ph) x.value = x.dataset.ph; });   // ✓ przy pustym polu = wartość z propozycji
     if (lt) row.dataset.rate = st ? oc || '' : '';
+    // RPE serii: tylko zaliczona ma RPE; ✓ bez światła = puste (brak danych), ✕ i wyczyszczenie kasują
+    row.dataset.rpe = st !== 'ok' ? '' : rpe !== undefined ? String(rpe) : lt && oc && blank(row.dataset.rpe) ? String(RATE[oc].rpe) : row.dataset.rpe || '';
     setState(row, st, true);
     const okb = row.querySelector('.ok'); if (okb && st === 'ok' && was !== 'ok') { okb.classList.remove('pop'); void okb.offsetWidth; okb.classList.add('pop'); }   // krótki ruch ✓
     const p = payloadOf(row, ex, s0);
@@ -3077,11 +3103,26 @@ function bindRow(row, ex, s0){
   // boje: dotknięcie świateł → wybór oceny pod wierszem
   if (lt) lt.onclick = () => {
     const open = row.nextElementSibling && row.nextElementSibling.classList.contains('rate');
-    document.querySelectorAll('.rate').forEach(x => x.remove());
+    document.querySelectorAll('.rate, .efp').forEach(x => x.remove()); document.querySelectorAll('.ef.open').forEach(x => x.classList.remove('open'));
     if (open) return;
-    row.insertAdjacentHTML('afterend', rateHtml(row.dataset.st ? row.dataset.rate : ''));
+    row.insertAdjacentHTML('afterend', rateHtml(row.dataset.st ? row.dataset.rate : '', row.dataset.rpe));
     const box = row.nextElementSibling;
-    box.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { const r = b.dataset.q; box.remove(); save(r ? (r === 'X' ? 'x' : 'ok') : '', r); });
+    box.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { const r = b.dataset.q; box.remove(); save(r ? (r === 'X' ? 'x' : 'ok') : '', r, r && r !== 'X' ? RATE[r].rpe : ''); });
+    box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { box.remove(); save('ok', row.dataset.rate, +b.dataset.v); });
+    box.querySelector('button').focus();
+  };
+  // zwykłe ćwiczenia: dotknięcie „oceń” → cztery światła pod wierszem; wybór zapisuje serię z RPE (lib EFF)
+  const ef = row.querySelector('.ef');
+  if (ef) ef.onclick = () => {
+    const open = row.nextElementSibling && row.nextElementSibling.classList.contains('efp');
+    document.querySelectorAll('.rate, .efp').forEach(x => x.remove());
+    document.querySelectorAll('.ef.open').forEach(x => x.classList.remove('open'));
+    if (open) return;
+    const st = row.dataset.st, q = st === 'x' ? 'X' : st ? lightOf(row.dataset.rpe) : '';
+    row.insertAdjacentHTML('afterend', effPick(q, row.dataset.rpe)); ef.classList.add('open');
+    const box = row.nextElementSibling, done = () => { box.remove(); ef.classList.remove('open'); };
+    box.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { const k = b.dataset.q; done(); save(k === 'X' ? 'x' : 'ok', '', k && k !== 'X' ? EFF[k].rpe : ''); });
+    box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { done(); save('ok', '', +b.dataset.v); });
     box.querySelector('button').focus();
   };
   // typ serii pod numerem: zwykła → drop → nieudana → zwykła (niezapisana)

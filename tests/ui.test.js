@@ -241,6 +241,8 @@ for (const scheme of ['light', 'dark']) for (const [mode, data] of [['PROSTY', D
 
 // --- PR 4: serie ✓/✕, typ pod numerem, RPE/RIR, „Ostatnio”, kolor talerza ---
 const lastSet = calls => calls.filter(c => c.fn === 'logSet').map(c => c.args[0]).pop();
+/** wysiłek serii światłem: „oceń” → światło (L/S/W/X) albo dokładne RPE (v); wybór od razu zapisuje serię */
+const light = async (p, row, q, v) => { await p.click(row + ' .ef'); await p.click(v !== undefined ? `.efp [data-v="${v}"]` : `.efp [data-q="${q}"]`); await p.waitForTimeout(100); };
 const SERIES = Object.assign({}, PRO, {
   cfg: Object.assign({}, PRO.cfg, { scale: 'RIR' }),
   plan: [{ week: 2, day: 'T1', title: 'FBW A', date: '2026-10-13', order: 1, name: 'Przysiad', prio: 'A', sets: 3, reps: '5', pct: 0.7, kg: 70, rpe: 8, note: '', extra: 0, drop: 0, block: '', group: '', swaps: [] }],
@@ -254,8 +256,19 @@ test('Serie: ✓ → ✕ (FAIL) → puste, poprawka zapisanej serii zapisuje od 
   const row = '.set[data-o="1"][data-s="1"]';
   await p.click(row + ' .ok'); await p.waitForTimeout(100);
   assert.deepEqual((({ done, typ, rpe }) => ({ done, typ, rpe }))(lastSet(calls)), { done: true, typ: '', rpe: '' });
-  await p.selectOption(row + ' .rpe', '8'); await p.waitForTimeout(100);
-  assert.equal(lastSet(calls).rpe, '8');                                  // zmiana RPE po ✓ → nowy zapis
+  assert.match(await p.textContent(row + ' .ef'), /oceń/);                // ✓ bez światła: brak oceny, nigdy domyślne 7
+  await light(p, row, 'S');
+  assert.deepEqual((({ done, typ, rpe }) => ({ done, typ, rpe }))(lastSet(calls)), { done: true, typ: '', rpe: 8 });   // 🟡 → RPE 8
+  assert.equal(await p.textContent(row + ' .ef b'), '8');
+  await light(p, row, 'W'); await light(p, row, '', 9.5);                 // korekta: to samo okienko, dokładne RPE
+  assert.equal(lastSet(calls).rpe, 9.5);
+  assert.equal(await p.$eval(row + ' .ef .d', d => d.classList.contains('r')), true);   // 9,5 → 🔴
+  await light(p, row, 'W'); await light(p, row, '', 8.5);                   // 🔴 + korekta 8,5 → 🟡
+  assert.equal(lastSet(calls).rpe, 8.5);
+  assert.equal(await p.$eval(row + ' .ef .d', d => d.classList.contains('y')), true);
+  await p.click(row + ' .ef'); await p.click('.efp .rclr'); await p.waitForTimeout(100);   // „Bez oceny”: seria zostaje zrobiona, RPE puste
+  assert.deepEqual((({ done, rpe }) => ({ done, rpe }))(lastSet(calls)), { done: true, rpe: '' });
+  await light(p, row, 'S');
   await p.fill(row + ' .kg', '52,5'); await p.press(row + ' .kg', 'Tab'); await p.waitForTimeout(100);
   assert.equal(lastSet(calls).kg, 52.5);
   await p.click(row + ' .ok'); await p.waitForTimeout(100);
@@ -265,7 +278,11 @@ test('Serie: ✓ → ✕ (FAIL) → puste, poprawka zapisanej serii zapisuje od 
   await p.click(row + ' .ok'); await p.waitForTimeout(100);
   assert.deepEqual((({ done, typ }) => ({ done, typ }))(lastSet(calls)), { done: false, typ: '' });
   assert.equal(await p.getAttribute(row, 'data-st'), '');
-  assert.equal(await p.$$eval('.rpe option', o => o.filter(x => /✗|Fail/.test(x.textContent)).length), 0);   // FAIL już nie w liście
+  assert.match(await p.textContent(row + ' .ef'), /oceń/);                // wyczyszczona seria: bez światła
+  await light(p, row, 'X');                                                // ✖ = nieudana: FAIL, RPE puste
+  assert.deepEqual((({ done, typ, rpe }) => ({ done, typ, rpe }))(lastSet(calls)), { done: true, typ: 'FAIL', rpe: '' });
+  assert.equal(await p.getAttribute(row, 'data-st'), 'x');
+  assert.equal(await p.$('.set[data-k="w"] .ef'), null);                  // rozgrzewka bez świateł
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
@@ -295,17 +312,54 @@ test('Serie: skala RIR z flagi klienta, przełącznik w nagłówku, „Ostatnio�
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
   assert.match(await p.textContent('.rx'), /RIR ≥2/);
   assert.equal(await p.textContent('.set-head .lbl:nth-child(4)'), 'RIR');
-  assert.deepEqual(await p.$$eval('.set[data-s="1"] .rpe option', o => o.map(x => x.textContent)), ['–', '0', '1', '2', '3', '4', '5+']);
+
   assert.ok(await p.$('.rx .zone.p10'));                                   // 70% → zielony talerz
   assert.equal((await p.textContent('.last')).trim(), 'Ostatnio: 67,5 kg × 5 · RIR 1,5');
-  await p.selectOption('.set[data-s="1"] .rpe', '2'); await p.click('.set[data-s="1"] .ok'); await p.waitForTimeout(100);
+  await light(p, '.set[data-s="1"]', 'S');
   assert.equal(lastSet(calls).rpe, 8);                                    // arkusz dostaje RPE
+  assert.equal(await p.textContent('.set[data-s="1"] .ef b'), 'RIR 2');
+  await p.click('.set[data-s="1"] .ef');
+  assert.match(await p.textContent('.efp .fine'), /Dokładniej, RIR: 2,5\s*2\s*1,5\s*1/);    // korekta w RIR, zapis w RPE
+  await p.click('.efp [data-v="8.5"]'); await p.waitForTimeout(100);
+  assert.equal(lastSet(calls).rpe, 8.5);
   await p.click('[data-sc="RPE"]');
   assert.match(await p.textContent('.rx'), /RPE ≤8/);
-  assert.equal(await p.$eval('.set[data-s="1"] .rpe', s => s.value), '8');
+  assert.equal(await p.textContent('.set[data-s="1"] .ef b'), '8,5');
   assert.equal(await p.evaluate(() => localStorage.getItem('sc_kabc')), 'RPE');
   assert.deepEqual(p.errors, []);
   await ctx.close();
+});
+
+test('Światła = RPE z Logu: stare 7 → 🟢, 8,5 → 🟡, 9,5 → 🔴, FAIL → ✖, puste → „oceń”; PROSTY słowami; bez sieci światło zostaje po ponownym otwarciu', async () => {
+  const L = (s, rpe, typ) => ({ id: `robert|2|T1|1|${s}`, zapisano: '2026-10-13T10:00:00.000Z', cwiczenie: 'Przysiad', tydzien: 2, jednostka: 'T1', seria: s, kg: 70, powt: 5, rpe, wykonane: 'TAK', typ: typ || '' });
+  const plan = [Object.assign({}, SERIES.plan[0], { sets: 5 })];
+  const logs = [L(1, 7), L(2, '8,5'), L(3, 9.5), L(4, '', 'FAIL')];
+  for (const simple of [false, true]) {
+    const calls = [];
+    const { ctx, p } = await page(calls, false, { data: Object.assign({}, PRO, { plan, logs, cfg: Object.assign({}, PRO.cfg, { simple }) }) });
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+    const dots = await p.$$eval('.set[data-o="1"]:not(.set-head) .ef .d', d => d.map(x => x.className.replace('d', '').trim()));
+    assert.deepEqual(dots, ['g', 'y', 'r', 'x', '']);
+    const txt = await p.$$eval('.set[data-o="1"]:not(.set-head) .ef', d => d.map(x => x.textContent.trim()));
+    assert.deepEqual(txt, simple ? ['Lekko', 'Średnio', 'Ciężko', '✕nieudana', 'oceń'] : ['7', '8,5', '9,5', '✕fail', 'oceń']);
+    if (simple) {
+      await p.click('.set[data-s="5"] .ef');
+      assert.equal(await p.$('.efp .fine'), null);                          // PROSTY: bez dokładnego RPE
+      assert.equal(await p.$$eval('.efp [data-q]', b => b.length), 4);
+      await p.screenshot({ path: path.join(SCREENS, 'swiatla-prosty.png') });
+    } else {
+      await ctx.unroute('**/macros/**'); await ctx.route('**/macros/**', r => r.abort());
+      await light(p, '.set[data-o="1"][data-s="5"]', 'S');
+      assert.equal(await p.$eval('.set[data-s="5"] .ok', b => b.classList.contains('pend')), true);
+      await p.goto(base); await p.waitForSelector('.set[data-o="1"]', { state: 'attached' });   // z kolejki offline (karta zrobiona = zwinięta)
+      assert.equal(await p.$eval('.set[data-s="5"] .ef .d', d => d.classList.contains('y')), true);
+      assert.equal(await p.textContent('.set[data-s="5"] .ef b'), '8');
+      const q = await p.evaluate(() => JSON.parse(localStorage.getItem('q_kabc') || '[]').filter(i => i.fn === 'logSet').map(i => i.payload.rpe));
+      assert.deepEqual(q, [8]);
+    }
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
 });
 
 test('Serie: bez sieci pole żółte, także po ponownym otwarciu', async () => {
@@ -419,7 +473,12 @@ test('Boje: światła zamiast RPE, ocena → zapis, propozycja i „Ustaw X kg�
   assert.equal(await p.$eval('.sug [data-setkg]', b => b.dataset.setkg), '75');
   assert.equal((await p.$$('.sug')).length, 1);                                  // tylko pod ostatnio ocenionym
   await p.click('[data-setkg="75"]');
+  await rate(p, 3, 'W');                                                         // Walka = RPE 9 (jedna skala z resztą aplikacji)
+  assert.deepEqual((({ ocena, rpe }) => ({ ocena, rpe }))(lastSet(calls)), { ocena: 'W', rpe: 9 });
+  await p.click('.set[data-s="3"] .lt'); await p.click('.rate [data-v="9.5"]'); await p.waitForTimeout(80);   // korekta w PRO: ocena zostaje
+  assert.deepEqual((({ ocena, rpe }) => ({ ocena, rpe }))(lastSet(calls)), { ocena: 'W', rpe: 9.5 });
   await rate(p, 3, 'L');
+  assert.equal(lastSet(calls).rpe, 7);
   assert.match(await p.textContent('.sug'), /to sufit dnia \(75 kg\)/);
   assert.equal(await p.$('.sug [data-setkg]'), null);
   await rate(p, 4, 'X');
@@ -1060,7 +1119,7 @@ for (const scheme of ['light', 'dark']) test(`Trening zrobiony ${scheme}: okno p
   const { ctx, p } = await page(calls, false, { data, scheme, api: b => { if (b.fn === 'logSession') data.sessions.push({ id: 'robert|8|T1', tydzien: 8, jednostka: 'T1', czas_min: b.args[0].minutes, start: b.args[0].start }); } });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
   assert.match(await p.textContent('#eyebrow'), /tydz\. 4 · T1/);                    // tydz. 8 = 4. tydzień bloku B2
-  for (const n of [1, 2, 3]) { await p.selectOption(`.set[data-o="1"][data-s="${n}"] .rpe`, '8'); await p.click(`.set[data-o="1"][data-s="${n}"] .ok`); await p.waitForTimeout(80); }
+  for (const n of [1, 2, 3]) await light(p, `.set[data-o="1"][data-s="${n}"]`, 'S');
   await p.evaluate(() => stopRest());
   await p.click('#saveSess'); await p.waitForSelector('#sheet .dn-t');
   assert.equal(calls.filter(c => c.fn === 'logSession').length, 1);
@@ -1950,26 +2009,25 @@ test('Rekord przy zapisie serii: pasek pod najlepszą serią ćwiczenia główne
   // PRO
   let calls = [], { ctx, p } = await page(calls, false, { data: mk(false) });
   await p.goto(base + '?k=k0123456789a'); await p.waitForSelector(row(1, 1));
-  await p.fill(row(1, 1) + ' .reps', '8'); await p.selectOption(row(1, 1) + ' .rpe', '8');
-  await p.click(row(1, 1) + ' .ok'); await p.waitForSelector('.rec');
+  await p.fill(row(1, 1) + ' .reps', '8'); await light(p, row(1, 1), 'S'); await p.waitForSelector('.rec');
   assert.match((await p.textContent('.rec')).replace(/\s+/g, ' '), /★ Rekord.*szacowane maks\. 70 kg · było 66,7/);
   assert.ok(await p.$eval(row(1, 1), r => r.classList.contains('isrec') && r.nextElementSibling.classList.contains('rec')));
   const ls = calls.filter(c => c.fn === 'logSet').pop().args[0];
   assert.deepEqual([ls.kg, ls.reps, ls.rpe, ls.done, ls.typ], [52.5, 8, 8, true, '']);          // zapis serii bez zmian
   await p.screenshot({ path: path.join(SCREENS, 'rekord-pro-jasny.png') });
   // lepsza seria 2 → pasek przechodzi pod nią (jeden na ćwiczenie)
-  await p.fill(row(1, 2) + ' .kg', '55'); await p.fill(row(1, 2) + ' .reps', '8'); await p.selectOption(row(1, 2) + ' .rpe', '8');
-  await p.click(row(1, 2) + ' .ok'); await p.waitForFunction(() => /73,3/.test((document.querySelector('.rec') || {}).textContent || ''));
+  await p.fill(row(1, 2) + ' .kg', '55'); await p.fill(row(1, 2) + ' .reps', '8'); await light(p, row(1, 2), 'S');
+  await p.waitForFunction(() => /73,3/.test((document.querySelector('.rec') || {}).textContent || ''));
   assert.equal(await p.$$eval('.rec', x => x.length), 1);
   assert.ok(await p.$eval(row(1, 2), r => r.nextElementSibling.classList.contains('rec')));
   // seria 2 nieudana → rekord wraca pod serię 1; obie cofnięte → brak paska
   await p.click(row(1, 2) + ' .ok'); await p.waitForFunction(() => /70 kg/.test((document.querySelector('.rec') || {}).textContent || ''));
   await p.click(row(1, 1) + ' .ok'); await p.click(row(1, 1) + ' .ok'); await p.waitForFunction(() => !document.querySelector('.rec'));
   // ćwiczenie uzupełniające (B): bez paska mimo lepszego wyniku
-  await p.fill(row(2, 1) + ' .reps', '8'); await p.selectOption(row(2, 1) + ' .rpe', '8'); await p.click(row(2, 1) + ' .ok'); await p.waitForTimeout(200);
+  await p.fill(row(2, 1) + ' .reps', '8'); await light(p, row(2, 1), 'S'); await p.waitForTimeout(100);
   assert.equal(await p.$('.rec'), null);
   // bez RPE seria liczy się jak RPE 10: 55 × 8 = 69,7 > 66,7 → rekord; po wszystkich seriach karta się zwija i w wyniku jest „★ rekord”
-  await p.fill(row(1, 1) + ' .kg', '55'); await p.fill(row(1, 1) + ' .reps', '8'); await p.selectOption(row(1, 1) + ' .rpe', '');
+  await p.fill(row(1, 1) + ' .kg', '55'); await p.fill(row(1, 1) + ' .reps', '8');
   await p.click(row(1, 1) + ' .ok'); await p.waitForSelector('.rec');
   assert.match((await p.textContent('.rec')).replace(/\s+/g, ' '), /szacowane maks\. 69,7 kg · było 66,7/);
   assert.equal(calls.filter(c => c.fn === 'logSet').pop().args[0].rpe, '');                       // arkusz dalej dostaje puste RPE
@@ -1982,8 +2040,9 @@ test('Rekord przy zapisie serii: pasek pod najlepszą serią ćwiczenia główne
   // PROSTY, ciemny: bez liczb; pasek jest też po ponownym otwarciu (z kolejki / pamięci telefonu)
   calls = []; ({ ctx, p } = await page(calls, false, { data: mk(true), scheme: 'dark' }));
   await p.goto(base + '?k=k0123456789a'); await p.waitForSelector(row(1, 1));
-  await p.fill(row(1, 1) + ' .reps', '8'); await p.selectOption(row(1, 1) + ' .rpe', { label: 'Średnio' });
-  await p.click(row(1, 1) + ' .ok'); await p.waitForSelector('.rec');
+  await p.fill(row(1, 1) + ' .reps', '8'); await light(p, row(1, 1), 'S'); await p.waitForSelector('.rec');
+  assert.equal(await p.textContent(row(1, 1) + ' .ef b'), 'Średnio');                          // PROSTY: słowo zamiast liczby
+  assert.equal(calls.filter(c => c.fn === 'logSet').pop().args[0].rpe, 8);
   assert.match(await p.textContent('.rec'), /Najlepszy wynik w tym ćwiczeniu/);
   assert.doesNotMatch(await p.textContent('.rec'), /\d/);
   await p.screenshot({ path: path.join(SCREENS, 'rekord-prosty-ciemny.png') });

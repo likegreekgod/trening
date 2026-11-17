@@ -27,12 +27,26 @@
     const base = L.isNum(fromKg) ? fromKg : (L.isNum(planKg) ? planKg : null);
     return { kg: base === null ? '' : L.floor25(base * 0.8), reps: '' };
   };
-  /** tryb PROSTY: RPE z arkusza → przycisk Lekko 6 / Średnio 7,5 / Ciężko 9 / Max 10 */
-  L.effortVal = r => {
+  /**
+   * Jedna skala wysiłku serii w całej aplikacji (17.11.2026): światło = widok liczby RPE z Logu.
+   * Lekko 7 · Średnio 8 · Ciężko 9 · Nieudana = FAIL bez RPE. Brak światła = puste RPE (brak danych, nigdy 7).
+   * Boje (RATE) mają te same stopnie i te same RPE, tylko inne słowa i światła sędziowskie.
+   */
+  L.EFF = {
+    L: { rpe: 7, label: 'Lekko', hint: 'Szybko, czysto, zapas ≥ 3', c: 'g' },
+    S: { rpe: 8, label: 'Średnio', hint: 'Wolniej albo z poprawką, zapas 2', c: 'y' },
+    W: { rpe: 9, label: 'Ciężko', hint: 'Walka, zapas 0–1', c: 'r' },
+    X: { rpe: '', label: 'Nieudana', hint: 'Seria nie wyszła', c: 'x' }
+  };
+  /** dokładne RPE przy świetle (korekta w PRO): zakres światła i krok w stronę sąsiedniego */
+  L.EFF_FINE = { L: [6, 6.5, 7, 7.5, 8], S: [7.5, 8, 8.5, 9], W: [8.5, 9, 9.5, 10] };
+  /** RPE (i typ) → światło: ≤ 7,5 Lekko, 8–8,5 Średnio, ≥ 9 Ciężko, FAIL Nieudana; puste = '' (także stare wpisy) */
+  L.lightOf = (r, typ) => {
+    if (/FAIL/.test(typ || '')) return 'X';
     if (L.blank(r)) return '';
     const n = parseFloat(String(r).replace(',', '.'));
     if (isNaN(n)) return '';
-    return n < 7 ? '6' : n < 8.5 ? '7.5' : n < 9.75 ? '9' : '10';
+    return n <= 7.5 ? 'L' : n < 9 ? 'S' : 'W';
   };
 
   /* RPE ↔ RIR (Zourdos i in. 2016): RIR = 10 − RPE. Arkusz zawsze zapisuje RPE. */
@@ -246,19 +260,17 @@
     return 'I';
   };
   L.isOly = ex => { const g = L.groupOf(ex.group, ex.name); return g === 'R' || g === 'P'; };
-  /** ocena → zapis: Łatwo rpe 7, Średnio 8, Walka 9,5, Spalone = FAIL bez rpe; światła: w = białe, r = czerwone */
+  /** ocena boju → zapis jak L.EFF: Łatwo rpe 7, Średnio 8, Walka 9, Spalone = FAIL bez rpe; światła: w = białe, r = czerwone */
   L.RATE = {
-    L: { rpe: 7, label: 'Łatwo', lights: 'www' }, S: { rpe: 8, label: 'Średnio', lights: 'wwr' },
-    W: { rpe: 9.5, label: 'Walka', lights: 'wrr' }, X: { rpe: '', label: 'Spalone', lights: 'rrr' }
+    L: { rpe: L.EFF.L.rpe, label: 'Łatwo', lights: 'www' }, S: { rpe: L.EFF.S.rpe, label: 'Średnio', lights: 'wwr' },
+    W: { rpe: L.EFF.W.rpe, label: 'Walka', lights: 'wrr' }, X: { rpe: '', label: 'Spalone', lights: 'rrr' }
   };
   /** ocena zapisanego podejścia; starsze wpisy bez „ocena” → z typu FAIL albo RPE */
   L.rateOf = l => {
     if (!l || l.wykonane !== 'TAK') return '';
     const o = String(l.ocena || '').toUpperCase();
     if (L.RATE[o]) return o;
-    if (/FAIL/.test(l.typ || '')) return 'X';
-    const r = parseFloat(String(l.rpe).replace(',', '.'));
-    return isNaN(r) ? '' : r <= 7 ? 'L' : r <= 8.5 ? 'S' : 'W';
+    return L.lightOf(l.rpe, l.typ);
   };
   /** sufit dnia = floor_2,5(1RM × (procent + sufit_oly)); słaba dyspozycja (uwaga / zmęczenie) → ciężar z planu; bez % → null */
   L.olyCap = (planKg, pct, ceil, weak) => {
