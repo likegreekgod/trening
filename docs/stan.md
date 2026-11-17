@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, `main` = v55 (scalone PR #76: panel trenera PR 1–2, #77: marka „Siła z Ruchu”, #78: panel na telefonie i przełącznik aplikacja ↔ panel, #79: animacja po przerwie 30 minut i ikona „Duet”, #80: naprawa importu planu); komentarz do sesji ze szkicem AI w panelu (v56) na gałęzi `claude/project-thread-taywqw`.
+Stan na 2026-11-17, `main` = v56 (scalone PR #76: panel trenera PR 1–2, #77: marka „Siła z Ruchu”, #78: panel na telefonie i przełącznik aplikacja ↔ panel, #79: animacja po przerwie 30 minut i ikona „Duet”, #80: naprawa importu planu, #81: komentarz do sesji ze szkicem AI); poprawka skoku CMJ (v57) na gałęzi `claude/project-thread-3sgrbv`.
 
 ## Jak pracujemy
 
@@ -18,7 +18,8 @@ Stan na 2026-11-17, `main` = v55 (scalone PR #76: panel trenera PR 1–2, #77: m
 
 ## Ostatnio zrobione
 
-- 17.11 (v56 + `apps-script/`, na gałęzi): panel trenera: komentarz do sesji wpisywany w karcie klienta → Sesje (`trKomentarz`, kolumna Sesje `komentarz_trenera`, klient widzi go w zakładce Trener) i „✦ Szkic AI” przez Claude API (`trSzkic`, poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic, limit 30 dziennie, koszt każdego szkicu w zakładce „AI”). AI tylko szkicuje, zapisuje trener.
+- 17.11 (v57, na gałęzi): Dyspozycja, poprawka błędnego skoku CMJ: okno „Zmierz skok z filmu” ma wybór „Zapisz jako Skok 1 / 2 / 3” (przy trzech wpisanych domyślnie skok najdalej od mediany, czyli pomyłka), a komunikat o odstającym skoku mówi wprost, że pole można poprawić. Wcześniej pomiar z filmu przy pełnych polach zawsze nadpisywał Skok 1.
+- 17.11 (v56 + `apps-script/`, scalony PR #81): panel trenera: komentarz do sesji wpisywany w karcie klienta → Sesje (`trKomentarz`, kolumna Sesje `komentarz_trenera`, klient widzi go w zakładce Trener) i „✦ Szkic AI” przez Claude API (`trSzkic`, poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic, limit 30 dziennie, koszt każdego szkicu w zakładce „AI”). AI tylko szkicuje, zapisuje trener.
 - 17.11 (`apps-script/`, scalony PR #80): naprawa importu planu: plik usuwa niezrobione jednostki tylko z bloków, które sam zawiera (wcześniej kasował niezrobione jednostki innych bloków klienta), jednostka z serią w Logu liczy się jako zrobiona, każde usunięcie jest w Import („usunięto: …”, status „OK (usunięto N)”). Do dopisania w SKILL.md skilla trenera (przebuduj ZIP).
 - 17.11 (v55, scalony PR #79): animacja otwarcia przy każdym wejściu po co najmniej 30 minutach bez aplikacji (uruchomienie albo powrót do aplikacji z tła) zamiast raz dziennie; w trakcie treningu się nie pokazuje. Nowa ikona „Duet” (tor sztangi, linia tańca i talerz z animacji) na ekranie głównym, w karcie przeglądarki i w nagłówku aplikacji; pliki rysuje `tools/make-icons.js`.
 - 17.11 (v54, scalony PR #78): przełącznik między aplikacją a panelem: w aplikacji na ekranie Trener przycisk „Panel trenera” tylko na urządzeniu, na którym ktoś raz zalogował się do panelu (`tr_dev` w localStorage, zostaje po wylogowaniu), w panelu „Mój trening ›” otwiera aplikację z kluczem zapamiętanym w tej przeglądarce. Klienci go nie widzą, bo do panelu wpuszcza tylko adres trenera.
