@@ -10,6 +10,10 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Puste RPE = brak danych w arkuszu (tak było: `n_` daje NaN). Wyjątek, wybrany przez Damiana na karcie: w aplikacji rekord i wykres Siły dalej liczą serię bez RPE jak RPE 10 (ustalenie z v50), bo po zmianie wiele serii będzie zapisywanych samym ✓.
 - Skutek w arkuszu: Lekko = 7 zamiast 6 w PROSTYM, więc takie serie liczą się jako twarde (RPE ≥ 7).
 
+## 2026-11-17 · Szkic AI tylko przy zapisanych seriach (v58)
+
+Damian: jeśli klient nie uzupełnił treningu, szkic AI nie powinien się generować, bo szkoda pieniędzy. Szkic i tak powstaje tylko po kliknięciu trenera, ale przy sesji bez żadnej zapisanej serii roboczej panel chowa „✦ Szkic AI”, a `trSzkic` odmawia przed wywołaniem Claude API (`trSzkicSets_`). Komentarz ręczny zostaje możliwy.
+
 ## 2026-11-17 · Szkic AI komentarza do sesji (v56)
 
 - Damian zaakceptował szkic wyglądu: pole „Twój komentarz do sesji” pod otwartą sesją w karcie klienta → Sesje, przycisk „✦ Szkic AI”, ramka „Szkic AI. Przeczytaj i popraw”, poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic. Klient widzi komentarz dopiero po „Zapisz” (ta sama kolumna Sesje `komentarz_trenera`, którą aplikacja już pokazuje w zakładce Trener).
