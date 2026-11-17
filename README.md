@@ -7,7 +7,7 @@ Architektura, schemat danych i konwencje są opisane w **CLAUDE.md**.
 web/           aplikacja (GitHub Pages)
 apps-script/   Code.gs (API + arkusz + podsumowania + wczytywanie planów), Cwiczenia.gs, Podglad.gs, appsscript.json
 tests/         testy (npm test)
-tools/         validate-plan.js
+tools/         validate-plan.js (sprawdzenie planu), make-icons.js (ikony w web/icons/)
 plans/         przykładowy plan JSON
 ```
 
