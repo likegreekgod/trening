@@ -260,7 +260,9 @@ test('doneSets, e1rm, strengthSeries, records: siła z Logu', () => {
   assert.equal(sets.length, 7);                                               // bez rozgrzewki i niewykonanej
   assert.equal(sets.find(s => s.week === 2).date, '2026-10-07');
   assert.equal(Math.round(L.e1rm(80, 5, 8) * 10) / 10, 98.7);                 // 80 × (1 + 7/30)
-  assert.ok(isNaN(L.e1rm(80, 5, '')));
+  assert.equal(Math.round(L.e1rm(80, 5, '') * 10) / 10, 93.3);              // bez RPE = jak RPE 10: 80 × (1 + 5/30)
+  assert.equal(L.e1rm(80, 5, NaN), L.e1rm(80, 5, 10));
+  assert.ok(isNaN(L.e1rm(80, 5, 4)));                                          // RPE < 5 pomijane
   assert.deepEqual(L.strengthSeries(sets, 'Przysiad'), [{ date: '2026-09-28', v: 98.7, block: 'B1', pr: true }, { date: '2026-10-07', v: 104.8, block: 'B1', pr: true }]);
   assert.deepEqual(L.strengthSeries(sets, 'Rwanie').map(p => p.v), [70, 95]);  // boje: zaliczone kg, spalone 72,5 się nie liczy
   assert.deepEqual(L.records(sets).map(r => [r.name, r.oly, r.best, r.date]), [['Przysiad', false, 104.8, '2026-10-07'], ['Rwanie', true, 95, '2026-10-07']]);
@@ -541,7 +543,8 @@ test('unitRecord: rekord w chwili zapisu – która seria i o ile, tylko ćwicze
   assert.equal(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { fail: true })]), 'Przysiad'), null);          // nieudana
   assert.equal(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { prio: 'B' })]), 'Przysiad'), null);           // tylko główne
   assert.equal(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { timed: true })]), 'Przysiad'), null);         // na czas
-  assert.equal(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { rpe: '' })]), 'Przysiad'), null);             // bez RPE nie ma e1RM
+  assert.deepEqual(L.unitRecord(d([S(1, 'Przysiad', 140, 5, { rpe: '' })]), 'Przysiad'), { set: '1', v: 163.3, was: 123.3, oly: false });   // bez RPE = jak RPE 10
+  assert.equal(L.unitRecord(d([S(1, 'Przysiad', 105, 5, { rpe: '' })]), 'Przysiad'), null);             // 105 × 5 bez RPE = 122,5 < 123,3
   assert.equal(L.unitRecord(d([S(1, 'Wiosłowanie', 60, 8)]), 'Wiosłowanie'), null);                     // pierwszy raz = brak punktu odniesienia
   // boje: najcięższe zaliczone kg, RPE niepotrzebne
   assert.deepEqual(L.unitRecord(d([S(1, 'Rwanie', 72, 1, { group: 'R', rpe: '' }), S(2, 'Rwanie', 75, 1, { group: 'R', fail: true })]), 'Rwanie'), { set: '1', v: 72, was: 70, oly: true });

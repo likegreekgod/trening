@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, aplikacja v49 w PR #72 (plan v4 PR 9, czeka na scalenie; `main` = v48 po PR #70, scalonym 16.11).
+Stan na 2026-11-17, `main` = v49 (PR #72 scalony); v50 (poprawki po próbie na telefonie) na gałęzi `claude/project-thread-mlzyqf`, czeka na akceptację szkicu i zgodę na PR.
 
 ## Jak pracujemy
 
@@ -18,6 +18,7 @@ Stan na 2026-11-17, aplikacja v49 w PR #72 (plan v4 PR 9, czeka na scalenie; `ma
 
 ## Ostatnio zrobione
 
+- 17.11 (v50): poprawki po próbie v44–v48: seria bez RPE liczona do rekordu jak RPE 10, „★ rekord” w zwiniętej karcie, licznik podpowiedzi tylko z niewidzianych, „Wyczyść trening” pod „⋯” górnego paska.
 - 17.11 (v49 + `apps-script/`): plan v4 PR 9: raport po bloku w Postęp → Blok (wykonanie, tonaż, czas, siła, jak było, notatka trenera z kolumny Bloków `dla_klienta`) i notatka trenera do jednostki (kolumna Planu `uwagi_jedn`, karta „Od trenera” nad treningiem).
 - 16.11 (v48): plan v4 PR 8: tryb skupienia, jedno ćwiczenie na ekranie (włączany pod „⋯” w górnym pasku, pasek „Ćwiczenie n z m”, „Następne”, przesunięcie palcem, podsumowanie jako ostatni krok).
 - 16.11 (v47): plan v4 PR 7: podpowiedzi przy pierwszym użyciu, cztery dymki po kolei (✓, „⋯”, kamera, dzień w pasku), każdy raz; długa ściągawka w PROSTYM zwinięta na dole Treningu.
@@ -49,11 +50,7 @@ Stan na 2026-11-17, aplikacja v49 w PR #72 (plan v4 PR 9, czeka na scalenie; `ma
 ## Czeka na Damiana
 
 - Scalenie PR #72 (v49 + `apps-script/`, plan v4 PR 9: raport po bloku, notatka do jednostki). Po scaleniu: w zakładce Bloki kolumna `dla_klienta` pojawi się przy najbliższym przeliczeniu podsumowania, a w Planie kolumna `uwagi_jedn` przy najbliższym imporcie planu; dopisać oba pola do SKILL.md skilla trenera i przebudować ZIP.
-- Próba na telefonie: tryb skupienia (v48, PR #70 scalony 16.11; włączany pod „⋯” w górnym pasku Treningu).
-- Próba na telefonie: podpowiedzi przy pierwszym użyciu (v47, PR #69 scalony 16.11; obecni klienci zobaczą cztery dymki raz).
-- Próba na telefonie: timer, zwijanie kart, ✓ (v46, PR #68 scalony 16.11).
-- Próba na telefonie: karta „dziś” (v45, PR #67 scalony 16.11). Do potwierdzenia przyjęte ustawienia: bez osobnego ekranu „Dziś wolne”, karta znika po zapisaniu jednostki, etykiety „Zaległy” / „Zaplanowany”.
-- Próba na telefonie: pasek „★ Rekord” (v44).
+- Akceptacja szkicu „Wyczyść trening” i zgoda na PR v50 (rekord bez RPE, licznik podpowiedzi, reset); potem próba rekordu na telefonie.
 - Po scaleniu PR #65: wpisać TAK w kolumnie N `edycja` zakładki Klienci u osób, które mają móc zmieniać trening (nagłówek `edycja` w komórce N1 dopisać ręcznie; aplikacja czyta kolumnę po pozycji), i dopisać flagę do SKILL.md skilla trenera.
 - Próba na telefonie: okno „Trening zrobiony”, „Historia”, przypięta nazwa przy przewijaniu, komentarz w oknie.
 

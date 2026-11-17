@@ -535,7 +535,11 @@
   /* ---------- postęp: siła, objętość, obciążenie (cała historia z Logu) ---------- */
   const mondayOf = d => L.addDays(d, -((new Date(utc(d)).getUTCDay() + 6) % 7));
   /** e1RM = kg × (1 + (powt. + RIR) / 30), RIR = 10 − RPE; jak w podsumowaniu: tylko serie z RPE ≥ 5 */
-  L.e1rm = (kg, reps, rpe) => kg > 0 && reps > 0 && rpe >= 5 ? kg * (1 + (reps + (10 - rpe)) / 30) : NaN;
+  // seria bez RPE (puste pole) liczy się jak RPE 10: ostrożnie, najniższe szacowane maks. (ustalenie 17.11); RPE < 5 dalej pomijane
+  L.e1rm = (kg, reps, rpe) => {
+    const r = rpe === '' || rpe === null || rpe === undefined || (typeof rpe === 'number' && isNaN(rpe)) ? 10 : Number(rpe);
+    return kg > 0 && reps > 0 && r >= 5 ? kg * (1 + (reps + (10 - r)) / 30) : NaN;
+  };
   /**
    * Serie z Logu z kontekstem planu. plan: wiersze getData (week, day, order, prio, group, pct, kg, block);
    * dates: {tydzień|jednostka → faktyczny dzień}. Bez rozgrzewki, tylko wykonane.

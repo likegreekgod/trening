@@ -317,6 +317,9 @@
   .opts.act .opt{display:flex;align-items:center;gap:12px;min-height:52px;font-size:16px;text-decoration:none}
   .opts.act .opt i{flex:none;width:24px;text-align:center;font-style:normal;color:var(--muted)}
   .opts.act .opt small{margin-left:auto;color:var(--muted);font-size:13px}
+  .opts.act .opt.warnopt,.opts.act .opt.warnopt i{color:var(--bad)}
+  .btn.bad{background:var(--bad);border-color:var(--bad);color:var(--surface);width:100%;padding:12px;font:800 20px/1 var(--f-display);letter-spacing:.06em;margin:14px 0 8px}
+  .btn.wide{width:100%}
   .fold-b{flex:1;min-width:0;min-height:44px;border:0;background:transparent;padding:0;text-align:left;display:flex;align-items:flex-start;gap:10px;color:inherit}
   .ft{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
   .chev{flex:none;width:10px;height:10px;margin:5px 0 0;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-135deg);transition:transform .2s}
@@ -1229,6 +1232,7 @@ const TIPS = [
   { id: 'dzien', sel: '.wk[data-wk="t"] .wk-d.cur, .wk[data-wk="t"] .wk-d:not(.free)', h: 'Inny dzień?', t: 'Przytrzymaj dzień w pasku, żeby przenieść trening. Dotknięcie otwiera trening z tego dnia.' }
 ];
 let TIP = null;                                                   // { tip, el } pokazywanej podpowiedzi
+let TIPN = null;                                                  // id podpowiedzi niewidzianych przy starcie: licznik „n z m” tylko z nich (nowa = „1 z 1”)
 const tipSeen = () => { try { const a = JSON.parse(localStorage.getItem(TIPK) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
 const tipEl = t => [...document.querySelectorAll(t.sel)].find(e => e.offsetParent !== null) || null;
 /** rysuje pierwszą nieobejrzaną podpowiedź, której element jest na ekranie Treningu; go = przewiń do niej */
@@ -1238,6 +1242,8 @@ function tipDraw(go){
   const id = TAB === 'trening' ? nextTip(TIPS.map(t => t.id), tipSeen(), TIPS.filter(tipEl).map(t => t.id)) : '';
   if (!id) { if (box) box.hidden = true; return; }
   const tip = TIPS.find(t => t.id === id), el = tipEl(tip);
+  if (!TIPN) { const seen = tipSeen(); TIPN = TIPS.map(t => t.id).filter(x => !seen.includes(x)); }
+  if (!TIPN.includes(id)) TIPN.push(id);
   if (!box) {
     box = document.createElement('aside'); box.id = 'tip'; box.setAttribute('aria-label', 'Podpowiedź');
     document.body.appendChild(box);
@@ -1245,7 +1251,7 @@ function tipDraw(go){
     window.addEventListener('resize', tipPlace);
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(tipPlace).observe($('#main'));              // karta się zwinęła, doszedł wiersz
   }
-  box.innerHTML = `<b class="h">${esc(tip.h)}</b>${esc(tip.t)}<div class="r"><small>${TIPS.indexOf(tip) + 1} z ${TIPS.length}</small><button type="button" id="tip-ok">Rozumiem</button></div>`;
+  box.innerHTML = `<b class="h">${esc(tip.h)}</b>${esc(tip.t)}<div class="r"><small>${TIPN.indexOf(id) + 1} z ${TIPN.length}</small><button type="button" id="tip-ok">Rozumiem</button></div>`;
   box.className = tip.up ? 'dn' : 'up'; box.hidden = false;
   el.classList.add('tipring'); TIP = { tip, el };
   $('#tip-ok').onclick = () => tipOk(true);
@@ -2244,7 +2250,7 @@ function renderTrening(){
     s0.title || cur.day,
     `<span>Czas <b class="clock">${clockText()}</b></span><span>Serie <b id="st-sets"></b></span><span>Tonaż <b id="st-ton"></b> kg</span>`,
     (SIMPLE ? '' : `<span class="sc" role="group" aria-label="Skala">${['RPE', 'RIR'].map(s => `<button type="button" data-sc="${s}" aria-pressed="${SCALE === s}">${s}</button>`).join('')}</span>`) +
-    (exs.length > 1 ? `<button type="button" class="hmore" id="umore" aria-label="Więcej akcji: ${esc(s0.title || cur.day)}">${MORE_SVG}</button>` : ''));
+    (exs.length > 1 || (!sessDone(cur.week, cur.day) && unitEntries().length) ? `<button type="button" class="hmore" id="umore" aria-label="Więcej akcji: ${esc(s0.title || cur.day)}">${MORE_SVG}</button>` : ''));
   document.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => {
     SCALE = b.dataset.sc; try { localStorage.setItem('sc_' + KEY, SCALE); } catch (e) {}
     renderTrening();
@@ -2286,11 +2292,13 @@ function renderTrening(){
         ${open ? '<button type="button" class="opt" id="cut"><i aria-hidden="true">⏱</i>Skróć trening<small>gdy brakuje czasu</small></button>' : ''}
         ${fx ? '' : '<button type="button" class="opt" id="fold-all"><i aria-hidden="true">▴</i>Zwiń zrobione</button>'}
         <button type="button" class="opt" id="fx-sw"><i aria-hidden="true">${fx ? '☰' : '▣'}</i>${fx ? 'Cała lista' : 'Tryb skupienia'}<small>${fx ? 'wszystkie ćwiczenia' : 'jedno ćwiczenie na ekranie'}</small></button>
+        ${open && unitEntries().length ? '<button type="button" class="opt warnopt" id="u-reset"><i aria-hidden="true">↺</i>Wyczyść trening<small>od zera</small></button>' : ''}
       </div>
       <button type="button" class="btn" data-close>Zamknij</button>`);
     const ct = $('#cut'); if (ct) ct.onclick = () => { closeSheet(); openCut(); };
     const fa = $('#fold-all'); if (fa) fa.onclick = () => { closeSheet(); foldAll(); };
     $('#fx-sw').onclick = () => { closeSheet(); fxSet(!fx); };
+    const ur = $('#u-reset'); if (ur) ur.onclick = () => openReset(s0);
   };
 }
 function rxPro(ex){
@@ -2403,6 +2411,38 @@ function saveSkip(ex, to, why){
 function unSkip(ex){
   Object.keys(LOGS).forEach(k => { if (k.endsWith(lid(ex, 0))) delete LOGS[k]; });
   send('deleteSet', { week: cur.week, day: cur.day, order: ex.order, set: 0 }).catch(() => {});
+}
+/** zapisane wpisy bieżącej jednostki (serie, rozgrzewki, dropy, pominięcia): [{order, set}] bez powtórzeń */
+function unitEntries(){
+  const out = {}, w = String(cur.week), d = String(cur.day);
+  Object.keys(LOGS).forEach(k => {
+    const p = k.split('|'), l = LOGS[k];
+    if (p.length < 5 || p[1] !== w || p[2] !== d || !l || l.deleted) return;
+    out[p[3] + '|' + p[4]] = { order: +p[3], set: p[4] };
+  });
+  return Object.values(out);
+}
+/** „Wyczyść trening” (⋯ w górnym pasku, tylko przed „Zakończ i zapisz”): drugie dotknięcie usuwa wszystkie wpisy jednostki i czas */
+function openReset(s0){
+  const es = unitEntries(), skips = es.filter(e => String(e.set) === '0').length, sets = es.length - skips;
+  openSheet(`<h2 id="sheet-t">Wyczyścić trening?</h2>
+    <p class="sub">${esc(s0.title || cur.day)}: usunę ${sets} ${plural(sets, 'zapisaną serię', 'zapisane serie', 'zapisanych serii')}${skips ? ' i ' + skips + ' ' + plural(skips, 'pominięcie', 'pominięcia', 'pominięć') : ''}, także z arkusza trenera, i wyzeruję czas. Filmy zostają na Dysku.</p>
+    <button type="button" class="btn bad" id="ur-go">Wyczyść trening</button>
+    <button type="button" class="btn wide" data-close>Anuluj</button>`);
+  const go = $('#ur-go');
+  go.onclick = () => {
+    if (!go.dataset.arm) { go.dataset.arm = '1'; go.textContent = 'Na pewno? Dotknij jeszcze raz'; return; }
+    closeSheet(); resetUnit();
+  };
+}
+function resetUnit(){
+  const es = unitEntries(), w = String(cur.week), d = String(cur.day);
+  Object.keys(LOGS).forEach(k => { const p = k.split('|'); if (p[1] === w && p[2] === d) delete LOGS[k]; });
+  es.forEach(e => send('deleteSet', { week: cur.week, day: cur.day, order: e.order, set: e.set }).catch(() => {}));
+  const m = tGet(); delete m[skey()]; delete m['r|' + skey()]; tSet(m);
+  stopRest(); wake(false);
+  renderTrening(); window.scrollTo(0, 0);
+  toast('Trening wyczyszczony. Możesz zacząć od nowa.');
 }
 /** „Pomiń”: opcjonalne (B) od razu, główne i korekcyjne z powodem (trener widzi je w Przeglądzie) */
 function openSkip(ex){
@@ -2712,6 +2752,7 @@ function recDraw(ex){
   if (!ex) return;
   document.querySelectorAll(`.rec[data-o="${ex.order}"]`).forEach(x => x.remove());
   document.querySelectorAll(`.set.isrec[data-o="${ex.order}"]`).forEach(x => x.classList.remove('isrec'));
+  recSum(ex);
   if (ex.prio !== 'A' || timeUnit(ex.reps)) return;
   const r = unitRecord({ week: cur.week, day: cur.day, plan: PLAN, logs: (DATA && DATA.logs) || [], dates: unitDays(), sets: unitSets([ex]) }, ex.name);
   const row = r && document.querySelector(`.set[data-o="${ex.order}"][data-s="${r.set}"]`);
@@ -2719,7 +2760,10 @@ function recDraw(ex){
   row.classList.add('isrec');
   row.insertAdjacentHTML('afterend', `<div class="rec" data-o="${ex.order}" role="status"><b>★ Rekord</b><span>${
     SIMPLE ? 'Najlepszy wynik w tym ćwiczeniu' : (r.oly ? 'najlepsze zaliczone ' : 'szacowane maks. ') + kgTxt(r.v) + ' kg · było ' + kgTxt(r.was)}</span></div>`);
+  recSum(ex);
 }
+/** „★ rekord” w wyniku zwiniętej karty: pasek pod serią chowa się razem z kartą */
+const recSum = ex => foldSum(ex.order);
 /** dane do okna „Trening zrobiony”: bieżąca jednostka z telefonu, porównanie i rekordy z historii (lib unitSummary) */
 function doneSummary(minutes){
   const exs = curExs(), sets = unitSets(exs);
@@ -2819,7 +2863,7 @@ function foldSum(o){
   const s = document.querySelector(`.card[data-card="${o}"] .fsum`); if (!s) return;
   if (s.closest('.card').classList.contains('skip')) { s.textContent = 'pominięte'; return; }
   const w = work(o), done = w.filter(r => r.dataset.st), ton = done.reduce((a, r) => { const kg = num(fv(r.querySelector('.kg'))), n = num(fv(r.querySelector('.reps'))); return a + (r.dataset.st === 'ok' && isNum(kg) && isNum(n) && !(r.querySelector('.reps').dataset.u || '').match(/sek|min/) ? kg * n : 0); }, 0);
-  s.textContent = done.length + ' z ' + w.length + ' ' + plural(w.length, 'serii', 'serii', 'serii') + (ton ? ' · ' + fmtKg(Math.round(ton)) + ' kg' : '') + (cardDone(o) ? ' · ✓' : '');
+  s.textContent = done.length + ' z ' + w.length + ' ' + plural(w.length, 'serii', 'serii', 'serii') + (ton ? ' · ' + fmtKg(Math.round(ton)) + ' kg' : '') + (cardDone(o) ? ' · ✓' : '') + (document.querySelector(`.rec[data-o="${o}"]`) ? ' · ★ rekord' : '');
 }
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 /** płynna zmiana wysokości karty przy zwijaniu i rozwijaniu; stan (klasa fold) zmienia się od razu, animuje się tylko wysokość */
