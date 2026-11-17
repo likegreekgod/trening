@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-17 · Poprawki po próbie v44–v48 na telefonie (v50)
+
+- Damian sprawdził v45–v48: działają. v44 (rekord) nie pokazał się, bo seria w PRO była bez RPE, a e1RM bez RPE nie był liczony.
+- **Seria bez RPE liczy się jak RPE 10** (`L.e1rm`): ostrożnie, najniższe szacowane maksimum. Dotyczy aplikacji (rekord przy zapisie, okno „Trening zrobiony”, Historia, Postęp: Siła, Tydzień, Blok). Arkusz bez zmian (Podsumowanie i Bloki dalej pomijają serie bez RPE), w Logu RPE zostaje puste. RPE < 5 dalej pomijane.
+- W zwiniętej karcie wynik kończy się „★ rekord”, bo pasek pod serią chowa się razem z kartą (`recSum` → `foldSum`).
+- Podpowiedzi: każda zapamiętana osobno, więc nowa podpowiedź pokaże się sama. Licznik „n z m” liczy tylko podpowiedzi niewidziane przy otwarciu aplikacji (`TIPN`; nowa = „1 z 1”).
+- **„Wyczyść trening”** pod „⋯” górnego paska (ostatnia pozycja, czerwona; „⋯” widoczne też przy jednym ćwiczeniu, gdy jest co czyścić): tylko przed „Zakończ i zapisz” i tylko gdy są wpisy. Okno z liczbą serii i pominięć, drugie dotknięcie „Na pewno?”; usuwa wszystkie wpisy jednostki (serie, rozgrzewki, dropy, pominięcia) przez `deleteSet` (offline przez kolejkę), zeruje czas i przerwę. Filmy zostają na Dysku, komentarze do ćwiczeń zapisane w seriach znikają razem z nimi. Bez zmian w Code.gs. Po zapisaniu jednostki tylko poprawki pojedynczych serii, żeby nie skasować zrobionego treningu przez pomyłkę.
+
 ## 2026-11-17 · Raport po bloku i notatka trenera do jednostki (v49 + `apps-script/`, plan v4 PR 9)
 
 - Raport: wariant A, piąta zakładka „Blok” w Postępie (Tydzień, Blok, Siła, Objętość, Dyspozycja) z ◀ ▶ między blokami, domyślnie ostatni blok. Odrzucony wariant B (karta „Raport z bloku” na górze Tygodnia): pokazuje tylko ostatni skończony blok.

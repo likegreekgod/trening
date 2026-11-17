@@ -1929,6 +1929,15 @@ test('Rekord przy zapisie serii: pasek pod najlepszą serią ćwiczenia główne
   // ćwiczenie uzupełniające (B): bez paska mimo lepszego wyniku
   await p.fill(row(2, 1) + ' .reps', '8'); await p.selectOption(row(2, 1) + ' .rpe', '8'); await p.click(row(2, 1) + ' .ok'); await p.waitForTimeout(200);
   assert.equal(await p.$('.rec'), null);
+  // bez RPE seria liczy się jak RPE 10: 55 × 8 = 69,7 > 66,7 → rekord; po wszystkich seriach karta się zwija i w wyniku jest „★ rekord”
+  await p.fill(row(1, 1) + ' .kg', '55'); await p.fill(row(1, 1) + ' .reps', '8'); await p.selectOption(row(1, 1) + ' .rpe', '');
+  await p.click(row(1, 1) + ' .ok'); await p.waitForSelector('.rec');
+  assert.match((await p.textContent('.rec')).replace(/\s+/g, ' '), /szacowane maks\. 69,7 kg · było 66,7/);
+  assert.equal(calls.filter(c => c.fn === 'logSet').pop().args[0].rpe, '');                       // arkusz dalej dostaje puste RPE
+  await p.click(row(1, 2) + ' .ok'); await p.click(row(1, 2) + ' .ok'); await p.click(row(1, 3) + ' .ok');   // seria 2 nieudana, 3 zrobiona
+  await p.waitForSelector('.card[data-card="1"].fold');
+  assert.match(await p.textContent('.card[data-card="1"] .fsum'), /★ rekord$/);
+  assert.doesNotMatch(await p.textContent('.card[data-card="2"] .fsum'), /rekord/);
   assert.deepEqual(p.errors, []);
   await ctx.close();
   // PROSTY, ciemny: bez liczb; pasek jest też po ponownym otwarciu (z kolejki / pamięci telefonu)
@@ -2107,10 +2116,10 @@ test(`podpowiedzi przy pierwszym użyciu (${mode}, ${scheme}): po kolei, każda 
   await p.waitForSelector('#sheet:not([hidden])');
   assert.match(await tip(), /Nagraj serię.*3 z 4/);
   await p.evaluate(() => closeSheet());
-  await p.reload(); await p.waitForSelector('#tip:not([hidden])');           // po ponownym otwarciu ciąg dalszy, nie od początku
-  assert.match(await tip(), /Nagraj serię.*3 z 4/);
+  await p.reload(); await p.waitForSelector('#tip:not([hidden])');           // po ponownym otwarciu ciąg dalszy, nie od początku; licznik z niewidzianych
+  assert.match(await tip(), /Nagraj serię.*1 z 2/);
   await p.click('#tip-ok');
-  assert.match(await tip(), /Inny dzień\?.*4 z 4/);
+  assert.match(await tip(), /Inny dzień\?.*2 z 2/);
   if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, `podpowiedz-dzien-${mode}-${scheme}.png`) });
   await p.click('#tip-ok');
   assert.equal(await tip(), '');
@@ -2119,6 +2128,53 @@ test(`podpowiedzi przy pierwszym użyciu (${mode}, ${scheme}): po kolei, każda 
   await p.reload(); await p.waitForSelector('.set[data-o="1"]');
   assert.equal(await p.$('#tip:not([hidden])'), null);
   assert.equal(calls.filter(c => c.fn !== 'getData').length, 0);             // podpowiedzi niczego nie zapisują na serwerze
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+for (const scheme of ['light', 'dark'])
+test(`„Wyczyść trening” (${scheme}): pod „⋯” górnego paska, dwa dotknięcia, usuwa serie i pominięcia także z arkusza, zeruje czas`, async () => {
+  const calls = [];
+  const data = Object.assign({}, PRO, { plan: [PRO.plan[0], Object.assign({}, PRO.plan[0], { order: 2, name: 'Uginanie ramion', prio: 'B', kg: 10, sets: 2 })] });
+  const { ctx, p } = await page(calls, false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('#umore'); await p.waitForSelector('#sheet:not([hidden])');
+  assert.equal(await p.$('#u-reset'), null);                                  // nic nie zapisano = nie ma czego czyścić
+  await p.evaluate(() => closeSheet());
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.click('.set[data-o="1"][data-s="2"] .ok');
+  await p.click('[data-more="2"]'); await p.click('[data-skip="2"]');           // B: pominięte od razu
+  await p.waitForSelector('.card[data-card="2"].skip');
+  await p.click('#umore'); await p.waitForSelector('#u-reset');
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `wyczysc-menu-${scheme}.png`) }); }
+  await p.click('#u-reset');
+  assert.match(await p.textContent('#sheet'), /usunę 2 zapisane serie i 1 pominięcie, także z arkusza trenera/);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `wyczysc-${scheme}.png`) }); }
+  const n0 = calls.length;
+  await p.click('#ur-go');                                                    // pierwsze dotknięcie tylko pyta jeszcze raz
+  assert.match(await p.textContent('#ur-go'), /Na pewno/);
+  assert.equal(calls.length, n0);
+  await p.click('#ur-go');
+  await p.waitForSelector('#sheet', { state: 'hidden' });
+  await p.waitForFunction(() => !document.querySelector('.card[data-card="2"].skip'));
+  const del = () => calls.filter(c => c.fn === 'deleteSet').map(c => c.args[0].order + '|' + c.args[0].set).sort();
+  for (let i = 0; i < 20 && del().length < 3; i++) await p.waitForTimeout(50);
+  assert.deepEqual(del(), ['1|1', '1|2', '2|0']);
+  assert.equal(await p.$$eval('.set[data-st="ok"]', a => a.length), 0);
+  assert.equal(await p.textContent('.clock'), '00:00');
+  assert.equal(await p.$('#rest:not([hidden])'), null);
+  await p.reload(); await p.waitForSelector('.set[data-o="1"]');           // po przeładowaniu też czysto (pamięć telefonu)
+  assert.equal(await p.$$eval('.set[data-st="ok"]', a => a.length), 0);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('nowa podpowiedź: klient widzi tylko ją, licznik „1 z 1”', async () => {
+  const { ctx, p } = await page([], false, { tips: true });
+  await p.addInitScript(() => { try { if (!sessionStorage.getItem('t')) { localStorage.setItem('tip_kabc', '["seria","wiecej","kamera"]'); sessionStorage.setItem('t', '1'); } } catch (e) {} });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#tip:not([hidden])');
+  assert.match(await p.textContent('#tip'), /Inny dzień\?.*1 z 1/);
+  await p.click('#tip-ok');
+  assert.equal(await p.$eval('#tip', e => e.hidden), true);
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
