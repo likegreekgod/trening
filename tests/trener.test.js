@@ -83,6 +83,13 @@ const GSI = `window.google = { accounts: { id: {
 
 // klient nagrał / wpisał serie dzisiejszej sesji, ale żadnej nie odhaczył (wykonane puste, jak po samym filmie)
 const untick = d => { d.logs.forEach(l => { if (l.data === TODAY) { l.wykonane = ''; if (l.film_link) { l.kg = ''; l.powt = ''; l.rpe = ''; } } }); return d; };
+// syntetyczny fragment „moov” MP4: tabela stsd z jednym wpisem wideo (fourcc, szerokość, wysokość), opcjonalnie hvcC (profil) i colr nclx (krzywa)
+const mp4Stsd = (cc, w, h, prof, tr) => {
+  const e = Buffer.alloc(120); e.write('stsd', 0); e.writeUInt32BE(1, 8); e.writeUInt32BE(110, 12); e.write(cc, 16); e.writeUInt16BE(w, 44); e.writeUInt16BE(h, 46);
+  if (prof) { e.write('hvcC', 90); e[94] = 1; e[95] = prof; }
+  if (tr) { e.write('colrnclx', 100); e.writeUInt16BE(9, 108); e.writeUInt16BE(tr, 110); e.writeUInt16BE(9, 112); }
+  return Buffer.concat([Buffer.from('....ftypisomavc1mp41....mdat'), Buffer.alloc(64), e]);   // „avc1” w ftyp nie może zmylić
+};
 async function page(calls, opt = {}) {
   const ctx = await browser.newContext({ viewport: opt.vp || { width: 1440, height: 900 }, colorScheme: opt.scheme || 'light', reducedMotion: 'reduce', ...(opt.ua ? { userAgent: opt.ua } : {}) });
   const st = { authFail: 0 };
@@ -118,6 +125,7 @@ async function page(calls, opt = {}) {
     const cors = { 'Access-Control-Allow-Origin': '*' };
     if (tok !== 'tok-film' || (opt.mediaExpired && u.searchParams.get('alt') === 'media' && !st.fresh)) return r.fulfill({ status: 401, headers: cors, body: '' });
     if (opt.film404) return r.fulfill({ status: 404, headers: cors, body: '' });
+    if (opt.sniff && h.range === 'bytes=0-262143') return r.fulfill({ status: 206, headers: { ...cors, 'Content-Type': 'video/mp4' }, body: opt.sniff });   // początek pliku do odczytu formatu
     if (u.searchParams.get('alt') !== 'media') return r.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify({ size: String(opt.filmSize || FILM.length), mimeType: 'video/webm' }) });
     const m = /bytes=(\d+)-(\d*)/.exec(h.range || '');
     if (!m) return r.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes', 'Content-Length': String(FILM.length) }, body: FILM });
@@ -501,6 +509,9 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   await s5.p.waitForFunction(() => Math.abs(document.querySelector('#pvv').currentTime - 2 / 30) < 0.005);
   const sm = s5.p.st.drive.filter(d => d.alt === 'media');
   assert.ok(sm.length && sm.every(d => d.tok === 'tok-film') && sm.some(d => d.range));   // bilet w nagłówku i zapytania o kawałek
+  // „Czarny obraz, a słychać dźwięk?”: format z pliku i wymiary obrazu w przeglądarce, porady
+  await s5.p.click('#pvh summary'); await s5.p.waitForFunction(() => /Plik:/.test(document.querySelector('#pvh-b').textContent));
+  assert.match(await s5.p.textContent('#pvh-b'), /Plik: VP8\. Przeglądarka widzi obraz \d+×\d+[\s\S]*przyspieszenie graficzne[\s\S]*Otwórz na Dysku/);
   assert.deepEqual(s5.p.errors, []);
   await s5.ctx.close();
   // bilet wygasł w trakcie oglądania: nowy bilet i film gra dalej, bez komunikatu
@@ -514,7 +525,7 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   // dźwięk bez obrazu (HEVC bez dekodera): komunikat z „Otwórz na Dysku”, bez „Spróbuj ponownie”
   const s6 = await page([], { loggedIn: true, noPic: true });
   await s6.p.goto(base + 'trener.html#filmy'); await s6.p.waitForSelector('.pv .pmsg a');
-  assert.match(await s6.p.textContent('.pv .pmsg'), /tylko dźwięk tego filmu, bez obrazu.*HEVC \(H\.265\).*Otwórz film na Dysku/);
+  assert.match(await s6.p.textContent('.pv .pmsg'), /Słychać dźwięk, ale ta przeglądarka nie pokaże obrazu tego filmu\.Format: VP8\.Przeglądarka nie dekoduje obrazu tego filmu\.Przyspieszenie sprzętowe: w Edge.*Na Dysku film zagra/);
   assert.equal(await s6.p.$('#pv-retry'), null);
   assert.doesNotMatch(await s6.p.textContent('.pv .pmsg'), /Sklepu Microsoft/);   // podpowiedź o rozszerzeniu tylko w Edge
   assert.equal(await s6.p.getAttribute('.pv .pmsg a', 'href'), 'https://drive.google.com/file/d/film1/view');
@@ -522,10 +533,11 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   assert.deepEqual(s6.p.errors, []);
   await s6.ctx.close();
   // Edge na Windows bez dekodera HEVC: podpowiedź o rozszerzeniu ze Sklepu Microsoft
-  const s7 = await page([], { loggedIn: true, noPic: true, ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0' });
+  const s7 = await page([], { loggedIn: true, noPic: true, sniff: mp4Stsd('hvc1', 3840, 2160, 2, 18), ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0' });
   await s7.p.addInitScript(() => { if (window.MediaSource) MediaSource.isTypeSupported = t => !/hvc1/.test(t); });
   await s7.p.goto(base + 'trener.html#filmy'); await s7.p.waitForSelector('.pv .pmsg a');
-  assert.match(await s7.p.textContent('.pv .pmsg'), /Otwórz film na Dysku.*„HEVC Video Extensions”/);
+  await s7.p.screenshot({ path: path.join(SCREENS, 'trener-film-bez-obrazu.png') });
+  assert.match(await s7.p.textContent('.pv .pmsg'), /Format: HEVC \(H\.265\), 3840×2160 \(4K\), 10 bitów, HDR \(HLG\)\.Ta przeglądarka nie obsługuje HEVC\. W Edge pomaga rozszerzenie „HEVC Video Extensions”.*Na Dysku film zagra.*wideo 1080p, bez „wydajnego wideo”/);
   assert.deepEqual(s7.p.errors, []);
   await s7.ctx.close();
   const s3 = await page([], { loggedIn: true, film404: true });

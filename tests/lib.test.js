@@ -1,6 +1,13 @@
 // Czyste funkcje aplikacji z web/lib.js.
 const test = require('node:test'), assert = require('node:assert');
 const L = require('../web/lib.js');
+// syntetyczny fragment „moov” MP4: tabela stsd z jednym wpisem wideo (fourcc, szerokość, wysokość), opcjonalnie hvcC (profil) i colr nclx (krzywa)
+const mp4Stsd = (cc, w, h, prof, tr) => {
+  const e = Buffer.alloc(120); e.write('stsd', 0); e.writeUInt32BE(1, 8); e.writeUInt32BE(110, 12); e.write(cc, 16); e.writeUInt16BE(w, 44); e.writeUInt16BE(h, 46);
+  if (prof) { e.write('hvcC', 90); e[94] = 1; e[95] = prof; }
+  if (tr) { e.write('colrnclx', 100); e.writeUInt16BE(9, 108); e.writeUInt16BE(tr, 110); e.writeUInt16BE(9, 112); }
+  return Buffer.concat([Buffer.from('....ftypisomavc1mp41....mdat'), Buffer.alloc(64), e]);   // „avc1” w ftyp nie może zmylić
+};
 
 test('repsDefault: kompleksy i zapisy powtórzeń', () => {
   assert.equal(L.repsDefault('1+1'), 2);
@@ -729,4 +736,15 @@ test('animacja otwarcia: linia tańca trzyma wysokość talerza, na szczycie rob
   let prev = -1;
   for (let i = 0; i <= 70; i++) { const f = at(0.9 * i / 70, 100 - i); assert.ok(f >= prev && f <= 0.9 + 1e-9); prev = f; }   // nigdy się nie cofa
   assert.equal(L.introDance([5, 5, 5], 5)(0.2, 5), 0);                                          // płaska linia: bez dzielenia przez zero
+});
+
+test('videoCodec: format obrazu z kawałków pliku (MP4 z telefonu: HEVC, 4K, 10 bitów, HDR; WebM)', () => {
+  const u = b => new Uint8Array(b);
+  assert.deepEqual(L.videoCodec(u(mp4Stsd('hvc1', 3840, 2160, 2, 18))), { codec: 'HEVC (H.265)', bits10: true, hdr: 'HLG', w: 3840, h: 2160 });
+  assert.deepEqual(L.videoCodec(u(mp4Stsd('avc1', 1920, 1080))), { codec: 'H.264', bits10: false, hdr: '', w: 1920, h: 1080 });
+  // opis ścieżek na końcu pliku: początek (ftyp + dane) nic nie mówi, koniec ma stsd; najpierw ścieżka dźwięku (mp4a) jest pomijana
+  const head = u(Buffer.concat([Buffer.from('....ftypisomavc1mp41'), Buffer.alloc(2000)])), tail = u(Buffer.concat([Buffer.from('stsd\0\0\0\0\0\0\0\1\0\0\0\x20mp4a'), Buffer.alloc(40), mp4Stsd('hev1', 1920, 1080, 1, 1)]));
+  assert.deepEqual(L.videoCodec(head, null, tail), { codec: 'HEVC (H.265)', bits10: false, hdr: '', w: 1920, h: 1080 });
+  assert.equal(L.videoCodec(head).codec, '');                                   // samo „avc1” w ftyp to nie kodek
+  assert.equal(L.videoCodec(u(require('fs').readFileSync(__dirname + '/fixtures/film.webm'))).codec, 'VP8');
 });

@@ -122,7 +122,8 @@
   .pv video{max-width:100%;max-height:100%;width:auto;height:100%;display:block;transform-origin:50% 50%;background:var(--pv-bg)}
   .pv .zoom{position:absolute;top:10px;left:10px;background:var(--pv-glass);color:var(--pv-white);font:600 12.5px/1 var(--f-body);padding:7px 10px;border-radius:999px;pointer-events:none}
   .pv .fsb{position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:12px;border:0;background:var(--pv-glass);color:var(--pv-white);font-size:20px}
-  .pv .pmsg{display:grid;gap:12px;justify-items:center;text-align:center;color:var(--pv-ink);padding:24px;max-width:340px}.pv .pmsg .hint{color:var(--pv-muted)}
+  .pv .pmsg{display:grid;gap:12px;justify-items:center;text-align:center;color:var(--pv-ink);padding:24px;max-width:340px}.pv .pmsg .hint{color:var(--pv-muted)}.pv .pmsg .more{display:grid;gap:8px;font-size:14px;line-height:1.45;color:var(--pv-muted);max-width:460px}.pv .pmsg .more b{color:var(--pv-ink)}.pv .pmsg a.b,.pv .pmsg button.b{color:var(--ink)}.pv .pmsg:has(.more){max-width:500px}
+  .pvh{margin:8px 0 4px}.pvh summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600;color:var(--ink-2)}.pvh p,.pvh ul{margin:4px 0 8px}.pvh li{margin:4px 0}
   .pv .ld{display:block;width:220px;height:6px;border-radius:3px;background:var(--pv-line);overflow:hidden}.pv .ld b{display:block;height:100%;background:var(--accent);transition:width .15s}
   .pv .buf{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--pv-glass);color:var(--pv-white);font:600 13px/1 var(--f-body);padding:9px 14px;border-radius:999px;pointer-events:none}
   .pv .ctl{background:var(--surface-2);padding:10px 12px 12px;display:grid;gap:10px}
@@ -456,6 +457,7 @@ function renderFilmy(who){
   const sw = cur && list.length > 1 ? '<div class="vsw"><button class="ib" type="button" data-vgo="-1" aria-label="Poprzedni film"' + (ix ? '' : ' disabled') + '>‹</button><div class="t"><b>Film ' + (ix + 1) + ' z ' + list.length + (cur.kom ? '' : ' · bez komentarza') + '</b><span>' + esc(cur.name) + ' · ' + esc(cur.ex) + ' · seria ' + esc(cur.set) + '</span></div><button class="ib" type="button" data-vgo="1" aria-label="Następny film"' + (ix < list.length - 1 ? '' : ' disabled') + '>›</button></div>' : '';
   const view = cur ? '<div class="card">' + playerHtml(cur) +
     '<h2 style="margin-top:14px">' + esc(cur.name) + ' · ' + esc(cur.ex) + '</h2><p class="muted">' + esc(dowDm(cur.at)) + ' · tydz. ' + esc(cur.week) + ' · ' + esc(cur.day) + ' · seria ' + esc(cur.set) + ' · ' + what(cur) + (FB[cur.file] && FB[cur.file].size ? ' · plik ' + pl((FB[cur.file].size / 1048576).toFixed(FB[cur.file].size < 10485760 ? 1 : 0)) + ' MB' : '') + '</p>' +
+    (FB[cur.file] && FB[cur.file].st === 'ok' ? '<details class="pvh" id="pvh"><summary>Czarny obraz, a słychać dźwięk?</summary><div id="pvh-b" class="hint">Sprawdzam plik…</div></details>' : '') +
     (cur.note ? '<div class="eb">Komentarz klienta</div><p class="note">' + esc(cur.note) + '</p>' : '') +
     (cur.komD ? '<div class="eb">Z komentarzy na Dysku</div><p class="kom">' + esc(cur.komD) + '</p>' : '') +
     '<div class="kfw" id="kfw"></div>' +
@@ -473,12 +475,40 @@ function renderFilmy(who){
   if (!f) filmLoad(cur.file, redraw);
   else if (f.st === 'ok') playerBind(cur, redraw);
   else if (f.st === 'err') { const r = $('#pv-retry'); if (r) r.onclick = () => { delete FB[cur.file]; filmLoad(cur.file, redraw); }; }
+  const ph = $('#pvh'); if (ph) ph.ontoggle = async () => { if (!ph.open) return;
+    const fmt = await filmFmt(cur.file, (FB[cur.file] || {}).size || 0), vid = $('#pvv'), b = $('#pvh-b'); if (!b) return;
+    const hevc = /HEVC/.test(fmt.codec);
+    b.innerHTML = '<p>Plik: ' + esc(fmtTxt(fmt) || 'formatu nie udało się odczytać') + '. ' + (vid && vid.videoWidth ? 'Przeglądarka widzi obraz ' + vid.videoWidth + '×' + vid.videoHeight + ', więc go dekoduje, a czarny ekran to zwykle grafika komputera.' : 'Przeglądarka nie widzi obrazu.') + '</p><ul>' +
+      (hevc ? '<li>Film jest w HEVC (H.265). W Edge pomaga rozszerzenie „HEVC Video Extensions” ze Sklepu Microsoft.</li>' : '') + '<li>' + esc(HWTIP) + '</li><li>„Otwórz na Dysku” zawsze pokaże film.</li></ul>'; };
   komFilmDraw(cur, who);
+}
+/** format obrazu z początku (256 KB) i końca (3 MB) pliku na Dysku: kodek, wymiary, 10 bitów, HDR (TL.videoCodec); pamięć na czas wizyty */
+const FMT = {};
+async function filmFmt(file, size){
+  if (FMT[file]) return FMT[file];
+  const head = 262144, tail = 3145728;
+  const part = async rg => { try { const r = await filmGet(file, 'alt=media', { Range: 'bytes=' + rg }); return r.ok ? new Uint8Array(await r.arrayBuffer()) : null; } catch (e) { return null; } };
+  return (FMT[file] = TL.videoCodec(await part('0-' + (head - 1)), size > head ? await part((size > tail ? size - tail : head) + '-') : null));
+}
+const fmtTxt = fmt => [fmt.codec, fmt.w && fmt.h ? fmt.w + '×' + fmt.h + (Math.max(fmt.w, fmt.h) >= 3840 ? ' (4K)' : '') : '', fmt.bits10 ? '10 bitów' : '', fmt.hdr ? 'HDR (' + fmt.hdr + ')' : ''].filter(Boolean).join(', ');
+const HWTIP = 'Przyspieszenie sprzętowe: w Edge Ustawienia → System i wydajność → wyłącz przyspieszenie graficzne (sprzętowe), uruchom Edge ponownie i sprawdź film jeszcze raz. To częsta przyczyna czarnego obrazu z dźwiękiem.';
+/** komunikat „dźwięk bez obrazu” z formatem filmu (TL.videoCodec) i podpowiedzią, co zrobić */
+function picMsg(fmt){
+  const ms = t => !!(window.MediaSource && MediaSource.isTypeSupported && MediaSource.isTypeSupported(t)), edge = /Edg\//.test(navigator.userAgent);
+  const hevc = /HEVC/.test(fmt.codec), big = fmt.w * fmt.h > 2073600;
+  const what = fmtTxt(fmt);
+  const why = hevc ? (ms('video/mp4; codecs="hvc1.1.6.L93.B0"') ? (fmt.bits10 || fmt.hdr ? 'Ta przeglądarka zna HEVC, ale nie dekoduje wersji 10-bitowej / HDR.' : 'Ta przeglądarka zna HEVC, ale karta graficzna nie dekoduje tego filmu' + (big ? ' w tej rozdzielczości' : '') + '.')
+        : 'Ta przeglądarka nie obsługuje HEVC.' + (edge ? ' W Edge pomaga rozszerzenie „HEVC Video Extensions” ze Sklepu Microsoft (potem uruchom Edge ponownie).' : ''))
+    : fmt.codec ? 'Przeglądarka nie dekoduje obrazu tego filmu' + (big ? ' w tej rozdzielczości' : '') + (fmt.bits10 || fmt.hdr ? ' (10 bitów / HDR)' : '') + '.'
+    : 'Nie udało się odczytać formatu pliku.';
+  return { err: 'Słychać dźwięk, ale ta przeglądarka nie pokaże obrazu tego filmu.',
+    more: [what ? 'Format: ' + what + '.' : '', why, hevc ? '' : HWTIP, 'Na Dysku film zagra: Dysk sam go przekonwertuje.',
+      hevc || big || fmt.bits10 || fmt.hdr ? 'Na przyszłość: w aparacie telefonu klienta wideo 1080p, bez „wydajnego wideo” (HEVC) i bez HDR. Filmy będą mniejsze i zagrają wszędzie.' : ''].filter(Boolean) };
 }
 function playerHtml(v){
   const f = FB[v.file] || { st: 'load', pct: 0 };
   const stage = f.st === 'ok' ? '<video id="pvv" src="' + esc(filmUrl(v.file)) + '" playsinline preload="auto"' + (VLOOP ? ' loop' : '') + '></video><span class="zoom" hidden></span><span class="buf" hidden>Wczytuję…</span><button class="fsb" type="button" data-pv="fs" aria-label="Pełny ekran">⤢</button>'
-    : f.st === 'err' ? '<div class="pmsg"><b>' + esc(f.err) + '</b><span>' + (f.codec ? '' : '<button class="b" type="button" id="pv-retry">Spróbuj ponownie</button> ') + '<a class="b" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(v.link) + '">Otwórz na Dysku</a></span></div>'
+    : f.st === 'err' ? '<div class="pmsg"><b>' + esc(f.err) + '</b>' + (f.more ? '<div class="more">' + f.more.map(x => '<span>' + esc(x) + '</span>').join('') + '</div>' : '') + '<span>' + (f.codec ? '' : '<button class="b" type="button" id="pv-retry">Spróbuj ponownie</button> ') + '<a class="b" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(v.link) + '">Otwórz na Dysku</a></span></div>'
     : '<div class="pmsg"><b>' + (f.pct ? 'Pobieram film…' : 'Łączę z Dyskiem…') + '</b><span class="ld"><b style="width:' + (f.pct || 0) + '%"></b></span></div>';
   const dis = f.st === 'ok' ? '' : ' disabled';
   return '<div class="pv" data-file="' + esc(v.file) + '"><div class="stage">' + stage + '</div><div class="ctl">' +
@@ -517,14 +547,15 @@ function playerBind(v, redraw){
     FB[v.file] = { st: 'err', size: f.size, err: 'Przeglądarka nie odtwarza tego filmu' + (f.mime ? ' (' + f.mime + ')' : '') + ', kod ' + code + '. Otwórz go na Dysku.' };
     redraw();
   });
-  // dźwięk bez obrazu: przeglądarka nie ma dekodera ścieżki wideo (zwykle HEVC / H.265 z telefonu), wymiary obrazu = 0
-  function noPic(){
-    if (vid.videoWidth || vid.videoHeight || !(vid.duration > 0) || !FB[v.file] || FB[v.file].st !== 'ok') return;
-    vid.pause(); const f = FB[v.file], hevc = window.MediaSource && MediaSource.isTypeSupported && MediaSource.isTypeSupported('video/mp4; codecs="hvc1.1.6.L93.B0"');
-    FB[v.file] = { st: 'err', codec: true, size: f.size, err: 'Ta przeglądarka odtwarza tylko dźwięk tego filmu, bez obrazu. Telefon nagrał go zapewne w formacie HEVC (H.265)' +
-      (hevc ? ', a karta graficzna komputera go nie dekoduje' : ', którego ta przeglądarka nie obsługuje') + '. Otwórz film na Dysku: Dysk sam go przekonwertuje.' +
-      (/Edg\//.test(navigator.userAgent) && !hevc ? ' Żeby oglądać takie filmy tutaj w Edge, zainstaluj ze Sklepu Microsoft rozszerzenie „HEVC Video Extensions” i uruchom Edge ponownie.' : '') };
-    redraw();
+  // dźwięk bez obrazu: przeglądarka nie ma dekodera ścieżki wideo (zwykle HEVC / 10 bitów / HDR z telefonu), wymiary obrazu = 0;
+  // format odczytany z początku i końca pliku (TL.videoCodec), żeby komunikat mówił, co dokładnie nie gra
+  let picChecked = false;
+  async function noPic(){
+    if (picChecked || vid.videoWidth || vid.videoHeight || !(vid.duration > 0) || !FB[v.file] || FB[v.file].st !== 'ok') return;
+    picChecked = true; vid.pause();
+    const f = FB[v.file], fmt = await filmFmt(v.file, f.size);
+    FB[v.file] = Object.assign({ st: 'err', codec: true, size: f.size }, picMsg(fmt));
+    if (location.hash.startsWith('#filmy')) redraw();
   }
   rng.oninput = () => { vid.pause(); vid.currentTime = Number(rng.value); tick(); };
   const step = n => { vid.pause(); vid.currentTime = Math.min(vid.duration || 0, Math.max(0, vid.currentTime + n / FPS)); };
