@@ -124,7 +124,7 @@ Cel: wybrana osoba (np. sam Damian) może w trakcie treningu szybko dopasować j
 2. PR 2: porównanie do poprzedniej takiej samej jednostki czy do średniej z 4 tygodni.
 3. PR 4: czy rekord pokazywać też w trybie PROSTY (propozycja: tak).
 4. PR 8: przełącznik czy nowy domyślny widok.
-5. PR 9: czy klient ma widzieć „wnioski” trenera z zakładki Bloki.
+5. PR 9: czy klient ma widzieć „wnioski” trenera z zakładki Bloki. **Ustalone 17.11:** nie; osobna kolumna `dla_klienta`.
 6. Czy przed szkicami zrobić krótki przegląd kilku popularnych aplikacji treningowych (propozycje wyżej są z doświadczenia, nie z aktualnego przeglądu rynku).
 
 ## Odrzucone wcześniej (nie proponuj ponownie)
@@ -143,6 +143,6 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 6 | Ruch i timer | zrobione (v46): timer B (pasek u góry, czerwone ostatnie 10 s), puste stany jako karty (`emptyCard`), płynne zwijanie (`foldMove`) i ruch ✓ (`.ok.pop`) |
 | 7 | Podpowiedzi przy pierwszym użyciu | zrobione (v47): wariant A, dymek `#tip` przy elemencie, po kolei; lib `nextTip`, `tipDraw` / `tipPlace` / `tipOk`, stan w `tip_<klucz>` |
 | 8 | Tryb skupienia | zrobione (v48): wariant A, przełącznik pod „⋯” górnego paska; lib `focusSteps`, `focusStart`, `fxDraw` / `fxGo` / `fxSet`, stan w `fx_<klucz>` |
-| 9 | Raport po bloku, notatka do jednostki | po decyzji |
+| 9 | Raport po bloku, notatka do jednostki | zrobione (v49 + `apps-script/`): raport wariant A (Postęp → Blok, lib `blockReport`, liczony w telefonie), „wnioski” zostają u trenera, dla klienta kolumna Bloków `dla_klienta`; notatka wariant A (Plan `uwagi_jedn`, karta `#unote`) |
 | 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zrobione (v42 + `apps-script/`): flaga Klienci N `edycja`, API `editPlan`, lib `planEdit`; szczegóły w `decyzje.md` |
 | 11 | Przypięta nazwa ćwiczenia przy przewijaniu; komentarz do ćwiczenia w osobnym oknie | zrobione (v43): nazwa przypięta w wariancie B (`stickDraw`, `.ch.stuck`), komentarz w oknie (`openNote`) |

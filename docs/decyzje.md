@@ -2,6 +2,15 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-17 · Raport po bloku i notatka trenera do jednostki (v49 + `apps-script/`, plan v4 PR 9)
+
+- Raport: wariant A, piąta zakładka „Blok” w Postępie (Tydzień, Blok, Siła, Objętość, Dyspozycja) z ◀ ▶ między blokami, domyślnie ostatni blok. Odrzucony wariant B (karta „Raport z bloku” na górze Tygodnia): pokazuje tylko ostatni skończony blok.
+- Raport liczy telefon z danych, które już ma (plan z `blok`, Log, Sesje, Dyspozycja), lib `blockReport`, tymi samymi regułami co `computeBlocks_` (zakładka Bloki). Dzięki temu `getData` nie czyta liczb z Bloków i raport działa bez sieci.
+- Zawartość: zakres dat i tygodni, stan (zakończony = minął ostatni dzień planu bloku albo wszystko zrobione; w trakcie), kafle Wykonanie % (w trakcie: „Treningi x z y”) / Tonaż / Czas, siła ćwiczeń głównych (e1RM pierwszy → ostatni tydzień z wynikiem, boje: najcięższe zaliczone) z wykresem, „Jak było” (RPE sesji, samopoczucie, ból, dyspozycja). Blok przed startem pominięty.
+- „Wnioski” trenera z Bloków **nie** idą do klienta (prywatne). Nowa kolumna Bloków `dla_klienta` (na końcu): tekst pokazany w raporcie jako „Od trenera”; pusta = brak sekcji. `keepNotes_` przenosi obie kolumny przy przeliczeniu, `getData.blockNotes` = {blok → tekst} tylko z `dla_klienta`.
+- Notatka do jednostki: wariant A, karta „✎ Od trenera do tego treningu” nad kartą „dziś”, cały tekst widoczny (w trybie skupienia tylko na pierwszym kroku). Odrzucony wariant B (dwie linie w karcie „dziś” + „więcej”): polecenia na dany trening nie powinny się chować.
+- Notatka to nowa kolumna Planu `uwagi_jedn` na końcu nagłówków (pole w JSON planu), wpisywana w jednym wierszu jednostki; dwie różne treści w jednej jednostce = błąd walidacji planu. `getData` zwraca ją w `row.unote`.
+
 ## 2026-11-16 · Tryb skupienia (v48, plan v4 PR 8)
 
 - Wybrany wariant A: pasek „Ćwiczenie n z m” z odcinkami (zrobione zielone, bieżące w kolorze akcentu), pod kartą „‹” i „Następne: <ćwiczenie> ›”. Odrzucony wariant B (przyciski 1 / 2 / A1…): same numery niewiele mówią.

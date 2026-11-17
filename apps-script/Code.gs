@@ -110,7 +110,7 @@ function getData(key) {
       group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
       swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts, own: src(r) === 'klient', added: src(r) === 'dodane',
       mode: opt(r, 'tryb').toUpperCase(), cut: Number(opt(r, 'ciecie')) || null, setsMin: opt(r, 'serie_min') === '' ? null : Number(opt(r, 'serie_min')),
-      circuit: circuit_(opt(r, 'obwod'))
+      circuit: circuit_(opt(r, 'obwod')), unote: opt(r, 'uwagi_jedn')
     }; });
   lap('wiersze');
   const sessions = readRows_('Sesje', SES_HEADERS, client.id), logs = readRows_('Log', LOG_HEADERS, client.id); lap('log');
@@ -120,8 +120,16 @@ function getData(key) {
   return { cfg: { name: client.name, pain: client.pain, simple: client.simple, extra: client.extra,
       swap: client.swap, scale: client.scale, olyCeil: client.olyCeil, own: client.own, edit: client.edit },
     plan: rows, removed: removed, logs: logs, sessions: sessions,
-    readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id),
+    readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id), blockNotes: blockNotes_(tableOf_('Bloki'), client.id),
     parts: pm, ms: Object.assign(ms, { razem: Date.now() - t0 }) };
+}
+
+/** Notatki trenera dla klienta z zakładki Bloki (kolumna „dla_klienta”; „wnioski” zostają u trenera): {blok → tekst}. */
+function blockNotes_(rows, clientId) {
+  const out = {};
+  (rows || []).forEach(r => { const t = String(r.dla_klienta === undefined || r.dla_klienta === null ? '' : r.dla_klienta).trim();
+    if (t && String(r.klient).toLowerCase() === clientId) out[String(r.blok)] = t; });
+  return out;
 }
 
 /** Zapis jednej serii. Idempotentny po id (klient|tydz|jedn|nr|seria). */
@@ -1091,7 +1099,9 @@ function computeSummary_(plan, log, ses, klienci, opts) {
  * Kolumna „wnioski” należy do trenera: keepNotes_ przenosi ją między przeliczeniami (klucz klient|blok).
  */
 const BLOK_HEADERS = ['klient', 'blok', 'od', 'do', 'tygodnie', 'jednostki', 'wykonanie_%', 'tonaz_kg', 'e1RM_zm',
-  'najlepsze_boje', 'sRPE_sr', 'samopocz_sr', 'dyspozycja', 'bol_max', 'statusy', 'wnioski'];
+  'najlepsze_boje', 'sRPE_sr', 'samopocz_sr', 'dyspozycja', 'bol_max', 'statusy', 'wnioski', 'dla_klienta'];
+/** Kolumny Bloków wpisywane przez trenera: „wnioski” (tylko trener), „dla_klienta” (pokazuje raport po bloku w aplikacji). */
+const BLOK_NOTES = ['wnioski', 'dla_klienta'];
 const NO_BLOCK = '(bez bloku)';
 
 function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
@@ -1163,15 +1173,16 @@ function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
       units.filter(Boolean).length + '/' + units.length, x.planned ? Math.round(100 * x.donePlanned / x.planned) : '',
       Math.round(x.ton), e1, best, x.rpe.length ? r1_(avg_(x.rpe)) : '', x.feel.length ? r1_(avg_(x.feel)) : '',
       Object.keys(verd).map(k => k + ' ' + verd[k]).join(', '), isNaN(x.pain) ? '' : x.pain,
-      st['🔴'] || st['🟠'] ? '🔴 ' + st['🔴'] + ', 🟠 ' + st['🟠'] : '', ''];
+      st['🔴'] || st['🟠'] ? '🔴 ' + st['🔴'] + ', 🟠 ' + st['🟠'] : '', '', ''];
   }).sort((a, b) => a[0].localeCompare(b[0]) || String(a[2]).localeCompare(String(b[2])));
 }
 
-/** Przenosi „wnioski” trenera do nowych wierszy; blok, który zniknął z planu, zostaje z wnioskami. */
+/** Przenosi notatki trenera („wnioski”, „dla_klienta”) do nowych wierszy; blok, który zniknął z planu, zostaje z notatkami. */
 function keepNotes_(rows, old) {
-  const W = BLOK_HEADERS.indexOf('wnioski'), seen = {}, prev = {};
-  (old || []).forEach(r => { if (String(r.wnioski || '').trim()) prev[String(r.klient) + '|' + String(r.blok)] = r; });
-  const out = rows.map(r => { const k = r[0] + '|' + r[1]; seen[k] = 1; const c = r.slice(); if (prev[k]) c[W] = prev[k].wnioski; return c; });
+  const seen = {}, prev = {};
+  (old || []).forEach(r => { if (BLOK_NOTES.some(h => String(r[h] || '').trim())) prev[String(r.klient) + '|' + String(r.blok)] = r; });
+  const out = rows.map(r => { const k = r[0] + '|' + r[1]; seen[k] = 1; const c = r.slice();
+    if (prev[k]) BLOK_NOTES.forEach(h => { c[BLOK_HEADERS.indexOf(h)] = prev[k][h] === undefined ? '' : prev[k][h]; }); return c; });
   Object.keys(prev).filter(k => !seen[k]).forEach(k => out.push(BLOK_HEADERS.map(h => prev[k][h] === undefined ? '' : prev[k][h])));
   return out;
 }
@@ -1908,14 +1919,16 @@ function przeglad() {
 
 /* ================== WCZYTYWANIE PLANÓW Z DRIVE ==================
  * Plik JSON w „Trening – Klienci/_plany/”: lista wierszy planu (klucze = PLAN_HEADERS; data, dod_serie, drop, grupa,
- * zamienniki, blok opcjonalne; opcjonalne `zastepuje` = blok, którego niezrobione jednostki od pierwszej daty
+ * zamienniki, blok, uwagi_jedn opcjonalne; `uwagi_jedn` = notatka trenera do całej jednostki, wpisywana w jednym
+ * wierszu jednostki (np. nr 1), w aplikacji karta „Od trenera” nad treningiem; opcjonalne `zastepuje` = blok, którego niezrobione jednostki od pierwszej daty
  * klienta w pliku zostają zamknięte, patrz mergePlan_). Poprawny plik → podmiana wierszy klientów z pliku w zakładce Plan, plik przeniesiony
  * do „_plany/wczytane”. Jednostki już zrobione (wpis w Sesjach) zostają z dotychczasowego planu; plik, który
  * nadpisałby zrobioną jednostkę innego bloku (ten sam tydzień i jednostka), trafia do „_plany/bledy”.
  * Każdy import zapisuje wiersz w zakładce „Import”.
  */
 const PLAN_HEADERS = ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'nr', 'cwiczenie', 'prio', 'serie', 'powt',
-  'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok', 'zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod'];
+  'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok', 'zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod',
+  'uwagi_jedn'];
 /** obwód / superseria: jedna litera A–Z, inaczej brak */
 const circuit_ = v => { const t = String(v === undefined || v === null ? '' : v).trim().toUpperCase(); return /^[A-Z]$/.test(t) ? t : ''; };
 const PLAN_REQUIRED = ['klient', 'tydzien', 'jednostka', 'nr', 'cwiczenie', 'serie', 'powt'];
@@ -1958,7 +1971,7 @@ function wczytajPlany(e) {
 function validatePlan_(rows) {
   const e = [];
   if (!Array.isArray(rows) || !rows.length) return ['Plik nie zawiera listy wierszy planu'];
-  const seen = {}, zast = {}, units = {};
+  const seen = {}, zast = {}, units = {}, unote = {};
   rows.forEach((r, i) => {
     const w = 'wiersz ' + (i + 1) + ': ';
     const uk = [String(r.klient).toLowerCase(), r.tydzien, r.jednostka].join('|');
@@ -1980,6 +1993,11 @@ function validatePlan_(rows) {
       const k = String(r.klient).toLowerCase(), z = String(r.zastepuje).trim();
       if (zast[k] === undefined) zast[k] = z;
       else if (zast[k] !== z) e.push(w + 'zastepuje „' + z + '” ≠ „' + zast[k] + '” — jeden blok do zamknięcia na klienta');
+    }
+    if (!blank_(r.uwagi_jedn)) {
+      const t = String(r.uwagi_jedn).trim();
+      if (unote[uk] !== undefined && unote[uk] !== t) e.push(w + 'uwagi_jedn różne w jednej jednostce (' + r.jednostka + ' tyg. ' + r.tydzien + '): wpisz notatkę w jednym wierszu');
+      unote[uk] = t;
     }
     const id = [String(r.klient).toLowerCase(), r.tydzien, r.jednostka, r.nr].join('|');
     if (seen[id]) e.push(w + 'powtórzony nr ' + r.nr + ' w ' + r.jednostka + ' tyg. ' + r.tydzien);
