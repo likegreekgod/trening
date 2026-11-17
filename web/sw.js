@@ -1,6 +1,6 @@
 // Service worker: pliki aplikacji w pamięci telefonu → start bez sieci.
 // Zmień VERSION przy każdej publikacji, żeby telefony pobrały nową wersję.
-const VERSION = 'v52';
+const VERSION = 'v53';
 const CACHE = 'trening-' + VERSION;
 const SHELL = ['./', 'index.html', 'config.js', 'lib.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon.svg', 'icons/favicon-32.png',
   'icons/apple-touch-icon.png', 'icons/icon-maskable-192.png', 'icons/icon-maskable-512.png', 'icons/icon-mono.svg',
@@ -30,6 +30,8 @@ self.addEventListener('fetch', e => {
       const copy = r.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy));
       return r;
-    }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('index.html')))
+    }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || (/trener\.html$/.test(url.pathname)   // panel trenera bez sieci nie działa: nie podsuwaj mu aplikacji klienta
+      ? new Response('Brak połączenia z siecią.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+      : caches.match('index.html'))))
   );
 });
