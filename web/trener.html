@@ -23,6 +23,7 @@
         --ink:#17221c;--ink-2:#31473a;--muted:#5f6649;--olive:#7c8363;
         --primary:#31473a;--on-primary:#ffffff;--accent:#a9542a;--on-accent:#ffffff;
         --ok:#296c45;--warn:#8f5d0e;--bad:#b5483b;
+        --pv-bg:#0b0d0c;--pv-ink:#e8ece9;--pv-muted:#aab3ae;--pv-ctl:rgba(20,22,21,.94);--pv-btn:#262a28;--pv-line:#3a3f3c;--pv-on:#e9e4d0;--pv-on-ink:#111111;--pv-glass:rgba(0,0,0,.6);--pv-white:#ffffff;
         --panel:#17221c;--light-off:#38443d;--light-white:#f7f7f2;--light-red:#e5392d;--light-amber:#f0b54f;
         --p25:#c8372d;--p20:#2a5ea8;--p15:#d9ad1f;--p10:#3f8a4a;--p5:#f4f4f0;
         --h1:#9da783;--h2:#7c8363;--h3:#5d6447;--h4:#3f452e;
@@ -115,6 +116,44 @@
   .vi{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;font-size:13.5px}
   .vi[aria-current="true"]{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
   .vi b{display:block}.vi .d{color:var(--muted);font-size:12.5px}
+  .pv{background:var(--pv-bg);border-radius:var(--r);overflow:hidden;position:relative}
+  .pv .stage{position:relative;height:min(62vh,560px);display:grid;place-items:center;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+  .pv video{max-width:100%;max-height:100%;width:auto;height:100%;display:block;transform-origin:50% 50%;background:var(--pv-bg)}
+  .pv .zoom{position:absolute;top:10px;left:10px;background:var(--pv-glass);color:var(--pv-white);font:600 12.5px/1 var(--f-body);padding:7px 10px;border-radius:999px;pointer-events:none}
+  .pv .fsb{position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:12px;border:0;background:var(--pv-glass);color:var(--pv-white);font-size:20px}
+  .pv .pmsg{display:grid;gap:12px;justify-items:center;text-align:center;color:var(--pv-ink);padding:24px;max-width:340px}.pv .pmsg .hint{color:var(--pv-muted)}
+  .pv .ld{display:block;width:220px;height:6px;border-radius:3px;background:var(--pv-line);overflow:hidden}.pv .ld b{display:block;height:100%;background:var(--accent);transition:width .15s}
+  .pv .ctl{background:var(--surface-2);padding:10px 12px 12px;display:grid;gap:10px}
+  .pv .tl{display:flex;align-items:center;gap:10px;font:500 13px/1 var(--f-mono)}
+  .pv .bar{flex:1;position:relative;height:32px;display:flex;align-items:center}
+  .pv .bar input{width:100%;margin:0;height:32px;background:transparent;-webkit-appearance:none;appearance:none;--p:0%}
+  .pv .bar input::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:linear-gradient(var(--accent),var(--accent)) 0/var(--p) 100% no-repeat,var(--line)}
+  .pv .bar input::-moz-range-track{height:6px;border-radius:3px;background:var(--line)}.pv .bar input::-moz-range-progress{height:6px;border-radius:3px;background:var(--accent)}
+  .pv .bar input::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--accent);margin-top:-8px;border:0}
+  .pv .bar input::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--accent);border:0}
+  .pv .mk{position:absolute;left:11px;right:11px;top:0;height:0}
+  .pv .mk button{position:absolute;top:-2px;width:16px;height:14px;margin-left:-8px;border:0;background:none;padding:0;cursor:pointer}
+  .pv .mk button::after{content:"";position:absolute;left:6.5px;top:0;width:3px;height:10px;border-radius:2px;background:var(--primary)}
+  .pv .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .ib{min-width:48px;height:48px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);font:600 14px/1 var(--f-body);display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:0 10px;color:var(--ink)}
+  .ib:disabled{opacity:.45}
+  .ib.big{min-width:64px;background:var(--primary);color:var(--on-primary);border:0;font-size:18px}
+  .ib[aria-pressed=true]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+  .spd{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}.spd .ib{border:0;border-radius:0;min-width:46px}
+  .pv .sp,.row2 .sp{flex:1}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .pv .fsx{display:none}
+  .pv.fs{position:fixed;inset:0;z-index:60;border-radius:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--pv-bg)}
+  .pv.fs .stage{height:auto}.pv.fs .fsb{display:none}.pv.fs .fsx{display:inline-flex}.pv.fs .tch{display:none}
+  .pv.fs .ctl{background:var(--pv-ctl);color:var(--pv-ink);padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .pv.fs .ib{background:var(--pv-btn);color:var(--pv-ink);border-color:var(--pv-line)}.pv.fs .ib.big,.pv.fs .ib[aria-pressed=true]{background:var(--pv-on);color:var(--pv-on-ink)}
+  body.pvfs{overflow:hidden}
+  .vsw{display:none;align-items:center;gap:8px;margin-bottom:10px}.vsw .t{flex:1;min-width:0}.vsw .t b{display:block;font-size:15px}.vsw .t span{font-size:12.5px;color:var(--muted)}
+  #kf-txt{width:100%;min-height:110px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px 12px;font-size:15px;line-height:1.5;resize:vertical}
+  .row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .new.done{background:var(--ok);color:var(--pv-white)}
+  @media (hover:none){.kbd{display:none}}
+  @media (hover:hover) and (pointer:fine){.tch{display:none}}
   .player{position:relative;width:100%;aspect-ratio:16/9;background:var(--panel);border-radius:var(--r);overflow:hidden}
   .player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
   .kom{white-space:pre-wrap;background:var(--surface-2);border-radius:var(--r);padding:10px 12px;font-size:14px;margin:8px 0 0}
@@ -161,6 +200,7 @@
   @media (max-width:760px){.app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr;align-content:start}
     aside{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:10px 12px;border-right:0;border-bottom:3px solid var(--accent)}
     aside .brand{margin:0 12px 0 4px;font-size:18px}aside nav{flex-direction:row;flex-wrap:wrap}aside .foot{margin:0 0 0 auto;padding:0 4px;display:flex;gap:12px;align-items:center}aside .foot #at{display:none}aside .foot #set{min-height:44px;display:inline-flex;align-items:center;font-size:13px}aside .foot button{min-height:44px;font-size:13px}
+    .vsw{display:flex}.vids .vlist{display:none}.pv .stage{height:min(58vh,520px)}
     .top,.pg{padding-left:16px;padding-right:16px}.tabs{padding:0 16px}.search{width:100%}}
 </style>
 </head>
@@ -251,6 +291,7 @@ async function start(){
 function errBox(e){ return '<div class="pg"><div class="card es"><b>Nie udało się wczytać danych</b><span class="err">' + esc(e.message) + '</span><p><button class="b" data-retry>Spróbuj ponownie</button></p></div></div>'; }
 function route(){
   if (!PUL) return;
+  document.body.classList.remove('pvfs');
   const h = (location.hash || '#pulpit').slice(1).split('/'), v = h[0];
   document.querySelectorAll('#nav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === v || (v === 'k' && a.dataset.v === 'pulpit') ? 'page' : 'false'));
   $('#n-filmy').textContent = PUL.videos.filter(x => !x.kom).length || '';
@@ -350,25 +391,162 @@ function renderPulpit(){
 }
 
 /* ---------- filmy ---------- */
+/* ---------- filmy: własny odtwarzacz (film z Drive API przez bilet trFilm) i komentarz z sekundą (trKomentarzFilm) ---------- */
+const FPS = 30;                                  // krok „klatka” (filmy z telefonu: zwykle 30 kl./s)
+const FT = { token: '', exp: 0 };                // bilet Google do pobrania filmu, tylko w pamięci strony
+const FB = {};                                   // plik → {url, st: 'load'|'ok'|'err', pct, err}; najwyżej 4 filmy w pamięci
+const FBQ = [];
+const KF = {};                                   // seria → szkic komentarza (tylko w pamięci strony)
+const KEEP = {};                                 // seria skomentowana w tej sesji: zostaje na liście „Bez komentarza”
+let VSPD = 1, VLOOP = true;
+const vKey = v => v.file + '|' + v.set;
+const tFmt = (s, tenth) => { s = Math.max(0, s || 0); const m = Math.floor(s / 60), x = s - m * 60; return m + ':' + (tenth ? (x < 10 ? '0' : '') + x.toFixed(1).replace('.', ',') : String(Math.floor(x)).padStart(2, '0')); };
+const komTimes = t => String(t || '').split('\n').map(l => /^\s*(\d{1,2}):([0-5]\d)(?:[.,](\d))?\b/.exec(l)).filter(Boolean).map(m => Number(m[1]) * 60 + Number(m[2]) + (m[3] ? Number(m[3]) / 10 : 0));
+async function filmToken(force){
+  if (!force && FT.token && FT.exp > Date.now() + 60000) return FT.token;
+  const r = await guard(api('trFilm')); FT.token = r.token; FT.exp = r.exp || Date.now() + 45 * 60000; return FT.token;
+}
+async function filmLoad(file, redraw){
+  const f = FB[file];
+  if (f && (f.st === 'ok' || f.st === 'load')) return;
+  FB[file] = { st: 'load', pct: 0 }; redraw();
+  try {
+    let tok = await filmToken(), r = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(file) + '?alt=media', { headers: { Authorization: 'Bearer ' + tok } });
+    if (r.status === 401) { tok = await filmToken(true); r = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(file) + '?alt=media', { headers: { Authorization: 'Bearer ' + tok } }); }
+    if (!r.ok) throw new Error(r.status === 404 ? 'Filmu nie ma już na Dysku.' : 'Dysk nie oddał filmu (' + r.status + ').');
+    const len = Number(r.headers.get('Content-Length')) || 0, parts = [];
+    if (r.body && r.body.getReader) { const rd = r.body.getReader(); let got = 0, last = 0;
+      for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); got += value.length;
+        if (len && Date.now() - last > 150) { last = Date.now(); FB[file].pct = Math.round(got / len * 100); const b = document.querySelector('.pv[data-file="' + CSS.escape(file) + '"] .ld b'); if (b) b.style.width = FB[file].pct + '%'; } } }
+    else parts.push(new Uint8Array(await r.arrayBuffer()));
+    FB[file] = { st: 'ok', url: URL.createObjectURL(new Blob(parts, { type: r.headers.get('Content-Type') || 'video/mp4' })) };
+    FBQ.push(file); while (FBQ.length > 4) { const o = FBQ.shift(); if (FB[o] && FB[o].url) URL.revokeObjectURL(FB[o].url); delete FB[o]; }
+  } catch (e) { if (e.auth) { delete FB[file]; return; } FB[file] = { st: 'err', err: e.message || 'Nie udało się pobrać filmu.' }; }
+  redraw();
+}
 function renderFilmy(who){
-  const all = PUL.videos.filter(v => !who || v.id === who), list = VALL ? all : all.filter(v => !v.kom);
-  const key = v => v.file + '|' + v.set;
-  if (!list.some(v => key(v) === VSEL)) VSEL = list.length ? key(list[0]) : '';
-  const cur = list.find(v => key(v) === VSEL);
+  document.body.classList.remove('pvfs'); PVK.v = null;
+  const all = PUL.videos.filter(v => !who || v.id === who), list = VALL ? all : all.filter(v => !v.kom || KEEP[vKey(v)]);
+  if (!list.some(v => vKey(v) === VSEL)) VSEL = list.length ? vKey(list[0]) : '';
+  const ix = list.findIndex(v => vKey(v) === VSEL), cur = list[ix];
   const what = v => (v.kg !== '' ? pl(v.kg) + ' kg × ' : '') + esc(v.reps) + (v.ocena ? ' · ocena ' + esc(v.ocena) : v.rpe !== '' ? ' · RPE ' + pl(v.rpe) : '') + (/FAIL/.test(v.typ) ? ' · nieudana' : '');
-  const items = list.map(v => '<button class="vi" type="button" data-vk="' + esc(key(v)) + '" aria-current="' + (key(v) === VSEL) + '"><b>' + esc(v.name) + ' · ' + esc(v.ex) + (v.kom ? '' : '<span class="new">bez komentarza</span>') + '</b>' +
+  const badge = v => v.kom ? (KEEP[vKey(v)] ? '<span class="new done">✓ skomentowany</span>' : '') : '<span class="new">bez komentarza</span>';
+  const items = list.map(v => '<button class="vi" type="button" data-vk="' + esc(vKey(v)) + '" aria-current="' + (vKey(v) === VSEL) + '"><b>' + esc(v.name) + ' · ' + esc(v.ex) + badge(v) + '</b>' +
     '<span class="d">' + esc(dowDm(v.at)) + ' · ' + esc(v.day) + ' · seria ' + esc(v.set) + ' · ' + what(v) + '</span></button>').join('');
   const who1 = who ? (PUL.clients.find(c => c.id === who) || {}).name || who : '';
-  const view = cur ? '<div class="card"><div class="player"><iframe src="https://drive.google.com/file/d/' + encodeURIComponent(cur.file) + '/preview" allow="autoplay; fullscreen" allowfullscreen title="Film: ' + esc(cur.ex) + '"></iframe></div>' +
+  const sw = cur && list.length > 1 ? '<div class="vsw"><button class="ib" type="button" data-vgo="-1" aria-label="Poprzedni film"' + (ix ? '' : ' disabled') + '>‹</button><div class="t"><b>Film ' + (ix + 1) + ' z ' + list.length + (cur.kom ? '' : ' · bez komentarza') + '</b><span>' + esc(cur.name) + ' · ' + esc(cur.ex) + ' · seria ' + esc(cur.set) + '</span></div><button class="ib" type="button" data-vgo="1" aria-label="Następny film"' + (ix < list.length - 1 ? '' : ' disabled') + '>›</button></div>' : '';
+  const view = cur ? '<div class="card">' + playerHtml(cur) +
     '<h2 style="margin-top:14px">' + esc(cur.name) + ' · ' + esc(cur.ex) + '</h2><p class="muted">' + esc(dowDm(cur.at)) + ' · tydz. ' + esc(cur.week) + ' · ' + esc(cur.day) + ' · seria ' + esc(cur.set) + ' · ' + what(cur) + '</p>' +
     (cur.note ? '<div class="eb">Komentarz klienta</div><p class="note">' + esc(cur.note) + '</p>' : '') +
-    '<div class="eb">Twój komentarz</div>' + (cur.kom ? '<p class="kom">' + esc(cur.kom) + '</p>' : '<p class="muted">Jeszcze bez komentarza. Na razie dodaj go na Dysku (z sekundą filmu); trafi do klienta jak dotąd. Pisanie komentarza w panelu dojdzie w kolejnym kroku.</p>') +
-    '<p><a class="b" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(cur.link) + '">Otwórz na Dysku</a> <a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#k/' + encodeURIComponent(cur.id) + '/sesje">Karta klienta</a></p></div>'
+    (cur.komD ? '<div class="eb">Z komentarzy na Dysku</div><p class="kom">' + esc(cur.komD) + '</p>' : '') +
+    '<div class="kfw" id="kfw"></div>' +
+    '<p class="row2"><a class="b" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(cur.link) + '">Otwórz na Dysku</a> <a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#k/' + encodeURIComponent(cur.id) + '/sesje">Karta klienta</a></p>' +
+    '<p class="hint kbd">Klawiatura: spacja = start / pauza, ← → = klatka, 1 / 2 / 3 = ¼× ½× 1×, F = pełny ekran.</p></div>'
     : '<div class="card es"><b>' + (all.length ? 'Wszystkie filmy skomentowane' : 'Brak filmów z 14 dni') + '</b>' + (all.length ? 'Przełącz na „Wszystkie”, żeby obejrzeć skomentowane.' : '') + '</div>';
   $('#main').innerHTML = head('Ostatnie 14 dni' + (who1 ? ' · ' + esc(who1) : ''), 'Filmy', '<div class="chips"><button class="chip" type="button" data-vall="0" aria-pressed="' + !VALL + '">Bez komentarza</button><button class="chip" type="button" data-vall="1" aria-pressed="' + VALL + '">Wszystkie</button>' + (who ? '<a class="chip" style="display:inline-flex;align-items:center;text-decoration:none" href="#filmy">Wszyscy klienci</a>' : '') + '</div>') +
-    '<div class="pg"><div class="vids' + (items ? '' : ' one') + '">' + (items ? '<div class="vlist">' + items + '</div>' : '') + view + '</div></div>';
-  document.querySelectorAll('[data-vk]').forEach(b => b.onclick = () => { VSEL = b.dataset.vk; renderFilmy(who); });
-  document.querySelectorAll('[data-vall]').forEach(b => b.onclick = () => { VALL = b.dataset.vall === '1'; renderFilmy(who); });
+    '<div class="pg">' + sw + '<div class="vids' + (items ? '' : ' one') + '">' + (items ? '<div class="vlist">' + items + '</div>' : '') + view + '</div></div>';
+  const redraw = () => { if (location.hash.startsWith('#filmy')) renderFilmy(who); };
+  document.querySelectorAll('[data-vk]').forEach(b => b.onclick = () => { VSEL = b.dataset.vk; redraw(); });
+  document.querySelectorAll('[data-vgo]').forEach(b => b.onclick = () => { const n = list[ix + Number(b.dataset.vgo)]; if (n) { VSEL = vKey(n); redraw(); window.scrollTo(0, 0); } });
+  document.querySelectorAll('[data-vall]').forEach(b => b.onclick = () => { VALL = b.dataset.vall === '1'; redraw(); });
+  if (!cur) return;
+  const f = FB[cur.file];
+  if (!f) filmLoad(cur.file, redraw);
+  else if (f.st === 'ok') playerBind(cur);
+  else if (f.st === 'err') { const r = $('#pv-retry'); if (r) r.onclick = () => { delete FB[cur.file]; filmLoad(cur.file, redraw); }; }
+  komFilmDraw(cur, who);
+}
+function playerHtml(v){
+  const f = FB[v.file] || { st: 'load', pct: 0 };
+  const stage = f.st === 'ok' ? '<video id="pvv" src="' + f.url + '" playsinline preload="auto"' + (VLOOP ? ' loop' : '') + '></video><span class="zoom" hidden></span><button class="fsb" type="button" data-pv="fs" aria-label="Pełny ekran">⤢</button>'
+    : f.st === 'err' ? '<div class="pmsg"><b>' + esc(f.err) + '</b><span><button class="b" type="button" id="pv-retry">Spróbuj ponownie</button> <a class="b" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(v.link) + '">Otwórz na Dysku</a></span></div>'
+    : '<div class="pmsg"><b>Pobieram film…</b><span class="ld"><b style="width:' + (f.pct || 0) + '%"></b></span><span class="hint">Cały film trafia do przeglądarki, żeby dało się go oglądać klatka po klatce.</span></div>';
+  const dis = f.st === 'ok' ? '' : ' disabled';
+  return '<div class="pv" data-file="' + esc(v.file) + '"><div class="stage">' + stage + '</div><div class="ctl">' +
+    '<div class="tl"><span id="pvt">0:00,0</span><div class="bar"><input type="range" id="pvr" min="0" max="1" step="0.01" value="0" aria-label="Chwila filmu"' + dis + '><span class="mk" id="pvm"></span></div><span id="pvd">–</span></div>' +
+    '<div class="btns"><button class="ib" type="button" data-pv="back" aria-label="Klatka wstecz"' + dis + '>‹ klatka</button><button class="ib big" type="button" data-pv="play" aria-label="Odtwarzaj"' + dis + '>▶</button><button class="ib" type="button" data-pv="fwd" aria-label="Klatka naprzód"' + dis + '>klatka ›</button><span class="sp"></span>' +
+    '<div class="spd" role="group" aria-label="Prędkość">' + [[0.25, '¼×'], [0.5, '½×'], [1, '1×']].map(x => '<button class="ib" type="button" data-spd="' + x[0] + '" aria-pressed="' + (VSPD === x[0]) + '"' + dis + '>' + x[1] + '</button>').join('') + '</div>' +
+    '<button class="ib" type="button" data-pv="loop" aria-pressed="' + VLOOP + '" aria-label="Pętla" title="Pętla"' + dis + '>⟲</button><button class="ib fsx" type="button" data-pv="fs" aria-label="Zamknij pełny ekran">✕</button></div>' +
+    '<div class="hint tch">Powiększ dwoma palcami, przesuń jednym. Dwa dotknięcia = z powrotem 1×.</div></div></div>';
+}
+function playerBind(v){
+  const pv = document.querySelector('.pv'), vid = $('#pvv'), rng = $('#pvr'), st = pv.querySelector('.stage'), zl = pv.querySelector('.zoom');
+  vid.playbackRate = VSPD;
+  const Z = { s: 1, x: 0, y: 0 };
+  const apply = () => { Z.s = Math.min(6, Math.max(1, Z.s)); if (Z.s === 1) { Z.x = 0; Z.y = 0; }
+    const mx = (Z.s - 1) * st.clientWidth / 2, my = (Z.s - 1) * st.clientHeight / 2; Z.x = Math.min(mx, Math.max(-mx, Z.x)); Z.y = Math.min(my, Math.max(-my, Z.y));
+    vid.style.transform = Z.s === 1 ? '' : 'translate(' + Z.x + 'px,' + Z.y + 'px) scale(' + Z.s + ')';
+    zl.hidden = Z.s === 1; zl.textContent = pl(Z.s.toFixed(1)) + '× · dotknij dwa razy, żeby wrócić'; };
+  const tick = () => { const d = vid.duration || 0; $('#pvt').textContent = tFmt(vid.currentTime, true); if (d) { rng.max = d; rng.value = vid.currentTime; rng.style.setProperty('--p', (vid.currentTime / d * 100) + '%'); }
+    pv.querySelector('[data-pv="play"]').textContent = vid.paused ? '▶' : '❚❚'; pv.querySelector('[data-pv="play"]').setAttribute('aria-label', vid.paused ? 'Odtwarzaj' : 'Pauza');
+    const w = $('#kf-ins'); if (w) w.textContent = '⏱ Wstaw chwilę ' + tFmt(vid.currentTime); };
+  let raf = 0; const loop = () => { tick(); raf = vid.paused ? 0 : requestAnimationFrame(loop); };
+  vid.addEventListener('loadedmetadata', () => { $('#pvd').textContent = tFmt(vid.duration, true); marks(); tick(); });
+  vid.addEventListener('play', () => { if (!raf) raf = requestAnimationFrame(loop); tick(); });
+  vid.addEventListener('pause', tick); vid.addEventListener('seeked', tick);
+  rng.oninput = () => { vid.pause(); vid.currentTime = Number(rng.value); tick(); };
+  const step = n => { vid.pause(); vid.currentTime = Math.min(vid.duration || 0, Math.max(0, vid.currentTime + n / FPS)); };
+  const fs = on => { pv.classList.toggle('fs', on === undefined ? !pv.classList.contains('fs') : on); document.body.classList.toggle('pvfs', pv.classList.contains('fs')); Z.s = 1; apply(); };
+  pv.querySelectorAll('[data-pv]').forEach(b => b.onclick = () => { const k = b.dataset.pv;
+    if (k === 'play') vid.paused ? vid.play() : vid.pause();
+    if (k === 'back') step(-1); if (k === 'fwd') step(1);
+    if (k === 'loop') { VLOOP = !VLOOP; vid.loop = VLOOP; b.setAttribute('aria-pressed', VLOOP); }
+    if (k === 'fs') fs(); });
+  pv.querySelectorAll('[data-spd]').forEach(b => b.onclick = () => { VSPD = Number(b.dataset.spd); vid.playbackRate = VSPD; pv.querySelectorAll('[data-spd]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  // powiększanie: dwa palce = skala, jeden palec przy powiększeniu = przesunięcie, dwa dotknięcia = 1×; na komputerze kółko myszy
+  const P = new Map(); let g = null, lastTap = 0;
+  const dist = () => { const a = [...P.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
+  st.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; st.setPointerCapture(e.pointerId); P.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    g = P.size === 2 ? { d: dist(), s: Z.s } : { x: e.clientX, y: e.clientY, zx: Z.x, zy: Z.y, moved: false }; });
+  st.addEventListener('pointermove', e => { if (!P.has(e.pointerId) || !g) return; P.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (P.size === 2 && g.d) { Z.s = g.s * dist() / g.d; apply(); }
+    else if (P.size === 1 && g.zx !== undefined) { if (Math.abs(e.clientX - g.x) + Math.abs(e.clientY - g.y) > 6) g.moved = true; if (Z.s > 1) { Z.x = g.zx + e.clientX - g.x; Z.y = g.zy + e.clientY - g.y; apply(); } } });
+  const up = e => { const was = g; P.delete(e.pointerId);
+    if (!P.size && was && was.zx !== undefined && !was.moved) { const now = Date.now(); if (now - lastTap < 320) { Z.s = 1; apply(); lastTap = 0; } else lastTap = now; }
+    g = P.size === 1 ? (() => { const a = [...P.values()][0]; return { x: a.x, y: a.y, zx: Z.x, zy: Z.y, moved: true }; })() : null; };
+  st.addEventListener('pointerup', up); st.addEventListener('pointercancel', up);
+  st.addEventListener('wheel', e => { e.preventDefault(); Z.s *= e.deltaY < 0 ? 1.15 : 1 / 1.15; apply(); }, { passive: false });
+  PVK.v = vid; PVK.step = step; PVK.fs = fs;
+  tick();
+}
+const PVK = {};                                   // klawiatura w widoku Filmy
+document.addEventListener('keydown', e => {
+  if (!location.hash.startsWith('#filmy') || !PVK.v || !document.contains(PVK.v) || e.target.closest('textarea,input:not([type=range]),select') || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key, v = PVK.v;
+  if (k === ' ') { e.preventDefault(); v.paused ? v.play() : v.pause(); }
+  else if (k === 'ArrowLeft' || k === ',') { e.preventDefault(); PVK.step(-1); }
+  else if (k === 'ArrowRight' || k === '.') { e.preventDefault(); PVK.step(1); }
+  else if (k === '1' || k === '2' || k === '3') { const b = document.querySelector('[data-spd="' + ({ 1: 0.25, 2: 0.5, 3: 1 })[k] + '"]'); if (b) b.click(); }
+  else if (k === 'f' || k === 'F') PVK.fs();
+  else if (k === 'Escape' && document.querySelector('.pv.fs')) PVK.fs(false);
+});
+function marks(){
+  const vid = $('#pvv'), m = $('#pvm'), t = $('#kf-txt'); if (!vid || !m || !vid.duration) { if (m) m.innerHTML = ''; return; }
+  m.innerHTML = komTimes(t ? t.value : '').filter(s => s <= vid.duration).map(s => '<button type="button" style="left:' + (s / vid.duration * 100) + '%" data-seek="' + s + '" aria-label="Przejdź do ' + tFmt(s) + '" title="' + tFmt(s) + '"></button>').join('');
+  m.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => { vid.pause(); vid.currentTime = Number(b.dataset.seek); });
+}
+function komFilmDraw(v, who){
+  const k = vKey(v), st = KF[k] || {}, w = $('#kfw'); if (!w) return;
+  const text = st.text !== undefined ? st.text : v.komT, dis = st.busy ? ' disabled' : '';
+  w.innerHTML = '<div class="eb" style="margin:14px 0 6px">Twój komentarz</div><textarea id="kf-txt" aria-label="Twój komentarz do filmu" placeholder="Np. 0:03 Łokcie wyżej przy wejściu pod sztangę."' + dis + '>' + esc(text) + '</textarea>' +
+    '<div class="row2"><button class="b" type="button" id="kf-ins"' + (FB[v.file] && FB[v.file].st === 'ok' ? '' : ' disabled') + '>⏱ Wstaw chwilę 0:00</button><span class="sp"></span>' +
+    (st.ok ? '<span class="saved">✓ Zapisano</span>' : '') + '<button class="b p" type="button" id="kf-save"' + dis + '>' + (st.busy ? 'Zapisuję…' : 'Zapisz') + '</button></div>' +
+    (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') +
+    '<p class="hint" style="margin-top:8px">Klient zobaczy komentarz przy tej serii w zakładce Trener. Linia zaczynająca się od „0:03” to chwila filmu: w panelu pokazuje się jako kreska na pasku, którą możesz kliknąć.</p>';
+  const ta = $('#kf-txt');
+  ta.oninput = () => { (KF[k] = KF[k] || {}).text = ta.value; KF[k].ok = false; marks(); };
+  $('#kf-ins').onclick = () => { const vid = $('#pvv'); if (!vid) return; vid.pause();
+    const tag = tFmt(vid.currentTime) + ' ', a = ta.selectionStart, pre = ta.value.slice(0, a), lineStart = pre.lastIndexOf('\n') + 1;
+    const nl = pre.slice(lineStart).trim() ? '\n' : '';
+    ta.value = pre + nl + tag + ta.value.slice(a); const pos = (pre + nl + tag).length; ta.focus(); ta.setSelectionRange(pos, pos); ta.oninput(); };
+  $('#kf-save').onclick = async () => {
+    const s = KF[k] = KF[k] || {}; s.busy = true; s.err = ''; s.text = ta.value; komFilmDraw(v, who);
+    try { const r = await guard(api('trKomentarzFilm', v.id, v.week, v.day, v.order, v.set, s.text));
+      v.komT = r.text; v.kom = [v.komD, v.komT].filter(Boolean).join('\n'); KEEP[k] = true; KF[k] = { ok: true }; }
+    catch (e) { s.busy = false; if (!e.auth) s.err = e.message; }
+    if (location.hash.startsWith('#filmy') && VSEL === k) { komFilmDraw(v, who); document.querySelectorAll('[data-vk="' + CSS.escape(k) + '"] b').forEach(b => { const n = b.querySelector('.new'); if (n && v.kom) { n.className = 'new done'; n.textContent = '✓ skomentowany'; } }); marks(); }
+  };
+  marks();
 }
 
 /* ---------- bloki ---------- */
