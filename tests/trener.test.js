@@ -81,6 +81,8 @@ const GSI = `window.google = { accounts: { id: {
   renderButton(el){ el.innerHTML = '<button id="fake-g" type="button">Zaloguj (atrapa)</button>'; el.querySelector('button').onclick = () => window.__gcb({ credential: window.__jwt }); },
   prompt(){}, disableAutoSelect(){ window.__noauto = true; } } } };`;
 
+// klient nagrał / wpisał serie dzisiejszej sesji, ale żadnej nie odhaczył (wykonane puste, jak po samym filmie)
+const untick = d => { d.logs.forEach(l => { if (l.data === TODAY) { l.wykonane = ''; if (l.film_link) { l.kg = ''; l.powt = ''; l.rpe = ''; } } }); return d; };
 async function page(calls, opt = {}) {
   const ctx = await browser.newContext({ viewport: opt.vp || { width: 1440, height: 900 }, colorScheme: opt.scheme || 'light', reducedMotion: 'reduce' });
   const st = { authFail: 0 };
@@ -91,7 +93,7 @@ async function page(calls, opt = {}) {
     else if (!b.token) out = { ok: false, error: 'Logowanie: brak biletu' };
     else if (st.authFail > 0) { st.authFail--; out = { ok: false, error: 'Logowanie: bilet wygasł' }; }
     else if (b.fn === 'trPulpit' || b.fn === 'trPrzelicz') out = { ok: true, result: Object.assign({}, PULPIT, b.fn === 'trPrzelicz' ? { at: TODAY + 'T09:30:00.000Z' } : {}) };
-    else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: opt.noSets ? Object.assign(klient(), { logs: [] }) : klient() } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
+    else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: opt.noSets ? Object.assign(klient(), { logs: [] }) : opt.unticked ? untick(klient()) : klient() } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
     else if (b.fn === 'trKomentarz') out = { ok: true, result: { text: String(b.args[3]).trim(), at: TODAY + 'T19:52:00.000Z' } };
     else if (b.fn === 'trSzkic') { st.ai = (st.ai || 0) + 1; await new Promise(res => setTimeout(res, 150));
       out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).' }
@@ -124,6 +126,7 @@ async function page(calls, opt = {}) {
   });
   await ctx.route('https://drive.google.com/**', r => r.fulfill({ status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: '<body style="margin:0;background:#222;color:#bbb;font:14px sans-serif;display:grid;place-items:center;height:100vh">podgląd filmu (atrapa)</body>' }));
   const exp = Math.floor(Date.now() / 1000) + 3600;
+  if (opt.noPic) await ctx.addInitScript(() => { for (const k of ['videoWidth', 'videoHeight']) Object.defineProperty(HTMLVideoElement.prototype, k, { get: () => 0 }); });
   await ctx.addInitScript(([j, tok]) => { window.__jwt = j; if (tok) try { localStorage.setItem('tr_tok', j); } catch (e) {} }, [JWT(exp), !!opt.loggedIn]);
   const p = await ctx.newPage(); p.errors = []; p.on('pageerror', e => p.errors.push(e.message));
   p.st = st;
@@ -344,6 +347,15 @@ test('panel: komentarz do sesji ze szkicem AI (szkic, poprawka „Krócej”, za
   assert.equal(c2.filter(c => c.fn === 'trSzkic').length, 0);
   assert.deepEqual(s2.p.errors, []);
   await s2.ctx.close();
+  // serie nagrane albo wpisane bez ✓ (np. boje z filmem): widać je na szaro z objaśnieniem, a szkic AI jest dostępny
+  const s3 = await page([], { loggedIn: true, unticked: true });
+  await s3.p.goto(base + 'trener.html#k/ania/sesje'); await s3.p.waitForSelector('details.ses[open] .kedit textarea');
+  assert.ok(await s3.p.$('details.ses[open] .kedit button.ai'));
+  assert.ok((await s3.p.$$('details.ses[open] .sets .nd')).length >= 3);
+  assert.match(await s3.p.textContent('details.ses[open]'), /s\. 1 ▶[\s\S]*klient nagrał albo wpisał serię, ale jej nie odhaczył/);
+  await s3.p.goto(base + 'trener.html#k/ania/przeglad'); await s3.p.waitForSelector('.sets');
+  assert.deepEqual(s3.p.errors, []);
+  await s3.ctx.close();
 });
 
 test('panel: Ustawienia, klucz Claude API wklejany w panelu (też na telefonie), bez pokazywania całego klucza', async () => {
@@ -499,6 +511,15 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   assert.equal(await s4.p.$('#pv-retry'), null);
   assert.deepEqual(s4.p.errors, []);
   await s4.ctx.close();
+  // dźwięk bez obrazu (HEVC bez dekodera): komunikat z „Otwórz na Dysku”, bez „Spróbuj ponownie”
+  const s6 = await page([], { loggedIn: true, noPic: true });
+  await s6.p.goto(base + 'trener.html#filmy'); await s6.p.waitForSelector('.pv .pmsg a');
+  assert.match(await s6.p.textContent('.pv .pmsg'), /tylko dźwięk tego filmu, bez obrazu.*HEVC \(H\.265\).*Otwórz film na Dysku/);
+  assert.equal(await s6.p.$('#pv-retry'), null);
+  assert.equal(await s6.p.getAttribute('.pv .pmsg a', 'href'), 'https://drive.google.com/file/d/film1/view');
+  assert.deepEqual(await s6.p.evaluate(() => [tFmt(9.96, true), tFmt(69.97, true), tFmt(70.04, true), tFmt(59.99)]), ['0:10,0', '1:10,0', '1:10,0', '0:59']);
+  assert.deepEqual(s6.p.errors, []);
+  await s6.ctx.close();
   const s3 = await page([], { loggedIn: true, film404: true });
   await s3.p.goto(base + 'trener.html#filmy'); await s3.p.waitForSelector('#pv-retry');
   assert.match(await s3.p.textContent('.pv .pmsg'), /Filmu nie ma już na Dysku/);

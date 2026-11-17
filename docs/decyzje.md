@@ -3,6 +3,12 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-17 · Serie bez ✓ w panelu, film bez obrazu (v65)
+
+- Sesja klienta (boje z filmami) miała w Logu serie z filmem albo z ciężarem, ale bez ✓ (`wykonane` puste: `logVideo` dopisuje sam link, a seria nieodhaczona zostaje pusta). Panel i `trSzkicSets_` liczyły tylko `wykonane = TAK`, więc pokazywały „Brak zapisanych serii” i blokowały szkic AI.
+- Teraz w panelu (sesje, szkic AI sesji i bloku) seria robocza = odhaczona albo z kg, powt. lub filmem (`trLogged_`, w panelu `logged`); rozgrzewka, seria 0 i SKIP dalej nie. Nieodhaczone są szare z objaśnieniem, a AI dostaje dopisek „(nieodhaczona)” / „tylko z filmem” i prośbę, żeby nie zgadywać wysiłku. Arkusz (Podsumowanie, Bloki, tonaż) liczy dalej tylko odhaczone: bez zmian w danych.
+- Film z dźwiękiem i czarnym obrazem = przeglądarka nie dekoduje ścieżki wideo (zwykle HEVC z telefonu; Chrome na Windows tylko ze sprzętowym dekoderem). Wykrycie: wymiary obrazu 0 po wczytaniu. Komunikat odsyła na Dysk, który sam konwertuje film. Konwersji w panelu nie robimy (168 MB w przeglądarce = za ciężko).
+
 ## 2026-11-17 · Zamknięcie bloku w panelu ze szkicem AI (v64)
 
 - Damian (7 bloków do zamknięcia): wnioski i notatkę „dla klienta” pisze w panelu, w karcie klienta → Bloki, zamiast w arkuszu. Szkic wyglądu zaakceptowany.

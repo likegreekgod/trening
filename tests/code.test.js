@@ -925,6 +925,24 @@ test('trSzkicCtx_: dane jednostki do szkicu AI (bez imienia i linków), poprzedn
   const simple = szkicData(); simple.cfg.simple = true;
   assert.match(C.trSzkicCtx_(simple, 12, 'T1'), /tryb PROSTY/);
 });
+test('trLogged_, trSzkicSets_: nagrane albo wpisane serie bez ✓ (boje z filmem) też są serią, szkic AI to zaznacza', () => {
+  const d = szkicData();
+  // klient nagrał dwa podejścia rwania i wpisał trzecie, żadnego nie odhaczył (wykonane puste, jak po logVideo)
+  d.logs = d.logs.filter(l => Number(l.tydzien) !== 12);
+  d.logs.push({ tydzien: 12, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Rwanie z zawisu', seria: 1, kg: '', powt: '', rpe: '', wykonane: '', typ: '', ocena: '', film_link: 'https://drive.google.com/file/d/a/view' },
+    { tydzien: 12, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Rwanie z zawisu', seria: 2, kg: '', powt: '', rpe: '', wykonane: '', typ: '', ocena: '', film_link: 'https://drive.google.com/file/d/b/view' },
+    { tydzien: '12', jednostka: 'T1 ', nr_cw: 1, cwiczenie: 'Rwanie z zawisu', seria: 3, kg: 75, powt: 3, rpe: '', wykonane: '', typ: '', ocena: '', film_link: '' },
+    { tydzien: 12, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Rwanie z zawisu', seria: 4, kg: '', powt: '', rpe: '', wykonane: '', typ: '', ocena: '', film_link: '' },   // odznaczona, bez śladu
+    { tydzien: 12, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Rwanie z zawisu', seria: 5, kg: 70, powt: 2, rpe: 8, wykonane: 'tak', typ: '', ocena: 'S', film_link: '' });
+  assert.equal(C.trSzkicSets_(d, 12, 'T1'), 4);                                  // dawniej 0 → „Brak zapisanych serii”
+  const t = C.trSzkicCtx_(d, 12, 'T1');
+  assert.match(t, /zrobione: seria 1 tylko z filmem, bez wpisu; seria 2 tylko z filmem, bez wpisu; 75 kg×3 \(nieodhaczona\); 70 kg×2 \(średnio\)/);
+  assert.match(t, /nie odhaczył w aplikacji/);
+  assert.doesNotMatch(t, /drive\.google/);
+  assert.equal(C.trLogged_({ seria: 'R1', kg: 40, wykonane: 'TAK' }), false);    // rozgrzewka
+  assert.equal(C.trLogged_({ seria: '0', typ: 'SKIP', uwagi: 'brak czasu' }), false);
+  assert.doesNotMatch(C.trSzkicCtx_(szkicData(), 12, 'T1'), /nie odhaczył/);    // wszystko odhaczone = bez dopisku
+});
 test('trBlokCtx_, trBlokSets_, aiBlokReq_, aiBlokParse_: szkic zamknięcia bloku (bez imienia), dwa teksty z jednej odpowiedzi', () => {
   const d = szkicData();
   d.plan.push({ week: 13, day: 'T1', title: 'Nogi', date: '2026-11-24', order: 1, name: 'Przysiad tylny', prio: 'A', sets: 4, reps: '4', kg: 85, rpe: 8, block: 'B3', own: false });
