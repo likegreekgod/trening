@@ -2,6 +2,15 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-17 · Import planu: usuwanie tylko w blokach z pliku
+
+- Błąd (17.11 i wcześniej 12.11): plik jednego bloku skasował z Planu wszystkie niezrobione jednostki innego bloku tego klienta, a Import nic o tym nie mówił. Przyczyna: `mergePlan_` podmieniał wszystkie niezrobione wiersze klienta z pliku, bez względu na blok.
+- Teraz plik usuwa niezrobione jednostki **tylko z bloków, które sam zawiera** (pole `blok`; pusty blok to też blok). Inne bloki klienta zostają w całości, razem z dodanymi i usuniętymi przez klienta ćwiczeniami. Jednostka z pliku o tym samym tygodniu i dniu co niezrobiona jednostka innego bloku ją zastępuje (uwaga), żeby nie było dwóch jednostek pod jednym id.
+- Zrobiona jednostka = wpis w Sesjach **albo** jakakolwiek seria w Logu (wcześniej tylko Sesje, więc zaczęty, niezakończony trening mógł zniknąć). Takiej nigdy nie usuwamy ani nie zmieniamy; gdy w jej bloku plik jej nie ma, Import pisze uwagę.
+- Każde usunięcie jest w Import: „usunięto: klient tydz. X jednostka Y (blok Z)”, status „OK (usunięto N)” albo „OK (usunięto N, uwagi)”. Dotyczy też jednostek zamkniętych przez `zastepuje`.
+- Skutek dla nowego bloku: stary blok nie znika już sam. Jego niezrobione jednostki zamyka `zastepuje` (od pierwszej daty klienta w pliku); wcześniejsze zostają jako zaległe, dopóki trener ich nie usunie plikiem starego bloku.
+- Uzupełnia ustalenie z 26.10 (`zastepuje`): zdanie „import i tak podmienia wszystkie niezrobione wiersze klientów z pliku” już nie obowiązuje.
+
 ## 2026-11-17 · Przełącznik aplikacja ↔ panel trenera (v54)
 
 - Damian trenuje w aplikacji jak klient i prowadzi klientów w panelu, na tym samym telefonie. Chce przechodzić jednym dotknięciem.

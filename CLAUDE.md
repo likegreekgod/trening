@@ -107,7 +107,7 @@ Arkusz zawsze zapisuje RPE (RIR = 10 − RPE to tylko widok). Ocena podejścia w
 ## Plany treningowe
 
 Plany tworzy Claude w projekcie claude.ai („Trener personalny (OLY)”) i zapisuje je jako JSON do `Trening – Klienci/_plany/` na Drive.
-`wczytajPlany()` działa z wyzwalacza co 15 min albo z menu „Trening”. Menu „Trening” (`onOpen`) ma też: Przegląd klientów, Dodaj klienta, Odśwież linki klientów, Sprawdź arkusz (`diagnose_`, czysta funkcja z testem) i Zainstaluj wyzwalacze; okna w arkuszu mogą używać `google.script.run`, bo to interfejs trenera, a nie `web/`. Kolejno: waliduje plik (`validatePlan_`), podmienia wiersze klientów z pliku (`mergePlan_`: jednostki zrobione zostają; zrobiona jednostka z innym blokiem w pliku = błąd; opcjonalne pole wiersza `zastepuje` = blok, którego niezrobione jednostki klienta z datą ≥ pierwszej daty klienta w pliku są zamykane, bez ruszania Logu, Sesji i własnych; w Import „zamknięto n jedn. bloku X”, nieistniejący blok = uwaga; `zastepuje` nie jest kolumną Planu), przenosi plik do `_plany/wczytane` albo `_plany/bledy` i zapisuje wynik w zakładce Import.
+`wczytajPlany()` działa z wyzwalacza co 15 min albo z menu „Trening”. Menu „Trening” (`onOpen`) ma też: Przegląd klientów, Dodaj klienta, Odśwież linki klientów, Sprawdź arkusz (`diagnose_`, czysta funkcja z testem) i Zainstaluj wyzwalacze; okna w arkuszu mogą używać `google.script.run`, bo to interfejs trenera, a nie `web/`. Kolejno: waliduje plik (`validatePlan_`), podmienia wiersze klientów z pliku (`mergePlan_`: **tylko bloki, które plik zawiera** (`blok`, pusty też jest blokiem) i jednostki z pliku; niezrobione jednostki tych bloków spoza pliku znikają i każda jest w Import „usunięto: klient tydz. X jednostka Y (blok Z)”, status „OK (usunięto N)” (`removed`, `importStatus_`); inne bloki klienta zostają; jednostka zrobiona = wpis w Sesjach **albo** seria w Logu (`wczytajPlany` czyta z Logu trzy kolumny przez `pgTable_`) i zawsze zostaje bez zmian, spoza pliku z uwagą; niezrobiona jednostka innego bloku z tym samym tygodniem i dniem co plik = zastąpiona, uwaga; własne (`zrodlo` = klient) nietknięte; zrobiona jednostka z innym blokiem w pliku = błąd; opcjonalne pole wiersza `zastepuje` = blok, którego niezrobione jednostki klienta z datą ≥ pierwszej daty klienta w pliku są zamykane, bez ruszania Logu, Sesji i własnych; w Import „zamknięto n jedn. bloku X”, nieistniejący blok = uwaga; `zastepuje` nie jest kolumną Planu), przenosi plik do `_plany/wczytane` albo `_plany/bledy` i zapisuje wynik w zakładce Import.
 Konwencje Damiana:
 - % z max;
 - kg zaokrąglane **w dół** do 2,5 kg;
@@ -212,6 +212,7 @@ Przy zmianie reguł dopisz scenariusz testowy (syntetyczne tygodnie) i sprawdź,
 
 | Objaw | Przyczyna / rozwiązanie |
 |---|---|
+| Import nowego bloku skasował niezrobione jednostki innego bloku (do 17.11) | Dawny `mergePlan_` podmieniał cały plan klienta z pliku. Teraz tylko bloki z pliku; stary blok zamyka `zastepuje`. |
 | „6-8” wyświetla się jako data | Brak formatu `@` przed zapisem. `txt_()` w getData odtwarza zakres. |
 | Zmiana w Code.gs nie działa na telefonie | Brak `clasp deploy` (nowej wersji wdrożenia). |
 | Zmiana w web/ nie dociera | Nie podbito `VERSION` w sw.js albo Actions jeszcze nie skończył. |
