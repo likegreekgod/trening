@@ -746,3 +746,16 @@ test('zmiany klienta: poza wykonaniem planu w podsumowaniu i blokach; ponowne wc
   m = C.mergePlan_(plan, inc, ses);
   assert.deepEqual(m.rows.map(r => r.nr + ':' + (r.zrodlo || '')), ['1:', '2:usuniete', '51:dodane']);
 });
+
+test('doGet: stary link dostaje zwykły tekst (bez strony HtmlService, więc bez google.script.run)', () => {
+  // Atrapy usług Google: doGet nie może sięgnąć po HtmlService, bo z takiej strony da się wywołać każdą funkcję skryptu.
+  const out = [];
+  C.HtmlService = { createHtmlOutput() { throw new Error('HtmlService'); }, createTemplateFromFile() { throw new Error('HtmlService'); } };
+  C.ContentService = { createTextOutput(t) { out.push(t); return { text: t }; } };
+  C.PropertiesService = { getScriptProperties: () => ({ getProperty: k => k === 'PWA_URL' ? 'https://example.github.io/trening/' : null }) };
+  assert.deepEqual(JSON.parse(JSON.stringify(C.doGet({ parameter: { k: 'k0123456789a' } }))), { text: out[0] });
+  assert.match(out[0], /wyłączona.*https:\/\/example\.github\.io\/trening\//);
+  assert.doesNotMatch(out[0], /k0123456789a/);                          // klucz z linku nie wraca w odpowiedzi
+  assert.equal(C.oldLinkText_(''), 'Ta wersja aplikacji jest wyłączona. Używaj nowego linku od trenera.');
+  assert.equal(C.oldLinkText_('javascript:x'), 'Ta wersja aplikacji jest wyłączona. Używaj nowego linku od trenera.');
+});

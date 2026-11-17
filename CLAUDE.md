@@ -29,7 +29,7 @@ Filmy: telefon → Drive bezpośrednio (sesja resumable otwierana przez startUpl
 
 - `web/index.html` to jeden plik (HTML + CSS + JS), bez bundlera i frameworka; czyste funkcje (bez DOM) są w `web/lib.js` (`window.TL`, testy `tests/lib.test.js`), czcionki w `web/fonts/`. Cała komunikacja z serwerem idzie przez funkcję `call(fn, ...args)`.
 - `apps-script/Code.gs` jest powiązany z arkuszem `Trening – Aplikacja (dane)` (konto trenera, właściciel arkusza; `clasp login` musi być na tym samym koncie). API: `doPost` → `API_FNS` (getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError, logNote, logReadyVideo, editPlan). Pierwszym argumentem każdej funkcji jest klucz klienta.
-- `apps-script/Index.html` to stara wersja działająca przez `doGet` i `google.script.run` (linki `/exec?k=`). Zostaje na okres przejściowy. Nowe funkcje rób w `web/index.html`; starą wersję poprawiaj tylko przy błędach.
+- Stara wersja (`apps-script/Index.html`, `doGet` + `google.script.run`, linki `/exec?k=`) usunięta 17.11.2026. `doGet` zwraca tylko zwykły tekst „wersja wyłączona” (`ContentService`, `oldLinkText_`). **Nie wracaj do stron `HtmlService` w `doGet`**: z każdej publicznej strony HtmlService da się przez `google.script.run` wywołać każdą funkcję bez „_” na końcu (np. `dodajKlientaZapisz`), także bez klucza. Okna w arkuszu (Dodaj klienta) są w porządku, bo otwiera je tylko trener.
 - Klucz klienta w linku (`?k=k` + 11 znaków hex) jest jedynym zabezpieczeniem. PWA zapamiętuje go w `localStorage` („key”). Bez klucza (iOS: PWA z ekranu głównego ma osobny `localStorage` i startuje bez `?k=`) `askKey` pokazuje pole na link albo kod (lib `keyFrom`).
 - Nowe zapisy to nowe akcje w `API_FNS` wywoływane przez `call()` (np. `saveDyspozycja`), nigdy `google.script.run`.
 
@@ -174,7 +174,7 @@ Konwencje Damiana:
 
 ### Zasady v2
 
-- v2 powstaje w `web/`. `apps-script/Index.html` zostaje bez zmian (tylko poprawki błędów).
+- v2 powstaje w `web/`.
 - Styl Pomost z kartami (od 15.10.2026): każda sekcja (ćwiczenie, jednostka w Planie, wykres, dyspozycja) to osobna karta na tle `--surface` z zaokrągleniem `--rc` i odstępem `--gap`; kontrolki zaokrąglone `--r`; pasek stanu karty jako cień wewnętrzny z lewej. Zakładki podkreślone akcentem. Tokeny kolorów z tabeli w specyfikacji, jasny i ciemny motyw przez `prefers-color-scheme`.
 - Etykiety ≥ 12 px (obok zasad dostępności wyżej).
 - Czcionki (Big Shoulders Display, Instrument Sans, IBM Plex Mono) jako woff2 w `web/fonts/` (licencja OFL), dopisane do cache w `sw.js`. Bez linku do Google Fonts; to jedyny wyjątek od zasady „wszystko inline”.
