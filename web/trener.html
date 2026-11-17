@@ -415,8 +415,8 @@ const DRV = (file, q) => 'https://www.googleapis.com/drive/v3/files/' + encodeUR
 // bez niego (pierwsze wejście) albo gdy strumień zawiedzie, film pobiera się w całości do pamięci strony.
 const fswOk = () => !!(navigator.serviceWorker && navigator.serviceWorker.controller);
 const filmUrl = file => { const f = FB[file] || {}; return f.mode === 'sw' ? 'film-strumien/' + encodeURIComponent(file) + '?t=' + encodeURIComponent(FT.token) : f.url || ''; };
-async function filmGet(file, q, extra){
-  const go = async force => fetch(DRV(file, q), { headers: Object.assign({ Authorization: 'Bearer ' + await filmToken(force) }, extra || {}) });
+async function filmGet(file, q, extra, signal){
+  const go = async force => fetch(DRV(file, q), { headers: Object.assign({ Authorization: 'Bearer ' + await filmToken(force) }, extra || {}), signal });
   let r = await go(); if (r.status === 401) r = await go(true); return r;
 }
 async function filmWhy(r){                                   // powód odmowy Dysku słowami, z kodem do zgłoszenia
@@ -475,11 +475,13 @@ function renderFilmy(who){
   if (!f) filmLoad(cur.file, redraw);
   else if (f.st === 'ok') playerBind(cur, redraw);
   else if (f.st === 'err') { const r = $('#pv-retry'); if (r) r.onclick = () => { delete FB[cur.file]; filmLoad(cur.file, redraw); }; }
+  // pomoc: wymiary obrazu w przeglądarce i porady od razu, format pliku dopisywany, gdy się wczyta
   const ph = $('#pvh'); if (ph) ph.ontoggle = async () => { if (!ph.open) return;
-    const fmt = await filmFmt(cur.file, (FB[cur.file] || {}).size || 0), vid = $('#pvv'), b = $('#pvh-b'); if (!b) return;
-    const hevc = /HEVC/.test(fmt.codec);
-    b.innerHTML = '<p>Plik: ' + esc(fmtTxt(fmt) || 'formatu nie udało się odczytać') + '. ' + (vid && vid.videoWidth ? 'Przeglądarka widzi obraz ' + vid.videoWidth + '×' + vid.videoHeight + ', więc go dekoduje, a czarny ekran to zwykle grafika komputera.' : 'Przeglądarka nie widzi obrazu.') + '</p><ul>' +
-      (hevc ? '<li>Film jest w HEVC (H.265). W Edge pomaga rozszerzenie „HEVC Video Extensions” ze Sklepu Microsoft.</li>' : '') + '<li>' + esc(HWTIP) + '</li><li>„Otwórz na Dysku” zawsze pokaże film.</li></ul>'; };
+    const draw = fmt => { const vid = $('#pvv'), b = $('#pvh-b'); if (!b) return; const hevc = fmt && /HEVC/.test(fmt.codec);
+      b.innerHTML = '<p>Plik: ' + (fmt ? esc(fmtTxt(fmt) || (fmt.read ? 'formatu nie rozpoznano' : 'nie udało się odczytać formatu (Dysk nie odpowiedział)')) : 'sprawdzam format…') + '. ' +
+        (vid && vid.videoWidth ? 'Przeglądarka widzi obraz ' + vid.videoWidth + '×' + vid.videoHeight + ', więc go dekoduje, a czarny ekran to zwykle grafika komputera.' : 'Przeglądarka nie widzi obrazu.') + '</p><ul>' +
+        (hevc ? '<li>Film jest w HEVC (H.265). W Edge pomaga rozszerzenie „HEVC Video Extensions” ze Sklepu Microsoft.</li>' : '') + '<li>' + esc(HWTIP) + '</li><li>„Otwórz na Dysku” zawsze pokaże film.</li></ul>'; };
+    draw(null); draw(await filmFmt(cur.file, (FB[cur.file] || {}).size || 0)); };
   komFilmDraw(cur, who);
 }
 /** format obrazu z początku (256 KB) i końca (3 MB) pliku na Dysku: kodek, wymiary, 10 bitów, HDR (TL.videoCodec); pamięć na czas wizyty */
@@ -487,8 +489,23 @@ const FMT = {};
 async function filmFmt(file, size){
   if (FMT[file]) return FMT[file];
   const head = 262144, tail = 3145728;
-  const part = async rg => { try { const r = await filmGet(file, 'alt=media', { Range: 'bytes=' + rg }); return r.ok ? new Uint8Array(await r.arrayBuffer()) : null; } catch (e) { return null; } };
-  return (FMT[file] = TL.videoCodec(await part('0-' + (head - 1)), size > head ? await part((size > tail ? size - tail : head) + '-') : null));
+  // kawałek pliku: czytany strumieniem i ucinany po limicie (gdyby Dysk zignorował Range i oddał cały film), najwyżej 20 s;
+  // koniec pliku tylko z odpowiedzi 206, bo 200 = początek, nie koniec
+  const part = async (from, n, tailOnly) => {
+    const ac = new AbortController(), to = setTimeout(() => ac.abort(), 20000), buf = new Uint8Array(n); let got = 0;
+    try {
+      const r = await filmGet(file, 'alt=media', { Range: 'bytes=' + from + '-' + (from + n - 1) }, ac.signal);
+      if (!r.ok || (tailOnly && r.status !== 206)) return null;
+      const rd = r.body.getReader();
+      while (got < n) { const { done, value } = await rd.read(); if (done) break; const k = Math.min(value.length, n - got); buf.set(value.subarray(0, k), got); got += k; }
+      rd.cancel().catch(() => {});
+      return buf.subarray(0, got);
+    } catch (e) { return got ? buf.subarray(0, got) : null; } finally { clearTimeout(to); ac.abort(); }
+  };
+  const a = await part(0, Math.min(head, size || head)), b = size > head ? await part(Math.max(head, size - tail), Math.min(tail, size - head), true) : null;
+  const fmt = TL.videoCodec(a, b); fmt.read = !!(a || b);
+  if (fmt.read) FMT[file] = fmt;
+  return fmt;
 }
 const fmtTxt = fmt => [fmt.codec, fmt.w && fmt.h ? fmt.w + '×' + fmt.h + (Math.max(fmt.w, fmt.h) >= 3840 ? ' (4K)' : '') : '', fmt.bits10 ? '10 bitów' : '', fmt.hdr ? 'HDR (' + fmt.hdr + ')' : ''].filter(Boolean).join(', ');
 const HWTIP = 'Przyspieszenie sprzętowe: w Edge Ustawienia → System i wydajność → wyłącz przyspieszenie graficzne (sprzętowe), uruchom Edge ponownie i sprawdź film jeszcze raz. To częsta przyczyna czarnego obrazu z dźwiękiem.';
