@@ -456,14 +456,15 @@ function sesList(d, dates){
       '<span class="muted">' + [x.s.czas_min ? x.s.czas_min + ' min' : '', nf(x.s.rpe_sesji) >= 0 ? 'RPE ' + pl(x.s.rpe_sesji) : '', nf(x.s.samopoczucie) > 0 ? 'samopoczucie ' + x.s.samopoczucie + '/5' : '', isFinite(p[1]) && p[1] > 0 ? 'ból ' + pl(p[1]) + (p[0] ? ' ' + p[0] : '') : ''].filter(Boolean).map(esc).join(' · ') + '</span></summary>' +
       '<div class="tw"><table><tbody>' + ex.map(e => '<tr><td><b>' + esc(e.name) + '</b> <span class="muted">' + esc(e.prio) + '</span></td><td class="sets">' + e.sets.map(setTxt).join(', ') + '</td><td>' + esc(e.note) + '</td></tr>').join('') + '</tbody></table></div>' +
       (x.s.uwagi ? '<p class="note"><span class="eb">Uwagi klienta</span><br>' + esc(x.s.uwagi) + '</p>' : '') +
-      komBox(x.s) + '</details>';
+      komBox(x.s, ex.length) + '</details>';
   }).join('') + '</div>';
 }
 /* ---------- komentarz do sesji: zapis (trKomentarz) i szkic AI (trSzkic); stan pola tylko w pamięci strony ---------- */
 const KD = {};                  // klient|tydzień|jednostka → {text, edit, ai, busy, ok, err, cost, n, limit}
 const SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" fill="currentColor"/></svg>';
 const kdKey = s => CID + '|' + s.tydzien + '|' + s.jednostka;
-function komBox(s){
+function komBox(s, nSets){
+  if (nSets === undefined) nSets = setsOf(CUR, s.tydzien + '|' + s.jednostka).length;
   const u = s.tydzien + '|' + s.jednostka, st = KD[kdKey(s)] || {}, saved = String(s.komentarz_trenera || '');
   const box = inner => '<div class="kedit" data-u="' + esc(u) + '"><div class="eb" style="margin-bottom:6px">Twój komentarz do sesji</div>' + inner + (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') + '</div>';
   if (saved && !st.edit) return box('<p class="kom" style="margin:0">' + esc(saved) + '</p><div class="row">' +
@@ -472,9 +473,9 @@ function komBox(s){
   const flag = st.ai ? '<div class="aiflag">' + SPARK + '<div><b>Szkic AI. Przeczytaj i popraw przed zapisem.</b>Klient nie zobaczy niczego, dopóki nie klikniesz „Zapisz”.</div></div>' : '';
   const chips = st.ai ? '<div class="row"><span class="hint">Popraw szkic:</span><div class="chips">' +
     [['krocej', 'Krócej'], ['cieplej', 'Cieplej'], ['technicznie', 'Bardziej technicznie'], ['inny', 'Inny szkic']].map(c => '<button class="chip" type="button" data-k="ai" data-t="' + c[0] + '"' + dis + '>' + c[1] + '</button>').join('') + '</div></div>' : '';
-  const hint = st.busy ? 'AI pisze szkic, to trwa kilka–kilkanaście sekund…' : st.ai && st.cost !== undefined ? 'koszt szkicu ' + pl(st.cost.toFixed(3)) + ' $ · dziś ' + st.n + ' z ' + st.limit : 'Klient zobaczy komentarz w aplikacji, w zakładce Trener.';
+  const hint = st.busy ? 'AI pisze szkic, to trwa kilka–kilkanaście sekund…' : st.ai && st.cost !== undefined ? 'koszt szkicu ' + pl(st.cost.toFixed(3)) + ' $ · dziś ' + st.n + ' z ' + st.limit : !nSets ? 'Brak zapisanych serii, więc bez szkicu AI. Klient zobaczy komentarz w zakładce Trener.' : 'Klient zobaczy komentarz w aplikacji, w zakładce Trener.';
   return box(flag + '<textarea aria-label="Komentarz do sesji ' + esc(u.replace('|', ' ')) + '" placeholder="Napisz klientowi, jak poszło…" data-k="txt"' + dis + '>' + esc(text) + '</textarea>' + chips +
-    '<div class="row">' + (st.ai ? '' : '<button class="b ai" type="button" data-k="ai"' + dis + '>' + SPARK + (st.busy ? 'Piszę szkic…' : 'Szkic AI') + '</button>') +
+    '<div class="row">' + (st.ai || !nSets ? '' : '<button class="b ai" type="button" data-k="ai"' + dis + '>' + SPARK + (st.busy ? 'Piszę szkic…' : 'Szkic AI') + '</button>') +
     '<span class="hint">' + hint + '</span><span class="sp"></span>' + (saved ? '<button class="b" type="button" data-k="cancel"' + dis + '>Anuluj</button>' : '') +
     '<button class="b p" type="button" data-k="save"' + dis + '>Zapisz</button></div>' +
     '<details class="ctx"><summary>Co dostaje AI (bez imienia klienta)</summary><ul><li>ta jednostka: plan i wykonane serie, RPE, czas, samopoczucie, ból, uwagi i komentarze klienta</li>' +

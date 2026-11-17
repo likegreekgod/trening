@@ -919,6 +919,9 @@ test('trSzkicCtx_: dane jednostki do szkicu AI (bez imienia i linków), poprzedn
   assert.match(t, /Następna jednostka: tydzień 12, T2 „Góra”, 2026-11-19: Wyciskanie na ławce 3×5 47,5 kg/);
   assert.match(t, /Wcześniejsze komentarze trenera.*\n- „Równe serie, tak trzymaj\.”/);
   assert.equal(C.trSzkicCtx_(szkicData(), 12, 'T2'), null);                     // jednostka bez sesji
+  assert.equal(C.trSzkicSets_(szkicData(), 12, 'T1'), 3);                        // 3 serie robocze; rozgrzewka i pominięcie się nie liczą
+  const empty = szkicData(); empty.logs = empty.logs.filter(l => !(Number(l.tydzien) === 12 && String(l.seria) !== '0' && !/^R/i.test(String(l.seria))));
+  assert.equal(C.trSzkicSets_(empty, 12, 'T1'), 0);                              // tylko „Zakończ” + pominięcie = bez szkicu AI
   const simple = szkicData(); simple.cfg.simple = true;
   assert.match(C.trSzkicCtx_(simple, 12, 'T1'), /tryb PROSTY/);
 });

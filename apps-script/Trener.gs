@@ -246,6 +246,12 @@ function aiReq_(ctx, opt) {
  * Bez imienia, klucza i linków do filmów: tryb, jednostka, plan i wykonanie, sesja, ból, dyspozycja dnia,
  * 3 poprzednie takie same jednostki, następna jednostka, 5 ostatnich komentarzy trenera do tej osoby.
  */
+/** Liczba zapisanych serii roboczych jednostki (bez rozgrzewki i pominięć). 0 = szkic AI nie ma z czego pisać, więc nie wołamy API. */
+function trSzkicSets_(d, week, day) {
+  return (d.logs || []).filter(l => Number(l.tydzien) === Number(week) && String(l.jednostka) === String(day) &&
+    String(l.wykonane || '').trim() === 'TAK' && !/^R/i.test(String(l.seria)) && String(l.seria) !== '0').length;
+}
+
 function trSzkicCtx_(d, week, day) {
   const W = Number(week), D = String(day), str = v => v === undefined || v === null ? '' : String(v).trim();
   const ses = (d.sessions || []).find(s => Number(s.tydzien) === W && String(s.jednostka) === D);
@@ -326,6 +332,7 @@ function trSzkic(id, week, day, opt) {
   d.cfg.masters = String(row[8] || '').trim().toUpperCase() === 'TAK';
   const ctx = trSzkicCtx_(d, week, day);
   if (!ctx) throw new Error('Nie ma tej jednostki w zakładce Sesje.');
+  if (!trSzkicSets_(d, week, day)) throw new Error('Klient nie zapisał w tej jednostce żadnej serii, więc szkic AI nie ma z czego pisać (bez opłaty).');
   const r = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
     headers: { 'x-api-key': key, 'anthropic-version': '2026-10-21', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
     payload: JSON.stringify(aiReq_(ctx, opt)) });
