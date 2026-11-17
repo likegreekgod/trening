@@ -582,9 +582,9 @@ function komFilmDraw(v, who){
 
 /* ---------- bloki ---------- */
 function renderBloki(){
-  const rows = PUL.blocks.map(b => '<tr class="row" data-k="' + esc(b.id) + '"><td><a class="who" href="#k/' + encodeURIComponent(b.id) + '/bloki">' + esc(b.name) + '</a></td><td class="mono">' + esc(b.block) + '</td><td class="nw">' + esc(dm(b.from)) + '–' + esc(dm(b.to)) + '</td><td>' + (b.to < PUL.today ? 'skończony' : 'kończy się ' + esc(dm(b.to))) + '</td><td>' + (b.dlaKlienta ? 'jest' : '<span class="muted">brak</span>') + '</td></tr>').join('');
+  const rows = PUL.blocks.map(b => '<tr class="row" data-k="' + esc(b.id) + '"><td><a class="who" href="#k/' + encodeURIComponent(b.id) + '/bloki">' + esc(b.name) + '</a></td><td class="mono">' + esc(b.block) + '</td><td class="nw">' + esc(dm(b.from)) + '–' + esc(dm(b.to)) + '</td><td>' + (b.to < PUL.today ? 'skończony' : 'kończy się ' + esc(dm(b.to))) + '</td><td>' + (b.dlaKlienta ? 'jest' : '<span class="muted">brak</span>') + '</td><td class="nw"><a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#k/' + encodeURIComponent(b.id) + '/bloki">Zamknij blok ›</a></td></tr>').join('');
   $('#main').innerHTML = head('Koniec w ciągu 7 dni albo już po, bez wniosków', 'Bloki do zamknięcia') + '<div class="pg"><div class="card">' +
-    (rows ? '<div class="tw"><table><thead><tr><th>Klient</th><th>Blok</th><th>Daty</th><th>Stan</th><th>Dla klienta</th></tr></thead><tbody>' + rows + '</tbody></table></div><p class="legend">Wnioski i notatkę „dla klienta” wpisujesz na razie w zakładce Bloki w arkuszu. Pisanie w panelu dojdzie w kolejnym kroku.</p>'
+    (rows ? '<div class="tw"><table><thead><tr><th>Klient</th><th>Blok</th><th>Daty</th><th>Stan</th><th>Dla klienta</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div><p class="legend">„Zamknij blok” otwiera kartę klienta: wnioski i notatkę „dla klienta” wpiszesz sam albo zaczniesz od szkicu AI.</p>'
       : '<div class="es"><b>Wszystkie bloki zamknięte</b>Wnioski są wpisane.</div>') + '</div></div>';
 }
 
@@ -729,9 +729,9 @@ function komDraw(s){
   if (focus) { const t = document.querySelector('.kedit[data-u="' + CSS.escape(s.tydzien + '|' + s.jednostka) + '"] textarea'); if (t) t.focus(); }
 }
 const sesOf = el => { const u = el.closest('.kedit').dataset.u.split('|'); return (CUR.sessions || []).find(s => String(s.tydzien) === u[0] && String(s.jednostka) === u[1]); };
-document.addEventListener('input', e => { const t = e.target.closest('.kedit textarea'); if (!t || !CUR) return; const s = sesOf(t); (KD[kdKey(s)] = KD[kdKey(s)] || {}).text = t.value; });
+document.addEventListener('input', e => { const t = e.target.closest('.kedit:not(.bedit) textarea'); if (!t || !CUR) return; const s = sesOf(t); (KD[kdKey(s)] = KD[kdKey(s)] || {}).text = t.value; });
 document.addEventListener('click', async e => {
-  const b = e.target.closest('.kedit [data-k]'); if (!b || b.tagName === 'TEXTAREA' || !CUR) return;
+  const b = e.target.closest('.kedit:not(.bedit) [data-k]'); if (!b || b.tagName === 'TEXTAREA' || !CUR) return;
   const s = sesOf(b), k = kdKey(s), st = KD[k] = KD[k] || {}, saved = String(s.komentarz_trenera || ''), cid = CID;
   const cur = () => st.text !== undefined ? st.text : saved;
   st.err = '';
@@ -762,9 +762,62 @@ function blokList(d){
     f('Tygodnie / jednostki', [b.tygodnie, b.jednostki].filter(x => x !== '').join(' / ')) + f('Wykonanie', b['wykonanie_%'] !== '' ? b['wykonanie_%'] + '%' : '') + f('Tonaż', nf(b.tonaz_kg) > 0 ? fmt1(nf(b.tonaz_kg) / 1000) + ' t' : '') +
     f('Zmiana e1RM', b.e1RM_zm) + f('Najlepsze boje', b.najlepsze_boje) + f('sRPE śr. / samopoczucie', [b.sRPE_sr, b.samopocz_sr].filter(x => x !== '').join(' / ')) +
     f('Dyspozycja', b.dyspozycja) + f('Ból max', b.bol_max) + f('Statusy', b.statusy) + '</div>' +
-    '<div class="eb" style="margin-top:12px">Wnioski (tylko Ty)</div>' + (String(b.wnioski || '').trim() ? '<p class="kom">' + esc(b.wnioski) + '</p>' : '<p class="muted">Brak. Na razie wpisz w arkuszu, zakładka Bloki.</p>') +
-    '<div class="eb">Dla klienta</div>' + (String(b.dla_klienta || '').trim() ? '<p class="kom">' + esc(b.dla_klienta) + '</p>' : '<p class="muted">Brak.</p>') + '</div>').join('');
+    blokBox(b) + '</div>').join('');
 }
+/* ---------- zamknięcie bloku: wnioski (tylko trener) i „dla klienta” (Postęp → Blok w aplikacji), szkic AI obu naraz (trBlokSzkic), zapis trBlok ---------- */
+const BD = {};                                   // klient|blok → {w, k, ai, busy, err, ok, edit, cost, n, limit}; tylko w pamięci strony
+const bdKey = b => CID + '|' + b.blok;
+function blokBox(b){
+  const st = BD[bdKey(b)] || {}, sw = String(b.wnioski || '').trim(), sk = String(b.dla_klienta || '').trim(), dis = st.busy ? ' disabled' : '';
+  const box = inner => '<div class="kedit bedit" data-b="' + esc(b.blok) + '">' + inner + (st.err ? '<p class="err" role="alert">' + esc(st.err) + (/Ustawienia/.test(st.err) ? ' <a href="#ustawienia">Otwórz Ustawienia</a>' : '') + '</p>' : '') + '</div>';
+  if ((sw || sk) && !st.edit) return box('<div class="eb">Wnioski (tylko Ty)</div>' + (sw ? '<p class="kom">' + esc(sw) + '</p>' : '<p class="muted">Brak.</p>') +
+    '<div class="eb" style="margin-top:10px">Dla klienta</div>' + (sk ? '<p class="kom">' + esc(sk) + '</p>' : '<p class="muted">Brak.</p>') +
+    '<div class="row">' + (st.ok ? '<span class="saved">✓ Zapisano · klient zobaczy notatkę w aplikacji: Postęp → Blok</span>' : '') + '<span class="sp"></span><button class="b" type="button" data-k="edit">Edytuj</button></div>');
+  const w = st.w !== undefined ? st.w : sw, k = st.k !== undefined ? st.k : sk;
+  const flag = st.ai ? '<div class="aiflag">' + SPARK + '<div><b>Szkic AI. Przeczytaj i popraw przed zapisem.</b>Klient nie zobaczy niczego, dopóki nie klikniesz „Zapisz”.</div></div>' : '';
+  const chips = st.ai ? '<div class="row"><span class="hint">Popraw szkic:</span><div class="chips">' +
+    [['krocej', 'Krócej'], ['cieplej', 'Cieplej (dla klienta)'], ['inny', 'Inny szkic']].map(c => '<button class="chip" type="button" data-k="ai" data-t="' + c[0] + '"' + dis + '>' + c[1] + '</button>').join('') + '</div></div>' : '';
+  const hint = st.busy ? 'AI pisze szkic, to trwa kilka–kilkanaście sekund…' : st.ai && st.cost !== undefined ? 'koszt szkicu ' + pl(st.cost.toFixed(3)) + ' $ · dziś ' + st.n + ' z ' + st.limit : 'Jeden szkic pisze oba pola.';
+  return box(flag + '<div class="eb" style="margin-bottom:6px">Wnioski (tylko Ty)</div><textarea data-k="w" aria-label="Wnioski z bloku ' + esc(b.blok) + '" placeholder="Co zadziałało, co nie, co zmieniasz w następnym bloku…"' + dis + '>' + esc(w) + '</textarea>' +
+    '<div class="eb" style="margin:10px 0 6px">Dla klienta <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· zobaczy w aplikacji: Postęp → Blok</span></div><textarea data-k="k" aria-label="Notatka dla klienta do bloku ' + esc(b.blok) + '" placeholder="Kilka zdań do klienta o tym bloku…"' + dis + '>' + esc(k) + '</textarea>' + chips +
+    '<div class="row">' + (st.ai ? '' : '<button class="b ai" type="button" data-k="ai"' + dis + '>' + SPARK + (st.busy ? 'Piszę szkic…' : 'Szkic AI') + '</button>') +
+    '<span class="hint">' + hint + '</span><span class="sp"></span>' + (sw || sk ? '<button class="b" type="button" data-k="cancel"' + dis + '>Anuluj</button>' : '') +
+    '<button class="b p" type="button" data-k="save"' + dis + '>Zapisz</button></div>' +
+    '<details class="ctx"><summary>Co dostaje AI (bez imienia klienta)</summary><ul><li>liczby z tego bloku (jak w karcie wyżej) i z poprzedniego bloku do porównania</li>' +
+    '<li>tydzień po tygodniu: wykonanie, tonaż, sRPE, samopoczucie, ból, dyspozycja</li><li>ćwiczenia A: e1RM na początku i na końcu, boje: najlepsze zaliczone i spalone</li><li>komentarze klienta i pominięte ćwiczenia, plan następnego bloku, jeśli już jest</li><li>Twoje wcześniejsze wnioski, żeby pisało Twoim stylem</li></ul></details>');
+}
+function blokDraw(blok){
+  const b = ((CUR && CUR.blocks) || []).find(x => String(x.blok) === blok), el = document.querySelector('.bedit[data-b="' + CSS.escape(blok) + '"]'); if (!b || !el) return;
+  el.outerHTML = blokBox(b);
+}
+document.addEventListener('input', e => { const t = e.target.closest('.bedit textarea'); if (!t || !CUR) return; const blok = t.closest('.bedit').dataset.b, b = CUR.blocks.find(x => String(x.blok) === blok);
+  (BD[bdKey(b)] = BD[bdKey(b)] || {})[t.dataset.k] = t.value; });
+document.addEventListener('click', async e => {
+  const el = e.target.closest('.bedit [data-k]'); if (!el || el.tagName === 'TEXTAREA' || !CUR) return;
+  const blok = el.closest('.bedit').dataset.b, b = CUR.blocks.find(x => String(x.blok) === blok), st = BD[bdKey(b)] = BD[bdKey(b)] || {}, cid = CID;
+  const cur = f => st[f] !== undefined ? st[f] : String((f === 'w' ? b.wnioski : b.dla_klienta) || '');
+  st.err = ''; st.ok = false;
+  if (el.dataset.k === 'edit') { st.edit = true; return blokDraw(blok); }
+  if (el.dataset.k === 'cancel') { BD[bdKey(b)] = {}; return blokDraw(blok); }
+  if (el.dataset.k === 'save') {
+    st.busy = true; blokDraw(blok);
+    try { const r = await guard(api('trBlok', cid, blok, cur('w'), cur('k'))); b.wnioski = r.wnioski; b.dla_klienta = r.dla_klienta; BD[bdKey(b)] = { ok: true };
+      const pb = PUL.blocks.find(x => x.id === cid && x.block === blok); if (pb && String(r.wnioski).trim()) PUL.blocks.splice(PUL.blocks.indexOf(pb), 1); }
+    catch (err) { st.busy = false; if (!err.auth) st.err = err.message; }
+    if (CID === cid) blokDraw(blok);
+    return;
+  }
+  if (el.dataset.k === 'ai') {
+    const tweak = el.dataset.t || '';
+    st.busy = true; blokDraw(blok);
+    try { const r = await guard(api('trBlokSzkic', cid, blok, { tweak, draft: tweak ? { w: cur('w'), k: cur('k') } : null }));
+      Object.assign(st, { w: r.wnioski, k: r.dla_klienta, ai: true, edit: true, cost: r.cost, n: r.n, limit: r.limit }); }
+    catch (err) { if (!err.auth) st.err = err.message; }
+    finally { st.busy = false; }
+    if (CID === cid) blokDraw(blok);
+  }
+});
+
 function dyspList(d){
   const rd = (d.readiness || []).slice().sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 30);
   if (!rd.length) return '<div class="card es"><b>Brak wpisów dyspozycji</b>Klient jeszcze nie zapisał dyspozycji dnia.</div>';

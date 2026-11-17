@@ -56,6 +56,11 @@ function klient() {
   };
 }
 
+const BLOK_SZKIC = {   // syntetyczny szkic AI zamknięcia bloku
+  wnioski: 'Wykonanie 100% (11 z 11), ale sRPE rosło z 700 do 790, a w tyg. 12 dyspozycja „Uwaga” i kolano 5/10. Przysiad e1RM 74 → 80 kg (+8%), wyciskanie stoi na 46 kg od tyg. 9. Kolano pojawia się tylko po T1 z przysiadem powyżej 85%. Następny blok: przysiad 3×5 od 62,5 kg z pauzą, wyciskanie 5×3 na 42,5 kg z dokładaniem 1,25 kg tygodniowo, deload w tyg. 4.',
+  dla_klienta: 'Zrobione wszystkie 11 treningów z bloku, a przysiad urósł o 6 kg szacowanego maksimum. Wyciskanie od trzech tygodni stoi, więc w następnym bloku zmieniamy mu schemat. Kolano dało znać przy najcięższych przysiadach: zaczynamy lżej, z pauzą na dole, i wracamy do ciężaru po 3 tygodniach.' };
+const BLOK_KROCEJ = { wnioski: 'Przysiad +8%, wyciskanie stoi od tyg. 9, kolano 5/10 po ciężkich T1. Następny blok: przysiad z pauzą od 62,5 kg, wyciskanie 5×3 na 42,5 kg.', dla_klienta: 'Komplet 11 treningów i przysiad +6 kg. Teraz ruszamy wyciskanie i oszczędzamy kolano.' };
+
 // ---------- serwer, przeglądarka, atrapy ----------
 let server, base, browser;
 test.before(async () => {
@@ -91,6 +96,9 @@ async function page(calls, opt = {}) {
     else if (b.fn === 'trSzkic') { st.ai = (st.ai || 0) + 1; await new Promise(res => setTimeout(res, 150));
       out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).' }
         : { ok: true, result: { text: (b.args[3] && b.args[3].tweak === 'krocej' ? 'Krótko: ' : '') + SZKIC, cost: 0.024, n: st.ai, limit: 30, model: 'claude-opus-5-5' } }; }
+    else if (b.fn === 'trBlokSzkic') { st.ai = (st.ai || 0) + 1; await new Promise(res => setTimeout(res, 150));
+      out = { ok: true, result: Object.assign({}, b.args[2] && b.args[2].tweak === 'krocej' ? BLOK_KROCEJ : BLOK_SZKIC, { cost: 0.031, n: st.ai, limit: 30, model: 'claude-opus-5-5' }) }; }
+    else if (b.fn === 'trBlok') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { wnioski: String(b.args[2]).trim(), dla_klienta: String(b.args[3]).trim() } }; }
     else if (b.fn === 'trAI') out = { ok: true, result: st.key ? { set: true, end: '…' + st.key.slice(-4), limit: 30, n: 2, model: 'claude-opus-5-5' } : { set: false, end: '', limit: 30, n: 0, model: 'claude-opus-5-5' } };
     else if (b.fn === 'trUstawAI') { await new Promise(res => setTimeout(res, 150)); const k = String(b.args[0] || '').trim();
       if (k && !/^sk-ant-/.test(k)) out = { ok: false, error: 'To nie wygląda na klucz Claude API (zaczyna się od sk-ant-). Nic nie zmieniono.' };
@@ -187,7 +195,7 @@ test('panel: karta klienta (przegląd, sesje, bloki, dyspozycja)', async () => {
   assert.equal(await p.$$eval('details.ses[open]', a => a.length), 1);
   await p.click('.tabs a[href$="/bloki"]'); await p.waitForFunction(() => /Wnioski \(tylko Ty\)/.test(document.querySelector('#main').textContent));
   txt = await p.textContent('#main');
-  assert.match(txt, /Blok B2[\s\S]*Brak\. Na razie wpisz w arkuszu[\s\S]*Blok B1[\s\S]*Dobra adaptacja/);
+  assert.match(txt, /Blok B2[\s\S]*Wnioski \(tylko Ty\)[\s\S]*Szkic AI[\s\S]*Blok B1[\s\S]*Dobra adaptacja/);
   await p.click('.tabs a[href$="/dyspozycja"]'); await p.waitForSelector('#main table');
   assert.match(await p.textContent('#main'), /Uwaga\s*32,5 cm/);
   assert.equal(calls.filter(c => c.fn === 'trKlient').length, 1, 'karta pobrana raz, zakładki bez nowych zapytań');
@@ -362,6 +370,35 @@ test('panel: Ustawienia, klucz Claude API wklejany w panelu (też na telefonie),
     await p.click('#aikey-del'); await p.waitForSelector('#aikey-card .saved');
     assert.match(await p.textContent('#aikey-card .kstat'), /Brak klucza/);
     assert.equal(calls.filter(c => c.fn === 'trUstawAI').pop().args[0], '');
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});
+
+test('panel: zamknięcie bloku (wnioski i notatka dla klienta, szkic AI obu naraz, zapis)', async () => {
+  for (const [vp, scheme, nm] of [[{ width: 390, height: 844 }, 'dark', 'telefon-ciemny'], [null, 'light', 'jasny']]) {
+    const calls = [], { ctx, p } = await page(calls, Object.assign({ loggedIn: true, scheme }, vp ? { vp } : {}));
+    await p.goto(base + 'trener.html#bloki'); await p.waitForSelector('#main table');
+    assert.equal(await p.getAttribute('text=Zamknij blok ›', 'href'), '#k/bartek/bloki');     // z listy prosto do karty klienta
+    if (!vp) await shot(p, 'trener-bloki-lista-jasny.png');
+    await p.goto(base + 'trener.html#k/ania/bloki'); await p.waitForSelector('.bedit[data-b="B2"] textarea');
+    assert.match(await p.textContent('.bedit[data-b="B1"]'), /Dobra adaptacja/);                // zapisane wnioski: tekst i „Edytuj”
+    assert.ok(await p.$('.bedit[data-b="B1"] [data-k="edit"]'));
+    await p.click('.bedit[data-b="B2"] [data-k="ai"]'); await p.waitForSelector('.bedit[data-b="B2"] .aiflag');
+    assert.deepEqual(calls.filter(c => c.fn === 'trBlokSzkic').map(c => c.args.slice(0, 2)), [['ania', 'B2']]);   // jedno zapytanie na oba pola
+    assert.match(await p.inputValue('.bedit[data-b="B2"] [data-k="w"]'), /Następny blok: przysiad 3×5 od 62,5 kg/);
+    assert.match(await p.inputValue('.bedit[data-b="B2"] [data-k="k"]'), /Zrobione wszystkie 11 treningów/);
+    assert.match(await p.textContent('.bedit[data-b="B2"]'), /koszt szkicu 0,031 \$ · dziś 1 z 30/);
+    await p.click('.bedit[data-b="B2"] [data-t="krocej"]'); await p.waitForFunction(() => /^Przysiad \+8%/.test(document.querySelector('.bedit[data-b="B2"] [data-k="w"]').value));
+    const tw = calls.filter(c => c.fn === 'trBlokSzkic').pop().args[2];
+    assert.equal(tw.tweak, 'krocej'); assert.match(tw.draft.w, /Wykonanie 100%/); assert.match(tw.draft.k, /Zrobione wszystkie/);   // poprawka dostaje poprzedni szkic
+    await p.fill('.bedit[data-b="B2"] [data-k="k"]', 'Komplet treningów. Teraz wyciskanie.');
+    const card = p.locator('.card', { has: p.locator('.bedit[data-b="B2"]') });
+    await card.screenshot({ path: path.join(SCREENS, 'trener-blok-szkic-' + nm + '.png') });
+    await p.click('.bedit[data-b="B2"] [data-k="save"]'); await p.waitForSelector('.bedit[data-b="B2"] .saved');
+    const sv = calls.filter(c => c.fn === 'trBlok').pop().args;
+    assert.deepEqual(sv.slice(0, 2), ['ania', 'B2']); assert.match(sv[2], /^Przysiad \+8%/); assert.equal(sv[3], 'Komplet treningów. Teraz wyciskanie.');
+    assert.match(await p.textContent('.bedit[data-b="B2"]'), /Postęp → Blok/);
     assert.deepEqual(p.errors, []);
     await ctx.close();
   }

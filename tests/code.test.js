@@ -925,6 +925,40 @@ test('trSzkicCtx_: dane jednostki do szkicu AI (bez imienia i linków), poprzedn
   const simple = szkicData(); simple.cfg.simple = true;
   assert.match(C.trSzkicCtx_(simple, 12, 'T1'), /tryb PROSTY/);
 });
+test('trBlokCtx_, trBlokSets_, aiBlokReq_, aiBlokParse_: szkic zamknięcia bloku (bez imienia), dwa teksty z jednej odpowiedzi', () => {
+  const d = szkicData();
+  d.plan.push({ week: 13, day: 'T1', title: 'Nogi', date: '2026-11-24', order: 1, name: 'Przysiad tylny', prio: 'A', sets: 4, reps: '4', kg: 85, rpe: 8, block: 'B3', own: false });
+  d.blocks = [{ blok: 'B1', od: '2026-09-01', do: '2026-10-26', tygodnie: '1–9', jednostki: '18/18', 'wykonanie_%': 95, tonaz_kg: 52000, e1RM_zm: 'Przysiad tylny 90→96 (+6,7%)', najlepsze_boje: '', sRPE_sr: 7, samopocz_sr: 4, dyspozycja: '', bol_max: 0, statusy: '', wnioski: 'Dobra adaptacja, więcej objętości.', dla_klienta: '' },
+    { blok: 'B2', od: '2026-11-03', do: '2026-11-19', tygodnie: '10–12', jednostki: '3/4', 'wykonanie_%': 80, tonaz_kg: 3700, e1RM_zm: 'Przysiad tylny 96→100 (+4,2%)', najlepsze_boje: '', sRPE_sr: 7.3, samopocz_sr: 4, dyspozycja: 'Uwaga 1', bol_max: 5, statusy: '', wnioski: '', dla_klienta: '' }];
+  const t = C.trBlokCtx_(d, 'B2');
+  assert.doesNotMatch(t, /Ania|drive\.google|tajne/);                           // bez imienia i linków do filmów
+  assert.match(t, /Blok B2: 2026-11-03–2026-11-19, tygodnie 10–12, jednostki zrobione\/plan 3\/4, wykonanie serii z planu 80%, tonaż 3700 kg, szacowane maksimum \(e1RM\): Przysiad tylny 96→100/);
+  assert.match(t, /- tydzień 12: jednostki 1\/2, tonaż 1260 kg, RPE sesji śr\. 8, samopoczucie 4\/5, ból max 5\/10/);
+  assert.match(t, /- Przysiad tylny: 80 kg×5 @7,5 \(tydz\. 10\) → 84 kg×5 @7,5 \(tydz\. 12\)/);
+  assert.match(t, /Nieudane serie\/podejścia: Przysiad tylny 1\./);
+  assert.match(t, /Pominięte albo skrócone ćwiczenia: Wiosłowanie hantlą\./);
+  assert.match(t, /Niezrobione jednostki: tydz\. 12 T2\./);
+  assert.match(t, /Przysiad tylny: „Ostatnie powtórzenie wolne”/);
+  assert.match(t, /sesja tydz\. 12 T1: „Kolano trochę ćmi”/);
+  assert.match(t, /Ból zgłoszony: tydz\. 12 T1: kolano 5\/10/);
+  assert.match(t, /Poprzedni blok B1: .*\nWnioski trenera po bloku B1 \(styl\): „Dobra adaptacja, więcej objętości\.”/);
+  assert.match(t, /Plan następnego bloku B3, pierwszy tydzień \(13\): T1 Przysiad tylny 4×4 85 kg\./);
+  assert.equal(C.trBlokCtx_(d, 'B9'), null);
+  const d2 = Object.assign({}, d, { plan: d.plan.filter(r => r.block !== 'B3') });
+  assert.match(C.trBlokCtx_(d2, 'B2'), /Planu następnego bloku jeszcze nie ma/);
+  assert.equal(C.trBlokSets_(d, 'B2'), 9);                                       // serie robocze z 3 tygodni; rozgrzewka i pominięcie się nie liczą
+  assert.equal(C.trBlokSets_(d, 'B3'), 0);                                       // blok bez serii = bez zapytania do AI
+  const r = C.aiBlokReq_('KONTEKST', {});
+  assert.equal(r.model, 'claude-opus-5-5'); assert.equal(r.fallbacks, 'default'); assert.equal(r.output_config.effort, 'low');
+  assert.match(r.system, /WNIOSKI:\n<tekst dla trenera>\nDLA KLIENTA:/);
+  assert.match(r.system, /najwyżej 5 krótkich zdań/); assert.match(r.system, /nie używaj form zależnych od płci/);
+  assert.match(r.messages[0].content, /KONTEKST[\s\S]*Napisz szkic wniosków/);
+  assert.match(C.aiBlokReq_('K', { tweak: 'cieplej', draft: { w: 'W1.', k: 'K1.' } }).messages[0].content, /Poprzedni szkic:\nWNIOSKI:\nW1\.\nDLA KLIENTA:\nK1\.\n\nPopraw szkic: Tekst dla klienta napisz cieplej/);
+  assert.deepEqual(JSON.parse(JSON.stringify(C.aiBlokParse_('WNIOSKI:\nPrzysiad +4%.\nDecyzja: 85 kg.\n\nDLA KLIENTA:\nŚwietny blok.'))), { wnioski: 'Przysiad +4%.\nDecyzja: 85 kg.', dla_klienta: 'Świetny blok.' });
+  assert.deepEqual(JSON.parse(JSON.stringify(C.aiBlokParse_('**Wnioski:** A.\n**Dla klienta:** B.'))), { wnioski: 'A.', dla_klienta: 'B.' });   // znaczniki z ozdobnikami
+  assert.deepEqual(JSON.parse(JSON.stringify(C.aiBlokParse_('Sam tekst.'))), { wnioski: 'Sam tekst.', dla_klienta: '' });   // bez znaczników: całość do wniosków
+  assert.ok(C.TR_FNS.trBlok && C.TR_FNS.trBlokSzkic && !C.API_FNS.trBlok && !C.API_FNS.trBlokSzkic);   // tylko zalogowany trener
+});
 test('aiReq_, aiCost_, aiDay_: zapytanie do Claude API, koszt, dzienny limit', () => {
   const r = C.aiReq_('KONTEKST', {});
   assert.equal(r.model, 'claude-opus-5-5');
