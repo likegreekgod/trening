@@ -4,6 +4,8 @@ Plan uzgodniony z Damianem 12.11.2026 (rozmowa „czy możemy usprawnić wygląd
 
 Stan wyjściowy: aplikacja v37, `main` po PR #60 (obwód / superseria). `npm test` = 142 testy, wszystkie zielone.
 
+Stan na 17.11: PR 1–8, 10 i 11 zrobione i scalone (ostatni PR #70, v48, 16.11). Został PR 9, po decyzji Damiana.
+
 ## Zasady (obowiązują w każdym PR)
 
 - Styl Pomost zostaje: karty, tokeny kolorów z `:root`, oba motywy, cele dotyku ≥ 44 px, etykiety ≥ 12 px. To odświeżenie, nie nowy wygląd.
@@ -111,6 +113,7 @@ Cel: wybrana osoba (np. sam Damian) może w trakcie treningu szybko dopasować j
 - Bez sieci: przez kolejkę, jak własny trening (`applyOwn`).
 - **Ustalone 13.11:** robimy przed PR 4. Przy każdej zmianie (dodanie, zamiana, usunięcie) aplikacja pyta „Na jak długo?”: „Tylko dziś” albo „Na stałe” (= także kolejne tygodnie tej samej jednostki, do końca obecnego planu).
 - Szkic pokazany 13.11 (pliki poza repo, do odtworzenia skryptem z atrapą): przycisk „+ Ćwiczenie” pod ostatnią kartą; okno „Dodaj ćwiczenie” (szukaj, serie / powt. / kg, „Na jak długo?”); „Usuń z treningu…” pod „⋯” karty z tym samym pytaniem. Czeka na akceptację i decyzję, czy „Usuń” dotyczy też ćwiczeń z planu (rekomendacja: tak, ale wiersz Planu nie jest kasowany, zostaje ślad „usunięte przez klienta” i ćwiczenie nie liczy się do wykonania; „Pomiń” zostaje jako „dziś nie zrobiłem”).
+- **Ustalone 13.11:** „Usuń” także dla ćwiczeń z planu (wiersz zostaje ze śladem `usuniete`), „Tylko ten trening” zamiast „Tylko dziś”. Zrobione w v42 (szczegóły w `decyzje.md`).
 
 ### PR 11 · Dwie poprawki karty (zgłoszone 13.11 na zrzutach; odczyt potwierdzony)
 
@@ -120,12 +123,10 @@ Cel: wybrana osoba (np. sam Damian) może w trakcie treningu szybko dopasować j
 
 ## Otwarte pytania do Damiana (zadaj przy odpowiednim PR)
 
-1. PR 1: które akcje zostają na wierzchu karty, a które idą pod „⋯”.
-2. PR 2: porównanie do poprzedniej takiej samej jednostki czy do średniej z 4 tygodni.
-3. PR 4: czy rekord pokazywać też w trybie PROSTY (propozycja: tak).
-4. PR 8: przełącznik czy nowy domyślny widok.
-5. PR 9: czy klient ma widzieć „wnioski” trenera z zakładki Bloki.
-6. Czy przed szkicami zrobić krótki przegląd kilku popularnych aplikacji treningowych (propozycje wyżej są z doświadczenia, nie z aktualnego przeglądu rynku).
+1. PR 9: czy w ogóle robimy dalej (raport po bloku, notatka trenera do jednostki).
+2. PR 9: czy klient ma widzieć „wnioski” trenera z zakładki Bloki.
+
+Rozstrzygnięte: akcje pod „⋯” (PR 1, 12.11), porównanie z poprzednią taką samą jednostką (PR 2, 13.11), rekord też w PROSTYM (PR 4, 15.11), tryb skupienia jako przełącznik (PR 8, 16.11). Przegląd innych aplikacji przed szkicami nie był robiony; PR 1–8, 10 i 11 są zrobione bez niego.
 
 ## Odrzucone wcześniej (nie proponuj ponownie)
 
@@ -143,6 +144,6 @@ Suwaki zamiast przycisków, zmiany pod konkretnego klienta, natywna aplikacja od
 | 6 | Ruch i timer | zrobione (v46): timer B (pasek u góry, czerwone ostatnie 10 s), puste stany jako karty (`emptyCard`), płynne zwijanie (`foldMove`) i ruch ✓ (`.ok.pop`) |
 | 7 | Podpowiedzi przy pierwszym użyciu | zrobione (v47): wariant A, dymek `#tip` przy elemencie, po kolei; lib `nextTip`, `tipDraw` / `tipPlace` / `tipOk`, stan w `tip_<klucz>` |
 | 8 | Tryb skupienia | zrobione (v48): wariant A, przełącznik pod „⋯” górnego paska; lib `focusSteps`, `focusStart`, `fxDraw` / `fxGo` / `fxSet`, stan w `fx_<klucz>` |
-| 9 | Raport po bloku, notatka do jednostki | po decyzji |
+| 9 | Raport po bloku, notatka do jednostki | po decyzji Damiana, czy robimy (wymaga zmian w arkuszu) |
 | 10 | Dodawanie / zamiana / usuwanie ćwiczeń w jednostce dla wybranych osób | zrobione (v42 + `apps-script/`): flaga Klienci N `edycja`, API `editPlan`, lib `planEdit`; szczegóły w `decyzje.md` |
 | 11 | Przypięta nazwa ćwiczenia przy przewijaniu; komentarz do ćwiczenia w osobnym oknie | zrobione (v43): nazwa przypięta w wariancie B (`stickDraw`, `.ch.stuck`), komentarz w oknie (`openNote`) |

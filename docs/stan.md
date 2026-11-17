@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-16, aplikacja v48 (v48 w PR #70, czeka na scalenie; `main` = v47 po PR #69).
+Stan na 2026-11-17, aplikacja v48 (`main` = v48 po PR #70, scalonym 16.11).
 
 ## Jak pracujemy
 
@@ -19,7 +19,6 @@ Stan na 2026-11-16, aplikacja v48 (v48 w PR #70, czeka na scalenie; `main` = v47
 ## Ostatnio zrobione
 
 - 16.11 (v48): plan v4 PR 8: tryb skupienia, jedno ćwiczenie na ekranie (włączany pod „⋯” w górnym pasku, pasek „Ćwiczenie n z m”, „Następne”, przesunięcie palcem, podsumowanie jako ostatni krok).
-
 - 16.11 (v47): plan v4 PR 7: podpowiedzi przy pierwszym użyciu, cztery dymki po kolei (✓, „⋯”, kamera, dzień w pasku), każdy raz; długa ściągawka w PROSTYM zwinięta na dole Treningu.
 - 16.11 (v46): plan v4 PR 6: timer przerwy z grubym paskiem u góry i czerwonymi ostatnimi 10 s, puste stany jako karty z ikoną, płynne zwijanie kart i krótki ruch ✓.
 - 16.11 (v45): plan v4 PR 5: karta „dziś” nad paskiem tygodnia (ile ćwiczeń, serii i minut, „Zacznij” / „Dalej” / „Zakończ”, postęp w trakcie).
@@ -48,7 +47,7 @@ Stan na 2026-11-16, aplikacja v48 (v48 w PR #70, czeka na scalenie; `main` = v47
 
 ## Czeka na Damiana
 
-- Scalenie PR #70 (v48, plan v4 PR 8, tryb skupienia), założonego 16.11 za zgodą Damiana; potem próba na telefonie.
+- Próba na telefonie: tryb skupienia (v48, PR #70 scalony 16.11; włączany pod „⋯” w górnym pasku Treningu).
 - Decyzja, czy robimy PR 9 (raport po bloku, notatka trenera do jednostki).
 - Próba na telefonie: podpowiedzi przy pierwszym użyciu (v47, PR #69 scalony 16.11; obecni klienci zobaczą cztery dymki raz).
 - Próba na telefonie: timer, zwijanie kart, ✓ (v46, PR #68 scalony 16.11).
@@ -67,9 +66,7 @@ Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPho
 
 ## Propozycje (do wyboru)
 
-- Krótkie podpowiedzi przy pierwszym użyciu zamiast długiej pomocy.
 - Przegląd trenera na telefonie (osobna strona).
-- Raport po bloku dla klienta.
 - Porządek w bazie ćwiczeń: lista podejrzanych duplikatów Catalyst / free-exercise-db do decyzji.
 
 ## Po filmach testowych
