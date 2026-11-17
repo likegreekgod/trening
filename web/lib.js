@@ -987,6 +987,44 @@
     return c ? c[1] : '';
   };
 
+  /* ---------- animacja otwarcia „Siła z Ruchu” (index.html: #intro, introRun) ----------
+     Pomarańczowa linia to tor sztangi w rwaniu, jasna linia to taniec wokół talerza; na koniec napis litera po literze.
+     Czasy w ms. PRE: talerz stoi na pomoście; T: ruch sztangi do chwytu; TXT_LEAD: o tyle przed chwytem wchodzi pierwsza litera;
+     LETTER: odstęp między literami; LETTER_IN: wejście litery; READ: tyle cały napis zostaje, żeby dało się go przeczytać;
+     OUT: zgaszenie; SKIP: zgaszenie po dotknięciu.
+     TEMPO: [ułamek czasu, ułamek długości toru, prędkość] = oderwanie, pozycja mocy (sztanga najbliżej zawodnika),
+     koniec wybicia (najszybciej), najwyższy punkt, chwyt w przysiadzie. */
+  L.INTRO = { PRE: 150, T: 1350, TXT_LEAD: 300, LETTER: 28, LETTER_IN: 300, READ: 1200, OUT: 300, SKIP: 180,
+    TEMPO: [[0, 0, 0], [.55, .4784, 1.35], [.615, .6101, 1.95], [.885, .9314, .4], [1, 1, .85]] };
+  /** jaka część toru jest za sztangą po ułamku k czasu ruchu (0…1): płynna krzywa Hermite'a przez punkty TEMPO, bez cofania */
+  L.introTempo = k => {
+    const t = Math.max(0, Math.min(1, Number(k) || 0)), P = L.INTRO.TEMPO;
+    for (let i = 1; i < P.length; i++) if (t <= P[i][0]) {
+      const a = P[i - 1], b = P[i], h = b[0] - a[0], u = (t - a[0]) / h, u2 = u * u, u3 = u2 * u;
+      return (2 * u3 - 3 * u2 + 1) * a[1] + (u3 - 2 * u2 + u) * h * a[2] + (3 * u2 - 2 * u3) * b[1] + (u3 - u2) * h * b[2];
+    }
+    return 1;
+  };
+  /** chwile animacji [ms od startu] dla napisu o n literach: grab = chwyt, text = pierwsza litera, full = cały napis na ekranie, fade = początek zgaszenia, end = koniec */
+  L.introTimes = n => {
+    const I = L.INTRO, grab = I.PRE + I.T, text = grab - I.TXT_LEAD, full = text + Math.max(0, n - 1) * I.LETTER + I.LETTER_IN, fade = full + I.READ;
+    return { grab, text, full, fade, end: fade + I.OUT };
+  };
+  /**
+   * Linia tańca trzyma wysokość talerza (krąży wokół niego), nad najwyższym punktem sztangi robi łuk i schodzi do chwytu razem z nią.
+   * dy: wysokości linii tańca co równy kawałek jej długości (y ekranu: mniejsze = wyżej), yApex: y sztangi w najwyższym punkcie toru.
+   * Zwraca funkcję (sb, yb) → ułamek długości linii tańca dla sztangi po ułamku sb toru, na wysokości yb.
+   */
+  L.introDance = (dy, yApex) => {
+    const n = dy.length - 1, y0 = dy[0], top = dy.indexOf(Math.min.apply(null, dy)), sApex = L.INTRO.TEMPO[3][1], lead = (y0 - dy[top]) / ((y0 - yApex) || 1);
+    return (sb, yb) => {
+      if (sb >= sApex) return (top + (n - top) * Math.min(1, (sb - sApex) / (1 - sApex))) / n;
+      const y = y0 - (y0 - yb) * lead;
+      let i = 0; while (i < top - 1 && dy[i + 1] > y) i++;
+      return (i + Math.min(1, Math.max(0, (dy[i] - y) / ((dy[i] - dy[i + 1]) || 1)))) / n;
+    };
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);

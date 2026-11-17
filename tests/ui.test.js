@@ -27,7 +27,7 @@ test.before(async () => {
 test.after(async () => { await browser.close(); server.close(); });
 
 async function page(calls, offline, opt = {}) {
-  const ctx = await browser.newContext(Object.assign({ viewport: { width: 390, height: 844 }, colorScheme: opt.scheme || 'light', reducedMotion: opt.motion ? 'no-preference' : 'reduce' }, opt.ua ? { userAgent: opt.ua } : {}));
+  const ctx = await browser.newContext(Object.assign({ viewport: { width: 390, height: 844 }, colorScheme: opt.scheme || 'light', reducedMotion: opt.motion ? 'no-preference' : 'reduce' }, opt.ua ? { userAgent: opt.ua } : {}, opt.touch ? { hasTouch: true } : {}));
   const data = opt.data || DATA;
   await ctx.route('**/macros/**', async r => {
     if (offline) return r.abort();
@@ -37,6 +37,8 @@ async function page(calls, offline, opt = {}) {
   });
   // podpowiedzi przy pierwszym użyciu zasłaniają część karty: domyślnie obejrzane, opt.tips je włącza
   if (!opt.tips) await ctx.addInitScript(() => { try { ['kabc', 'k0123456789a', 'kABCDEF01234'].forEach(k => localStorage.setItem('tip_' + k, '["seria","wiecej","kamera","dzien"]')); } catch (e) {} });
+  // animacja otwarcia zasłania ekran przez 3 s: domyślnie „obejrzana dziś”, opt.intro ją włącza (pokazuje się tylko z opt.motion)
+  if (!opt.intro) await ctx.addInitScript(() => { try { const d = new Date(), z = n => String(n).padStart(2, '0'); localStorage.setItem('intro', d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate())); } catch (e) {} });
   const p = await ctx.newPage(); p.errors = []; p.on('pageerror', e => p.errors.push(e.message));
   p.external = []; p.on('request', q => { if (!q.url().startsWith(base) && !/\/macros\//.test(q.url())) p.external.push(q.url()); });
   return { ctx, p };
@@ -77,7 +79,7 @@ test('z kluczem: plan, tryb prosty, kompleks 1+1 = 2, zapis serii przez API', as
   const calls = [];
   const { ctx, p } = await page(calls);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
-  assert.equal(await p.title(), 'Trening – Robert');
+  assert.equal(await p.title(), 'Siła z Ruchu – Robert');
   assert.equal(await p.getAttribute('meta[name="color-scheme"]', 'content'), 'light dark');   // bez przyciemniania przez system (Samsung)
   assert.equal(await p.textContent('#title'), 'FBW A');
   assert.match(await p.textContent('#eyebrow'), /Tydz\. 1 · T1 · wt 06\.10/);
@@ -1597,6 +1599,7 @@ test('EMOM: zegar minut z sygnałem, „+ runda” kopiuje kg/powt., rund więce
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.emom[data-emom="3"]');
   assert.equal(await p.textContent('.emom .em-of'), '/ 3');
   for (let i = 0; i < 5; i++) { await p.click('.emom[data-emom="3"] .em-add'); await p.clock.runFor(60000); }
+  await p.clock.runFor(300);                                                     // zegar odświeża się co 250 ms: zapas, żeby odczyt nie wypadł ułamek sekundy przed przejściem na 6. minutę
   assert.equal(await p.textContent('.emom .em-n'), '5');
   assert.match(await p.textContent('.emom .em-t'), /min 6 · /);
   assert.equal(await p.isHidden('#rest'), true);                                 // EMOM ma zegar minut zamiast przerwy
@@ -2090,6 +2093,149 @@ test('Ruch: karta zwija się płynnie (stan od razu, wysokość w 0,2 s), ✓ do
     await ctx.close();
   };
   await run(true); await run(false);
+});
+
+test('Marka „Siła z Ruchu”: nazwa pod ikoną na ekranie głównym, w karcie przeglądarki i w nagłówku przed wczytaniem planu', async () => {
+  const man = JSON.parse(fs.readFileSync(path.join(WEB, 'manifest.json'), 'utf8'));
+  assert.deepEqual([man.name, man.short_name], ['Siła z Ruchu', 'Siła z Ruchu']);
+  assert.ok(man.short_name.length <= 12);                                      // dłuższą nazwę Android ucina pod ikoną
+  assert.equal(man.id, './');                                                  // ta sama aplikacja co dotąd: telefon ją odświeży, a nie zainstaluje drugiej obok
+  const { ctx, p } = await page([]);
+  await p.goto(base); await p.waitForSelector('#key-in');                      // bez klucza: nagłówek z samą marką
+  assert.equal(await p.title(), 'Siła z Ruchu');
+  assert.equal(await p.textContent('#title'), 'Siła z Ruchu');
+  assert.equal(await p.getAttribute('meta[name="apple-mobile-web-app-title"]', 'content'), 'Siła z Ruchu');   // nazwa pod ikoną na iPhonie
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+const LIB = require('../web/lib.js');
+for (const scheme of ['light', 'dark'])
+test(`Animacja otwarcia (${scheme}): pierwsze otwarcie dnia pokazuje zasłonę z marką, talerz jedzie po torze, napis zostaje na czas czytania, potem zasłona znika; plan ładuje się pod spodem`, async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { motion: true, intro: true, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#intro', { state: 'visible' });
+  // zasłona: cały ekran, kolory marki niezależnie od motywu, napis marki, pasek systemowy w kolorze tła
+  const look = await p.evaluate(() => { const S = document.getElementById('intro'), r = S.getBoundingClientRect(), cs = getComputedStyle(S);
+    return { rect: [r.left, r.top, r.width, r.height], bg: cs.backgroundColor, acc: getComputedStyle(S.querySelector('.in-wm .a')).color, text: S.querySelector('.in-wm').innerText.replace(/\s+/g, ' '),
+      tag: S.querySelector('.in-tag').textContent, tagPx: parseFloat(getComputedStyle(S.querySelector('.in-tag')).fontSize), hid: S.getAttribute('aria-hidden'),
+      theme: document.querySelector('meta[name="theme-color"]').content, day: localStorage.getItem('intro') }; });
+  assert.deepEqual(look.rect, [0, 0, 390, 844]);
+  assert.deepEqual([look.bg, look.acc], ['rgb(23, 36, 29)', 'rgb(224, 163, 74)']);
+  assert.equal(look.text, 'SIŁA Z RUCHU');
+  assert.equal(look.tag, 'trening · plan · postęp'); assert.ok(look.tagPx >= 12);
+  assert.equal(look.hid, 'true');                                              // ozdoba: czytnik ekranu od razu ma aplikację
+  assert.equal(look.theme, '#17241d');
+  assert.equal(look.day, LIB.localDate());                                     // zapamiętane od razu, także gdy ktoś zamknie aplikację w trakcie
+  // plan wczytuje się w tym czasie pod zasłoną (animacja niczego nie wstrzymuje)
+  await p.waitForSelector('.set[data-o="1"]', { state: 'attached' });
+  assert.ok(await p.$('#intro'));
+  assert.equal(calls.filter(c => c.fn === 'getData').length, 1);
+  // czasy z lib: litery po kolei, cały napis stoi ≥ 1,2 s przed zgaszeniem
+  const tm = LIB.introTimes(11);
+  const an = await p.evaluate(() => { const S = document.getElementById('intro'), t = a => { const g = a.effect.getTiming(); return [g.delay, g.duration]; };
+    return { letters: [...S.querySelectorAll('.in-wm span')].map(e => t(e.getAnimations()[0])), fade: S.getAnimations().map(t) }; });
+  assert.equal(an.letters.length, 11);
+  an.letters.forEach((l, i) => assert.deepEqual(l, [tm.text + i * LIB.INTRO.LETTER, LIB.INTRO.LETTER_IN]));
+  assert.deepEqual(an.fade, [[tm.fade, LIB.INTRO.OUT]]);                       // jedyna animacja zasłony (bezpiecznik z CSS wyłączony, gdy ruch ruszył)
+  assert.ok(an.fade[0][0] - (an.letters[10][0] + an.letters[10][1]) >= 1200);
+  // stoper na zegarze animacji w przeglądarce: od startu ruchu do zniknięcia zasłony
+  await p.evaluate(() => { const S = document.getElementById('intro'), a = S.getAnimations()[0], t0 = document.timeline.currentTime - a.currentTime;
+    window.__introTook = new Promise(res => new MutationObserver((m, o) => { if (!S.isConnected) { o.disconnect(); res(document.timeline.currentTime - t0); } }).observe(document.body, { childList: true })); });
+  // ruch: talerz (pierścień i piasta) jest zawsze na końcu narysowanej części toru, linia się nie cofa, kropka tańca nie spada poniżej talerza
+  const snap = () => p.evaluate(() => { const bar = document.getElementById('in-bar'), q = id => { const e = document.getElementById(id); return [+e.getAttribute('cx'), +e.getAttribute('cy')]; };
+    const s = 1 - parseFloat(getComputedStyle(bar).strokeDashoffset), pt = bar.getPointAtLength(bar.getTotalLength() * s);
+    return { s, on: [pt.x, pt.y], ring: q('in-ring'), hub: q('in-hub'), dot: q('in-dot'), sd: 1 - parseFloat(getComputedStyle(document.getElementById('in-dance')).strokeDashoffset) }; });
+  const near = (a, b, eps = 0.5) => Math.abs(a[0] - b[0]) <= eps && Math.abs(a[1] - b[1]) <= eps;
+  let fin = { s: -1, sd: -1 }, mids = 0;
+  for (let i = 0; i < 80 && fin.s < 1; i++) {                                  // podglądamy ruch co ok. 70 ms, aż tor będzie cały
+    if (i) await p.waitForTimeout(70);
+    const f = await snap();
+    assert.ok(near(f.ring, f.on) && near(f.hub, f.on), JSON.stringify(f));
+    assert.ok(f.s >= fin.s && f.sd >= fin.sd, 'cofnięcie: ' + JSON.stringify([fin, f]));
+    if (f.s < LIB.INTRO.TEMPO[3][1]) assert.ok(f.dot[1] <= f.ring[1] + 0.5, JSON.stringify(f));
+    if (f.s > fin.s && f.s > 0 && f.s < 1) mids++;
+    fin = f;
+  }
+  assert.ok(mids >= 3, 'tor nie rysuje się stopniowo (' + mids + ' pośrednich położeń)');
+  // chwyt: cały tor narysowany, talerz i kropka tańca w tym samym punkcie na końcu obu linii
+  assert.ok(fin.s === 1 && fin.sd === 1 && near(fin.ring, [113.3, 43.7]) && near(fin.dot, [113.3, 43.7]), JSON.stringify(fin));
+  // cały napis na ekranie
+  await p.waitForFunction(() => [...document.querySelectorAll('#intro .in-wm span, #intro .in-tag')].every(e => getComputedStyle(e).opacity === '1'));
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `intro-${scheme}.png`) }); }
+  // koniec: zasłona usunięta, pasek systemowy wraca do koloru motywu, aplikacja działa
+  await p.waitForSelector('#intro', { state: 'detached', timeout: 8000 });
+  const took = await p.evaluate(() => window.__introTook);
+  assert.ok(took >= tm.end - 20 && took < tm.end + 1500, 'animacja trwała ' + Math.round(took) + ' ms zamiast ' + tm.end);
+  assert.equal(await p.$('#intro-tc'), null);
+  assert.equal(await p.$$eval('meta[name="theme-color"]', a => a.length), 2);
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(200);
+  assert.equal(calls.filter(c => c.fn === 'logSet').length, 1);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Animacja otwarcia: dotknięcie albo klawisz pomija i nie trafia w przycisk pod spodem; drugie otwarcie tego samego dnia bez animacji, następnego dnia znowu', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { motion: true, intro: true, touch: true });   // ekran dotykowy: na nim dotknięcie mogłoby „przelecieć” do przycisku pod zasłoną
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#intro', { state: 'visible' });
+  await p.waitForSelector('.set[data-o="1"]', { state: 'attached' });
+  // dotknięcie dokładnie tam, gdzie pod zasłoną jest ✓ pierwszej serii
+  const ok = await p.$eval('.set[data-o="1"][data-s="1"] .ok', b => { const r = b.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+  let t0 = Date.now();
+  await p.touchscreen.tap(ok[0], ok[1]);
+  await p.waitForSelector('#intro', { state: 'detached', timeout: 2000 });
+  assert.ok(Date.now() - t0 < 1500, 'pominięcie trwało ' + (Date.now() - t0) + ' ms');
+  await p.waitForTimeout(200);
+  assert.equal(calls.filter(c => c.fn === 'logSet').length, 0);                // dotknięcie zatrzymała zasłona: seria nieodhaczona
+  assert.equal(await p.getAttribute('.set[data-o="1"][data-s="1"]', 'data-st'), '');
+  assert.equal(await p.$('#intro-tc'), null);
+  await p.touchscreen.tap(ok[0], ok[1]); await p.waitForTimeout(200);          // to samo miejsce po animacji: zwykłe ✓
+  assert.equal(calls.filter(c => c.fn === 'logSet').length, 1);
+  // drugie otwarcie tego samego dnia: zasłony nie ma już w chwili, gdy strona jest gotowa
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  assert.equal(await p.$('#intro'), null);
+  await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await p.$('meta#intro-tc'), null);
+  // następny dzień (w pamięci telefonu wczorajsza data): animacja wraca; klawisz też ją pomija
+  await p.evaluate(() => localStorage.setItem('intro', '2026-01-01'));
+  await p.reload(); await p.waitForSelector('#intro', { state: 'visible' });
+  t0 = Date.now();
+  await p.keyboard.press('Escape');
+  await p.waitForSelector('#intro', { state: 'detached', timeout: 2000 });
+  assert.ok(Date.now() - t0 < 1500);
+  assert.equal(await p.evaluate(() => localStorage.getItem('intro')), LIB.localDate());
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Animacja otwarcia: przy ograniczeniu ruchu i bez dostępu do pamięci telefonu nie pokazuje się wcale; na niskim ekranie mieści się pomniejszona', async () => {
+  // ograniczenie ruchu w systemie: bez zasłony, a „dziś” nie jest zużyte (pokaże się, gdy ktoś wyłączy ograniczenie)
+  const a = await page([], false, { intro: true });
+  await a.p.goto(base + '?k=kabc', { waitUntil: 'domcontentloaded' });
+  assert.equal(await a.p.$('#intro'), null);
+  await a.p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await a.p.evaluate(() => localStorage.getItem('intro')), null);
+  assert.deepEqual(a.p.errors, []);
+  await a.ctx.close();
+  // nie da się zapamiętać dnia (pełna albo zablokowana pamięć) → bez animacji, inaczej wracałaby przy każdym otwarciu
+  const b = await page([], false, { motion: true, intro: true });
+  await b.ctx.addInitScript(() => { const set = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === 'intro') throw new Error('pełna pamięć'); return set.call(this, k, v); }; });
+  await b.p.goto(base + '?k=kabc', { waitUntil: 'domcontentloaded' });
+  assert.equal(await b.p.$('#intro'), null);
+  await b.p.waitForSelector('.set[data-o="1"]');
+  assert.deepEqual(b.p.errors, []);
+  await b.ctx.close();
+  // telefon poziomo w przeglądarce (740×360): rysunek i napis pomniejszone mieszczą się na ekranie, podpis (byłby < 12 px) schowany
+  const c = await page([], false, { motion: true, intro: true });
+  await c.p.setViewportSize({ width: 740, height: 360 });
+  await c.p.goto(base + '?k=kabc'); await c.p.waitForSelector('#intro', { state: 'visible' });
+  const g = await c.p.evaluate(() => { const S = document.getElementById('intro'), r = S.firstElementChild.getBoundingClientRect();
+    return { sm: S.classList.contains('sm'), top: r.top, bottom: r.bottom, left: r.left, right: r.right, tag: getComputedStyle(S.querySelector('.in-tag')).display }; });
+  assert.ok(g.sm && g.tag === 'none' && g.top >= 0 && g.bottom <= 360 && g.left >= 0 && g.right <= 740, JSON.stringify(g));
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await c.p.waitForTimeout(2200); await c.p.screenshot({ path: path.join(SCREENS, 'intro-poziomo.png') }); }
+  assert.deepEqual(c.p.errors, []);
+  await c.ctx.close();
 });
 
 for (const [mode, data] of [['prosty', DATA], ['pro', PRO]]) for (const scheme of ['light', 'dark'])

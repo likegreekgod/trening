@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<title>Trening</title>
+<title>Siła z Ruchu</title>
 <meta name="theme-color" content="#0f1612" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#edf4f2" media="(prefers-color-scheme: light)">
 <link rel="manifest" href="manifest.json">
@@ -10,6 +10,7 @@
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Siła z Ruchu">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- aplikacja ma własny jasny i ciemny motyw: bez tego Samsung / Chrome przyciemniają jasny motyw po swojemu (czarny nagłówek, szare karty) -->
@@ -33,6 +34,7 @@
         --panel:#17221c;--light-off:#38443d;--light-white:#f7f7f2;--light-red:#e5392d;--light-amber:#f0b54f;
         --p25:#c8372d;--p20:#2a5ea8;--p15:#d9ad1f;--p10:#3f8a4a;--p5:#f4f4f0;
         --h1:#9da783;--h2:#7c8363;--h3:#5d6447;--h4:#3f452e;
+        --intro-bg:#17241d;--intro-ink:#f3f1e8;--intro-acc:#e0a34a;--intro-muted:#a3ab86;
         --f-display:"Big Shoulders Display","Arial Narrow",system-ui,sans-serif;
         --f-body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
         --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
@@ -718,12 +720,67 @@
   body.flash::after{content:"";position:fixed;inset:0;z-index:40;pointer-events:none;background:var(--light-amber);animation:flash .5s ease-out 3}
   @keyframes flash{from{opacity:.75}to{opacity:0}}
   @media (prefers-reduced-motion: reduce){ body.flash::after{animation:flash 1.5s ease-out 1} }
+
+  /* animacja otwarcia „Siła z Ruchu”: zasłona na cały ekran w kolorach marki (te same w jasnym i ciemnym motywie, tło jak ekran startowy z manifestu).
+     Pokazuje ją skrypt pod znacznikiem #intro, ruch prowadzi introRun. Bezpiecznik intro-safe: gdyby skrypt nie ruszył, zasłona sama znika po 7 s. */
+  #intro{position:fixed;top:0;right:0;bottom:0;left:0;z-index:60;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--intro-bg);color:var(--intro-ink);
+         touch-action:none;-webkit-user-select:none;user-select:none;animation:intro-safe 1ms linear 7s forwards}
+  @keyframes intro-safe{to{visibility:hidden}}
+  .in-box{flex:none;display:flex;flex-direction:column;align-items:center}
+  #intro svg{display:block;overflow:visible;fill:none}
+  #in-ring{stroke:var(--intro-ink);stroke-width:5}
+  #in-bar{stroke:var(--intro-acc);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+  #in-dance{stroke:var(--intro-ink);stroke-width:2.5;stroke-linecap:round;opacity:.7}
+  #in-bar,#in-dance{stroke-dasharray:1 2;stroke-dashoffset:1}   /* pathLength="1": przesunięcie 1 = linia schowana, 0 = cała narysowana */
+  #in-dot,#in-hub{fill:var(--intro-ink)}
+  .in-wm{margin-top:8px;font:800 54px/.92 var(--f-display);letter-spacing:.02em;text-transform:uppercase;text-align:center}
+  .in-wm span{display:inline-block;opacity:0;transform:translateY(18px)}
+  .in-wm .a{color:var(--intro-acc)}
+  .in-tag{margin-top:14px;font:500 13px var(--f-body);letter-spacing:.24em;text-transform:uppercase;color:var(--intro-muted);opacity:0}
+  #intro.sm .in-tag{display:none}                               /* niski ekran: całość pomniejszona, podpis byłby poniżej 12 px */
+  @media (prefers-reduced-motion: reduce){ #intro{display:none} }
 </style>
 </head>
 <body>
+<!-- animacja otwarcia „Siła z Ruchu”: zasłona na cały ekran; skrypt pod nią pokazuje ją tylko przy pierwszym otwarciu danego dnia, ruch prowadzi introRun -->
+<div id="intro" hidden aria-hidden="true"><div class="in-box">
+  <svg width="200" height="330" viewBox="0 0 200 330" focusable="false">
+    <circle id="in-ring" cx="95" cy="306" r="16"/>
+    <!-- tor sztangi w rwaniu, odrysowany z rysunku wzorcowego toru (docs/decyzje.md, 2026-11-17): start na pomoście, zawodnik po prawej; pierścień talerza leży pod torem, żeby haczyk na szczycie był widoczny -->
+    <path id="in-bar" pathLength="1" d="M95 306 C99.2 269.9 117 187.4 113.1 156.3 C110.3 134.7 98.2 133 93.3 120.6 C88.7 108.6 87.3 94.2 86.9 81.4 C86.4 69 85.2 51.7 89.6 40.1 C91.2 35.9 96.5 25.1 102.1 26 C107.1 26.7 112 39.4 113.3 43.7"/>
+    <!-- linia tańca: wstęga owijająca tor, kończy się w tym samym punkcie co sztanga -->
+    <path id="in-dance" pathLength="1" d="M95 306 C45 292 48 262 100 254 C152 246 150 212 100 202 C52 192 54 160 100 150 C144 140 142 108 100 98 C60 88 58 20 96 8 C120 0 132 22 113.3 43.7"/>
+    <circle id="in-dot" cx="95" cy="306" r="5"/>
+    <circle id="in-hub" cx="95" cy="306" r="5"/>
+  </svg>
+  <div class="in-wm"><span>S</span><span>i</span><span>ł</span><span>a</span><span>&nbsp;</span><span>z</span><br><span class="a">R</span><span class="a">u</span><span class="a">c</span><span class="a">h</span><span class="a">u</span></div>
+  <div class="in-tag">trening · plan · postęp</div>
+</div></div>
+<script>
+/* Animacja otwarcia tylko przy pierwszym otwarciu aplikacji danego dnia (pamięć telefonu: „intro” = RRRR-MM-DD w strefie telefonu), nigdy przy ograniczeniu ruchu.
+   Decyzja zapada tutaj, przed pierwszym rysowaniem strony: aplikacja nie mignie przed zasłoną, a zasłona nie mignie przy kolejnych otwarciach.
+   Każdy błąd (np. zablokowana albo pełna pamięć) = bez animacji. */
+(function(){
+  var el = document.getElementById('intro');
+  try {
+    var d = new Date(), day = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    if (!el.animate || matchMedia('(prefers-reduced-motion: reduce)').matches || localStorage.getItem('intro') === day) { el.remove(); return; }
+    localStorage.setItem('intro', day);
+    el.hidden = false;
+    // niski albo wąski ekran: całość proporcjonalnie mniejsza; podpis znika, gdy wyszedłby poniżej 12 px
+    var box = el.firstElementChild, k = Math.min(1, (el.clientHeight - 40) / box.offsetHeight, (el.clientWidth - 32) / box.offsetWidth);
+    if (k > 0 && k < 1) { box.style.transform = 'scale(' + k + ')'; if (k * 13 < 12) el.classList.add('sm'); }
+    // pasek systemowy w kolorze zasłony na czas animacji (zdejmuje go introRun)
+    var m = document.createElement('meta'); m.name = 'theme-color'; m.id = 'intro-tc';
+    m.content = getComputedStyle(document.documentElement).getPropertyValue('--intro-bg').trim();
+    var first = document.querySelector('meta[name="theme-color"]');   // przeglądarka bierze pierwszy pasujący znacznik
+    (first ? first.parentNode : document.head).insertBefore(m, first);
+  } catch (e) { el.remove(); }
+})();
+</script>
 <header>
   <div class="hrow"><span class="eyebrow"><img class="logo" src="icons/favicon.svg" alt="" width="20" height="20"><span id="eyebrow"></span></span><span id="sync">ładowanie…</span></div>
-  <div class="trow"><h1 id="title">Trening</h1><span id="hx"></span></div>
+  <div class="trow"><h1 id="title">Siła z Ruchu</h1><span id="hx"></span></div>
   <div class="stats" id="stats"></div>
 </header>
 <main id="main"><div class="empty">Ładowanie planu…</div></main>
@@ -766,7 +823,7 @@ let SWAP = '';         // Klienci J „zamiana”: TRENER (dawne TAK) = zamienni
 function applyCfg(c){
   if (!c) return;
   PAIN = !!c.pain; SIMPLE = !!c.simple; EXTRA_DEF = Number(c.extra) || 0; EDIT = !!c.edit;
-  NAME = c.name || ''; document.title = 'Trening – ' + c.name;
+  NAME = c.name || ''; document.title = 'Siła z Ruchu – ' + c.name;
   let own = null; try { own = localStorage.getItem('sc_' + KEY); } catch (e) {}
   SCALE = own || (c.scale === 'RIR' ? 'RIR' : 'RPE');
   OLY_CEIL = c.olyCeil >= 0 ? Number(c.olyCeil) : 0.05;
@@ -3491,6 +3548,57 @@ function openCam(ex, row, s0){
   };
 }
 
+/* ---------- animacja otwarcia „Siła z Ruchu” ----------
+   Zasłona #intro jest w HTML na samej górze; mały skrypt pod nią zostawia ją tylko przy pierwszym otwarciu danego dnia (i bez ograniczenia ruchu).
+   Tu sam ruch: pomarańczowa linia = tor sztangi w rwaniu w tempie boju (lib introTempo), jasna linia = taniec na wysokości talerza (lib introDance),
+   napis litera po literze, chwila na przeczytanie, zgaszenie (czasy: lib INTRO, introTimes). Dotknięcie albo klawisz pomija.
+   Dane ładują się w tym czasie pod zasłoną (load nie czeka na animację). Każdy błąd = zasłona znika od razu. */
+function introRun(){
+  const S = $('#intro'); if (!S) return;
+  const I = TL.INTRO, tc = $('#intro-tc');
+  let over = false, raf = 0, guard = 0;
+  const end = () => {
+    if (over) return; over = true;
+    cancelAnimationFrame(raf); clearTimeout(guard); removeEventListener('keydown', skip, true);
+    S.remove(); if (tc) tc.remove();
+  };
+  function skip(){                                     // szybkie zgaszenie zamiast czekania do końca
+    if (over || S.dataset.skip) return; S.dataset.skip = '1';
+    try { S.animate([{ opacity: getComputedStyle(S).opacity }, { opacity: 0 }], { duration: I.SKIP, fill: 'forwards' }).onfinish = end; } catch (e) {}
+    setTimeout(end, I.SKIP + 60);
+  }
+  try {
+    const bar = $('#in-bar'), dance = $('#in-dance'), ring = $('#in-ring'), hub = $('#in-hub'), dot = $('#in-dot');
+    const letters = [...S.querySelectorAll('.in-wm span')], tm = TL.introTimes(letters.length);
+    const LB = bar.getTotalLength(), LD = dance.getTotalLength(), N = 240, dy = [];
+    for (let i = 0; i <= N; i++) dy.push(dance.getPointAtLength(LD * i / N).y);        // wysokość linii tańca co 1/N jej długości
+    const danceAt = TL.introDance(dy, bar.getPointAtLength(LB * I.TEMPO[3][1]).y);
+    const frame = k => {                               // k = ułamek czasu ruchu sztangi (lib przycina do 0…1)
+      const sb = TL.introTempo(k), p = bar.getPointAtLength(LB * sb), sd = danceAt(sb, p.y), d = dance.getPointAtLength(LD * sd);
+      bar.style.strokeDashoffset = 1 - sb; dance.style.strokeDashoffset = 1 - sd;
+      [ring, hub].forEach(c => { c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); });
+      dot.setAttribute('cx', d.x); dot.setAttribute('cy', d.y);
+    };
+    // pomijanie przy puszczeniu palca, nie przy dotknięciu: zasłona jeszcze stoi, więc to samo dotknięcie nie trafi w przycisk pod spodem
+    S.addEventListener('pointerup', skip); S.addEventListener('click', skip); addEventListener('keydown', skip, true);
+    guard = setTimeout(end, tm.end + 4000);            // gdyby przeglądarka nie zgłosiła klatki albo końca zgaszenia
+    // zegar rusza z pierwszą klatką po narysowaniu aplikacji pod spodem; napis, podpis i zgaszenie to animacje przeglądarki z opóźnieniem od tej chwili
+    raf = requestAnimationFrame(t0 => {
+      try {
+        S.style.animation = 'none';                    // ruch ruszył: bezpiecznik z CSS niepotrzebny, pilnuje guard
+        letters.forEach((el, i) => el.animate([{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }],
+          { duration: I.LETTER_IN, delay: tm.text + i * I.LETTER, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }));
+        S.querySelector('.in-tag').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 280, delay: tm.grab + 150, fill: 'forwards' });
+        dot.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, delay: tm.grab, fill: 'forwards' });   // kropka tańca gaśnie w talerzu
+        S.animate([{ opacity: 1 }, { opacity: 0 }], { duration: I.OUT, delay: tm.fade, fill: 'forwards' }).onfinish = end;
+        const step = t => { const k = (t - t0 - I.PRE) / I.T; frame(k); if (k < 1 && !over) raf = requestAnimationFrame(step); };
+        step(t0);
+      } catch (e) { end(); }
+    });
+  } catch (e) { end(); }
+}
+
+introRun();
 load();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
