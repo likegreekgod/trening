@@ -2538,3 +2538,22 @@ test('Tryb skupienia: przesunięcie palcem zmienia ćwiczenie; zrzuty PROSTY / P
     await ctx.close();
   }
 });
+
+// przejście z aplikacji do panelu trenera: tylko na urządzeniu, na którym ktoś zalogował się do panelu (tr_dev)
+for (const scheme of ['light', 'dark']) test(`Trener ${scheme}: „Panel trenera” tylko na urządzeniu trenera`, async () => {
+  for (const dev of [false, true]) {
+    const { ctx, p } = await page([], false, { scheme });
+    if (dev) await ctx.addInitScript(() => { try { localStorage.setItem('tr_dev', '1'); } catch (e) {} });
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('.card');
+    await p.click('#nav [data-tab="trener"]');
+    assert.equal(!!(await p.$('#trener .trp')), dev);
+    if (dev) {
+      assert.equal(await p.getAttribute('#trener .trp', 'href'), 'trener.html');
+      assert.ok((await p.$eval('#trener .trp', e => e.getBoundingClientRect().height)) >= 44);
+      assert.deepEqual(await a11y(p), []);
+      if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'trener-przycisk-' + scheme + '.png') }); }
+    }
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});

@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-17, `main` = v53 (scalone PR #76: panel trenera PR 1–2 i PR #77: marka „Siła z Ruchu” z animacją otwarcia); v55 (animacja otwarcia po przerwie 30 minut; nowa ikona w przygotowaniu) na gałęzi `claude/project-thread-ezlb23`.
+Stan na 2026-11-17, `main` = v54 (scalone PR #76: panel trenera PR 1–2, PR #77: marka „Siła z Ruchu” z animacją otwarcia, PR #78: panel na telefonie i przełącznik aplikacja ↔ panel); v55 (animacja otwarcia po przerwie 30 minut; nowa ikona w przygotowaniu) na gałęzi `claude/project-thread-ezlb23`.
 
 ## Jak pracujemy
 
@@ -19,6 +19,8 @@ Stan na 2026-11-17, `main` = v53 (scalone PR #76: panel trenera PR 1–2 i PR #7
 ## Ostatnio zrobione
 
 - 17.11 (v55): animacja otwarcia przy każdym wejściu po co najmniej 30 minutach bez aplikacji (uruchomienie albo powrót do aplikacji z tła) zamiast raz dziennie; w trakcie treningu się nie pokazuje.
+- 17.11 (v54, scalony PR #78): przełącznik między aplikacją a panelem: w aplikacji na ekranie Trener przycisk „Panel trenera” tylko na urządzeniu, na którym ktoś raz zalogował się do panelu (`tr_dev` w localStorage, zostaje po wylogowaniu), w panelu „Mój trening ›” otwiera aplikację z kluczem zapamiętanym w tej przeglądarce. Klienci go nie widzą, bo do panelu wpuszcza tylko adres trenera.
+- 17.11 (v54, scalony PR #78): panel trenera na telefonie: górny pasek nie rozciąga się na pół ekranu przy krótkiej stronie, „Przelicz teraz” i „Wyloguj” widoczne, pusta lista filmów bez podwójnego komunikatu. Logowanie Damiana działa (projekt Google Cloud „Panel trenera”, właściwości skryptu wpisane).
 - 17.11 (v53, scalony PR #77): marka „Siła z Ruchu”: nowa nazwa tam, gdzie widzi ją klient (pod ikoną, w karcie przeglądarki, w nagłówku przed planem), i animacja otwarcia (tor sztangi w rwaniu, linia tańca, napis; 3,3 s, dotknięcie pomija).
 - 17.11 (v52 + `apps-script/`, scalony PR #76): panel trenera PR 1 i 2 (`docs/plan-panel.md`): logowanie Google, pulpit z klientami i sygnałami, karta klienta, filmy oglądane w panelu, bloki do zamknięcia. Tylko odczyt; zapisy w PR 3.
 - 17.11 (`apps-script/`): bezpieczeństwo: stara wersja aplikacji (link `/exec?k=`) wyłączona, `doGet` zwraca tylko tekst; przegląd repo bez danych klientów.

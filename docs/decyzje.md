@@ -9,7 +9,14 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Pamięć telefonu `intro` to teraz chwila, w której aplikacja była ostatnio na ekranie (w v53: data). Aplikacja odświeża ją co minutę, gdy jest na ekranie, i w chwili schowania; schowana jej nie rusza. Dzięki temu przeładowanie strony w trakcie treningu nie pokazuje animacji, także gdy telefon zamknie stronę bez ostrzeżenia. Zapis z v53 liczy się jak „dawno temu”, więc pierwsze otwarcie po aktualizacji pokaże animację.
 - Przy powrocie do otwartej aplikacji liczy się czas od chwili schowania zapamiętany w samej stronie, a nie zegar co minutę: animacja nie może wyskoczyć z opóźnieniem, kiedy ktoś już coś wpisuje.
 - Schowanie aplikacji w trakcie animacji kończy ją od razu. Bez zmian: 3,3 s, dotknięcie albo klawisz pomija, przy ograniczeniu ruchu i bez działającej pamięci telefonu nie pokazuje się wcale.
-- Numer wersji: v54 ma gałąź panelu trenera, dlatego ta zmiana dostaje v55 (dwie gałęzie z tym samym numerem git scala bez konfliktu i telefony nie pobierają nowej wersji).
+- Numer wersji: v54 wzięła poprawka panelu trenera (PR #78), dlatego ta zmiana ma v55. Dwie gałęzie z tym samym numerem git scala bez konfliktu i telefony nie pobierają wtedy nowej wersji, więc wątki uzgadniają numery między sobą.
+
+## 2026-11-17 · Przełącznik aplikacja ↔ panel trenera (v54)
+
+- Damian trenuje w aplikacji jak klient i prowadzi klientów w panelu, na tym samym telefonie. Chce przechodzić jednym dotknięciem.
+- W aplikacji przycisk „Panel trenera” na ekranie Trener, tylko na urządzeniu, na którym ktoś raz zalogował się do panelu (panel zapisuje `tr_dev` w pamięci przeglądarki). W panelu „Mój trening ›” otwiera aplikację z kluczem zapamiętanym w tej przeglądarce.
+- Bez nowej kolumny w Klientach i bez zmiany w Apps Script: do panelu wpuszcza tylko adres trenera, więc klient nie ma jak dostać tej flagi. Gdyby ktoś ją sobie ustawił, zobaczy tylko ekran logowania panelu.
+- iPhone: aplikacja dodana do ekranu głównego ma osobną pamięć, więc przycisk pojawi się w niej dopiero po zalogowaniu do panelu z poziomu tej aplikacji (niesprawdzone).
 
 ## 2026-11-17 · Marka „Siła z Ruchu” i animacja otwarcia (v53)
 
@@ -24,7 +31,7 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Technika: bez biblioteki Motion (aplikacja działa offline, bez CDN): SVG, `requestAnimationFrame` dla toru i animacje przeglądarki (Web Animations API) dla napisu. Kolory zasłony stałe w obu motywach (`--intro-*`), tło takie jak ekran startowy z manifestu, więc przejście z ekranu startowego Androida jest w tym samym kolorze.
 - Szkice i nagrania wariantów są w plikach projektu (`marka-sila-z-ruchu/`), poza repozytorium.
 
-## 2026-11-17 · Panel trenera (plan, PR 1–2 na gałęzi)
+## 2026-11-17 · Panel trenera (plan, PR 1–2 scalone w #76)
 
 - Damian chce jednego miejsca do kontroli klientów, treningów i postępów, dostępnego zewsząd, z pomocą Claude API. Plan i szkice zaakceptowane, szczegóły i stan w `docs/plan-panel.md`.
 - Miejsce: `web/trener.html` na GitHub Pages + akcje trenera w Apps Script (wariant A). Odrzucone: osobny serwer (koszt i utrzymanie), panel w arkuszu (słaby na komputerze poza Arkuszami, brak filmów w jednym widoku).

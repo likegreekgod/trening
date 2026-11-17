@@ -14,8 +14,8 @@ Panel w przeglądarce (głównie komputer), dostępny z każdego miejsca, do kon
 
 | PR | Zakres | Stan |
 |---|---|---|
-| 1 | Logowanie trenera i akcje odczytu: `trConfig`, `trPulpit` (klienci z Przeglądu, sygnały, obciążenie 12 tyg., filmy z 14 dni, bloki do zamknięcia), `trKlient` (dane jak `getData` + bloki + podsumowanie), `trPrzelicz` | na gałęzi `claude/project-thread-taywqw` |
-| 2 | Panel do czytania: pulpit (5 liczników, tabela klientów, mapa obciążenia, „Do zrobienia”), karta klienta (Przegląd, Sesje, Bloki, Dyspozycja), Filmy (podgląd z Dysku w panelu), Bloki do zamknięcia; v52 | na gałęzi `claude/project-thread-taywqw` |
+| 1 | Logowanie trenera i akcje odczytu: `trConfig`, `trPulpit` (klienci z Przeglądu, sygnały, obciążenie 12 tyg., filmy z 14 dni, bloki do zamknięcia), `trKlient` (dane jak `getData` + bloki + podsumowanie), `trPrzelicz` | scalony (PR #76) |
+| 2 | Panel do czytania: pulpit (5 liczników, tabela klientów, mapa obciążenia, „Do zrobienia”), karta klienta (Przegląd, Sesje, Bloki, Dyspozycja), Filmy (podgląd z Dysku w panelu), Bloki do zamknięcia; v52; poprawka telefonu (pasek u góry, wylogowanie) i przełącznik aplikacja ↔ panel („Panel trenera” na ekranie Trener tylko przy `tr_dev`, „Mój trening ›” w panelu) v54 | scalony (PR #76) |
 | 3 | Zapisy trenera: komentarz do filmu z sekundą (komentarz na Dysku + `Log.komentarz_dysk`), komentarz do sesji, wnioski i „dla klienta” bloku, notatka do jednostki | do zrobienia |
 | 4 | Claude API: szkic komentarza do sesji (pierwsze zadanie), zakładka „AI” (tokeny, koszt, limit) | do zrobienia |
 | 5 | Asystent planu: szkic bloku jako JSON → `validatePlan_` → `_plany/` | do zrobienia |
