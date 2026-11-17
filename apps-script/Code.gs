@@ -71,9 +71,14 @@ function doPost(e) {
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    const f = API_FNS[req.fn];
-    if (!f) throw new Error('Nieznana funkcja: ' + req.fn);
-    out = { ok: true, result: f.apply(null, [req.key].concat(req.args || [])) };
+    if (Object.prototype.hasOwnProperty.call(TR_FNS, req.fn)) {          // panel trenera: bilet Google zamiast klucza klienta
+      if (req.fn !== 'trConfig') trAuth_(req.token);
+      out = { ok: true, result: TR_FNS[req.fn].apply(null, req.args || []) };
+    } else {
+      const f = Object.prototype.hasOwnProperty.call(API_FNS, req.fn) ? API_FNS[req.fn] : null;
+      if (!f) throw new Error('Nieznana funkcja: ' + req.fn);
+      out = { ok: true, result: f.apply(null, [req.key].concat(req.args || [])) };
+    }
   } catch (err) {
     out = { ok: false, error: String(err && err.message || err) };
   }
@@ -83,8 +88,14 @@ function doPost(e) {
 /* ---------- API (google.script.run – stara wersja, link /exec?k=) ---------- */
 
 function getData(key) {
-  const t0 = Date.now(), ms = {}, lap = k => { ms[k] = Date.now() - t0; };
-  const client = mustClient_(key); lap('klient');
+  const t0 = Date.now();
+  return clientData_(mustClient_(key), t0);
+}
+
+/** Dane jednego klienta jak w getData (aplikacja klienta i karta klienta w panelu trenera, trKlient). */
+function clientData_(client, t0) {
+  const ms = {}, lap = k => { ms[k] = Date.now() - t0; };
+  lap('klient');
   const ss = SpreadsheetApp.getActive();
   const plan = ss.getSheetByName('Plan').getDataRange().getValues(); lap('plan');
   const h = plan.shift();
@@ -375,19 +386,22 @@ function findClient_(key) {
   if (!key) return null;
   const sh = SpreadsheetApp.getActive().getSheetByName('Klienci');
   const v = sh.getDataRange().getValues();
-  const cell = (r, i) => String(r[i] === undefined ? '' : r[i]).trim().toUpperCase();
   for (let i = 1; i < v.length; i++) {
-    if (String(v[i][0]).trim() === key && String(v[i][3]).toUpperCase() !== 'NIE') {
-      return { key: key, id: String(v[i][1]).toLowerCase(), name: String(v[i][2]),
-        pain: cell(v[i], 5) === 'TAK',
-        simple: cell(v[i], 6) === 'PROSTY',
-        extra: Number(String(v[i][7] === undefined ? '' : v[i][7]).replace(',', '.')) || 0,
-        swap: swapMode_(cell(v[i], 9)),
-        scale: cell(v[i], 10) === 'RIR' ? 'RIR' : 'RPE',
-        olyCeil: olyCeil_(v[i][11]), own: cell(v[i], 12) !== 'NIE', edit: cell(v[i], 13) === 'TAK' };
-    }
+    if (String(v[i][0]).trim() === key && String(v[i][3]).toUpperCase() !== 'NIE') return clientOf_(v[i]);
   }
   return null;
+}
+
+/** Wiersz zakładki Klienci (A klucz … N edycja) → ustawienia klienta. */
+function clientOf_(r) {
+  const cell = i => String(r[i] === undefined || r[i] === null ? '' : r[i]).trim().toUpperCase();
+  return { key: String(r[0]).trim(), id: String(r[1]).toLowerCase(), name: String(r[2]),
+    pain: cell(5) === 'TAK',
+    simple: cell(6) === 'PROSTY',
+    extra: Number(String(r[7] === undefined ? '' : r[7]).replace(',', '.')) || 0,
+    swap: swapMode_(cell(9)),
+    scale: cell(10) === 'RIR' ? 'RIR' : 'RPE',
+    olyCeil: olyCeil_(r[11]), own: cell(12) !== 'NIE', edit: cell(13) === 'TAK' };
 }
 
 /** Klienci J „zamiana”: TAK / TRENER → zamienniki z planu i bazy, DOWOLNA → cała baza i własna nazwa, inne → brak (false). */
@@ -690,6 +704,7 @@ function onOpen() {
     .addItem('Uzupełnij puste bloki', 'uzupelnijBloki')
     .addItem('Zainstaluj wyzwalacze', 'menuWyzwalacze')
     .addItem('Ustaw adres alertu', 'ustawAlert')
+    .addItem('Ustaw panel trenera', 'ustawPanel')
     .addToUi();
 }
 
@@ -810,6 +825,7 @@ function podsumowanie(e) {
   writeTable_('Podsumowanie_cw', SUMX_HEADERS, res.exRows);
   writeTable_('Podsumowanie_OLY', OLY_HEADERS, res.olyRows);
   writeTable_('Podsumowanie_partie', PART_HEADERS, computeParts_(plan, log, ses, tableOf_('Ćwiczenia'), { localDay }));
+  PropertiesService.getScriptProperties().setProperty('PODSUM_AT', new Date().toISOString());   // panel trenera: „przeliczone o …”
   Logger.log('Podsumowanie: ' + res.rows.length + ' tygodni, ' + res.exRows.length + ' wierszy ćwiczeń.');
 }
 
