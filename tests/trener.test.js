@@ -84,7 +84,7 @@ const GSI = `window.google = { accounts: { id: {
 // klient nagrał / wpisał serie dzisiejszej sesji, ale żadnej nie odhaczył (wykonane puste, jak po samym filmie)
 const untick = d => { d.logs.forEach(l => { if (l.data === TODAY) { l.wykonane = ''; if (l.film_link) { l.kg = ''; l.powt = ''; l.rpe = ''; } } }); return d; };
 async function page(calls, opt = {}) {
-  const ctx = await browser.newContext({ viewport: opt.vp || { width: 1440, height: 900 }, colorScheme: opt.scheme || 'light', reducedMotion: 'reduce' });
+  const ctx = await browser.newContext({ viewport: opt.vp || { width: 1440, height: 900 }, colorScheme: opt.scheme || 'light', reducedMotion: 'reduce', ...(opt.ua ? { userAgent: opt.ua } : {}) });
   const st = { authFail: 0 };
   await ctx.route('**/macros/**', async r => {
     const b = JSON.parse(r.request().postData() || '{}'); calls.push(b);
@@ -516,10 +516,18 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   await s6.p.goto(base + 'trener.html#filmy'); await s6.p.waitForSelector('.pv .pmsg a');
   assert.match(await s6.p.textContent('.pv .pmsg'), /tylko dźwięk tego filmu, bez obrazu.*HEVC \(H\.265\).*Otwórz film na Dysku/);
   assert.equal(await s6.p.$('#pv-retry'), null);
+  assert.doesNotMatch(await s6.p.textContent('.pv .pmsg'), /Sklepu Microsoft/);   // podpowiedź o rozszerzeniu tylko w Edge
   assert.equal(await s6.p.getAttribute('.pv .pmsg a', 'href'), 'https://drive.google.com/file/d/film1/view');
   assert.deepEqual(await s6.p.evaluate(() => [tFmt(9.96, true), tFmt(69.97, true), tFmt(70.04, true), tFmt(59.99)]), ['0:10,0', '1:10,0', '1:10,0', '0:59']);
   assert.deepEqual(s6.p.errors, []);
   await s6.ctx.close();
+  // Edge na Windows bez dekodera HEVC: podpowiedź o rozszerzeniu ze Sklepu Microsoft
+  const s7 = await page([], { loggedIn: true, noPic: true, ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0' });
+  await s7.p.addInitScript(() => { if (window.MediaSource) MediaSource.isTypeSupported = t => !/hvc1/.test(t); });
+  await s7.p.goto(base + 'trener.html#filmy'); await s7.p.waitForSelector('.pv .pmsg a');
+  assert.match(await s7.p.textContent('.pv .pmsg'), /Otwórz film na Dysku.*„HEVC Video Extensions”/);
+  assert.deepEqual(s7.p.errors, []);
+  await s7.ctx.close();
   const s3 = await page([], { loggedIn: true, film404: true });
   await s3.p.goto(base + 'trener.html#filmy'); await s3.p.waitForSelector('#pv-retry');
   assert.match(await s3.p.textContent('.pv .pmsg'), /Filmu nie ma już na Dysku/);

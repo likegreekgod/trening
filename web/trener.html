@@ -522,7 +522,8 @@ function playerBind(v, redraw){
     if (vid.videoWidth || vid.videoHeight || !(vid.duration > 0) || !FB[v.file] || FB[v.file].st !== 'ok') return;
     vid.pause(); const f = FB[v.file], hevc = window.MediaSource && MediaSource.isTypeSupported && MediaSource.isTypeSupported('video/mp4; codecs="hvc1.1.6.L93.B0"');
     FB[v.file] = { st: 'err', codec: true, size: f.size, err: 'Ta przeglądarka odtwarza tylko dźwięk tego filmu, bez obrazu. Telefon nagrał go zapewne w formacie HEVC (H.265)' +
-      (hevc ? ', a karta graficzna komputera go nie dekoduje' : ', którego ta przeglądarka nie obsługuje') + '. Otwórz film na Dysku: Dysk sam go przekonwertuje.' };
+      (hevc ? ', a karta graficzna komputera go nie dekoduje' : ', którego ta przeglądarka nie obsługuje') + '. Otwórz film na Dysku: Dysk sam go przekonwertuje.' +
+      (/Edg\//.test(navigator.userAgent) && !hevc ? ' Żeby oglądać takie filmy tutaj w Edge, zainstaluj ze Sklepu Microsoft rozszerzenie „HEVC Video Extensions” i uruchom Edge ponownie.' : '') };
     redraw();
   }
   rng.oninput = () => { vid.pause(); vid.currentTime = Number(rng.value); tick(); };
