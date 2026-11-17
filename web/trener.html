@@ -122,6 +122,7 @@
   .pv .zoom{position:absolute;top:10px;left:10px;background:var(--pv-glass);color:var(--pv-white);font:600 12.5px/1 var(--f-body);padding:7px 10px;border-radius:999px;pointer-events:none}
   .pv .fsb{position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:12px;border:0;background:var(--pv-glass);color:var(--pv-white);font-size:20px}
   .pv .pmsg{display:grid;gap:12px;justify-items:center;text-align:center;color:var(--pv-ink);padding:24px;max-width:340px}.pv .pmsg .hint{color:var(--pv-muted)}
+  .pv .ld{display:block;width:220px;height:6px;border-radius:3px;background:var(--pv-line);overflow:hidden}.pv .ld b{display:block;height:100%;background:var(--accent);transition:width .15s}
   .pv .buf{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--pv-glass);color:var(--pv-white);font:600 13px/1 var(--f-body);padding:9px 14px;border-radius:999px;pointer-events:none}
   .pv .ctl{background:var(--surface-2);padding:10px 12px 12px;display:grid;gap:10px}
   .pv .tl{display:flex;align-items:center;gap:10px;font:500 13px/1 var(--f-mono)}
@@ -394,7 +395,8 @@ function renderPulpit(){
 /* ---------- filmy: własny odtwarzacz (film z Drive API przez bilet trFilm) i komentarz z sekundą (trKomentarzFilm) ---------- */
 const FPS = 30;                                  // krok „klatka” (filmy z telefonu: zwykle 30 kl./s)
 const FT = { token: '', exp: 0 };                // bilet Google do pobrania filmu, tylko w pamięci strony
-const FB = {};                                   // plik → {st: 'load'|'ok'|'err', size, err}; sam film nie leży w pamięci strony
+const FB = {};                                   // plik → {st: 'load'|'ok'|'err', mode: 'sw'|'blob', url, size, mime, pct, err}; pobrane w całości: najwyżej 4
+const FBQ = [];
 const KF = {};                                   // seria → szkic komentarza (tylko w pamięci strony)
 const KEEP = {};                                 // seria skomentowana w tej sesji: zostaje na liście „Bez komentarza”
 let VSPD = 1, VLOOP = true;
@@ -405,21 +407,39 @@ async function filmToken(force){
   if (!force && FT.token && FT.exp > Date.now() + 60000) return FT.token;
   const r = await guard(api('trFilm')); FT.token = r.token; FT.exp = r.exp || Date.now() + 45 * 60000; return FT.token;
 }
-const filmUrl = file => 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(file) + '?alt=media&access_token=' + encodeURIComponent(FT.token);
-// Film gra od razu strumieniem: <video> sam dociąga z Dysku kawałki (Range) przy odtwarzaniu, przewijaniu i krokach o klatkę.
-// Przed startem tylko krótkie pytanie o rozmiar (z nagłówkiem), żeby od razu rozpoznać brak pliku albo stary bilet.
-async function filmLoad(file, redraw){
+const DRV = (file, q) => 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(file) + '?' + q;
+// Dysk wydaje treść filmu tylko z biletem w nagłówku (bilet w adresie odrzuca), a <video> nagłówka nie wyśle.
+// Dlatego: z service workerem <video> gra od razu z adresu na tej stronie, a sw.js dokłada nagłówek i przekazuje kawałki (Range);
+// bez niego (pierwsze wejście) albo gdy strumień zawiedzie, film pobiera się w całości do pamięci strony.
+const fswOk = () => !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+const filmUrl = file => { const f = FB[file] || {}; return f.mode === 'sw' ? 'film-strumien/' + encodeURIComponent(file) + '?t=' + encodeURIComponent(FT.token) : f.url || ''; };
+async function filmGet(file, q, extra){
+  const go = async force => fetch(DRV(file, q), { headers: Object.assign({ Authorization: 'Bearer ' + await filmToken(force) }, extra || {}) });
+  let r = await go(); if (r.status === 401) r = await go(true); return r;
+}
+async function filmWhy(r){                                   // powód odmowy Dysku słowami, z kodem do zgłoszenia
+  let why = ''; try { const j = await r.json(); why = (((j.error || {}).errors || [])[0] || {}).reason || (j.error || {}).message || ''; } catch (e) {}
+  return r.status === 404 ? 'Filmu nie ma już na Dysku.' : 'Dysk nie oddał filmu (' + r.status + (why ? ', ' + why : '') + ').';
+}
+async function filmLoad(file, redraw, blob){
   const f = FB[file];
-  if (f && (f.st === 'ok' || f.st === 'load')) return;
-  FB[file] = { st: 'load' }; redraw();
+  if (!blob && f && (f.st === 'ok' || f.st === 'load')) return;
+  const prev = f || {};
+  FB[file] = { st: 'load', pct: 0, size: prev.size || 0, mime: prev.mime || '' }; redraw();
   try {
-    const meta = tok => fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(file) + '?fields=size,mimeType', { headers: { Authorization: 'Bearer ' + tok } });
-    let r = await meta(await filmToken());
-    if (r.status === 401) r = await meta(await filmToken(true));
-    if (!r.ok) throw new Error(r.status === 404 ? 'Filmu nie ma już na Dysku.' : 'Dysk nie oddał filmu (' + r.status + ').');
-    const m = await r.json().catch(() => ({}));
-    FB[file] = { st: 'ok', size: Number(m.size) || 0 };
-  } catch (e) { if (e.auth) { delete FB[file]; return; } FB[file] = { st: 'err', err: e.message || 'Nie udało się połączyć z Dyskiem.' }; }
+    if (!prev.size) { const r = await filmGet(file, 'fields=size,mimeType'); if (!r.ok) throw new Error(await filmWhy(r));
+      const m = await r.json().catch(() => ({})); FB[file].size = Number(m.size) || 0; FB[file].mime = m.mimeType || ''; }
+    if (!blob && fswOk()) { FB[file] = Object.assign(FB[file], { st: 'ok', mode: 'sw' }); return redraw(); }
+    const r = await filmGet(file, 'alt=media');
+    if (!r.ok) throw new Error(await filmWhy(r));
+    const len = Number(r.headers.get('Content-Length')) || FB[file].size, parts = [];
+    if (r.body && r.body.getReader) { const rd = r.body.getReader(); let got = 0, last = 0;
+      for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); got += value.length;
+        if (len && Date.now() - last > 150) { last = Date.now(); FB[file].pct = Math.round(got / len * 100); const b = document.querySelector('.pv[data-file="' + CSS.escape(file) + '"] .ld b'); if (b) b.style.width = FB[file].pct + '%'; } } }
+    else parts.push(new Uint8Array(await r.arrayBuffer()));
+    FB[file] = Object.assign(FB[file], { st: 'ok', mode: 'blob', url: URL.createObjectURL(new Blob(parts, { type: r.headers.get('Content-Type') || FB[file].mime || 'video/mp4' })) });
+    FBQ.push(file); while (FBQ.length > 4) { const o = FBQ.shift(); if (o !== file && FB[o] && FB[o].url) { URL.revokeObjectURL(FB[o].url); delete FB[o]; } }
+  } catch (e) { if (e.auth) { delete FB[file]; return; } FB[file] = { st: 'err', err: e instanceof TypeError ? 'Nie udało się połączyć z Dyskiem (' + e.message + '). Sprawdź internet i spróbuj ponownie.' : e.message || 'Nie udało się połączyć z Dyskiem.', size: FB[file] && FB[file].size }; }
   redraw();
 }
 function renderFilmy(who){
@@ -458,7 +478,7 @@ function playerHtml(v){
   const f = FB[v.file] || { st: 'load', pct: 0 };
   const stage = f.st === 'ok' ? '<video id="pvv" src="' + esc(filmUrl(v.file)) + '" playsinline preload="auto"' + (VLOOP ? ' loop' : '') + '></video><span class="zoom" hidden></span><span class="buf" hidden>Wczytuję…</span><button class="fsb" type="button" data-pv="fs" aria-label="Pełny ekran">⤢</button>'
     : f.st === 'err' ? '<div class="pmsg"><b>' + esc(f.err) + '</b><span><button class="b" type="button" id="pv-retry">Spróbuj ponownie</button> <a class="b" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(v.link) + '">Otwórz na Dysku</a></span></div>'
-    : '<div class="pmsg"><b>Łączę z Dyskiem…</b></div>';
+    : '<div class="pmsg"><b>' + (f.pct ? 'Pobieram film…' : 'Łączę z Dyskiem…') + '</b><span class="ld"><b style="width:' + (f.pct || 0) + '%"></b></span></div>';
   const dis = f.st === 'ok' ? '' : ' disabled';
   return '<div class="pv" data-file="' + esc(v.file) + '"><div class="stage">' + stage + '</div><div class="ctl">' +
     '<div class="tl"><span id="pvt">0:00,0</span><div class="bar"><input type="range" id="pvr" min="0" max="1" step="0.01" value="0" aria-label="Chwila filmu"' + dis + '><span class="mk" id="pvm"></span></div><span id="pvd">–</span></div>' +
@@ -486,11 +506,13 @@ function playerBind(v, redraw){
   const buf = pv.querySelector('.buf'); let bt = 0;
   vid.addEventListener('waiting', () => { clearTimeout(bt); bt = setTimeout(() => { buf.hidden = false; }, 300); });
   ['canplay', 'playing', 'seeked'].forEach(e => vid.addEventListener(e, () => { clearTimeout(bt); buf.hidden = true; }));
+  // błąd odtwarzania: strumień → raz nowy bilet, potem pobranie w całości; pobrany plik też nie gra = format (z typem pliku)
   let again = false;
   vid.addEventListener('error', async () => {
-    const at = vid.currentTime;
-    if (!again) { again = true; try { await filmToken(true); } catch (e) { return; } vid.src = filmUrl(v.file); if (at) vid.currentTime = at; return; }
-    FB[v.file] = { st: 'err', err: 'Nie udało się odtworzyć filmu: przerwany internet albo format, którego ta przeglądarka nie zna.' };
+    const f = FB[v.file] || {}, at = vid.currentTime, code = vid.error ? vid.error.code : 0;
+    if (f.mode === 'sw' && !again) { again = true; try { await filmToken(true); } catch (e) { return; } vid.src = filmUrl(v.file); if (at) vid.currentTime = at; return; }
+    if (f.mode === 'sw') return filmLoad(v.file, redraw, true);
+    FB[v.file] = { st: 'err', size: f.size, err: 'Przeglądarka nie odtwarza tego filmu' + (f.mime ? ' (' + f.mime + ')' : '') + ', kod ' + code + '. Otwórz go na Dysku.' };
     redraw();
   });
   rng.oninput = () => { vid.pause(); vid.currentTime = Number(rng.value); tick(); };
@@ -752,6 +774,8 @@ function dyspList(d){
 }
 
 start();
+// service worker (ten sam co w aplikacji): filmy strumieniem z nagłówkiem biletu (film-strumien/ w sw.js)
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>
