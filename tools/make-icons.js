@@ -1,16 +1,18 @@
-// Ikony „Siła z Ruchu” (web/icons/), szkic „Duet”: ostatnia klatka animacji otwarcia w zbliżeniu.
+// Ikony „Siła z Ruchu” (web/icons/), szkic „Duet z bliska”: góra rysunku z animacji otwarcia w zbliżeniu, grubą kreską.
 // Tor sztangi i linia tańca są wzięte wprost z animacji (web/index.html, #in-bar i #in-dance), a kolory z tokenów --intro-* tej samej strony.
-// Tutaj zmienia się tylko kadr, skala i grubość linii: kształtu toru nie poprawiaj w tym pliku.
+// Tutaj zmienia się tylko kadr, skala, grubość linii i to, który kolor marki rysuje którą część: kształtu toru nie poprawiaj w tym pliku.
 //   node tools/make-icons.js [katalog]    zapisuje wszystkie pliki (domyślnie do web/icons/); PNG rysuje przeglądarka z Playwright
 // Po zmianie ikon podbij VERSION w web/sw.js. Test „Ikona …” w tests/ui.test.js pilnuje, żeby pliki w web/icons/ były tym, co rysuje to narzędzie.
 const fs = require('fs'), path = require('path');
 const WEB = path.join(__dirname, '..', 'web');
 
 // Rysunek w układzie animacji (200 × 330) przeniesiony na kafel 512 × 512: punkt (cx, cy) trafia w środek kafla, skala s.
-// bw = grubość toru, dw = grubość linii tańca (0 = bez niej), rr / rw = promień i grubość pierścienia talerza, hub = promień piasty (0 = bez niej).
-const ART = { cx: 101, cy: 112, s: 2.05, bw: 12, dw: 5.5, rr: 18, rw: 9, hub: 6.5 };   // ikona na ekranie głównym
-const TINY = { cx: 104, cy: 92, s: 3.1, bw: 15, dw: 0, rr: 26, rw: 13, hub: 0 };       // znak 16–32 px (karta przeglądarki, nagłówek aplikacji): sam haczyk toru i talerz
-const DANCE_OPACITY = .9;
+// bw = grubość toru, dw = grubość linii tańca, rr = promień talerza (pełne koło na końcu toru), hub = promień środka talerza.
+const ART = { cx: 100, cy: 60, s: 3.5, bw: 15, dw: 9, rr: 18, hub: 7.5 };      // ikona na ekranie głównym: góra toru i kawałek linii tańca pod nią
+const TINY = { cx: 97, cy: 43, s: 5.4, bw: 17, dw: 11, rr: 16.5, hub: 7.5 };   // znak 16–32 px (karta przeglądarki, nagłówek aplikacji): sama góra toru z pętlą linii tańca i talerzem
+// Który kolor marki (bg = ciemne tło animacji, ink = jasny, acc = pomarańczowy) rysuje którą część. Środek talerza zostaje pomarańczowy:
+// ciemny albo jasny środek na kontrastowym kole wygląda jak oko.
+const LOOK = { tile: 'bg', bar: 'acc', dance: 'ink', plate: 'ink', hub: 'acc' };
 const SAFE = .8;    // ikona „maskable”: Android przycina ją do koła albo zaokrąglonego kwadratu, więc rysunek mieści się w środkowych 80%
 const RX = 111;     // zaokrąglenie rogów znaku (jak w poprzedniej ikonie: 26 / 120 boku)
 
@@ -20,21 +22,28 @@ function files(){
   const BAR = pick(/<path id="in-bar"[^>]*\sd="([^"]+)"/, 'tor sztangi #in-bar'), DANCE = pick(/<path id="in-dance"[^>]*\sd="([^"]+)"/, 'linia tańca #in-dance');
   const C = { bg: pick(/--intro-bg:(#[0-9a-f]{6})/i, '--intro-bg'), ink: pick(/--intro-ink:(#[0-9a-f]{6})/i, '--intro-ink'), acc: pick(/--intro-acc:(#[0-9a-f]{6})/i, '--intro-acc') };
   const END = BAR.trim().split(/[ ,]+/).slice(-2).map(Number);   // koniec toru = środek talerza w chwili chwytu
-  // mono = sam kształt (czarny, bez przezroczystości): z ikony jednobarwnej Android bierze tylko obrys i sam go koloruje
-  const draw = ({ cx, cy, s, bw, dw, rr, rw, hub }, mono) => {
-    const ink = mono ? '#000' : C.ink, acc = mono ? '#000' : C.acc;
+  const look = {}; for (const part of Object.keys(LOOK)) look[part] = C[LOOK[part]];
+  // Kolejność: linia tańca, tor, talerz (zakrywa koniec toru), środek talerza.
+  // mono = sam kształt (czarny, bez przezroczystości): z ikony jednobarwnej Android bierze tylko obrys i sam go koloruje.
+  // W niej środek talerza jest otworem (wycięcie regułą evenodd), bo czarne kółko na czarnym talerzu by znikło.
+  const draw = ({ cx, cy, s, bw, dw, rr, hub }, mono) => {
+    const k = mono ? { bar: '#000', dance: '#000', plate: '#000' } : look;
+    const ring = r => `M${END[0] - r} ${END[1]}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0z`;
+    const body = `<path d="${DANCE}" stroke="${k.dance}" stroke-width="${dw}"/>` + `<path d="${BAR}" stroke="${k.bar}" stroke-width="${bw}"/>` +
+      `<circle cx="${END[0]}" cy="${END[1]}" r="${rr}" fill="${k.plate}" stroke="none"/>`;
     return `<g transform="translate(256 256) scale(${s}) translate(${-cx} ${-cy})" fill="none" stroke-linecap="round" stroke-linejoin="round">` +
-      (dw ? `<path d="${DANCE}" stroke="${ink}" stroke-width="${dw}"${mono ? '' : ` opacity="${DANCE_OPACITY}"`}/>` : '') +
-      `<circle cx="${END[0]}" cy="${END[1]}" r="${rr}" stroke="${ink}" stroke-width="${rw}"/>` +
-      `<path d="${BAR}" stroke="${acc}" stroke-width="${bw}"/>` +
-      (hub ? `<circle cx="${END[0]}" cy="${END[1]}" r="${hub}" fill="${ink}" stroke="none"/>` : '') + '</g>';
+      (mono ? `<clipPath id="o"><path clip-rule="evenodd" d="M-400 -400h1000v1200h-1000z${ring(hub)}"/></clipPath><g clip-path="url(#o)">${body}</g>`
+            : body + `<circle cx="${END[0]}" cy="${END[1]}" r="${hub}" fill="${k.hub}" stroke="none"/>`) + '</g>';
   };
   const shrink = a => `<g transform="translate(256 256) scale(${SAFE}) translate(-256 -256)">${a}</g>`;
-  const full = a => `<rect width="512" height="512" fill="${C.bg}"/>${a}`;                         // kwadrat po brzegi: telefon sam zaokrągla rogi
+  const full = a => `<rect width="512" height="512" fill="${look.tile}"/>${a}`;                         // kwadrat po brzegi: telefon sam zaokrągla rogi
   const round = a => `<clipPath id="t"><rect width="512" height="512" rx="${RX}"/></clipPath><g clip-path="url(#t)">${full(a)}</g>`;
+  const at = (g, x, y, k) => [256 + (x - g.cx) * g.s * k, 256 + (y - g.cy) * g.s * k];   // punkt rysunku na kaflu 512 (k = zmniejszenie)
   const svg = (body, attrs = '') => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"${attrs}>${body}</svg>`;
   return {
-    colors: C,
+    colors: C, look,   // look = kolor każdej części po podstawieniu (tile, bar, dance, plate, hub)
+    // punkty kontrolne ikony jednobarwnej w pikselach kafla 512: środek talerza (otwór) i punkt na talerzu obok otworu
+    monoPlate: { hole: at(ART, END[0], END[1], SAFE), ring: at(ART, END[0] + (ART.hub + ART.rr) / 2, END[1], SAFE) },
     svg: { 'favicon.svg': svg(round(draw(TINY))) + '\n', 'icon-mono.svg': svg(shrink(draw(ART, true))) + '\n' },
     png: [
       ['icon-512.png', 512, full(draw(ART))], ['icon-192.png', 192, full(draw(ART))],

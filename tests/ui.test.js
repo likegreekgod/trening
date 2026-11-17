@@ -2218,12 +2218,12 @@ test('Ikona „Siła z Ruchu”: pliki mają rozmiary obiecane w manifeście i s
   assert.deepEqual(gen.png.map(f => f[0]).sort(), fs.readdirSync(path.join(WEB, 'icons')).filter(f => f.endsWith('.png')).sort());
   const html = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8');
   const bar = /<path id="in-bar"[^>]*\sd="([^"]+)"/.exec(html)[1], dance = /<path id="in-dance"[^>]*\sd="([^"]+)"/.exec(html)[1];
-  assert.ok(icon('favicon.svg').includes(bar) && icon('icon-mono.svg').includes(bar) && icon('icon-mono.svg').includes(dance));
+  for (const f of ['favicon.svg', 'icon-mono.svg']) assert.ok(icon(f).includes(bar) && icon(f).includes(dance), f + ': tor i linia tańca z animacji');
   // ikona jednobarwna (Android koloruje ją sam i bierze tylko obrys): sam czarny kształt, bez przezroczystości
   const mono = icon('icon-mono.svg').toString('utf8');
   assert.deepEqual([...new Set(mono.match(/#[0-9a-f]{3,8}\b/gi))], ['#000']); assert.ok(!/opacity/.test(mono));
-  // obraz w plikach PNG: piksel po pikselu ten sam rysunek, który narzędzie rysuje teraz z toru animacji; kolory marki są na miejscu (tło, pomarańczowy tor,
-  // jasny talerz), ikony na ekran główny są pełnym kwadratem bez przezroczystości
+  // obraz w plikach PNG: piksel po pikselu ten sam rysunek, który narzędzie rysuje teraz z toru animacji; kolory marki są na miejscu (tło, tor, linia tańca
+  // z talerzem) i zajmują tyle pola, że znak jest czytelny także w 16 px; ikony na ekran główny są pełnym kwadratem bez przezroczystości
   const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
   const { ctx, p } = await page([]);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
@@ -2236,17 +2236,24 @@ test('Ikona „Siła z Ruchu”: pliki mają rozmiary obiecane w manifeście i s
       const like = (i, k) => d[i + 3] === 255 && Math.abs(d[i] - k[0]) + Math.abs(d[i + 1] - k[1]) + Math.abs(d[i + 2] - k[2]) < 30;
       const share = k => { let m = 0; for (let i = 0; i < d.length; i += 4) if (like(i, k)) m++; return m / (n * n); };
       let off = 0; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - w[i]) + Math.abs(d[i + 1] - w[i + 1]) + Math.abs(d[i + 2] - w[i + 2]) + Math.abs(d[i + 3] - w[i + 3]) > 60) off++;
-      out[name] = { nat, corners: [0, n - 1, n * (n - 1), n * n - 1].map(q => d[q * 4 + 3]), bg: share(C.bg), acc: share(C.acc), ink: share(C.ink), off: off / (n * n) };
+      out[name] = { nat, corners: [0, n - 1, n * (n - 1), n * n - 1].map(q => d[q * 4 + 3]), tile: share(C.tile), bar: share(C.bar), dance: share(C.dance), off: off / (n * n) };
     }
-    return out; }, [gen.png, { bg: rgb(gen.colors.bg), acc: rgb(gen.colors.acc), ink: rgb(gen.colors.ink) }]);
+    return out; }, [gen.png, { tile: rgb(gen.look.tile), bar: rgb(gen.look.bar), dance: rgb(gen.look.dance) }]);
   for (const [name, n] of gen.png) {
     const q = px[name], small = /^favicon/.test(name);
     assert.deepEqual(q.nat, [n, n], name);
     assert.ok(q.off < 0.005, name + ' różni się od rysunku narzędzia (' + (q.off * 100).toFixed(2) + '% pikseli): uruchom node tools/make-icons.js');
-    assert.ok(q.bg > 0.5 && q.acc > 0.02 && q.ink > 0.004, name + ' ' + JSON.stringify(q));        // większość to tło, tor i talerz są widoczne
+    // tło jest największą plamą, a tor i linia tańca z talerzem są grube: w dużej ikonie tor ≥ 4% i linia ≥ 5% pola, w małym znaku ≥ 7% i ≥ 8%
+    // (zmierzone 6–9% i 7–12% oraz 11–14% i 11–17%; cienka ikona z v55 miała 3–4% i 1% oraz 5–8% i 1–3%, więc tu by nie przeszła)
+    assert.ok(small ? q.tile > 0.3 && q.bar > 0.07 && q.dance > 0.08 : q.tile > 0.6 && q.bar > 0.04 && q.dance > 0.05, name + ' ' + JSON.stringify(q));
     if (small) assert.ok(q.corners.every(a => a < 128), name + ' ' + q.corners);                   // znak w karcie przeglądarki ma zaokrąglone rogi
     else assert.deepEqual(q.corners, [255, 255, 255, 255], name);                                  // telefon sam przycina rogi: przezroczystość dałaby czarne narożniki
   }
+  // ikona jednobarwna narysowana przez przeglądarkę: środek talerza jest otworem, a sam talerz pełny (bez otworu talerz zlałby się z końcem toru w plamę)
+  const plate = await p.evaluate(async m => { const im = new Image(); im.src = 'icons/icon-mono.svg'; await im.decode();
+    const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d'); g.drawImage(im, 0, 0, 512, 512);
+    const alpha = ([x, y]) => g.getImageData(Math.round(x), Math.round(y), 1, 1).data[3]; return { hole: alpha(m.hole), ring: alpha(m.ring) }; }, gen.monoPlate);
+  assert.deepEqual(plate, { hole: 0, ring: 255 });
   await ctx.close();
   // znak w nagłówku aplikacji: wczytany, 20 × 20 px, w jasnym i ciemnym motywie
   for (const scheme of ['light', 'dark']) {

@@ -3,6 +3,16 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-18 · Ikona „Duet z bliska”: grubsza kreska i większy znak (v66, wariant kolorów do potwierdzenia)
+
+- Po scaleniu v55 Damian napisał, że animacja wygląda super, ale sama ikona jest „tak sobie”. Na jego zrzucie znak ma 16 px i stoi w ciemnym pasku kart przeglądarki: ciemne tło ikony zlewa się z paskiem, tor ma ok. 1,5 px, pierścień talerza ok. 1,3 px, a haczyk z kółkiem czyta się jak litera „P”. Duża ikona też była cienka (przy 60 px na ekranie głównym tor ok. 3 px, linia tańca ok. 1,3 px).
+- Nowy rysunek to ten sam tor i ta sama linia tańca z animacji, tylko w zbliżeniu na górę toru: tor ok. 2× grubszy, linia tańca ok. 2,8× grubsza i bez przezroczystości, talerz jako pełne koło nad końcem toru. Mały znak (karta przeglądarki 16–32 px, nagłówek aplikacji 20 px) pokazuje górę toru razem z pętlą linii tańca i talerzem (wcześniej sam haczyk), a duża ikona także kawałek linii tańca niżej. W znaku 16 px rysunek zajmuje ok. 22% pola zamiast ok. 6%.
+- Środek talerza jest pomarańczowy. Odrzucone na próbach: ciemny albo jasny środek na kontrastowym kole (wygląda jak oko), pierścień z piastą jak w v55 (w 16 px się rozmazuje), talerz bez środka (kula zamiast talerza), sam haczyk z talerzem bez linii tańca (litera „P”).
+- Damian dostał 18.11 planszę z trzema wariantami kolorów tej samej geometrii: 1 ciemne tło jak w animacji (tor pomarańczowy, linia tańca i talerz jasne), 2 pomarańczowe tło (tor ciemny, linia tańca i talerz jasne), 3 jasne tło (tor pomarańczowy, linia tańca i talerz ciemne). Na gałęzi jest wariant 1, polecany, bo ma kolory animacji i ekranu startowego i najlepiej siedzi w nagłówku aplikacji. **Wybór Damiana jeszcze nie zapadł**; inny wariant to jedna linia `LOOK` w `tools/make-icons.js` i `npm run icons`. O kolory marki nie pytamy osobno: zostają trzy kolory animacji.
+- Ikona jednobarwna (motyw Androida): środek talerza jest otworem, bo czarne kółko na czarnym talerzu by znikło, a talerz zlałby się z końcem toru w plamę.
+- Test „Ikona …” liczy kolory według ról (tło, tor, linia tańca z talerzem) i wymaga, żeby tor i linia zajmowały wyraźną część pola: w dużej ikonie co najmniej 4% i 5%, w małym znaku 7% i 8%. Cienka ikona z v55 (3–4% i 1% oraz 5–8% i 1–3%) by go nie przeszła, więc znak nie wróci po cichu do cienkiej kreski.
+
+
 ## 2026-11-17 · Serie bez ✓ w panelu, film bez obrazu (v65)
 
 - Sesja klienta (boje z filmami) miała w Logu serie z filmem albo z ciężarem, ale bez ✓ (`wykonane` puste: `logVideo` dopisuje sam link, a seria nieodhaczona zostaje pusta). Panel i `trSzkicSets_` liczyły tylko `wykonane = TAK`, więc pokazywały „Brak zapisanych serii” i blokowały szkic AI.
