@@ -2,13 +2,20 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
-## 2026-11-17 · Wysiłek serii = światło, jedna skala RPE w całej aplikacji (v56)
+## 2026-11-17 · Wysiłek serii = światło, jedna skala RPE w całej aplikacji (v59)
 
 - Zgłoszenie: dane RPE serii były bezużyteczne (wszystkie listopadowe serie z 7), a światła i RPE były dwoma osobnymi wpisami. W kodzie nie było domyślnej 7 dla zwykłych ćwiczeń (lista zaczynała się od „–”); 7 dawało „Łatwo” w bojach. Były trzy skale: PRO lista RPE, PROSTY `EFFORT` (Lekko 6 / Średnio 7,5 / Ciężko 9 / Max 10), boje `RATE` (7 / 8 / 9,5 / FAIL).
 - Teraz jedna skala (lib `EFF`): 🟢 Lekko 7, 🟡 Średnio 8, 🔴 Ciężko 9, ✖ Nieudana = FAIL bez RPE; odczyt (`lightOf`, też stare wpisy) ≤ 7,5 / 8–8,5 / ≥ 9. Boje mają te same stopnie i RPE (Walka 9 zamiast 9,5), zostają im światła sędziowskie i słowa Łatwo / Walka / Spalone. PROSTY traci „Max” (stare 10 = 🔴).
 - Jedno dotknięcie: wybór światła zapisuje serię z RPE. Samo ✓ = puste RPE (brak danych). Korekta tylko w PRO („Dokładniej”, wartości w zakresie światła i krok obok). W Logu tylko liczba RPE, bez nowej kolumny.
 - Puste RPE = brak danych w arkuszu (tak było: `n_` daje NaN). Wyjątek, wybrany przez Damiana na karcie: w aplikacji rekord i wykres Siły dalej liczą serię bez RPE jak RPE 10 (ustalenie z v50), bo po zmianie wiele serii będzie zapisywanych samym ✓.
 - Skutek w arkuszu: Lekko = 7 zamiast 6 w PROSTYM, więc takie serie liczą się jako twarde (RPE ≥ 7).
+
+## 2026-11-17 · Szkic AI komentarza do sesji (v56)
+
+- Damian zaakceptował szkic wyglądu: pole „Twój komentarz do sesji” pod otwartą sesją w karcie klienta → Sesje, przycisk „✦ Szkic AI”, ramka „Szkic AI. Przeczytaj i popraw”, poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic. Klient widzi komentarz dopiero po „Zapisz” (ta sama kolumna Sesje `komentarz_trenera`, którą aplikacja już pokazuje w zakładce Trener).
+- Zapis komentarza do sesji (z planu PR 3) idzie razem ze szkicem AI (PR 4), bo bez zapisu szkic nie ma dokąd trafić. Komentarze do filmów i notatki bloków: następny PR.
+- Model `claude-opus-5-5` z niskim wysiłkiem (`effort: low`): krótki tekst, koszt ok. 0,02–0,03 USD za szkic. Klucz we właściwości skryptu `CLAUDE_API_KEY`, limit 30 szkiców dziennie (`AI_LIMIT`), każde wywołanie w zakładce „AI”. Damian ma kredyt API (100 USD).
+- Do AI nie idzie imię, klucz klienta ani linki do filmów; idą liczby z jednostki, ból i uwagi klienta. Informacja o AI dla klientów (RODO) ustalona wcześniej.
 
 ## 2026-11-17 · Import planu: usuwanie tylko w blokach z pliku
 

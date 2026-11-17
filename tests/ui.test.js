@@ -802,11 +802,34 @@ test('Dyspozycja: skok odstający > 8% od mediany → komunikat, wykluczenie ze 
   await ctx.close();
 });
 
+test('Dyspozycja: pomyłka w skoku (0,4 zamiast 24) → poprawka w polu przed i po zapisie', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: HIST });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('#nav [data-tab="dysp"]'); await hooper(p, 3);
+  const jump = async (i, v) => { await p.fill(`#dysp input[data-j="${i}"]`, v); await p.press(`#dysp input[data-j="${i}"]`, 'Tab'); };
+  for (const [i, v] of [[0, '25,1'], [1, '23,5'], [2, '0,4']]) await jump(i, v);
+  assert.match(await p.textContent('#dysp .hint'), /^Skok 3 odstaje .*dotknij pola i popraw wynik/);
+  await jump(2, '24,1');
+  assert.equal(await p.$('#dysp .hint[role=alert]'), null);
+  assert.match(await p.$$eval('#dysp .card', c => c[1].textContent), /Średnia dziś\s*24,2 cm/);
+  await p.click('#rd-save'); await p.waitForTimeout(100);
+  assert.deepEqual(calls.filter(c => c.fn === 'saveDyspozycja').pop().args[0].cmj, [25.1, 23.5, 24.1]);
+  await p.click('#rd-edit'); await jump(2, '24,3');                               // po zapisie: Edytuj → poprawka → Zapisz zmiany
+  await p.click('#rd-save'); await p.waitForTimeout(100);
+  const s = calls.filter(c => c.fn === 'saveDyspozycja').pop().args[0];
+  assert.deepEqual({ cmj: s.cmj, cmjAvg: s.cmjAvg }, { cmj: [25.1, 23.5, 24.3], cmjAvg: 24.3 });
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('CMJ z filmu: instrukcja, odbicie i lądowanie → czas lotu → wysokość, klatkaż, zapis jako skok, film na Dysk', async () => {
   const calls = [];
   const { ctx, p } = await page(calls, false, { data: PRO, api: DRIVE });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
-  await p.click('#nav [data-tab="dysp"]'); await p.click('#cmj-vid');
+  await p.click('#nav [data-tab="dysp"]');
+  for (const [i, v] of [[0, '26,7'], [1, '23,5'], [2, '0,4']]) { await p.fill(`#dysp input[data-j="${i}"]`, v); await p.press(`#dysp input[data-j="${i}"]`, 'Tab'); }
+  await p.click('#cmj-vid');
   assert.match(await p.textContent('.cmj-how'), /pierwsza klatka, na której oba palce są już nad podłożem/);
   assert.equal(await p.$$eval('svg.cmj-ex', e => e.length), 2);
   await p.evaluate(async () => {                                                // krótki film nagrany w przeglądarce (treść bez znaczenia)
@@ -833,6 +856,10 @@ test('CMJ z filmu: instrukcja, odbicie i lądowanie → czas lotu → wysokość
   const flight = kv[1] - kv[0], h = 1.22625 * flight * flight * 100;
   assert.ok(Math.abs(parseFloat((await p.textContent('#cmj-h')).replace(',', '.')) - h) <= 0.3, 'wysokość ' + h.toFixed(1));   // czasy na ekranie zaokrąglone do 0,001 s
   assert.deepEqual(await a11y(p), []);
+  // wszystkie skoki wpisane → domyślnie ten najdalej od mediany (pomyłka 0,4); wybór skoku zmienia cel zapisu
+  assert.equal(await p.textContent('#cmj-slot [aria-pressed="true"]'), 'Skok 3 · 0,4');
+  await p.click('#cmj-slot [data-slot="0"]');
+  assert.equal(await p.textContent('#cmj-save'), 'Zapisz jako skok 1');
   const shown = (await p.textContent('#cmj-h')).trim();
   if (h <= 90) {
     await p.click('#cmj-save'); assert.equal(await p.inputValue('#dysp input[data-j="0"]'), shown);

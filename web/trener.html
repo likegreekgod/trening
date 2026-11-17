@@ -130,6 +130,24 @@
   #login .card{max-width:420px;width:100%;text-align:center;padding:28px 24px}
   #login p{color:var(--muted)}
   #gbtn{display:flex;justify-content:center;min-height:44px;margin-top:16px}
+  /* komentarz do sesji i szkic AI (karta klienta → Sesje) */
+  .kedit{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px}
+  .kedit textarea{width:100%;min-height:118px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px 12px;font-size:15px;line-height:1.45;resize:vertical}
+  .kedit .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .kedit .row .sp{flex:1}
+  .kedit .hint{font-size:13px;color:var(--muted)}
+  .kedit .ai{display:inline-flex;align-items:center;gap:6px}
+  .kedit .ai svg{width:16px;height:16px}
+  .kedit button:disabled{opacity:.55;cursor:default}
+  .aiflag{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border-left:4px solid var(--accent);border-radius:var(--r);padding:10px 12px;margin:0 0 8px;font-size:14px}
+  .aiflag svg{width:18px;height:18px;flex:none;color:var(--accent);margin-top:2px}
+  .aiflag b{display:block}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{min-height:36px;border-radius:999px;border:1px solid var(--line);background:var(--surface);padding:0 12px;font-size:13px;font-weight:600}
+  .ctx{font-size:13px;color:var(--muted);margin:8px 0 0}
+  .ctx summary{cursor:pointer;min-height:auto}
+  .ctx ul{margin:6px 0 0;padding-left:18px}
+  .saved{color:var(--ok);font-weight:600;font-size:14px}
   #busy{position:fixed;top:0;left:0;right:0;height:3px;background:var(--accent);transform-origin:left;animation:busy 1.2s ease-in-out infinite}
   @keyframes busy{0%{transform:scaleX(0)}50%{transform:scaleX(.7)}100%{transform:scaleX(1);opacity:0}}
   @media (prefers-reduced-motion:reduce){#busy{animation:none}}
@@ -438,9 +456,62 @@ function sesList(d, dates){
       '<span class="muted">' + [x.s.czas_min ? x.s.czas_min + ' min' : '', nf(x.s.rpe_sesji) >= 0 ? 'RPE ' + pl(x.s.rpe_sesji) : '', nf(x.s.samopoczucie) > 0 ? 'samopoczucie ' + x.s.samopoczucie + '/5' : '', isFinite(p[1]) && p[1] > 0 ? 'ból ' + pl(p[1]) + (p[0] ? ' ' + p[0] : '') : ''].filter(Boolean).map(esc).join(' · ') + '</span></summary>' +
       '<div class="tw"><table><tbody>' + ex.map(e => '<tr><td><b>' + esc(e.name) + '</b> <span class="muted">' + esc(e.prio) + '</span></td><td class="sets">' + e.sets.map(setTxt).join(', ') + '</td><td>' + esc(e.note) + '</td></tr>').join('') + '</tbody></table></div>' +
       (x.s.uwagi ? '<p class="note"><span class="eb">Uwagi klienta</span><br>' + esc(x.s.uwagi) + '</p>' : '') +
-      (x.s.komentarz_trenera ? '<p class="kom">' + esc(x.s.komentarz_trenera) + '</p>' : '') + '</details>';
+      komBox(x.s) + '</details>';
   }).join('') + '</div>';
 }
+/* ---------- komentarz do sesji: zapis (trKomentarz) i szkic AI (trSzkic); stan pola tylko w pamięci strony ---------- */
+const KD = {};                  // klient|tydzień|jednostka → {text, edit, ai, busy, ok, err, cost, n, limit}
+const SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" fill="currentColor"/></svg>';
+const kdKey = s => CID + '|' + s.tydzien + '|' + s.jednostka;
+function komBox(s){
+  const u = s.tydzien + '|' + s.jednostka, st = KD[kdKey(s)] || {}, saved = String(s.komentarz_trenera || '');
+  const box = inner => '<div class="kedit" data-u="' + esc(u) + '"><div class="eb" style="margin-bottom:6px">Twój komentarz do sesji</div>' + inner + (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') + '</div>';
+  if (saved && !st.edit) return box('<p class="kom" style="margin:0">' + esc(saved) + '</p><div class="row">' +
+    (st.ok ? '<span class="saved">✓ Zapisano · klient zobaczy komentarz w aplikacji, w zakładce Trener</span>' : '') + '<span class="sp"></span><button class="b" type="button" data-k="edit">Edytuj</button></div>');
+  const text = st.text !== undefined ? st.text : saved, dis = st.busy ? ' disabled' : '';
+  const flag = st.ai ? '<div class="aiflag">' + SPARK + '<div><b>Szkic AI. Przeczytaj i popraw przed zapisem.</b>Klient nie zobaczy niczego, dopóki nie klikniesz „Zapisz”.</div></div>' : '';
+  const chips = st.ai ? '<div class="row"><span class="hint">Popraw szkic:</span><div class="chips">' +
+    [['krocej', 'Krócej'], ['cieplej', 'Cieplej'], ['technicznie', 'Bardziej technicznie'], ['inny', 'Inny szkic']].map(c => '<button class="chip" type="button" data-k="ai" data-t="' + c[0] + '"' + dis + '>' + c[1] + '</button>').join('') + '</div></div>' : '';
+  const hint = st.busy ? 'AI pisze szkic, to trwa kilka–kilkanaście sekund…' : st.ai && st.cost !== undefined ? 'koszt szkicu ' + pl(st.cost.toFixed(3)) + ' $ · dziś ' + st.n + ' z ' + st.limit : 'Klient zobaczy komentarz w aplikacji, w zakładce Trener.';
+  return box(flag + '<textarea aria-label="Komentarz do sesji ' + esc(u.replace('|', ' ')) + '" placeholder="Napisz klientowi, jak poszło…" data-k="txt"' + dis + '>' + esc(text) + '</textarea>' + chips +
+    '<div class="row">' + (st.ai ? '' : '<button class="b ai" type="button" data-k="ai"' + dis + '>' + SPARK + (st.busy ? 'Piszę szkic…' : 'Szkic AI') + '</button>') +
+    '<span class="hint">' + hint + '</span><span class="sp"></span>' + (saved ? '<button class="b" type="button" data-k="cancel"' + dis + '>Anuluj</button>' : '') +
+    '<button class="b p" type="button" data-k="save"' + dis + '>Zapisz</button></div>' +
+    '<details class="ctx"><summary>Co dostaje AI (bez imienia klienta)</summary><ul><li>ta jednostka: plan i wykonane serie, RPE, czas, samopoczucie, ból, uwagi i komentarze klienta</li>' +
+    '<li>3 poprzednie takie same jednostki do porównania</li><li>dyspozycja z dnia treningu i następna jednostka z planu</li><li>Twoje ostatnie komentarze do tej osoby, żeby pisało Twoim stylem</li></ul></details>');
+}
+function komDraw(s){
+  const el = document.querySelector('.kedit[data-u="' + CSS.escape(s.tydzien + '|' + s.jednostka) + '"]'); if (!el) return;
+  const focus = document.activeElement && el.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA';
+  el.outerHTML = komBox(s);
+  if (focus) { const t = document.querySelector('.kedit[data-u="' + CSS.escape(s.tydzien + '|' + s.jednostka) + '"] textarea'); if (t) t.focus(); }
+}
+const sesOf = el => { const u = el.closest('.kedit').dataset.u.split('|'); return (CUR.sessions || []).find(s => String(s.tydzien) === u[0] && String(s.jednostka) === u[1]); };
+document.addEventListener('input', e => { const t = e.target.closest('.kedit textarea'); if (!t || !CUR) return; const s = sesOf(t); (KD[kdKey(s)] = KD[kdKey(s)] || {}).text = t.value; });
+document.addEventListener('click', async e => {
+  const b = e.target.closest('.kedit [data-k]'); if (!b || b.tagName === 'TEXTAREA' || !CUR) return;
+  const s = sesOf(b), k = kdKey(s), st = KD[k] = KD[k] || {}, saved = String(s.komentarz_trenera || ''), cid = CID;
+  const cur = () => st.text !== undefined ? st.text : saved;
+  st.err = '';
+  if (b.dataset.k === 'edit') { Object.assign(st, { edit: true, ok: false, text: saved, ai: false }); komDraw(s); return; }
+  if (b.dataset.k === 'cancel') { KD[k] = {}; komDraw(s); return; }
+  if (b.dataset.k === 'save') {
+    st.busy = true; komDraw(s);
+    try { const r = await guard(api('trKomentarz', cid, s.tydzien, s.jednostka, cur())); s.komentarz_trenera = r.text; KD[k] = r.text ? { ok: true } : {}; }
+    catch (err) { st.busy = false; if (!err.auth) st.err = err.message; }
+    if (CID === cid) komDraw(s);
+    return;
+  }
+  if (b.dataset.k === 'ai') {
+    const tweak = b.dataset.t || '';
+    st.busy = true; komDraw(s);
+    try { const r = await guard(api('trSzkic', cid, s.tydzien, s.jednostka, { tweak, draft: tweak ? cur() : '' }));
+      Object.assign(st, { text: r.text, ai: true, edit: true, cost: r.cost, n: r.n, limit: r.limit }); }
+    catch (err) { if (!err.auth) st.err = err.message; }
+    finally { st.busy = false; }
+    if (CID === cid) komDraw(s);
+  }
+});
 function blokList(d){
   const bl = (d.blocks || []).filter(b => String(b.blok) !== '(bez bloku)').sort((a, b) => String(b.od).localeCompare(String(a.od)));
   if (!bl.length) return '<div class="card es"><b>Brak bloków</b>Zakładka Bloki w arkuszu nie ma jeszcze wierszy tego klienta (liczy je „Przelicz teraz”).</div>';

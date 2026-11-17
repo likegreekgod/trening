@@ -1497,7 +1497,7 @@ function renderDysp(){
     <section class="card"><div class="cn">2 · Skok CMJ</div><div class="sub">3 skoki, ręce na biodrach, 30 s przerwy. Wpisz cm albo zmierz z filmu slow-mo.</div>
       <div class="jumps">${rd.cmj.map((c, i) => `<div class="jmp ${rd.excl[i] ? 'ex' : ''} ${sp.out.includes(i) ? 'odd' : ''}"><label class="fl">Skok ${i + 1}<input inputmode="decimal" data-j="${i}" value="${esc(fmtKg(c))}" placeholder="cm"></label>
         ${isNum(num(c)) ? `<button type="button" class="btn sm tg" data-ex="${i}" aria-pressed="${!!rd.excl[i]}">${rd.excl[i] ? 'Wykluczony' : 'Wyklucz'}</button>` : ''}</div>`).join('')}</div>
-      ${odd.length ? `<p class="hint" role="alert">${odd.map(i => 'Skok ' + (i + 1)).join(', ')} ${odd.length > 1 ? 'odstają' : 'odstaje'} o ponad 8% od mediany (${f1(sp.median)} cm) — sprawdź zaznaczenie albo powtórz. Możesz ${odd.length > 1 ? 'je' : 'go'} wykluczyć ze średniej.</p>` : ''}
+      ${odd.length ? `<p class="hint" role="alert">${odd.map(i => 'Skok ' + (i + 1)).join(', ')} ${odd.length > 1 ? 'odstają' : 'odstaje'} o ponad 8% od mediany (${f1(sp.median)} cm) — dotknij pola i popraw wynik, zmierz go jeszcze raz z filmu albo ${odd.length > 1 ? 'je' : 'go'} wyklucz ze średniej.</p>` : ''}
       <div class="kv"><span>Średnia dziś${rd.excl.some(Boolean) ? ' (bez wykluczonych)' : ''}</span><b>${f1(sp.avg)} cm</b></div><div class="kv"><span>Twoja średnia (5 testów)</span><b>${collecting ? '– (' + n + '/' + READY_MIN + ')' : f1(base.cmj) + ' cm'}</b></div>
       <button type="button" class="btn" id="cmj-vid">Zmierz skok z filmu</button></section>
     <section class="card"><div class="cn">3 · Prędkość na rozgrzewce</div><div class="sub">Zawsze to samo ćwiczenie i ten sam ciężar, 1 powtórzenie, najlepsza próba. Wynik z analizy filmu albo z urządzenia.</div>
@@ -1544,7 +1544,9 @@ async function readMoov(file){
 /** skok CMJ z filmu: pierwsza klatka w powietrzu i pierwsza klatka kontaktu → czas lotu → h = g·t²/8; film idzie do trenera (Dysk) */
 function openCMJ(rd, done){
   let fileFps = NaN, realFps = 240, tk = null, tl = null, url = null, vid = null, file = null, send2 = true;
-  let slot = rd.cmj.findIndex(x => !isNum(num(x))); if (slot < 0) slot = 0;
+  // skok do zapisu: pierwszy pusty, inaczej najbardziej odstający (pomyłka do poprawienia), inaczej 1.; klient może zmienić
+  const sp0 = cmjSpread(rd.cmj, rd.excl || []), far = i => Math.abs(num(rd.cmj[i]) - sp0.median);
+  let slot = rd.cmj.findIndex(x => !isNum(num(x))); if (slot < 0) slot = sp0.out.length ? sp0.out.reduce((a, b) => far(b) > far(a) ? b : a) : 0;
   openSheet(`<h2 id="sheet-t">CMJ z filmu</h2>
     <div class="cmj-how"><p><b>Odbicie</b> = pierwsza klatka, na której oba palce są już nad podłożem.</p>
       <p><b>Lądowanie</b> = pierwsza klatka, na której jakakolwiek część stopy dotyka podłoża.</p>
@@ -1565,11 +1567,13 @@ function openCMJ(rd, done){
     o.innerHTML = `<div class="kv"><span>Odbicie</span><b>${tk !== null ? fmtKg(Math.round(tk * 1000) / 1000) + ' s' : '–'}</b></div><div class="kv"><span>Lądowanie</span><b>${tl !== null ? fmtKg(Math.round(tl * 1000) / 1000) + ' s' : '–'}</b></div>
       <div class="metrics"><div class="metric"><span>Czas lotu</span><b id="cmj-t">${tF > 0 ? Math.round(tF * 1000) : '–'}</b><small>ms</small></div><div class="metric"><span>Wysokość</span><b id="cmj-h">${hh > 0 ? fmtKg(Math.round(hh * 10) / 10) : '–'}</b><small>cm</small></div><div class="metric"><span>Skok</span><b>${slot + 1}</b><small>z 3</small></div></div>
       ${hh > 90 ? '<p class="hint">Ponad 90 cm: film jest pewnie zwolniony. Sprawdź klatkaż nagrania powyżej.</p>' : ''}
+      <div class="plbl">Zapisz jako</div><div class="seg" id="cmj-slot" role="group" aria-label="Zapisz jako">${[0, 1, 2].map(i => `<button type="button" data-slot="${i}" aria-pressed="${i === slot}">Skok ${i + 1}${isNum(num(rd.cmj[i])) ? ' · ' + fmtKg(num(rd.cmj[i])) : ''}</button>`).join('')}</div>
       <button type="button" class="btn tg" id="cmj-send" aria-pressed="${send2}">Wyślij film trenerowi</button>
       <button type="button" class="btn p" id="cmj-save" ${ok ? '' : 'disabled'}>Zapisz jako skok ${slot + 1}</button>`;
     $('#cmj-send').onclick = () => { send2 = !send2; upd(); };
+    document.querySelectorAll('#cmj-slot [data-slot]').forEach(b => b.onclick = () => { slot = +b.dataset.slot; upd(); });
     $('#cmj-save').onclick = () => {
-      rd.cmj[slot] = Math.round(hh * 10) / 10; closeSheet(); done();
+      rd.cmj[slot] = Math.round(hh * 10) / 10; if (rd.excl) rd.excl[slot] = false; closeSheet(); done();
       if (send2) queueCmjVideo(file, rd.date, slot + 1);
     };
   };
