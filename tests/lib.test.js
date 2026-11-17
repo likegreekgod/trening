@@ -31,8 +31,14 @@ test('plural, setKey, esc', () => {
   assert.equal(L.esc('<b>"x"&</b>'), '&lt;b&gt;&quot;x&quot;&amp;&lt;/b&gt;');
 });
 
-test('effortVal: RPE → przycisk trybu PROSTY', () => {
-  assert.deepEqual(['', 6, 7, '8,5', 9.5, 10].map(L.effortVal), ['', '6', '7.5', '9', '9', '10']);
+test('lightOf: RPE → światło (jedna skala w całej aplikacji), puste = brak oceny, FAIL = nieudana', () => {
+  assert.deepEqual(['', null, 'x', 5, 6, 7, '7,5', 8, '8,5', 8.9, 9, 9.5, 10].map(r => L.lightOf(r)), ['', '', '', 'L', 'L', 'L', 'L', 'S', 'S', 'S', 'W', 'W', 'W']);
+  assert.equal(L.lightOf('', 'FAIL'), 'X'); assert.equal(L.lightOf(9, 'DROP+FAIL'), 'X'); assert.equal(L.lightOf(8, 'DROP'), 'S');
+  // światło → RPE i z powrotem to samo światło; korekty z zakresu też
+  ['L', 'S', 'W'].forEach(q => { assert.equal(L.lightOf(L.EFF[q].rpe), q); assert.ok(L.EFF_FINE[q].includes(L.EFF[q].rpe)); });
+  assert.deepEqual([L.EFF.L.rpe, L.EFF.S.rpe, L.EFF.W.rpe, L.EFF.X.rpe], [7, 8, 9, '']);
+  // boje: te same stopnie i te same RPE
+  ['L', 'S', 'W', 'X'].forEach(q => assert.equal(L.RATE[q].rpe, L.EFF[q].rpe));
 });
 
 test('RPE ↔ RIR: RIR = 10 − RPE, 5+ = RPE 5, recepta z ceil', () => {
@@ -122,8 +128,8 @@ test('groupOf / isOly: boje rozpoznane po nazwie albo z kolumny grupa', () => {
 
 test('rateOf: ocena z kolumny „ocena”, a dla starszych wpisów z FAIL / RPE', () => {
   const T = (o) => Object.assign({ wykonane: 'TAK' }, o);
-  assert.deepEqual([T({ ocena: 'w' }), T({ typ: 'FAIL' }), T({ rpe: 7 }), T({ rpe: '8,5' }), T({ rpe: 9.5 }), T({}), { ocena: 'L' }].map(L.rateOf),
-    ['W', 'X', 'L', 'S', 'W', '', '']);
+  assert.deepEqual([T({ ocena: 'w' }), T({ typ: 'FAIL' }), T({ rpe: 7 }), T({ rpe: '7,5' }), T({ rpe: 8 }), T({ rpe: '8,5' }), T({ rpe: 9 }), T({ rpe: 9.5 }), T({}), { ocena: 'L' }].map(L.rateOf),
+    ['W', 'X', 'L', 'L', 'S', 'S', 'W', 'W', '', '']);
 });
 
 test('olyCap: sufit dnia', () => {
