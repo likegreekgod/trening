@@ -944,4 +944,13 @@ test('aiReq_, aiCost_, aiDay_: zapytanie do Claude API, koszt, dzienny limit', (
   assert.deepEqual(JSON.parse(JSON.stringify(C.aiDay_('{"d":"2026-11-16","n":30}', '2026-11-17', 30))), { n: 0, ok: true });
   assert.equal(C.aiDay_('zepsute', '2026-11-17', 30).ok, true);
   assert.ok(C.TR_FNS.trKomentarz && C.TR_FNS.trSzkic && !C.API_FNS.trSzkic);
+  assert.ok(C.TR_FNS.trAI && C.TR_FNS.trUstawAI && !C.API_FNS.trUstawAI);          // klucz ustawia tylko zalogowany trener
+  const key = 'sk-ant-api03-' + 'x'.repeat(40);
+  assert.equal(C.aiKeyOk_(key), '');
+  assert.equal(C.aiKeyOk_('  ' + key + '\n'), '');                             // wklejony ze spacją albo nową linią na końcu
+  assert.match(C.aiKeyOk_(''), /Wklej/);
+  assert.match(C.aiKeyOk_('sk-ant-api03-abc def' + 'x'.repeat(20)), /spacji/);
+  assert.match(C.aiKeyOk_('sk-proj-' + 'x'.repeat(40)), /sk-ant-/);           // klucz innej firmy
+  assert.equal(C.aiKeyEnd_(key.slice(0, -4) + 'AbCd'), '…AbCd');                 // panel widzi tylko 4 ostatnie znaki
+  assert.equal(C.aiKeyEnd_(''), '');
 });

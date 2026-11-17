@@ -88,8 +88,12 @@ async function page(calls, opt = {}) {
     else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: opt.noSets ? Object.assign(klient(), { logs: [] }) : klient() } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
     else if (b.fn === 'trKomentarz') out = { ok: true, result: { text: String(b.args[3]).trim(), at: TODAY + 'T19:52:00.000Z' } };
     else if (b.fn === 'trSzkic') { st.ai = (st.ai || 0) + 1; await new Promise(res => setTimeout(res, 150));
-      out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: w arkuszu wybierz Trening → Ustaw klucz Claude API (klucz z console.anthropic.com).' }
+      out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).' }
         : { ok: true, result: { text: (b.args[3] && b.args[3].tweak === 'krocej' ? 'Krótko: ' : '') + SZKIC, cost: 0.024, n: st.ai, limit: 30, model: 'claude-opus-5-5' } }; }
+    else if (b.fn === 'trAI') out = { ok: true, result: st.key ? { set: true, end: '…' + st.key.slice(-4), limit: 30, n: 2, model: 'claude-opus-5-5' } : { set: false, end: '', limit: 30, n: 0, model: 'claude-opus-5-5' } };
+    else if (b.fn === 'trUstawAI') { await new Promise(res => setTimeout(res, 150)); const k = String(b.args[0] || '').trim();
+      if (k && !/^sk-ant-/.test(k)) out = { ok: false, error: 'To nie wygląda na klucz Claude API (zaczyna się od sk-ant-). Nic nie zmieniono.' };
+      else { st.key = k; out = { ok: true, result: Object.assign(k ? { set: true, end: '…' + k.slice(-4), limit: 30, n: 0 } : { set: false, end: '', limit: 30, n: 0 }, { checked: true }) }; } }
     else out = { ok: false, error: 'Nieznana funkcja: ' + b.fn };
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
   });
@@ -290,7 +294,8 @@ test('panel: komentarz do sesji ze szkicem AI (szkic, poprawka „Krócej”, za
   await p.fill('details.ses[open] .kedit textarea', 'Mój tekst');
   await p.click('details.ses[open] .kedit button.ai');
   await p.waitForSelector('details.ses[open] .kedit .err');
-  assert.match(await p.textContent('details.ses[open] .kedit .err'), /Ustaw klucz Claude API/);
+  assert.match(await p.textContent('details.ses[open] .kedit .err'), /panelu → Ustawienia/);
+  assert.ok(await p.$('details.ses[open] .kedit .err a[href="#ustawienia"]'));     // link prosto do wklejenia klucza
   assert.equal(await p.inputValue('details.ses[open] .kedit textarea'), 'Mój tekst');
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
   await p.$eval('details.ses[open] .kedit', e => e.scrollIntoView());
@@ -306,4 +311,33 @@ test('panel: komentarz do sesji ze szkicem AI (szkic, poprawka „Krócej”, za
   assert.equal(c2.filter(c => c.fn === 'trSzkic').length, 0);
   assert.deepEqual(s2.p.errors, []);
   await s2.ctx.close();
+});
+
+test('panel: Ustawienia, klucz Claude API wklejany w panelu (też na telefonie), bez pokazywania całego klucza', async () => {
+  for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
+    const calls = [];
+    const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
+    await p.goto(base + 'trener.html#ustawienia'); await p.waitForSelector('#aikey-card');
+    assert.match(await p.textContent('#aikey-card .kstat'), /Brak klucza/);
+    assert.equal(await p.$('#aikey-del'), null);
+    assert.equal(await p.getAttribute('#aikey', 'type'), 'password');             // klucz nie widać na ekranie
+    await p.fill('#aikey', 'sk-proj-zly-klucz');                                    // klucz innej firmy: komunikat, nic nie zapisane
+    await p.click('#aikey-save'); await p.waitForSelector('#aikey-card .err');
+    assert.match(await p.textContent('#aikey-card .err'), /sk-ant-/);
+    const key = 'sk-ant-api03-' + 'q'.repeat(40) + 'AbCd';
+    await p.fill('#aikey', '  ' + key + ' ');
+    await p.click('#aikey-save'); await p.waitForSelector('#aikey-card .saved');
+    assert.equal(calls.filter(c => c.fn === 'trUstawAI').pop().args[0], key);     // bez spacji z wklejania
+    assert.match(await p.textContent('#aikey-card .saved'), /Klucz działa/);
+    assert.match(await p.textContent('#aikey-card .kstat'), /Klucz ustawiony …AbCd/);
+    assert.ok(!(await p.content()).includes(key), 'cały klucz nie zostaje na stronie');
+    if (vp) { assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390)); await shot(p, 'trener-ustawienia-telefon-ciemny.png'); }
+    else await shot(p, 'trener-ustawienia-jasny.png');
+    await p.click('#aikey-del'); assert.match(await p.textContent('#aikey-del'), /Na pewno/);   // usunięcie: drugie dotknięcie
+    await p.click('#aikey-del'); await p.waitForSelector('#aikey-card .saved');
+    assert.match(await p.textContent('#aikey-card .kstat'), /Brak klucza/);
+    assert.equal(calls.filter(c => c.fn === 'trUstawAI').pop().args[0], '');
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
 });

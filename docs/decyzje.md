@@ -3,6 +3,11 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+
+## 2026-11-17 · Klucz Claude API wklejany w panelu (v60)
+
+Damian nie mógł ustawić klucza, bo menu „Trening” nie pokazuje się w Arkuszach na telefonie; chciał wkleić klucz na czacie. Odrzucone: klucz w czacie (zostaje w historii, a Claude nie ma dostępu do skryptu). Zamiast tego panel → Ustawienia: pole hasła, zapis tylko dla zalogowanego trenera (`trUstawAI` w `TR_FNS`), sprawdzenie klucza bezpłatną listą modeli przed zapisem, w panelu widać tylko 4 ostatnie znaki. Menu w arkuszu zostaje.
+
 ## 2026-11-17 · Szkic AI tylko przy zapisanych seriach (v58)
 
 Damian: jeśli klient nie uzupełnił treningu, szkic AI nie powinien się generować, bo szkoda pieniędzy. Szkic i tak powstaje tylko po kliknięciu trenera, ale przy sesji bez żadnej zapisanej serii roboczej panel chowa „✦ Szkic AI”, a `trSzkic` odmawia przed wywołaniem Claude API (`trSzkicSets_`). Komentarz ręczny zostaje możliwy.
