@@ -6,6 +6,7 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 ## 2026-11-18 · Czarny film w Edge = „Rozszerz klipy wideo”; proporcje filmu (v68)
 
 - Przyczyną czarnego obrazu z dźwiękiem u Damiana było ustawienie Edge „Rozszerz klipy wideo” (ulepszanie wideo), nie kodek ani nasz kod. Po wyłączeniu obraz jest. Porada trafiła do pomocy „Czarny obraz, a słychać dźwięk?”.
+- v69: Edge zignorował też `object-fit` (film dalej rozciągnięty), więc rozmiar `<video>` liczy JS z wymiarów filmu (`fit`) i wpisuje w piksele; CSS zostaje jako zapas przed wczytaniem.
 - `<video>` w odtwarzaczu: `width: 100%; height: 100%; object-fit: contain` zamiast `width: auto; height: 100%` (w siatce szerokość wychodziła zła i obraz był rozciągnięty albo zwężony).
 
 ## 2026-11-18 · Nowa ikona: talerz z nazwą marki (v67)
