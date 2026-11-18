@@ -2204,7 +2204,7 @@ test('Marka „Siła z Ruchu”: nazwa pod ikoną na ekranie głównym, w karcie
   await ctx.close();
 });
 
-test('Ikona „Siła z Ruchu”: pliki mają rozmiary obiecane w manifeście i są tym, co rysuje tools/make-icons.js z toru animacji; znak wczytuje się w nagłówku w obu motywach', async () => {
+test('Ikona „Siła z Ruchu”: pliki mają rozmiary obiecane w manifeście i są tym, co rysuje tools/make-icons.js (talerz z nazwą na obwodzie); znak wczytuje się w nagłówku w obu motywach', async () => {
   const man = JSON.parse(fs.readFileSync(path.join(WEB, 'manifest.json'), 'utf8'));
   const icon = f => fs.readFileSync(path.join(WEB, 'icons', f));
   const size = f => { const b = icon(f); assert.equal(b.toString('latin1', 1, 4), 'PNG', f); return b.readUInt32BE(16) + 'x' + b.readUInt32BE(20); };   // szerokość i wysokość z nagłówka pliku PNG
@@ -2212,41 +2212,55 @@ test('Ikona „Siła z Ruchu”: pliki mają rozmiary obiecane w manifeście i s
   for (const i of man.icons.filter(i => i.type === 'image/png')) assert.equal(size(i.src.replace('icons/', '')), i.sizes, i.src);
   assert.deepEqual(['apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png'].map(size), ['180x180', '32x32', '16x16']);
   assert.deepEqual(man.icons.map(i => i.purpose).sort(), ['any', 'any', 'maskable', 'maskable', 'monochrome']);
-  // pliki w repo są dokładnie tym, co rysuje narzędzie z krzywych animacji (nikt nie poprawił ikony ręcznie ani toru „na oko”)
+  // pliki w repo są dokładnie tym, co rysuje narzędzie (nikt nie poprawił ikony ręcznie)
   const gen = require('../tools/make-icons.js').files();
   for (const [name, text] of Object.entries(gen.svg)) assert.equal(icon(name).toString('utf8'), text, name + ' różni się od narzędzia: uruchom node tools/make-icons.js');
   assert.deepEqual(gen.png.map(f => f[0]).sort(), fs.readdirSync(path.join(WEB, 'icons')).filter(f => f.endsWith('.png')).sort());
-  const html = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8');
-  const bar = /<path id="in-bar"[^>]*\sd="([^"]+)"/.exec(html)[1], dance = /<path id="in-dance"[^>]*\sd="([^"]+)"/.exec(html)[1];
-  assert.ok(icon('favicon.svg').includes(bar) && icon('icon-mono.svg').includes(bar) && icon('icon-mono.svg').includes(dance));
-  // ikona jednobarwna (Android koloruje ją sam i bierze tylko obrys): sam czarny kształt, bez przezroczystości
+  // ikona jednobarwna (Android koloruje ją sam i bierze tylko kształt): w pliku jest sama czerń, bez półprzezroczystości
   const mono = icon('icon-mono.svg').toString('utf8');
   assert.deepEqual([...new Set(mono.match(/#[0-9a-f]{3,8}\b/gi))], ['#000']); assert.ok(!/opacity/.test(mono));
-  // obraz w plikach PNG: piksel po pikselu ten sam rysunek, który narzędzie rysuje teraz z toru animacji; kolory marki są na miejscu (tło, pomarańczowy tor,
-  // jasny talerz), ikony na ekran główny są pełnym kwadratem bez przezroczystości
+  // obraz w plikach PNG: piksel po pikselu ten sam rysunek, który rysuje narzędzie; kolory marki są na miejscu (ciemne tło, pomarańczowy talerz, jasna piasta),
+  // ikony na ekran główny są pełnym kwadratem bez przezroczystości
   const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
   const { ctx, p } = await page([]);
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
-  const px = await p.evaluate(async ([list, C]) => { const out = {};
+  const px = await p.evaluate(async ([list, C, probe]) => { const out = {};
+    const pix = async (src, n) => { const im = new Image(); im.src = src; await im.decode();
+      const c = document.createElement('canvas'); c.width = c.height = n; const g = c.getContext('2d'); g.drawImage(im, 0, 0, n, n);
+      return { nat: [im.naturalWidth, im.naturalHeight], d: g.getImageData(0, 0, n, n).data }; };
+    const near = (d, i, k) => d[i + 3] === 255 && Math.abs(d[i] - k[0]) + Math.abs(d[i + 1] - k[1]) + Math.abs(d[i + 2] - k[2]) < 30;
     for (const [name, n, markup] of list) {
-      const pix = async src => { const im = new Image(); im.src = src; await im.decode();
-        const c = document.createElement('canvas'); c.width = c.height = n; const g = c.getContext('2d'); g.drawImage(im, 0, 0);
-        return { nat: [im.naturalWidth, im.naturalHeight], d: g.getImageData(0, 0, n, n).data }; };
-      const { nat, d } = await pix('icons/' + name), w = (await pix('data:image/svg+xml,' + encodeURIComponent(markup))).d;   // d = plik z repo, w = rysunek narzędzia
-      const like = (i, k) => d[i + 3] === 255 && Math.abs(d[i] - k[0]) + Math.abs(d[i + 1] - k[1]) + Math.abs(d[i + 2] - k[2]) < 30;
-      const share = k => { let m = 0; for (let i = 0; i < d.length; i += 4) if (like(i, k)) m++; return m / (n * n); };
+      const { nat, d } = await pix('icons/' + name, n), w = (await pix('data:image/svg+xml,' + encodeURIComponent(markup), n)).d;   // d = plik z repo, w = rysunek narzędzia
+      const share = k => { let m = 0; for (let i = 0; i < d.length; i += 4) if (near(d, i, k)) m++; return m / (n * n); };
       let off = 0; for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - w[i]) + Math.abs(d[i + 1] - w[i + 1]) + Math.abs(d[i + 2] - w[i + 2]) + Math.abs(d[i + 3] - w[i + 3]) > 60) off++;
-      out[name] = { nat, corners: [0, n - 1, n * (n - 1), n * n - 1].map(q => d[q * 4 + 3]), bg: share(C.bg), acc: share(C.acc), ink: share(C.ink), off: off / (n * n) };
+      const at = q => { const i = (Math.round(q[1] * n / 512) * n + Math.round(q[0] * n / 512)) * 4; return near(d, i, C.bg) ? 'bg' : near(d, i, C.acc) ? 'acc' : near(d, i, C.ink) ? 'ink' : '?'; };
+      const pts = name === 'icon-512.png' ? probe : name === 'icon-maskable-512.png' ? probe.mono : null;
+      // ikona „maskable”: Android może ją przyciąć do koła o promieniu 40% boku, więc poza tym kołem ma być samo tło (cut = piksele rysunku poza kołem)
+      let cut = 0; if (/maskable/.test(name)) for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (Math.hypot(x + .5 - n / 2, y + .5 - n / 2) > n * .4 + 1 && !near(d, (y * n + x) * 4, C.bg)) cut++;
+      out[name] = { nat, corners: [0, n - 1, n * (n - 1), n * n - 1].map(q => d[q * 4 + 3]), bg: share(C.bg), acc: share(C.acc), ink: share(C.ink), off: off / (n * n), cut,
+        name: pts && [at(pts.stem), at(pts.gap)] };
     }
-    return out; }, [gen.png, { bg: rgb(gen.colors.bg), acc: rgb(gen.colors.acc), ink: rgb(gen.colors.ink) }]);
+    // ikona jednobarwna narysowana w 512 px: czy widoczne piksele są czarne i co jest w punktach kontrolnych (0 = wycięte na wylot, 255 = pełne)
+    const m = (await pix('icons/icon-mono.svg', 512)).d; let colored = 0, solid = 0;
+    for (let i = 0; i < m.length; i += 4) { if (m[i + 3] > 0 && m[i] + m[i + 1] + m[i + 2] > 0) colored++; if (m[i + 3] === 255) solid++; }
+    const alpha = q => m[(Math.round(q[1]) * 512 + Math.round(q[0])) * 4 + 3];
+    out.mono = { colored, solid: solid / (512 * 512), stem: alpha(probe.mono.stem), gap: alpha(probe.mono.gap), hole: alpha(probe.mono.hole), ring: alpha(probe.mono.solid) };
+    return out; }, [gen.png, { bg: rgb(gen.colors.bg), acc: rgb(gen.colors.acc), ink: rgb(gen.colors.ink) }, gen.probe]);
   for (const [name, n] of gen.png) {
     const q = px[name], small = /^favicon/.test(name);
     assert.deepEqual(q.nat, [n, n], name);
     assert.ok(q.off < 0.005, name + ' różni się od rysunku narzędzia (' + (q.off * 100).toFixed(2) + '% pikseli): uruchom node tools/make-icons.js');
-    assert.ok(q.bg > 0.5 && q.acc > 0.02 && q.ink > 0.004, name + ' ' + JSON.stringify(q));        // większość to tło, tor i talerz są widoczne
+    // pomarańczowy talerz zajmuje dużą część pola (w ikonie „maskable” jest pomniejszony, więc trochę mniejszą), piasta jest jasna, wokół zostaje ciemne tło
+    assert.ok(q.acc > (/maskable/.test(name) ? 0.25 : 0.3) && q.ink > 0.02 && q.bg > (small ? 0.15 : 0.4), name + ' ' + JSON.stringify(q));
+    if (q.name) assert.deepEqual(q.name, ['bg', 'acc'], name + ': napis na obwodzie');     // kreska litery „I” jest ciemna, przerwa między wyrazami pomarańczowa
+    assert.equal(q.cut, 0, name + ': talerz wychodzi poza koło, do którego Android przycina ikonę');
     if (small) assert.ok(q.corners.every(a => a < 128), name + ' ' + q.corners);                   // znak w karcie przeglądarki ma zaokrąglone rogi
     else assert.deepEqual(q.corners, [255, 255, 255, 255], name);                                  // telefon sam przycina rogi: przezroczystość dałaby czarne narożniki
   }
+  // ikona w kolorach motywu Androida: sam czarny kształt; napis, otwór na gryf są wycięte na wylot, a talerz między nimi jest pełny
+  assert.equal(px.mono.colored, 0);
+  assert.deepEqual([px.mono.stem, px.mono.gap, px.mono.hole, px.mono.ring], [0, 255, 0, 255], JSON.stringify(px.mono));
+  assert.ok(px.mono.solid > 0.3 && px.mono.solid < 0.6, JSON.stringify(px.mono));
   await ctx.close();
   // znak w nagłówku aplikacji: wczytany, 20 × 20 px, w jasnym i ciemnym motywie
   for (const scheme of ['light', 'dark']) {
