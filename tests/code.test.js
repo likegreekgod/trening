@@ -262,6 +262,34 @@ test('slugId_ i buildClientRow_: nowy klient z menu', () => {
   assert.equal(C.buildClientRow_({ imie: 'Ewa', id: 'Ewa K' }, [], 'k').id, 'ewa-k');
 });
 
+test('trKlientOf_ i trKlientVals_: klienci w panelu trenera (ustawienia ↔ wiersz Klienci)', () => {
+  const row = ['kabc', 'Ania', 'Ania', '', 'stary-link', 'tak', 'PROSTY', 2, 'TAK', 'TAK', 'RIR', 0.075, '', 'TAK'];
+  const k = C.trKlientOf_(row, 'https://x.github.io/trening/');
+  assert.deepEqual(JSON.parse(JSON.stringify(k)), { id: 'ania', name: 'Ania', on: true, mode: 'PROSTY', scale: 'RIR', swap: 'TRENER', pain: true, masters: true,
+    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc' });
+  // pusty wiersz = wartości domyślne; bez adresu aplikacji link z kolumny E
+  const d = C.trKlientOf_(['k1', 'bo', 'Bo', 'NIE', 'link-E'], '');
+  assert.equal(d.on, false); assert.equal(d.mode, 'PRO'); assert.equal(d.swap, 'NIE'); assert.equal(d.oly, 5); assert.equal(d.own, true); assert.equal(d.link, 'link-E');
+  // panel → kolumny D, F–N
+  const v = C.trKlientVals_({ on: false, mode: 'PRO', scale: 'RPE', swap: 'DOWOLNA', pain: true, masters: false, extra: 3, oly: 7.5, own: false, edit: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(v.vals)), { 3: 'NIE', 5: 'TAK', 6: 'PRO', 7: 3, 8: '', 9: 'DOWOLNA', 10: 'RPE', 11: 0.075, 12: 'NIE', 13: 'TAK' });
+  // zapis i odczyt dają to samo (np. sufit 7,5% → 0,075 → 7,5)
+  const r2 = ['k', 'x', 'X']; Object.keys(v.vals).forEach(i => { r2[i] = v.vals[i]; });
+  const back = C.trKlientOf_(r2, '');
+  assert.equal(back.oly, 7.5); assert.equal(back.swap, 'DOWOLNA'); assert.equal(back.own, false); assert.equal(back.on, false); assert.equal(back.extra, 3);
+  assert.equal(C.trKlientOf_(r2.map((x, i) => i === 11 ? 0 : x), '').oly, 0, 'sufit 0% zostaje zerem');
+  const base = Object.assign({}, C.KL_DOMYSLNE);
+  assert.ok(C.trKlientVals_(base).vals);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { extra: 6 })).error, /0–5/);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { extra: 1.5 })).error, /0–5/);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { oly: 25 })).error, /0–20/);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { swap: 'TAK' })).error, /Zamiana/);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { mode: 'X' })).error, /Tryb/);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { scale: '' })).error, /Skala/);
+  // nazwy akcji panelu nie pokrywają się z akcjami klientów
+  ['trKlienci', 'trKlientUstaw', 'trKlientNowy', 'trKlientLink'].forEach(n => { assert.ok(C.TR_FNS[n], n); assert.equal(C.API_FNS[n], undefined); });
+});
+
 test('computeOverview_: przegląd klientów – sygnały, zaległe, koniec planu, kolejność wg pilności', () => {
   const today = '2026-10-12';                                                  // poniedziałek
   const P = (k, j, data, nr, cw, x) => Object.assign({ klient: k, tydzien: 1, jednostka: j, data, nr, cwiczenie: cw, prio: 'A', serie: 3, powt: '5', kg: 80 }, x || {});

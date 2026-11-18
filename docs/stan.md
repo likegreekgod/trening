@@ -2,7 +2,7 @@
 
 Krótki punkt startowy dla nowej sesji: co działa, jak pracujemy, co czeka. Aktualizuj po każdym zadaniu (krótko, bez historii — historia jest w `docs/decyzje.md`). Bez danych klientów: repo jest publiczne.
 
-Stan na 2026-11-18, `main` = v68 (scalone PR #76: panel trenera PR 1–2, #77: marka „Siła z Ruchu”, #78: panel na telefonie i przełącznik aplikacja ↔ panel, #79: animacja po przerwie 30 minut i ikona „Duet”, #80: naprawa importu planu, #81: komentarz do sesji ze szkicem AI, #82: poprawka skoku CMJ, v57, #83: szkic AI tylko przy zapisanych seriach, v58, #84: światła RPE, v59); #85: klucz Claude API w panelu, v60, #86: filmy w panelu, v61, #87: film strumieniem, v62, #88: filmy przez service worker, v63, #89: zamknięcie bloku z AI, v64, #90: serie bez ✓ w panelu, format filmu, v65, #91: odtwarzacz w panelu bez przycinania filmu, odczyt formatu nie zawisa, v66, #92: nowa ikona (talerz z nazwą marki), v67); #93: proporcje filmu (object-fit), v68, #94: rozmiar filmu w pikselach, v69); v70 (zejście po 🟡 / 🔴 w bojach, rekord po zamknięciu ćwiczenia, stan ciała) na gałęzi `claude/project-thread-ig9gzo`.
+Stan na 2026-11-18, `main` = v70 (scalone PR #76: panel trenera PR 1–2, #77: marka „Siła z Ruchu”, #78: panel na telefonie i przełącznik aplikacja ↔ panel, #79: animacja po przerwie 30 minut i ikona „Duet”, #80: naprawa importu planu, #81: komentarz do sesji ze szkicem AI, #82: poprawka skoku CMJ, v57, #83: szkic AI tylko przy zapisanych seriach, v58, #84: światła RPE, v59); #85: klucz Claude API w panelu, v60, #86: filmy w panelu, v61, #87: film strumieniem, v62, #88: filmy przez service worker, v63, #89: zamknięcie bloku z AI, v64, #90: serie bez ✓ w panelu, format filmu, v65, #91: odtwarzacz w panelu bez przycinania filmu, odczyt formatu nie zawisa, v66, #92: nowa ikona (talerz z nazwą marki), v67); #93: proporcje filmu (object-fit), v68, #94: rozmiar filmu w pikselach, v69, #95: zejście po 🟡 / 🔴 w bojach, rekord po zamknięciu ćwiczenia, stan ciała, v70); v71 (Klienci w panelu trenera) na gałęzi `claude/project-thread-u3xxve`.
 
 ## Jak pracujemy
 
@@ -18,6 +18,7 @@ Stan na 2026-11-18, `main` = v68 (scalone PR #76: panel trenera PR 1–2, #77: m
 
 ## Ostatnio zrobione
 
+- 18.11 (v71 + `apps-script/`, na gałęzi `claude/project-thread-u3xxve`): panel trenera → Klienci: lista wszystkich klientów z ustawieniami w skrócie i „Kopiuj link” / „Wyślij…”, ustawienia klienta (aktywny, tryb, skala, ból, zamiana, zmiany w treningu, własne treningi, dodatkowe serie, masters, sufit w bojach) zapisywane do zakładki Klienci, „Wygeneruj nowy link” (stary przestaje działać), nowy klient z linkiem od razu. Działa też na telefonie, gdzie menu arkusza nie działa. Usuwania klienta nie ma (tylko „nieaktywny”). Wybrane 18.11 z listy usprawnień (punkt 5), szkic zaakceptowany.
 - 18.11 (v70 + `apps-script/`, na gałęzi): boje z „max dziś”: pierwsza ocena Średnio / Walka / Spalone blokuje sufit („max dziś” szare, „zablokowane”), kolejne serie dostają kg z planu jako domyślne z komunikatem „🟡 → wracasz do planu (X kg)”; Walka albo Spalone na ostatniej serii = podpowiedź „+ drop set” −10%. Pasek „★ Rekord” dopiero po zamknięciu ćwiczenia, nie między seriami. Dyspozycja → „Ból / napięcie” w dowolny dzień (kilka miejsc, 0–10, kiedy, ćwiczenie, notatka; lista 14 dni z usuwaniem; offline przez kolejkę) → nowa zakładka arkusza Stan. Podgląd dla Claude: ból z sesji w wierszu „— sesja —” i zakładka „Stan ciała” (28 dni).
 - 18.11 (v69, scalony PR #94): v68 nie wystarczył: Edge ignorował `object-fit` i dalej rozciągał film 1920×1080 na całą scenę. Teraz panel liczy rozmiar filmu z `videoWidth` / `videoHeight` i wpisuje go w piksele (`fit`, przy `loadedmetadata`, `resize` filmu i zmianie sceny przez `ResizeObserver`); test sprawdza, że prostokąt filmu ma proporcje pliku.
 - 18.11 (v68, scalony PR #93; v67 wziął PR #92 z ikoną): film w panelu był rozciągnięty / zwężony: `<video>` miał `width: auto; height: 100%` w siatce i przeglądarka liczyła złą szerokość (widać też w zrzucie testowym: film 4:3 był wąski). Teraz film wypełnia scenę, a proporcje trzyma `object-fit: contain`. Czarny obraz u Damiana rozwiązało wyłączenie w Edge „Rozszerz klipy wideo” (Ustawienia → System i wydajność).
@@ -73,6 +74,7 @@ Stan na 2026-11-18, `main` = v68 (scalone PR #76: panel trenera PR 1–2, #77: m
 
 ## Czeka na Damiana
 
+- Próba v71 (po scaleniu): panel → Klienci: skopiuj link, zmień ustawienie u siebie albo u klienta testowego i sprawdź w arkuszu, dodaj klienta testowego (potem przełącz go na nieaktywnego).
 - Po scaleniu v70: dopisać do SKILL.md skilla trenera zakładkę Stan i „Stan ciała” w podglądzie (przebuduj ZIP); próba zejścia po 🟡 na telefonie. Zakładka Stan i „Stan ciała” w podglądzie powstaną same (pierwszy zapis / najbliższe odświeżenie podglądu). Decyzja: Łatwo przy samych 🟢 dalej +2,5 kg czy +5 kg jak w uwagach planu.
 - Szkic AI (po scaleniu v56): klucz Claude API z console.anthropic.com wpisać przez menu „Trening → Ustaw klucz Claude API” albo w edytorze Apps Script jako właściwość `CLAUDE_API_KEY` (kroki w `docs/plan-panel.md`, „Szkic AI”). Bez klucza panel działa, a przycisk „Szkic AI” pokazuje, co zrobić.
 - Próba v67 na telefonie: nowa ikona (talerz) na ekranie głównym i mały talerz w nagłówku aplikacji (Android zwykle podmienia ikonę sam w ciągu kilku dni, iPhone dopiero po usunięciu ikony i ponownym dodaniu do ekranu głównego; aplikacja poprosi wtedy o link albo kod). Animację po przerwie 30 minut Damian potwierdził 18.11 („animacja super”).
@@ -90,6 +92,7 @@ Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPho
 
 ## Propozycje (do wyboru)
 
+- Z listy 18.11 (punkt 5 zrobiony w v71): odpowiedź klienta na komentarz trenera, proponowana rozgrzewka przy ćwiczeniu A, „Dodaj do kalendarza”, ekran pierwszego uruchomienia (dodanie do ekranu głównego), szybka poprawka planu w panelu (kg, serie, notatka do jednostki), poranny mail z przeglądem dnia, asystent planu (panel PR 5).
 - Przegląd trenera na telefonie (osobna strona).
 - Porządek w bazie ćwiczeń: lista podejrzanych duplikatów Catalyst / free-exercise-db do decyzji.
 

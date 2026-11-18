@@ -8,9 +8,11 @@
  * Odczyt: trPulpit, trKlient, trPrzelicz. Zapis: trKomentarz (komentarz do sesji), trKomentarzFilm (komentarz do serii z filmem). Filmy: trFilm (bilet do Drive API). Claude API: trSzkic (szkic komentarza,
  * klucz CLAUDE_API_KEY we właściwościach skryptu, dzienny limit, każde wywołanie w zakładce „AI”). AI tylko szkicuje, zapisuje trener.
  * Zamknięcie bloku: trBlok (Bloki.wnioski i dla_klienta), trBlokSzkic (szkic AI obu naraz).
+ * Klienci: trKlienci (lista z ustawieniami i linkiem), trKlientUstaw (flagi z zakładki Klienci), trKlientNowy (nowy klient), trKlientLink (nowy klucz = nowy link).
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
-const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic };
+const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
+  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -620,4 +622,114 @@ function trBlokSzkic(id, blok, opt) {
   const r = aiCall_(aiBlokReq_(ctx, opt), ['szkic bloku' + (opt && AI_POPRAW_BLOK[opt.tweak] ? ' · ' + opt.tweak : ''), id, '', blok]);
   const p = aiBlokParse_(r.text);
   return { wnioski: p.wnioski, dla_klienta: p.dla_klienta, cost: r.cost, n: r.n, limit: r.limit, model: r.model };
+}
+
+/* ---------- klienci: lista, ustawienia (flagi z zakładki Klienci), nowy klient, nowy link ----------
+ * Kolumny Klienci po pozycji (jak clientOf_): A klucz, B klient_id, C imie, D aktywny, E link, F bol, G tryb, H dod_serie, I masters,
+ * J zamiana, K skala, L sufit_oly, M wlasne, N edycja. Usuwania nie ma: „nieaktywny” zostawia historię.
+ */
+const KL_HEAD = ['klucz', 'klient_id', 'imie', 'aktywny', 'link', 'bol', 'tryb', 'dod_serie', 'masters', 'zamiana', 'skala', 'sufit_oly', 'wlasne', 'edycja'];
+const KL_SUFIT_MAX = 20;               // sufit w bojach: najwyżej 20% maksa ponad plan
+
+/** Czysta: wiersz Klienci → ustawienia dla panelu; base = adres aplikacji (link liczony z klucza, bo kolumna E bywa nieaktualna). */
+function trKlientOf_(r, base) {
+  const c = clientOf_(r), up = i => String(r[i] === undefined || r[i] === null ? '' : r[i]).trim().toUpperCase();
+  return { id: c.id, name: c.name, on: up(3) !== 'NIE', mode: c.simple ? 'PROSTY' : 'PRO', scale: c.scale, swap: c.swap || 'NIE',
+    pain: c.pain, masters: up(8) === 'TAK', extra: c.extra, oly: Math.round(c.olyCeil * 1000) / 10, own: c.own, edit: c.edit,
+    link: base && c.key ? base + '?k=' + c.key : String(r[4] || '').trim() };
+}
+
+/** Czysta: ustawienia z panelu → {vals: {indeks kolumny: wartość}} (D, F–N) albo {error}. */
+function trKlientVals_(f) {
+  f = f || {};
+  const extra = Number(f.extra), oly = Number(f.oly), swap = String(f.swap || ''), mode = String(f.mode || ''), scale = String(f.scale || '');
+  if (!(Number.isInteger(extra) && extra >= 0 && extra <= 5)) return { error: 'Dodatkowe serie: liczba 0–5.' };
+  if (!(isFinite(oly) && oly >= 0 && oly <= KL_SUFIT_MAX)) return { error: 'Sufit w bojach: 0–' + KL_SUFIT_MAX + '%.' };
+  if (['NIE', 'TRENER', 'DOWOLNA'].indexOf(swap) < 0) return { error: 'Zamiana ćwiczenia: Nie, Od trenera albo Dowolna.' };
+  if (['PROSTY', 'PRO'].indexOf(mode) < 0) return { error: 'Tryb: Prosty albo PRO.' };
+  if (['RPE', 'RIR'].indexOf(scale) < 0) return { error: 'Skala: RPE albo RIR.' };
+  return { vals: { 3: f.on === false ? 'NIE' : 'TAK', 5: f.pain ? 'TAK' : '', 6: mode, 7: extra, 8: f.masters ? 'TAK' : '', 9: swap, 10: scale,
+    11: Math.round(oly * 10) / 1000, 12: f.own === false ? 'NIE' : 'TAK', 13: f.edit ? 'TAK' : '' } };
+}
+
+/** Domyślne ustawienia nowego klienta (jak pusty wiersz w arkuszu). */
+const KL_DOMYSLNE = { on: true, mode: 'PRO', scale: 'RPE', swap: 'NIE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false };
+
+/** Arkusz Klienci; brakujące nagłówki (puste komórki A1–N1) dopisuje, istniejących nie zmienia. */
+function klSheet_() {
+  const sh = sheet_('Klienci', KL_HEAD.slice(0, 9));
+  const h = sh.getRange(1, 1, 1, KL_HEAD.length).getValues()[0];
+  if (h.some((x, i) => String(x).trim() === '')) sh.getRange(1, 1, 1, KL_HEAD.length).setValues([h.map((x, i) => String(x).trim() === '' ? KL_HEAD[i] : x)]);
+  return sh;
+}
+function klRows_(sh) {
+  const n = sh.getLastRow() - 1;
+  return n > 0 ? sh.getRange(2, 1, n, KL_HEAD.length).getValues() : [];
+}
+
+/** Lista wszystkich klientów (też nieaktywnych) z ustawieniami i linkiem. */
+function trKlienci() {
+  const base = linkBase_(), sh = SpreadsheetApp.getActive().getSheetByName('Klienci');
+  if (!sh) return [];
+  return klRows_(sh).filter(r => String(r[1]).trim()).map(r => trKlientOf_(r, base));
+}
+
+/** Zapisuje ustawienia klienta (D, F–N) i odświeża link w kolumnie E. */
+function trKlientUstaw(id, f) {
+  id = String(id || '').trim().toLowerCase();
+  const v = trKlientVals_(f);
+  if (v.error) throw new Error(v.error);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = klSheet_(), rows = klRows_(sh), i = rows.findIndex(r => String(r[1]).trim().toLowerCase() === id);
+    if (!id || i < 0) throw new Error('Nie ma klienta „' + id + '”.');
+    const r = rows[i].slice(), base = linkBase_();
+    Object.keys(v.vals).forEach(k => { r[k] = v.vals[k]; });
+    if (base) r[4] = base + '?k=' + String(r[0]).trim();
+    sh.getRange(i + 2, 4, 1, KL_HEAD.length - 3).setValues([r.slice(3)]);
+    return trKlientOf_(r, base);
+  } finally { lock.releaseLock(); }
+}
+
+/** Nowy klient z panelu: imię, ID (z imienia), tryb, zamiana, masters; reszta domyślna. Zwraca ustawienia z linkiem. */
+function trKlientNowy(f) {
+  f = f || {};
+  const s = Object.assign({}, KL_DOMYSLNE, { mode: f.mode || 'PRO', swap: f.swap || 'NIE', masters: !!f.masters });
+  const v = trKlientVals_(s);
+  if (v.error) throw new Error(v.error);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = klSheet_(), ids = klRows_(sh).map(r => r[1]);
+    const res = buildClientRow_({ imie: f.imie, id: f.id }, ids, newKey_());
+    if (res.error) throw new Error(res.error);
+    const r = res.row.slice(); while (r.length < KL_HEAD.length) r.push('');
+    Object.keys(v.vals).forEach(k => { r[k] = v.vals[k]; });
+    const base = linkBase_();
+    if (base) r[4] = base + '?k=' + r[0];
+    const n = sh.getLastRow() + 1;
+    sh.getRange(n, 1).setNumberFormat('@');                       // klucz zawsze jako tekst
+    sh.getRange(n, 1, 1, r.length).setValues([r]);
+    rootFolder_();                                                // folder na filmy (Trening – Klienci) istnieje
+    return trKlientOf_(r, base);
+  } finally { lock.releaseLock(); }
+}
+
+/** Nowy klucz klienta: stary link przestaje działać (dane w Logu i Sesjach są po klient_id, więc zostają). */
+function trKlientLink(id) {
+  id = String(id || '').trim().toLowerCase();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = klSheet_(), rows = klRows_(sh), i = rows.findIndex(r => String(r[1]).trim().toLowerCase() === id);
+    if (!id || i < 0) throw new Error('Nie ma klienta „' + id + '”.');
+    const r = rows[i].slice(), base = linkBase_();
+    r[0] = newKey_();
+    r[4] = base ? base + '?k=' + r[0] : '';
+    sh.getRange(i + 2, 1).setNumberFormat('@');
+    sh.getRange(i + 2, 1).setValue(r[0]);
+    sh.getRange(i + 2, 5).setValue(r[4]);
+    return trKlientOf_(r, base);
+  } finally { lock.releaseLock(); }
 }

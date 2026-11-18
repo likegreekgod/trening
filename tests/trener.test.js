@@ -56,6 +56,12 @@ function klient() {
   };
 }
 
+const KL1 = { scale: 'RPE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false };
+const KLIENCI = [   // panel → Klienci (trKlienci): ustawienia z zakładki Klienci, dane syntetyczne
+  Object.assign({}, KL1, { id: 'ania', name: 'Ania', on: true, mode: 'PRO', swap: 'DOWOLNA', pain: true, edit: true, extra: 2, link: 'https://example.com/trening/?k=kaaaaaaaaaa1' }),
+  Object.assign({}, KL1, { id: 'bartek', name: 'Bartek', on: true, mode: 'PROSTY', swap: 'TRENER', extra: 1, link: 'https://example.com/trening/?k=kbbbbbbbbbb2' }),
+  Object.assign({}, KL1, { id: 'ewa', name: 'Ewa', on: false, mode: 'PRO', swap: 'NIE', link: 'https://example.com/trening/?k=keeeeeeeeee3' })
+];
 const BLOK_SZKIC = {   // syntetyczny szkic AI zamknięcia bloku
   wnioski: 'Wykonanie 100% (11 z 11), ale sRPE rosło z 700 do 790, a w tyg. 12 dyspozycja „Uwaga” i kolano 5/10. Przysiad e1RM 74 → 80 kg (+8%), wyciskanie stoi na 46 kg od tyg. 9. Kolano pojawia się tylko po T1 z przysiadem powyżej 85%. Następny blok: przysiad 3×5 od 62,5 kg z pauzą, wyciskanie 5×3 na 42,5 kg z dokładaniem 1,25 kg tygodniowo, deload w tyg. 4.',
   dla_klienta: 'Zrobione wszystkie 11 treningów z bloku, a przysiad urósł o 6 kg szacowanego maksimum. Wyciskanie od trzech tygodni stoi, więc w następnym bloku zmieniamy mu schemat. Kolano dało znać przy najcięższych przysiadach: zaczynamy lżej, z pauzą na dole, i wracamy do ciężaru po 3 tygodniach.' };
@@ -114,6 +120,14 @@ async function page(calls, opt = {}) {
       else { st.key = k; out = { ok: true, result: Object.assign(k ? { set: true, end: '…' + k.slice(-4), limit: 30, n: 0 } : { set: false, end: '', limit: 30, n: 0 }, { checked: true }) }; } }
     else if (b.fn === 'trFilm') { st.nFilm = (st.nFilm || 0) + 1; if (st.nFilm > 1) st.fresh = true; out = { ok: true, result: { token: 'tok-film', exp: Date.now() + 3e6 } }; }
     else if (b.fn === 'trKomentarzFilm') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { text: String(b.args[5]).trim(), at: TODAY + 'T20:00:00.000Z' } }; }
+    else if (b.fn === 'trKlienci') { st.kl = st.kl || KLIENCI.map(k => Object.assign({}, k)); out = { ok: true, result: st.kl }; }
+    else if (b.fn === 'trKlientUstaw') { await new Promise(res => setTimeout(res, 100)); const f = b.args[1], i = st.kl.findIndex(k => k.id === b.args[0]);
+      if (f.extra > 5) out = { ok: false, error: 'Dodatkowe serie: liczba 0–5.' };
+      else { st.kl[i] = Object.assign({}, st.kl[i], f, { link: st.kl[i].link }); out = { ok: true, result: st.kl[i] }; } }
+    else if (b.fn === 'trKlientNowy') { await new Promise(res => setTimeout(res, 100)); const f = b.args[0];
+      if (st.kl.some(k => k.id === f.id)) out = { ok: false, error: 'Klient „' + f.id + '” już istnieje — wybierz inne ID (np. ' + f.id + '-2).' };
+      else { const k = { id: f.id, name: f.imie, on: true, mode: f.mode, scale: 'RPE', swap: f.swap, pain: false, masters: f.masters, extra: 0, oly: 5, own: true, edit: false, link: 'https://example.com/trening/?k=knowy0000001' }; out = { ok: true, result: k }; } }
+    else if (b.fn === 'trKlientLink') { const i = st.kl.findIndex(k => k.id === b.args[0]); st.kl[i] = Object.assign({}, st.kl[i], { link: 'https://example.com/trening/?k=knowylink001' }); out = { ok: true, result: st.kl[i] }; }
     else out = { ok: false, error: 'Nieznana funkcja: ' + b.fn };
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
   });
@@ -548,4 +562,101 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   assert.equal(await s3.p.getAttribute('.pv .pmsg a', 'href'), 'https://drive.google.com/file/d/film1/view');
   assert.deepEqual(s3.p.errors, []);
   await s3.ctx.close();
+});
+
+test('panel: Klienci (lista, kopiowanie linku, ustawienia klienta, nowy link, nowy klient)', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, { loggedIn: true });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await p.goto(base + 'trener.html#klienci');
+  await p.waitForSelector('table.kl');
+  assert.equal(await p.getAttribute('#nav a[data-v="klienci"]', 'aria-current'), 'page');
+  const txt = await p.textContent('#main');
+  assert.match(txt, /2 aktywnych · 1 nieaktywny/);
+  assert.match(txt, /Ania.*PRO · zamiana dowolna · zmiany w treningu · ból zawsze · \+2 serie/s);
+  assert.match(txt, /Bartek.*Prosty · zamiana od trenera · \+1 seria/s);
+  assert.match(txt, /Ewa.*nieaktywny/s);
+  assert.equal(await p.$$eval('table.kl tbody tr', t => t.map(r => r.querySelector('.who').textContent.trim())).then(a => a.join()), 'Ania,Bartek,Ewa');   // aktywni najpierw
+  assert.equal(await p.$('tr.off [data-copy]'), null, 'nieaktywny bez kopiowania linku');
+  // kopiowanie linku do schowka
+  await p.click('[data-copy="bartek"]');
+  await p.waitForSelector('[data-copy="bartek"].done');
+  assert.equal(await p.evaluate(() => navigator.clipboard.readText()), 'https://example.com/trening/?k=kbbbbbbbbbb2');
+  await shot(p, 'trener-klienci-jasny.png');
+  // ustawienia Bartka: zmiana trybu, zamiany, dodatkowych serii i sufitu, zapis
+  await p.click('a.cp[href="#klienci/bartek"]');
+  await p.waitForSelector('#kl-form');
+  assert.equal(await p.isDisabled('#kl-save'), true, 'bez zmian nie ma czego zapisać');
+  await p.click('[data-seg="mode"][data-val="PRO"]');
+  await p.click('[data-seg="swap"][data-val="DOWOLNA"]');
+  await p.click('[data-sw="masters"]');
+  await p.click('[data-num="extra"][data-d="1"]');
+  await p.click('[data-num="oly"][data-d="2.5"]');
+  assert.match(await p.textContent('#kl-form'), /Zmienione: 5/);
+  await p.click('[data-num="extra"][data-d="-1"]');
+  assert.match(await p.textContent('#kl-form'), /Zmienione: 4/, 'powrót do starej wartości nie liczy się jako zmiana');
+  await p.click('#kl-save');
+  await p.waitForSelector('#kl-form .saved');
+  const u = calls.filter(c => c.fn === 'trKlientUstaw').pop();
+  assert.equal(u.args[0], 'bartek');
+  assert.deepEqual([u.args[1].mode, u.args[1].swap, u.args[1].masters, u.args[1].extra, u.args[1].oly, u.args[1].on, u.args[1].own], ['PRO', 'DOWOLNA', true, 1, 7.5, true, true]);
+  assert.ok(u.token && !u.key, 'zapis tylko z biletem trenera');
+  assert.match(await p.textContent('#kl-form'), /Zapisano/);
+  assert.equal(await p.isDisabled('#kl-save'), true);
+  await shot(p, 'trener-klient-ustawienia-jasny.png');
+  // nowy link: dopiero po drugim dotknięciu
+  await p.click('#kl-rekey');
+  assert.match(await p.textContent('#kl-rekey'), /Na pewno/);
+  assert.equal(calls.filter(c => c.fn === 'trKlientLink').length, 0);
+  await p.click('#kl-rekey');
+  await p.waitForFunction(() => /knowylink001/.test(document.querySelector('#kl-link').textContent));
+  assert.match(await p.textContent('#kl-form'), /Stary już nie działa/);
+  // lista pokazuje nowe ustawienia
+  await p.click('a[href="#klienci"]');
+  await p.waitForSelector('table.kl');
+  assert.match(await p.textContent('#main'), /Bartek.*PRO · zamiana dowolna · masters · \+1 seria · sufit 7,5%/s);
+  // nowy klient: ID z imienia, błąd z serwera, potem sukces z linkiem
+  await p.click('a[href="#klienci/nowy"]');
+  await p.waitForSelector('#kl-new');
+  await p.click('#kl-add');
+  assert.match(await p.textContent('#kl-new .err'), /Podaj imię/);
+  assert.equal(calls.filter(c => c.fn === 'trKlientNowy').length, 0);
+  await p.fill('#kl-imie', 'Ania');
+  assert.equal(await p.inputValue('#kl-id'), 'ania');
+  await p.click('#kl-add');
+  await p.waitForSelector('#kl-new .err');
+  assert.match(await p.textContent('#kl-new .err'), /już istnieje/);
+  await p.fill('#kl-imie', 'Żaneta Łoś');
+  assert.equal(await p.inputValue('#kl-id'), 'zaneta-los');
+  await p.click('[data-sw="masters"]');
+  await p.click('#kl-add');
+  await p.waitForSelector('.okbox');
+  const n = calls.filter(c => c.fn === 'trKlientNowy').pop().args[0];
+  assert.deepEqual(n, { imie: 'Żaneta Łoś', id: 'zaneta-los', mode: 'PROSTY', swap: 'TRENER', masters: true });
+  assert.match(await p.textContent('#main'), /Dodano: Żaneta Łoś.*"zaneta-los".*knowy0000001/s);
+  await p.click('[data-copy="zaneta-los"]');
+  await p.waitForSelector('[data-copy="zaneta-los"].done');
+  assert.equal(await p.evaluate(() => navigator.clipboard.readText()), 'https://example.com/trening/?k=knowy0000001');
+  await p.click('a[href="#klienci"]');
+  await p.waitForSelector('table.kl');
+  assert.match(await p.textContent('#main'), /3 aktywnych · 1 nieaktywny/);
+  // karta klienta prowadzi do ustawień
+  await p.goto(base + 'trener.html#k/ania');
+  await p.waitForSelector('a.b[href="#klienci/ania"]');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+  // telefon, ciemny motyw
+  for (const [scheme, nm] of [['dark', 'ciemny'], ['light', 'jasny']]) {
+    const s2 = await page([], { loggedIn: true, vp: { width: 390, height: 844 }, scheme });
+    await s2.p.goto(base + 'trener.html#klienci/bartek');
+    await s2.p.waitForSelector('#kl-form');
+    assert.equal(await s2.p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'bez przewijania w bok');
+    await shot(s2.p, 'trener-klient-ustawienia-telefon-' + nm + '.png');
+    await s2.p.goto(base + 'trener.html#klienci');
+    await s2.p.waitForSelector('table.kl');
+    assert.equal(await s2.p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'lista bez przewijania w bok');
+    await shot(s2.p, 'trener-klienci-telefon-' + nm + '.png');
+    assert.deepEqual(s2.p.errors, []);
+    await s2.ctx.close();
+  }
 });
