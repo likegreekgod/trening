@@ -483,7 +483,7 @@ test('Boje: światła zamiast RPE, ocena → zapis, propozycja i „Ustaw X kg�
   assert.equal(await p.$('.sug [data-setkg]'), null);
   await rate(p, 4, 'X');
   assert.deepEqual((({ ocena, rpe, typ }) => ({ ocena, rpe, typ }))(lastSet(calls)), { ocena: 'X', rpe: '', typ: 'FAIL' });
-  assert.equal(await p.$('.sug'), null);                                         // brak serii do zrobienia
+  assert.match(await p.textContent('.sug'), /\+ drop set 67,5 kg/);             // brak serii do zrobienia: po ✖ podpowiedź drop setu (−10%)
   await p.click('.set[data-s="4"] .lt'); await p.click('.rate .rclr'); await p.waitForTimeout(80);
   assert.deepEqual((({ ocena, done }) => ({ ocena, done }))(lastSet(calls)), { ocena: '', done: false });
   assert.deepEqual(p.errors, []);
@@ -1997,7 +1997,7 @@ test('Karta v4: „+ seria (n)” wyszarza się po zużyciu limitu, pusty koment
   await ctx.close();
 });
 
-test('Rekord przy zapisie serii: pasek pod najlepszą serią ćwiczenia głównego (PRO z liczbami, PROSTY bez), znika po cofnięciu', async () => {
+test('Rekord po zamknięciu ćwiczenia (nie między seriami): pasek pod najlepszą serią ćwiczenia głównego (PRO z liczbami, PROSTY bez), znika po cofnięciu', async () => {
   const N = 'Wyciskanie sztangi na ławce płaskiej';
   const R = (w, d, o, name, x) => Object.assign({ week: w, day: 'T1', title: 'FBW A', date: d, order: o, name, prio: 'A', sets: 3, reps: '6–8', pct: null, kg: 50, rpe: 8, note: '', extra: null, drop: 0 }, x || {});
   const G = (o, name, s, kg) => ({ id: `robert|1|T1|${o}|${s}`, zapisano: '2026-11-08T17:00:00.000Z', cwiczenie: name, tydzien: 1, jednostka: 'T1', data: '2026-11-08', nr_cw: o, seria: s, kg, powt: 8, rpe: 8, wykonane: 'TAK', typ: '' });
@@ -2009,10 +2009,12 @@ test('Rekord przy zapisie serii: pasek pod najlepszą serią ćwiczenia główne
   // PRO
   let calls = [], { ctx, p } = await page(calls, false, { data: mk(false) });
   await p.goto(base + '?k=k0123456789a'); await p.waitForSelector(row(1, 1));
-  await p.fill(row(1, 1) + ' .reps', '8'); await light(p, row(1, 1), 'S'); await p.waitForSelector('.rec');
+  await p.fill(row(1, 1) + ' .reps', '8'); await light(p, row(1, 1), 'S');
+  assert.equal(await p.$('.rec'), null);                                                          // między seriami bez paska
+  await p.fill(row(2, 1) + ' .reps', '8'); await light(p, row(2, 1), 'S'); await p.waitForSelector('.rec');   // przejście do następnego ćwiczenia = zamknięte
   assert.match((await p.textContent('.rec')).replace(/\s+/g, ' '), /★ Rekord.*szacowane maks\. 70 kg · było 66,7/);
   assert.ok(await p.$eval(row(1, 1), r => r.classList.contains('isrec') && r.nextElementSibling.classList.contains('rec')));
-  const ls = calls.filter(c => c.fn === 'logSet').pop().args[0];
+  const ls = calls.filter(c => c.fn === 'logSet' && c.args[0].order === 1).pop().args[0];
   assert.deepEqual([ls.kg, ls.reps, ls.rpe, ls.done, ls.typ], [52.5, 8, 8, true, '']);          // zapis serii bez zmian
   await p.screenshot({ path: path.join(SCREENS, 'rekord-pro-jasny.png') });
   // lepsza seria 2 → pasek przechodzi pod nią (jeden na ćwiczenie)
@@ -2040,7 +2042,9 @@ test('Rekord przy zapisie serii: pasek pod najlepszą serią ćwiczenia główne
   // PROSTY, ciemny: bez liczb; pasek jest też po ponownym otwarciu (z kolejki / pamięci telefonu)
   calls = []; ({ ctx, p } = await page(calls, false, { data: mk(true), scheme: 'dark' }));
   await p.goto(base + '?k=k0123456789a'); await p.waitForSelector(row(1, 1));
-  await p.fill(row(1, 1) + ' .reps', '8'); await light(p, row(1, 1), 'S'); await p.waitForSelector('.rec');
+  await p.fill(row(1, 1) + ' .reps', '8'); await light(p, row(1, 1), 'S');
+  assert.equal(await p.$('.rec'), null);
+  await light(p, row(2, 1), 'S'); await p.waitForSelector('.rec');
   assert.equal(await p.textContent(row(1, 1) + ' .ef b'), 'Średnio');                          // PROSTY: słowo zamiast liczby
   assert.equal(calls.filter(c => c.fn === 'logSet').pop().args[0].rpe, 8);
   assert.match(await p.textContent('.rec'), /Najlepszy wynik w tym ćwiczeniu/);
@@ -2545,13 +2549,14 @@ test(`„★ Pierwszy wynik” (${mode}, ${scheme}): ćwiczenie główne bez his
   const { ctx, p } = await page([], false, { data, scheme });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set.oly');
   await p.fill('.set[data-o="1"][data-s="1"] .kg', '100'); await p.click('.set[data-o="1"][data-s="1"] .lt'); await p.click('.rate [data-q="L"]');
-  await p.waitForSelector('.rec.first');
+  await p.waitForTimeout(100); assert.equal(await p.$('.rec'), null);                         // między seriami bez paska
+  await p.fill('.set[data-o="1"][data-s="2"] .kg', '100'); await p.click('.set[data-o="1"][data-s="2"] .lt'); await p.click('.rate [data-q="S"]');
+  await p.waitForSelector('.rec.first');                                                       // ostatnia seria = ćwiczenie zamknięte
   const t = (await p.textContent('.rec.first')).replace(/\s+/g, ' ');
   assert.match(t, simple ? /★ Pierwszy wynik.*Od niego liczymy rekordy/ : /★ Pierwszy wynik.*najlepsze zaliczone 100 kg/);
   assert.doesNotMatch(t, /było|Rekord/);
   assert.ok(await p.$eval('.set[data-o="1"][data-s="1"]', r => r.nextElementSibling.classList.contains('rec')));
-  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.$eval('.rec.first', e => e.scrollIntoView({ block: 'center' })); await p.waitForTimeout(100); await p.screenshot({ path: path.join(SCREENS, `pierwszy-wynik-${mode}-${scheme}.png`) }); }
-  await p.fill('.set[data-o="1"][data-s="2"] .kg', '100'); await p.click('.set[data-o="1"][data-s="2"] .lt'); await p.click('.rate [data-q="S"]');
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.$eval('.rec.first', e => e.scrollIntoView({ block: 'center' })); await p.screenshot({ path: path.join(SCREENS, `pierwszy-wynik-${mode}-${scheme}.png`) }); }
   await p.waitForSelector('.card[data-card="1"].fold');
   assert.match(await p.textContent('.card[data-card="1"] .fsum'), /★ pierwszy wynik$/);
   assert.deepEqual(await p.evaluate(() => doneSummary(30).records), []);           // pierwszy wynik to nie rekord
@@ -2712,4 +2717,104 @@ for (const scheme of ['light', 'dark']) test(`Trener ${scheme}: „Panel trenera
     assert.deepEqual(p.errors, []);
     await ctx.close();
   }
+});
+
+// v70: zejście po 🟡 / 🔴 w bojach z „max dziś” (sufit = plan) i podpowiedź drop setu po ostatniej serii
+const SNATCH = (simple) => ({ cfg: { name: 'Robert', pain: false, simple, extra: 0, olyCeil: 0.05 },
+  plan: [{ week: 1, day: 'S1', title: 'H2', date: '2026-11-17', order: 1, name: 'Snatch', prio: 'A', sets: 5, reps: '2', pct: 0.75, kg: 112.5, rpe: '', note: '', extra: 0, drop: 0, block: 'H2', group: 'R', swaps: [] }],
+  logs: [], sessions: [], readiness: [] });
+for (const [mode, simple, scheme] of [['pro', false, 'light'], ['pro', false, 'dark'], ['prosty', true, 'light'], ['prosty', true, 'dark']])
+test(`Boje (${mode}, ${scheme}): po 🟡 „max dziś” zablokowane i kolejne serie na kg z planu, po 🔴 to samo, po 🔴 na ostatniej „+ drop set” −10%`, async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: SNATCH(simple), scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set.oly');
+  const S = n => `.set[data-o="1"][data-s="${n}"]`;
+  assert.match(await p.textContent('.rx'), /max dziś 120 kg/);                                    // 1RM 150 × (0,75 + 0,05)
+  assert.equal(await p.$('.mxd.lock'), null);
+  assert.equal(await p.isVisible('.mxd small'), false);
+  await rate(p, 1, 'L');
+  assert.match(await p.textContent('.sug'), /Łatwo: możesz dołożyć 2,5 kg/);
+  // S2 na 120 (sufit dnia) = Średnio → wracasz do planu
+  await p.fill(S(2) + ' .kg', '120'); await rate(p, 2, 'S');
+  assert.deepEqual((({ kg, ocena, rpe }) => ({ kg, ocena, rpe }))(lastSet(calls)), { kg: 120, ocena: 'S', rpe: 8 });   // zapis bez zmian
+  assert.equal((await p.textContent('.sug')).trim(), '🟡 → wracasz do planu (112,5 kg).');
+  assert.deepEqual(await Promise.all([3, 4, 5].map(n => fval(p, S(n) + ' .kg'))), ['112,5', '112,5', '112,5']);
+  assert.deepEqual(await p.$$eval(S(3) + ' .kg', i => i.map(x => x.value)), ['']);                 // podpowiedź, nie wpis: klient może nadpisać
+  assert.ok(await p.$('.mxd.lock'));
+  assert.match(await p.textContent('.mxd'), /zablokowane/);
+  assert.equal(await p.isVisible('.mxd small'), true);
+  assert.equal(await p.$('.sug [data-setkg]'), null);                                           // domyślne już ustawione
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `zejscie-${mode}-${scheme}.png`) }); }
+  // ręczne nadpisanie: S3 znów 120 i Walka → znów plan (🔴); S4 ✓ na pustym polu = 112,5
+  await p.fill(S(3) + ' .kg', '120'); await p.$eval(S(3) + ' .kg', e => e.blur());
+  assert.equal(await p.$eval('.sug [data-setkg]', b => b.dataset.setkg), '112.5');             // wpisane ręcznie zostaje, „Ustaw” wraca
+  await rate(p, 3, 'W');
+  assert.equal(lastSet(calls).kg, 120);
+  assert.equal((await p.textContent('.sug')).trim(), '🔴 → wracasz do planu (112,5 kg).');
+  await rate(p, 4, 'L');
+  assert.equal(lastSet(calls).kg, 112.5);
+  assert.match(await p.textContent('.sug'), /Łatwo, ale po 🟡 sufit to plan: zostań przy 112,5 kg/);
+  // ostatnia seria Walka → podpowiedź drop setu −10% w dół do 2,5 kg
+  await rate(p, 5, 'W');
+  assert.match(await p.textContent('.sug'), /🔴 → serie z planu zrobione\. Jeśli chcesz dołożyć: \+ drop set 100 kg \(−10%\)/);
+  if (process.env.SCREENS !== '0') { await p.$eval('.sug', e => e.scrollIntoView({ block: 'center' })); await p.screenshot({ path: path.join(SCREENS, `zejscie-drop-${mode}-${scheme}.png`) }); }
+  await p.click('.sug [data-dropkg="100"]'); await p.waitForSelector('.set[data-o="1"][data-k="d"]');
+  assert.equal(await fval(p, '.set[data-o="1"][data-s="D1"] .kg'), '100');
+  assert.equal(await p.$('.sug.drop'), null);                                                    // drop set dodany: podpowiedź znika
+  assert.deepEqual(await a11y(p), []);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+// v70: Dyspozycja → „Ból / napięcie” w dowolny dzień (zakładka Stan), kilka miejsc naraz, usuwanie, offline przez kolejkę
+for (const [mode, simple, scheme] of [['pro', false, 'light'], ['pro', false, 'dark'], ['prosty', true, 'light'], ['prosty', true, 'dark']])
+test(`Stan ciała (${mode}, ${scheme}): ból / napięcie poza sesją, lista 14 dni, usuwanie, offline`, async () => {
+  const calls = [], d = new Date(), z = n => String(n).padStart(2, '0'), iso = x => x.getFullYear() + '-' + z(x.getMonth() + 1) + '-' + z(x.getDate());
+  const today = iso(d), old = iso(new Date(d.getTime() - 20 * 864e5)), week = iso(new Date(d.getTime() - 5 * 864e5));
+  const data = Object.assign({}, simple ? DATA : PRO, { readiness: [], stan: [
+    { id: 'robert|' + week + '|Biodro P', zapisano: week + 'T08:00:00.000Z', klient: 'robert', data: week, miejsce: 'Biodro', strona: 'P', ocena: 2, kontekst: 'po treningu', cwiczenie: '', notatka: '' },
+    { id: 'robert|' + old + '|Bark L', zapisano: old + 'T08:00:00.000Z', klient: 'robert', data: old, miejsce: 'Bark', strona: 'L', ocena: 6, kontekst: '', cwiczenie: '', notatka: '' }] });
+  const { ctx, p } = await page(calls, false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('#nav [data-tab="dysp"]'); await p.waitForSelector('#dysp .stan');
+  assert.equal(await p.$$eval('#dysp .stan .st-r', r => r.length), 1);                         // starsze niż 14 dni nie pokazujemy
+  assert.match(await p.textContent('#dysp .stan .st-r'), /Biodro P 2\/10 · po treningu/);
+  assert.equal(await p.$('#st-save'), null);
+  await p.click('#dysp [data-st="Kolano L"]'); await p.click('#dysp [data-st="Bark P"]');
+  assert.equal(await p.isDisabled('#st-save'), true);
+  const E = k => `#dysp .st-e[data-k="${k}"]`;
+  await p.click(E('Kolano L') + ' .pv[data-v="3"]'); await p.click(E('Kolano L') + ' [data-ctx="w ćwiczeniu"]');
+  await p.fill(E('Kolano L') + ' .st-ex', 'Przysiad tylny'); await p.fill(E('Kolano L') + ' .st-note', 'kłuje przy zejściu');
+  assert.equal((await p.textContent('#st-save')).trim(), 'Zapisz 1 miejsce');
+  await p.click(E('Bark P') + ' .pv[data-v="0"]'); await p.click(E('Bark P') + ' [data-ctx="spoczynek"]');
+  assert.equal((await p.textContent('#st-save')).trim(), 'Zapisz 2 miejsca');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.$eval('#dysp .stan', e => e.scrollIntoView()); await p.screenshot({ path: path.join(SCREENS, `stan-${mode}-${scheme}.png`) }); }
+  await p.click('#st-save'); await p.waitForTimeout(150);
+  assert.deepEqual(calls.filter(c => c.fn === 'saveStan').map(c => c.args[0]), [[
+    { date: today, place: 'Kolano', side: 'L', score: 3, context: 'w ćwiczeniu', exercise: 'Przysiad tylny', note: 'kłuje przy zejściu' },
+    { date: today, place: 'Bark', side: 'P', score: 0, context: 'spoczynek', exercise: '', note: '' }]]);
+  assert.equal(await p.$('#dysp .st-e'), null);                                                 // formularz wyczyszczony
+  assert.equal(await p.$$eval('#dysp .stan .st-r', r => r.length), 3);
+  assert.match(await p.textContent('#dysp .stan .st-list'), /Kolano L 3\/10 · w ćwiczeniu: Przysiad tylny · kłuje przy zejściu/);
+  // „Inne” z własną nazwą: bez nazwy nie da się zapisać
+  await p.click('#dysp [data-st="inne"]'); await p.click(E('inne') + ' .pv[data-v="4"]');
+  assert.equal(await p.isDisabled('#st-save'), true);
+  await p.fill(E('inne') + ' .st-place', 'stopa'); await p.click(E('inne') + ' [data-side="L"]');
+  assert.equal(await p.isDisabled('#st-save'), false);
+  // bez sieci: zapis i usunięcie trafiają do kolejki, po ponownym otwarciu lista je pokazuje
+  await ctx.unroute('**/macros/**'); await ctx.route('**/macros/**', r => r.abort());
+  await p.click('#st-save'); await p.waitForTimeout(200);
+  const del = '#dysp [data-del="' + week + '|Biodro P"]';
+  await p.click(del); assert.match(await p.textContent(del), /usuń\?/); await p.click(del); await p.waitForTimeout(200);
+  assert.deepEqual((await p.evaluate(() => JSON.parse(localStorage.getItem('q_kabc')))).map(x => x.fn + ':' + JSON.stringify(x.payload)),
+    ['saveStan:' + JSON.stringify([{ date: today, place: 'stopa', side: 'L', score: 4, context: '', exercise: '', note: '' }]),
+     'deleteStan:' + JSON.stringify({ date: week, place: 'Biodro', side: 'P' })]);
+  await p.goto(base); await p.waitForSelector('.set', { state: 'attached' });
+  await p.click('#nav [data-tab="dysp"]'); await p.waitForSelector('#dysp .stan');
+  const txt = await p.textContent('#dysp .stan .st-list');
+  assert.match(txt, /stopa L 4\/10/);
+  assert.doesNotMatch(txt, /Biodro/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
 });

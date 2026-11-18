@@ -161,7 +161,58 @@ test('sugOly: propozycje wg tabeli ocen', () => {
   assert.deepEqual(s([R(70, 'X'), R(70, 'X'), open], 1), ['down', 65]);       // −5% 1RM
   assert.deepEqual(s([R(72.5, 'X'), R(70, 'X'), open], 1), ['stay', 70]);    // inne ciężary – liczy się od nowa
   assert.deepEqual(s([R(70, 'L'), R(72.5, 'S'), open], 0), null);             // nie ostatnie ocenione
-  assert.deepEqual(s([R(70, 'L'), R(72.5, 'S')], 1), null);                   // brak serii do zrobienia
+  assert.deepEqual(s([R(70, 'L'), R(72.5, 'S')], 1), null);                   // brak serii do zrobienia (po 🟡 bez drop setu)
+});
+
+test('sugOly: zejście po 🟡 / 🔴 (sufit = plan) i drop set po ostatniej serii', () => {
+  const R = (kg, rate, done = true) => ({ kg, rate, done });
+  const open = R(112.5, '', false), o = { cap: 120, one: 150, plan: 112.5 };
+  const s = (rows, i, x) => { const r = L.sugOly(rows, i, Object.assign({}, o, x)); return r && [r.lvl, r.kg, !!r.lock]; };
+  // 17.11: 5×2 @112,5, max dziś 120, S4 120 Średnio → S5 wraca do planu
+  const day = [R(112.5, 'L'), R(115, 'L'), R(117.5, 'L'), R(120, 'S'), open];
+  assert.deepEqual(s(day, 3), ['down', 112.5, true]);
+  assert.equal(L.sugOly(day, 3, o).txt, '🟡 → wracasz do planu (112,5 kg).');
+  assert.equal(L.olyLocked(day), true);
+  assert.equal(L.olyLocked(day.slice(0, 3)), false);
+  assert.match(L.sugOly([R(120, 'W'), open], 0, o).txt, /^🔴 → wracasz do planu \(112,5 kg\)/);
+  assert.deepEqual(s([R(120, 'X'), open], 0), ['down', 112.5, true]);
+  // po blokadzie Łatwo nie podnosi ponad plan
+  assert.deepEqual(s([R(112.5, 'S'), R(112.5, 'L'), open], 1), ['stay', 112.5, true]);
+  assert.match(L.sugOly([R(112.5, 'S'), R(112.5, 'L'), open], 1, o).txt, /po 🟡 sufit to plan/);
+  assert.deepEqual(s([R(112.5, 'S'), R(110, 'L'), open], 1), ['up', 112.5, true]);
+  assert.deepEqual(s([R(112.5, 'S'), R(120, 'L'), open], 1), ['down', 112.5, true]);   // ręcznie wyżej mimo blokady → znów plan
+  assert.equal(L.sugOly([R(112.5, 'S'), open], 0, o).txt, '🟡 → zostajesz przy planie (112,5 kg).');
+  // na planie dalej działają zejścia poniżej planu
+  assert.deepEqual(s([R(112.5, 'W'), R(112.5, 'W'), open], 1), ['down', 110, true]);
+  assert.deepEqual(s([R(112.5, 'X'), R(112.5, 'X'), open], 1), ['down', 105, true]);
+  // bez blokady (same 🟢) jak dotąd: +2,5 do max dziś
+  assert.deepEqual(s([R(112.5, 'L'), open], 0), ['up', 115, false]);
+  // 🔴 / ✖ na ostatniej serii → drop set −10% w dół do 2,5 kg; 🟡 na ostatniej = nic
+  assert.deepEqual(s([R(112.5, 'L'), R(120, 'W')], 1), ['drop', 107.5, false]);
+  assert.deepEqual(s([R(112.5, 'X')], 0), ['drop', 100, false]);
+  assert.match(L.sugOly([R(120, 'W')], 0, o).txt, /\+ drop set 107,5 kg \(−10%\)/);
+  assert.equal(L.sugOly([R(120, 'S')], 0, o), null);
+  // bez kg w planie: bez blokady (np. „max”)
+  assert.deepEqual(s([R(120, 'S'), open], 0, { plan: null }), ['stay', 120, false]);
+});
+
+test('stan ciała: klucz, ostatnie 14 dni, nadpisanie tego samego miejsca, usunięcie', () => {
+  assert.equal(L.stanKey('2026-11-18', ' Czworoboczny  lędźwi ', 'L'), '2026-11-18|Czworoboczny lędźwi L');
+  assert.equal(L.stanKey('2026-11-18', 'Inne: stopa', ''), '2026-11-18|Inne: stopa');
+  const rows = [
+    { data: '2026-11-18', miejsce: 'Kolano', strona: 'L', ocena: 3, zapisano: '2026-11-18T08:00:00Z' },
+    { data: '2026-11-18', miejsce: 'Bark', strona: 'P', ocena: 2, zapisano: '2026-11-18T09:00:00Z' },
+    { data: '2026-11-05', miejsce: 'Biodro', strona: 'L', ocena: 1, zapisano: '' },            // 14. dzień wstecz
+    { data: '2026-11-04', miejsce: 'Biodro', strona: 'L', ocena: 5, zapisano: '' },            // za stary
+    { data: '2026-11-19', miejsce: 'Bark', strona: 'L', ocena: 5, zapisano: '' }               // jutro
+  ];
+  assert.deepEqual(L.stanRecent(rows, '2026-11-18').map(r => r.miejsce + r.day), ['Bark2026-11-18', 'Kolano2026-11-18', 'Biodro2026-11-05']);
+  const upd = L.stanApply(rows, [{ date: '2026-11-18', place: 'Kolano', side: 'L', score: 6, context: 'w ćwiczeniu', exercise: 'Przysiad', note: '' },
+    { date: '2026-11-18', place: 'Kolano', side: 'P', score: 0, context: 'spoczynek', exercise: 'nie' }], '2026-11-18T10:00:00Z');
+  assert.equal(upd.length, 6);
+  assert.deepEqual(upd.filter(r => r.miejsce === 'Kolano').map(r => [r.strona, r.ocena, r.cwiczenie]), [['L', 6, 'Przysiad'], ['P', 0, '']]);
+  assert.equal(L.stanRecent(upd, '2026-11-18')[0].strona, 'L');                                  // najnowszy zapis na górze
+  assert.equal(L.stanDrop(upd, { date: '2026-11-18', place: 'Kolano', side: 'L' }).length, 5);
 });
 
 test('swapOptions, swapText, parseSwap: zamiana ćwiczenia', () => {

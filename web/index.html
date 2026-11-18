@@ -504,6 +504,21 @@
   .card.dsum{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px}
   .card.dsum b{font:500 15px var(--f-mono);color:var(--ink)}
   .card.dsum .btn{margin:0!important}
+  .stan .st-e{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+  .stan .st-e .plbl{font:700 18px/1.1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;color:var(--ink-2);margin-bottom:6px}
+  .stan .st-ch{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px}
+  .stan .st-pl .pl,.stan .st-ch .pl{text-transform:none;letter-spacing:0;font-size:14px}
+  .stan .fl{margin-top:8px}
+  .stan .fl input,.stan input.st-note{font:400 16px/1.3 var(--f-body);min-height:48px;width:100%}
+  .stan .st-list{margin-top:14px}
+  .stan .st-list .lbl{margin-bottom:4px;text-align:left}
+  .stan .st-r{align-items:center;gap:8px}
+  .stan .st-r span{font-size:14px;line-height:1.35}
+  .stan .st-r small{color:var(--muted);font-size:13px}
+  .stan .st-o{font:600 14px var(--f-mono)}
+  .stan .st-o.g{color:var(--ok)} .stan .st-o.a{color:var(--warn)} .stan .st-o.r{color:var(--bad)}
+  .stan .st-del{min-width:44px;min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--muted);font-size:14px;flex:none}
+  .stan .st-del.arm{color:var(--bad);border-color:var(--bad)}
   .jmp{display:grid;gap:4px;align-content:start}
   .jmp .btn{margin:0!important;padding:6px 4px}
   .jmp.odd input{border-color:var(--warn);border-width:2px}
@@ -624,6 +639,11 @@
   .sug{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-left:4px solid var(--muted);padding:6px 0 6px 10px;margin:6px 0;font-size:14px}
   .sug.up{border-left-color:var(--ok)}
   .sug.down{border-left-color:var(--warn)}
+  .mxd small{display:none}
+  .mxd.lock, .mxd.lock b{color:var(--muted);font-weight:400}
+  .mxd.lock b{text-decoration:line-through}
+  .mxd.lock small{display:inline;font-size:inherit}
+  .sug.drop{border-left-color:var(--bad)}
   .rx .badge + b,.rx b{white-space:nowrap}
 
   /* timer przerwy: ciemny pasek na całą szerokość nad dolnym menu, bursztynowe cyfry */
@@ -869,11 +889,11 @@ const $ = s => document.querySelector(s);
 const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
   RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, planEdit, restSec, fmtClock, plates,
-  isOly, RATE, rateOf, olyCap, sugOly, SWAP_WHY, swapOptions, swapText, parseSwap,
+  isOly, RATE, rateOf, olyCap, sugOly, olyLocked, SWAP_WHY, swapOptions, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
   doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
-  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart, blockReport } = window.TL;
+  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart, blockReport, STAN_PLACES, STAN_CTX, stanKey, stanRecent, stanApply, stanDrop } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -1230,6 +1250,8 @@ function useData(d){
     if (it.fn === 'editPlan') applyEdit(p, false);                            // zmiana w jednostce trenera czekająca w kolejce
     if (it.fn === 'addOwnUnit') applyOwn(p, false);                           // własny trening czekający w kolejce
     if (it.fn === 'saveDyspozycja') applyReady(p, false);
+    if (it.fn === 'saveStan') applyStan(p, false);                             // ból / napięcie czekające w kolejce
+    if (it.fn === 'deleteStan') applyStanDel(p, false);
   });
 }
 /** nowe daty jednostek w planie (lokalnie; serwer dostaje je przez send/kolejkę); save = zapis w pamięci telefonu */
@@ -1485,8 +1507,9 @@ function renderDysp(){
   const sumLine = [isFinite(v.hs) ? 'Ankieta ' + v.hs : '', isFinite(sp.avg) ? 'CMJ ' + f1(sp.avg) + ' cm' : '', isNum(num(rd.vbt)) ? f2(num(rd.vbt)) + ' m/s' : ''].filter(Boolean).join(' · ');
   if (rd.saved && !rd.edit) {
     $('#dysp').innerHTML = verdictCard + `<section class="card dsum"><div><div class="lbl">Zapisane dziś</div><b>${esc(sumLine || '–')}</b></div><button type="button" class="btn" id="rd-edit">Edytuj</button></section>
-      <p class="sub">To wskazówka do rozmowy z trenerem, nie diagnoza.</p>` + readyHistory();
+      <p class="sub">To wskazówka do rozmowy z trenerem, nie diagnoza.</p><div id="stanbox"></div>` + readyHistory();
     $('#rd-edit').onclick = () => { rd.edit = true; renderDysp(); };
+    renderStan();
     return;
   }
   const odd = sp.out.filter(i => !rd.excl[i]);
@@ -1504,7 +1527,8 @@ function renderDysp(){
       <label class="fl">Prędkość (m/s)<input id="rd-vbt" inputmode="decimal" value="${esc(fmtKg(rd.vbt))}" placeholder="np. 1,05"></label>
       <div class="kv"><span>Twoja średnia (5 pomiarów)</span><b>${collecting ? '–' : f2(base.vbt) + ' m/s'}</b></div></section>
     <button type="button" class="btn p" id="rd-save">${rd.saved ? 'Zapisz zmiany' : 'Zapisz dyspozycję'}</button>
-    <p class="sub">${rd.saved ? 'Dzisiejsza dyspozycja jest zapisana.' : 'Pomiary zostają w telefonie, dopóki nie dotkniesz „Zapisz”.'} To wskazówka do rozmowy z trenerem, nie diagnoza.</p>` + readyHistory();
+    <p class="sub">${rd.saved ? 'Dzisiejsza dyspozycja jest zapisana.' : 'Pomiary zostają w telefonie, dopóki nie dotkniesz „Zapisz”.'} To wskazówka do rozmowy z trenerem, nie diagnoza.</p><div id="stanbox"></div>` + readyHistory();
+  renderStan();
   const keep = () => { const y = window.scrollY; rd.saved = false; rd.edit = true; rdKeep(); renderDysp(); window.scrollTo(0, y); };
   document.querySelectorAll('#dysp .scale[data-q] button').forEach(b => b.onclick = () => { rd.hooper[b.parentElement.dataset.q] = +b.dataset.v; keep(); });
   document.querySelectorAll('#dysp input[data-j]').forEach(i => i.onchange = () => { const x = num(i.value); rd.cmj[+i.dataset.j] = isNum(x) ? x : ''; if (!isNum(x)) rd.excl[+i.dataset.j] = false; keep(); });
@@ -1519,6 +1543,87 @@ function renderDysp(){
     send('saveDyspozycja', p).then(() => toast('Zapisano.')).catch(() => toast('Brak sieci – zapiszę, gdy wróci połączenie.'));
     renderDysp(); window.scrollTo(0, 0);
   };
+}
+/* ---------- stan ciała: ból / napięcie w dowolny dzień (zakładka Stan; kilka miejsc naraz; zapis przez kolejkę jak reszta) ---------- */
+let SD = { sel: [], e: {} };               // szkic: wybrane miejsca (klucze „Kolano L” / „inne”) i wpisy {score, ctx, ex, note, place, side}
+const STAN_DAYS = 14;
+const stanOpts = () => STAN_PLACES.flatMap(p => ['L', 'P'].map(sd => ({ k: p + ' ' + sd, place: p, side: sd }))).concat([{ k: 'inne', place: '', side: '' }]);
+const ctxTxt = (c, ex) => c === 'w ćwiczeniu' ? 'w ćwiczeniu' + (ex ? ': ' + ex : '') : c;
+/** wpisy zapisane od razu w danych aplikacji (lista pod formularzem); save = pamięć telefonu */
+function applyStan(list, save){
+  if (!DATA) return;
+  DATA.stan = stanApply(DATA.stan || [], list, new Date().toISOString());
+  if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
+}
+function applyStanDel(e, save){
+  if (!DATA) return;
+  DATA.stan = stanDrop(DATA.stan || [], e);
+  if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e2) {}
+}
+/** nazwy ćwiczeń z planu klienta do podpowiedzi pola „Które ćwiczenie?” */
+const stanExNames = () => [...new Set((PLAN || []).map(r => String(r.name || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pl'));
+function renderStan(){
+  const box = $('#stanbox'); if (!box) return;
+  const today = localDate(), opts = stanOpts(), list = stanRecent((DATA && DATA.stan) || [], today, STAN_DAYS);
+  const readyOf = () => SD.sel.filter(k => { const e = SD.e[k] || {}; return isNum(e.score) && (k !== 'inne' || String(e.place || '').trim()); });
+  const saveTxt = n => n ? 'Zapisz ' + (n === 1 ? '1 miejsce' : n + ' ' + plural(n, 'miejsce', 'miejsca', 'miejsc')) : 'Oceń miejsce, żeby zapisać';
+  const ready = readyOf();
+  const ent = k => {
+    const e = SD.e[k] || (SD.e[k] = { score: null, ctx: '', ex: '', note: '', place: '', side: '' }), lbl = k === 'inne' ? 'Inne' : k, id = k.replace(/\W+/g, '_');
+    return `<div class="st-e" data-k="${esc(k)}"><div class="plbl">${esc(lbl)}</div>
+      ${k === 'inne' ? `<label class="fl">Miejsce<input class="st-place" maxlength="40" value="${esc(e.place)}" placeholder="np. stopa, kark"></label>
+        <div class="st-ch st-side" role="group" aria-label="Strona">${[['L', 'Lewa'], ['P', 'Prawa'], ['', 'Bez strony']].map(([v, t]) => `<button type="button" class="pl ${e.side === v ? 'on' : ''}" data-side="${v}" aria-pressed="${e.side === v}">${t}</button>`).join('')}</div>` : ''}
+      <div class="sub">Jak mocno? 0 = nic, 10 = najgorzej</div>
+      ${scale('', 0, 10, isNum(e.score) ? e.score : null, painSev, `role="group" aria-label="Ocena: ${esc(lbl)}, 0–10"`)}
+      <div class="sub">Kiedy?</div>
+      <div class="st-ch st-ctx" role="group" aria-label="Kiedy: ${esc(lbl)}">${STAN_CTX.map(c => `<button type="button" class="pl ${e.ctx === c ? 'on' : ''}" data-ctx="${c}" aria-pressed="${e.ctx === c}">${c}</button>`).join('')}</div>
+      ${e.ctx === 'w ćwiczeniu' ? `<label class="fl">Które ćwiczenie?<input class="st-ex" list="st-exl" maxlength="80" value="${esc(e.ex)}" placeholder="np. przysiad"></label>` : ''}
+      <label class="fl" for="st-n-${id}">Notatka (opcjonalnie)</label><input class="st-note" id="st-n-${id}" maxlength="300" value="${esc(e.note)}" placeholder="np. kłuje przy zejściu w dół"></div>`;
+  };
+  const rows = list.map(r => `<div class="kv st-r"><span><b>${weekday(r.day)} ${ddmm(r.day)}</b> · ${esc(r.miejsce)}${r.strona ? ' ' + esc(r.strona) : ''} <b class="st-o ${painSev(+r.ocena)}">${esc(String(r.ocena))}/10</b>${r.kontekst ? '<small> · ' + esc(ctxTxt(r.kontekst, r.cwiczenie)) + '</small>' : ''}${r.notatka ? '<small> · ' + esc(r.notatka) + '</small>' : ''}</span>
+      <button type="button" class="st-del" data-del="${esc(stanKey(r.day, r.miejsce, r.strona))}" aria-label="Usuń wpis: ${esc(r.miejsce)}${r.strona ? ' ' + esc(r.strona) : ''}, ${ddmm(r.day)}">✕</button></div>`).join('');
+  box.innerHTML = `<section class="card stan"><div class="cn">Ból / napięcie</div>
+      <div class="sub">Możesz zapisać w dowolny dzień, także bez treningu. Zaznacz miejsca, oceń i zapisz. Trener zobaczy historię.</div>
+      <div class="pls st-pl" role="group" aria-label="Miejsce">${opts.map(o => `<button type="button" class="pl ${SD.sel.includes(o.k) ? 'on' : ''}" data-st="${esc(o.k)}" aria-pressed="${SD.sel.includes(o.k)}">${o.k === 'inne' ? 'Inne' : esc(o.k)}</button>`).join('')}</div>
+      ${SD.sel.map(ent).join('')}
+      <datalist id="st-exl">${stanExNames().map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      ${SD.sel.length ? `<button type="button" class="btn p" id="st-save" ${ready.length ? '' : 'disabled'}>${saveTxt(ready.length)}</button>` : ''}
+      <div class="st-list"><div class="lbl">Ostatnie ${STAN_DAYS} dni</div>${rows || '<p class="sub">Brak wpisów.</p>'}</div></section>`;
+  const keep = () => { const y = window.scrollY; renderStan(); window.scrollTo(0, y); };
+  box.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
+    const k = b.dataset.st; SD.sel = SD.sel.includes(k) ? SD.sel.filter(x => x !== k) : SD.sel.concat([k]); keep();
+  });
+  box.querySelectorAll('.st-e').forEach(el => {
+    const e = SD.e[el.dataset.k];
+    el.querySelectorAll('.scale .pv').forEach(b => b.onclick = () => { e.score = +b.dataset.v; keep(); });
+    el.querySelectorAll('[data-ctx]').forEach(b => b.onclick = () => { e.ctx = e.ctx === b.dataset.ctx ? '' : b.dataset.ctx; keep(); });
+    el.querySelectorAll('[data-side]').forEach(b => b.onclick = () => { e.side = b.dataset.side; keep(); });
+    const bindIn = (sel, f) => { const i = el.querySelector(sel); if (i) i.oninput = () => {
+      e[f] = i.value;
+      const sv = $('#st-save'), n = readyOf().length; if (sv) { sv.disabled = !n; sv.textContent = saveTxt(n); }   // bez przerysowania (pole zostaje w edycji)
+    }; };
+    bindIn('.st-place', 'place'); bindIn('.st-ex', 'ex'); bindIn('.st-note', 'note');
+  });
+  const sv = $('#st-save');
+  if (sv) sv.onclick = () => {
+    const ready = readyOf(), out = ready.map(k => { const e = SD.e[k], o = opts.find(x => x.k === k);
+      return { date: today, place: k === 'inne' ? String(e.place).replace(/\s+/g, ' ').trim() : o.place, side: k === 'inne' ? e.side : o.side,
+        score: e.score, context: e.ctx, exercise: e.ctx === 'w ćwiczeniu' ? String(e.ex || '').trim() : '', note: String(e.note || '').trim() }; });
+    applyStan(out, true);
+    SD = { sel: SD.sel.filter(k => !ready.includes(k)), e: {} };
+    send('saveStan', out).then(() => toast('Zapisano.')).catch(() => toast('Brak sieci – zapiszę, gdy wróci połączenie.'));
+    keep();
+  };
+  // ✕ przy wpisie: 1. dotknięcie = „usuń?”, 2. = usunięcie (też bez sieci, przez kolejkę)
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (!b.classList.contains('arm')) { b.classList.add('arm'); b.textContent = 'usuń?'; setTimeout(() => { if (b.isConnected) { b.classList.remove('arm'); b.textContent = '✕'; } }, 3000); return; }
+    const i = b.dataset.del.indexOf('|'), date = b.dataset.del.slice(0, i), r = list.find(x => stanKey(x.day, x.miejsce, x.strona) === b.dataset.del);
+    if (!r) return;
+    const e = { date, place: r.miejsce, side: r.strona || '' };
+    applyStanDel(e, true);
+    send('deleteStan', e).then(() => toast('Usunięto.')).catch(() => toast('Brak sieci – usunę, gdy wróci połączenie.'));
+    keep();
+  });
 }
 /* przykładowe kadry: odbicie (oba palce już nad podłożem) i lądowanie (pierwszy kontakt) */
 const CMJ_EX = (land) => `<svg viewBox="0 0 150 76" class="cmj-ex" role="img" aria-label="${land ? 'Lądowanie: pierwszy kontakt stopy z podłożem' : 'Odbicie: oba palce już nad podłożem'}">
@@ -2410,29 +2515,48 @@ function capOf(ex){
   const why = weakToday(), kg = isNum(ex.kg) ? ex.kg : NaN;
   return { cap: olyCap(kg, ex.pct, OLY_CEIL, !!why), one: kg > 0 && ex.pct > 0 ? kg / ex.pct : 0, weak: !!why, why };
 }
-const maxToday = ex => { const c = capOf(ex).cap; return c ? ` · max dziś <b>${fmtKg(c)} kg</b>` : ''; };
+/** „max dziś” w recepcie; po pierwszym 🟡 / 🔴 / ✖ szare z dopiskiem „zablokowane” (updateSug przełącza klasę lock) */
+const maxToday = ex => { const c = capOf(ex).cap; return c ? `<span class="mxd" data-mx="${ex.order}"> · max dziś <b>${fmtKg(c)} kg</b><small> · zablokowane</small></span>` : ''; };
 const lightsHtml = q => `<span class="lights" aria-hidden="true">${[...(RATE[q] ? RATE[q].lights : 'ooo')].map(c => `<i class="${c}"></i>`).join('')}</span>`;
 const RATE_HINT = { L: '3 białe', S: '2 białe, 1 czerwone', W: '1 białe, 2 czerwone', X: '3 czerwone' };
 const rateHtml = (cur, rpe) => `<div class="rate" role="group" aria-label="Ocena podejścia">` +
   ['L', 'S', 'W', 'X'].map(q => `<button type="button" data-q="${q}" aria-pressed="${cur === q}">${lightsHtml(q)}<b>${RATE[q].label}</b><small>${RATE_HINT[q]}</small></button>`).join('') +
   (cur && cur !== 'X' ? fineHtml(cur, rpe) : '') + (cur ? '<button type="button" class="rclr" data-q="">Wyczyść ocenę</button>' : '') + '</div>';
-/** propozycja ciężaru pod ostatnio ocenionym podejściem (tylko gdy zostały serie) */
-function updateSug(ex){
+/**
+ * propozycja ciężaru pod ostatnio ocenionym podejściem (lib sugOly); fresh = właśnie zapisana ocena:
+ * po zablokowaniu sufitu (🟡 / 🔴 / ✖) niezrobione serie bez wpisanego ciężaru dostają propozycję (kg z planu) jako domyślne
+ */
+function updateSug(ex, fresh){
   if (!isOly(ex)) return;
-  document.querySelectorAll(`.sug[data-o="${ex.order}"]`).forEach(x => x.remove());
-  const rows = [...document.querySelectorAll(`.set[data-o="${ex.order}"]:not([data-k="w"])`)];
+  const o = ex.order;
+  document.querySelectorAll(`.sug[data-o="${o}"]`).forEach(x => x.remove());
+  const rows = workRows(o), plan = isNum(ex.kg) && ex.kg > 0 ? ex.kg : null;
   const model = rows.map(r => ({ kg: num(fv(r.querySelector('.kg'))), rate: r.dataset.rate || '', done: !!r.dataset.st }));
+  const lock = !!plan && olyLocked(model);
+  document.querySelectorAll(`.mxd[data-mx="${o}"]`).forEach(m => { m.classList.toggle('lock', lock); m.setAttribute('aria-label', lock ? 'max dziś zablokowane, sufit = plan' : ''); if (!lock) m.removeAttribute('aria-label'); });
   let i = -1; model.forEach((m, j) => { if (m.done && m.rate) i = j; });
-  const s = i < 0 || !isNum(model[i].kg) ? null : sugOly(model, i, capOf(ex));
-  if (!s) return;
+  const s = i < 0 || !isNum(model[i].kg) ? null : sugOly(model, i, Object.assign(capOf(ex), { plan }));
+  if (!s || s.drop && document.querySelector(`.set[data-o="${o}"][data-k="d"]`)) return;   // drop set już dodany
+  const todo = rows.filter(r => !r.dataset.st);
+  if (fresh && s.lock) { todo.forEach(r => { const x = r.querySelector('.kg'); if (x && x.value.trim() === '') setPh(x, fmtKg(s.kg)); }); placeStep(o); }
   const at = rows[i].nextElementSibling && rows[i].nextElementSibling.classList.contains('rate') ? rows[i].nextElementSibling : rows[i];
-  at.insertAdjacentHTML('afterend', `<div class="sug ${s.lvl}" data-o="${ex.order}"><span>${esc(s.txt)}</span>` +
-    (s.kg !== model[i].kg ? `<button type="button" class="btn sm" data-setkg="${s.kg}">Ustaw ${fmtKg(s.kg)} kg</button>` : '') + '</div>');
-  const b = document.querySelector(`.sug[data-o="${ex.order}"] [data-setkg]`);
+  const need = !s.drop && todo.some(r => num(fv(r.querySelector('.kg'))) !== s.kg);
+  at.insertAdjacentHTML('afterend', `<div class="sug ${s.lvl}" data-o="${o}" role="status"><span>${esc(s.txt)}</span>` +
+    (s.drop ? `<button type="button" class="btn sm" data-dropkg="${s.kg}">+ drop set ${fmtKg(s.kg)} kg</button>`
+      : need ? `<button type="button" class="btn sm" data-setkg="${s.kg}">Ustaw ${fmtKg(s.kg)} kg</button>` : '') + '</div>');
+  const b = document.querySelector(`.sug[data-o="${o}"] [data-setkg]`);
   if (b) b.onclick = () => {
     let n = 0;
-    rows.forEach(r => { if (!r.dataset.st) { r.querySelector('.kg').value = fmtKg(s.kg); n++; } });
+    todo.forEach(r => { r.querySelector('.kg').value = fmtKg(s.kg); n++; });
     toast('Ustawiono ' + fmtKg(s.kg) + ' kg w ' + n + ' ' + plural(n, 'serii', 'seriach', 'seriach') + '.');
+    placeStep(o); updateSug(ex);
+  };
+  const d = document.querySelector(`.sug[data-o="${o}"] [data-dropkg]`), add = document.querySelector(`[data-drop="${o}"]`);
+  if (d) d.onclick = () => {
+    if (!add) return;
+    add.click();
+    const ds = document.querySelectorAll(`.set[data-o="${o}"][data-k="d"]`), x = ds.length && ds[ds.length - 1].querySelector('.kg');
+    if (x) { setPh(x, fmtKg(s.kg)); x.focus(); }
     updateSug(ex);
   };
 }
@@ -2842,13 +2966,28 @@ function unitSets(exs){
     sets.push({ set: k, name: ex.name, prio: ex.prio, group: ex.group, kg: num(l.kg), reps: num(l.powt), rpe: num(l.rpe), fail: /FAIL/.test(l.typ || ''), timed: !!timeUnit(ex.reps) }); }); });
   return sets;
 }
-/** rekord w chwili zapisu: pasek pod najlepszą serią ćwiczenia głównego, gdy bije całą wcześniejszą historię (lib unitRecord) */
+/**
+ * ćwiczenie zamknięte (18.11.2026: rekord dopiero wtedy, nie między seriami): wszystkie serie robocze zrobione,
+ * karta zwinięta ręcznie, jest już seria w dalszym ćwiczeniu (poza własnym obwodem) albo tryb skupienia przeszedł dalej
+ */
+function exClosed(o){
+  o = +o;
+  const c = document.querySelector(`.card[data-card="${o}"]`);
+  if (cardDone(o) || c && c.classList.contains('fold')) return true;
+  const exs = curExs(), k = exs.findIndex(e => e.order === o), g = grpOf(o);
+  if (exs.slice(k + 1).some(e => !(g && g.orders.includes(e.order)) && work(e.order).some(r => r.dataset.st))) return true;
+  if (fxOn() && FXI !== null) { const j = focusSteps(exs, CIRC).findIndex(x => x.orders.includes(o)); return j >= 0 && FXI > j; }
+  return false;
+}
+/** rekordy wszystkich ćwiczeń jednostki (po zapisie serii, zwinięciu karty, przejściu kroku) */
+const recAll = () => { if (PLAN) curExs().forEach(recDraw); };
+/** rekord po zamknięciu ćwiczenia: pasek pod najlepszą serią ćwiczenia głównego, gdy bije całą wcześniejszą historię (lib unitRecord) */
 function recDraw(ex){
   if (!ex) return;
   document.querySelectorAll(`.rec[data-o="${ex.order}"]`).forEach(x => x.remove());
   document.querySelectorAll(`.set.isrec[data-o="${ex.order}"]`).forEach(x => x.classList.remove('isrec'));
   recSum(ex);
-  if (ex.prio !== 'A' || timeUnit(ex.reps)) return;
+  if (ex.prio !== 'A' || timeUnit(ex.reps) || !exClosed(ex.order)) return;
   const r = unitRecord({ week: cur.week, day: cur.day, plan: PLAN, logs: (DATA && DATA.logs) || [], dates: unitDays(), sets: unitSets([ex]) }, ex.name);
   const row = r && document.querySelector(`.set[data-o="${ex.order}"][data-s="${r.set}"]`);
   if (!row) return;
@@ -2980,7 +3119,7 @@ function setFold(o, on, keep = true){
 }
 function bindFold(exs){
   exs.forEach(ex => { const st = foldGet()[foldKey(ex.order)]; foldSum(ex.order); setFold(ex.order, st === undefined ? cardDone(ex.order) : st === 1, false); });
-  document.querySelectorAll('[data-fold]').forEach(b => b.onclick = () => { if (!fxOn()) setFold(b.dataset.fold, !b.closest('.card').classList.contains('fold')); });
+  document.querySelectorAll('[data-fold]').forEach(b => b.onclick = () => { if (!fxOn()) { setFold(b.dataset.fold, !b.closest('.card').classList.contains('fold')); recAll(); } });
 }
 /* ---------- tryb skupienia (lib focusSteps, focusStart): wszystkie karty zostają w DOM, widać jeden krok; przełącznik pod „⋯” górnego paska, wybór w fx_<klucz> ---------- */
 const FXK = 'fx_' + KEY;
@@ -2995,7 +3134,7 @@ function fxSet(on){
   if (c) { setFold(o, false, false); window.scrollTo(0, (c.closest('.grp') || c).getBoundingClientRect().top + window.scrollY - 8); } else window.scrollTo(0, 0);
   stickDraw();
 }
-function fxGo(i){ FXI = i; FXM = true; fxDraw(); window.scrollTo(0, 0); stickDraw(); tipDraw(); }
+function fxGo(i){ FXI = i; FXM = true; fxDraw(); recAll(); window.scrollTo(0, 0); stickDraw(); tipDraw(); }
 /** rysuje pasek i przyciski, pokazuje bieżący krok; wołane też po każdej serii (odcinki paska) */
 function fxDraw(){
   const bar = $('#fx'); if (!bar) return;
@@ -3091,7 +3230,7 @@ function bindRow(row, ex, s0){
     if (!was && st && kind !== 'w' && !isEmom(ex) && !inGrp) startRest(ex);       // przerwa po zaliczeniu (✓ lub ✕), nie po rozgrzewce; EMOM ma zegar minut
     putLocal(ex, p);
     if (st) followRow(row);
-    refreshStats(); updateSug(ex); recDraw(ex); refreshAll(ex.order, !!st && !wasDone);
+    refreshStats(); updateSug(ex, !!st); recAll(); refreshAll(ex.order, !!st && !wasDone);
     if (inGrp) { if (!was && st && kind !== 'w') grpAfter(ex); else grpDraw(grpOf(ex.order).id); }
     send('logSet', p).then(() => { if (row.dataset.st === st) setState(row, st); }).catch(() => {});
     const em = document.querySelector(`.emom[data-emom="${ex.order}"]`); if (em && em._draw) em._draw();
