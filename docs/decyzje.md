@@ -3,6 +3,11 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-18 · Czarny film w Edge = „Rozszerz klipy wideo”; proporcje filmu (v68)
+
+- Przyczyną czarnego obrazu z dźwiękiem u Damiana było ustawienie Edge „Rozszerz klipy wideo” (ulepszanie wideo), nie kodek ani nasz kod. Po wyłączeniu obraz jest. Porada trafiła do pomocy „Czarny obraz, a słychać dźwięk?”.
+- `<video>` w odtwarzaczu: `width: 100%; height: 100%; object-fit: contain` zamiast `width: auto; height: 100%` (w siatce szerokość wychodziła zła i obraz był rozciągnięty albo zwężony).
+
 ## 2026-11-18 · Nowa ikona: talerz z nazwą marki (v67)
 
 - Ikona z v55 („Duet”, zbliżenie końca toru z animacji) wyszła „tak sobie”: w karcie przeglądarki (16 px) zostawał z niej haczyk z kółkiem. Poprawka z tej samej nocy (ten sam rysunek grubszą kreską, w trzech kolorach tła) też odpadła. Damian: zbliżenie na końcówkę ruchu nie działa, animacja jest super, potrzebny jest nowy pomysł na ikonę. Wniosek: wycinek linii z animacji nie jest znakiem, bo poza animacją nie widać, co przedstawia.

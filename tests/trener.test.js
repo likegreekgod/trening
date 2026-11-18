@@ -511,7 +511,7 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   assert.ok(sm.length && sm.every(d => d.tok === 'tok-film') && sm.some(d => d.range));   // bilet w nagłówku i zapytania o kawałek
   // „Czarny obraz, a słychać dźwięk?”: format z pliku i wymiary obrazu w przeglądarce, porady
   await s5.p.click('#pvh summary'); await s5.p.waitForFunction(() => /Plik: VP8/.test(document.querySelector('#pvh-b').textContent));
-  assert.match(await s5.p.textContent('#pvh-b'), /Plik: VP8\. Przeglądarka widzi obraz \d+×\d+[\s\S]*przyspieszenie graficzne[\s\S]*Otwórz na Dysku/);
+  assert.match(await s5.p.textContent('#pvh-b'), /Plik: VP8\. Przeglądarka widzi obraz \d+×\d+[\s\S]*Rozszerz klipy wideo[\s\S]*przyspieszenie graficzne[\s\S]*Otwórz na Dysku/);
   assert.deepEqual(s5.p.errors, []);
   await s5.ctx.close();
   // bilet wygasł w trakcie oglądania: nowy bilet i film gra dalej, bez komunikatu

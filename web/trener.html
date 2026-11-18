@@ -121,7 +121,8 @@
      (obraz idzie przez nakładkę sprzętową). Rogi robi tło .pv, film leży niżej o promień, a pasek sterowania ma własne dolne rogi. */
   .pv{background:var(--pv-bg);border-radius:var(--r);position:relative;padding-top:var(--r)}
   .pv .stage{position:relative;height:min(62vh,560px);display:grid;place-items:center;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
-  .pv video{max-width:100%;max-height:100%;width:auto;height:100%;display:block;transform-origin:50% 50%;background:var(--pv-bg)}
+  /* film zawsze wypełnia scenę, a proporcje trzyma object-fit (nie wymiary z pliku: Edge potrafi podać złe, wtedy obraz był rozciągnięty) */
+  .pv video{width:100%;height:100%;object-fit:contain;display:block;transform-origin:50% 50%;background:var(--pv-bg)}
   .pv .zoom{position:absolute;top:10px;left:10px;background:var(--pv-glass);color:var(--pv-white);font:600 12.5px/1 var(--f-body);padding:7px 10px;border-radius:999px;pointer-events:none}
   .pv .fsb{position:absolute;top:8px;right:8px;width:44px;height:44px;border-radius:12px;border:0;background:var(--pv-glass);color:var(--pv-white);font-size:20px}
   .pv .pmsg{display:grid;gap:12px;justify-items:center;text-align:center;color:var(--pv-ink);padding:24px;max-width:340px}.pv .pmsg .hint{color:var(--pv-muted)}.pv .pmsg .more{display:grid;gap:8px;font-size:14px;line-height:1.45;color:var(--pv-muted);max-width:460px}.pv .pmsg .more b{color:var(--pv-ink)}.pv .pmsg a.b,.pv .pmsg button.b{color:var(--ink)}.pv .pmsg:has(.more){max-width:500px}
@@ -482,7 +483,7 @@ function renderFilmy(who){
     const draw = fmt => { const vid = $('#pvv'), b = $('#pvh-b'); if (!b) return; const hevc = fmt && /HEVC/.test(fmt.codec);
       b.innerHTML = '<p>Plik: ' + (fmt ? esc(fmtTxt(fmt) || (fmt.read ? 'formatu nie rozpoznano' : 'nie udało się odczytać formatu (Dysk nie odpowiedział)')) : 'sprawdzam format…') + '. ' +
         (vid && vid.videoWidth ? 'Przeglądarka widzi obraz ' + vid.videoWidth + '×' + vid.videoHeight + ', więc go dekoduje, a czarny ekran to zwykle grafika komputera.' : 'Przeglądarka nie widzi obrazu.') + '</p><ul>' +
-        (hevc ? '<li>Film jest w HEVC (H.265). W Edge pomaga rozszerzenie „HEVC Video Extensions” ze Sklepu Microsoft.</li>' : '') + '<li>' + esc(HWTIP) + '</li><li>„Otwórz na Dysku” zawsze pokaże film.</li></ul>'; };
+        (hevc ? '<li>Film jest w HEVC (H.265). W Edge pomaga rozszerzenie „HEVC Video Extensions” ze Sklepu Microsoft.</li>' : '') + '<li>' + esc(VSRTIP) + '</li><li>' + esc(HWTIP) + '</li><li>„Otwórz na Dysku” zawsze pokaże film.</li></ul>'; };
     draw(null); draw(await filmFmt(cur.file, (FB[cur.file] || {}).size || 0)); };
   komFilmDraw(cur, who);
 }
@@ -510,6 +511,7 @@ async function filmFmt(file, size){
   return fmt;
 }
 const fmtTxt = fmt => [fmt.codec, fmt.w && fmt.h ? fmt.w + '×' + fmt.h + (Math.max(fmt.w, fmt.h) >= 3840 ? ' (4K)' : '') : '', fmt.bits10 ? '10 bitów' : '', fmt.hdr ? 'HDR (' + fmt.hdr + ')' : ''].filter(Boolean).join(', ');
+const VSRTIP = 'Edge: Ustawienia → System i wydajność → wyłącz „Rozszerz klipy wideo” i przeładuj panel. To najczęstsza przyczyna czarnego obrazu z dźwiękiem tylko na niektórych stronach.';
 const HWTIP = 'Przyspieszenie sprzętowe: w Edge Ustawienia → System i wydajność → wyłącz przyspieszenie graficzne (sprzętowe), uruchom Edge ponownie i sprawdź film jeszcze raz. To częsta przyczyna czarnego obrazu z dźwiękiem.';
 /** komunikat „dźwięk bez obrazu” z formatem filmu (TL.videoCodec) i podpowiedzią, co zrobić */
 function picMsg(fmt){
