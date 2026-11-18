@@ -3,6 +3,15 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-18 · Klienci w panelu trenera (v71)
+
+- Damian zapytał, co jeszcze usprawnić; z listy 8 propozycji przyjął rekomendację „Klienci w panelu”, bo menu „Dodaj klienta” i flagi w arkuszu nie działają na telefonie, a przyda się to pod sprzedaż przez stronę. Szkic zaakceptowany bez zmian.
+- Panel → Klienci: lista, ustawienia klienta (flagi D, F–N), kopiowanie i wysyłanie linku, nowy klient. „Wygeneruj nowy link” zostaje (po drugim dotknięciu), bo to jedyny sposób na unieważnienie linku, który trafił do niewłaściwej osoby; Log i Sesje są po `klient_id`, więc historia zostaje.
+- Usuwania klienta nie ma: „Aktywny” wyłączony blokuje aplikację, a dane zostają.
+- Link w panelu liczony z `PWA_URL` + klucz (kolumna E bywa nieaktualna, np. stare linki `/exec`); zapis ustawień odświeża kolumnę E. Nagłówki zakładki Klienci uzupełniane tylko tam, gdzie komórka jest pusta, żeby nie nadpisać nazw Damiana.
+- Menu „Dodaj klienta” w arkuszu zostaje bez zmian.
+- Na telefonie menu panelu jest jednym przewijanym rzędem (piąta pozycja nie zmieściła się w dwóch rzędach).
+
 ## 2026-11-18 · Zejście po 🟡 / 🔴 w bojach, rekord po zamknięciu ćwiczenia, stan ciała poza sesją (v70)
 
 - Powód: 17.11 w rwaniu (5×2 na kg z planu, „max dziś” = plan + 5% 1RM) seria na sufit dostała Średnio, a aplikacja kazała „zostać przy tym ciężarze”, więc następna seria znów poszła na sufit i wyszła Walka. Reguła trenera: sufit = plan, dokładanie tylko przy samych 🟢, jakakolwiek 🟡 = zostajesz przy planie.

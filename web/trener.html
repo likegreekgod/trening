@@ -201,11 +201,37 @@
   #busy{position:fixed;top:0;left:0;right:0;height:3px;background:var(--accent);transform-origin:left;animation:busy 1.2s ease-in-out infinite}
   @keyframes busy{0%{transform:scaleX(0)}50%{transform:scaleX(.7)}100%{transform:scaleX(1);opacity:0}}
   @media (prefers-reduced-motion:reduce){#busy{animation:none}}
+  /* klienci: lista, ustawienia (flagi), nowy klient */
+  .kl .flags{color:var(--muted);font-size:12.5px}.kl tr.off td{color:var(--muted)}.kl .lk{display:flex;gap:6px;align-items:center;justify-content:flex-end}
+  .cp{min-height:40px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);padding:0 12px;font-weight:600;font-size:13px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink)}
+  .cp.done{background:var(--ok);color:var(--on-primary);border-color:var(--ok)}.cp.danger{color:var(--bad)}.cp:disabled{opacity:.55;cursor:default}
+  .fr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+  .frm > .fr:first-child,.sec + .fr{border-top:0}
+  .fr b{font-weight:650;font-size:15px}.fr small{display:block;color:var(--muted);font-size:13px;line-height:1.35;margin-top:2px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+  .seg button{min-height:44px;border:0;background:none;padding:0 14px;font-weight:600;font-size:13.5px;border-left:1px solid var(--line)}
+  .seg button:first-child{border-left:0}.seg button[aria-pressed=true]{background:var(--primary);color:var(--on-primary)}
+  .sw{width:52px;height:30px;border-radius:999px;background:var(--line);position:relative;border:0;flex:none;margin:7px 0}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s}
+  .sw[aria-checked=true]{background:var(--ok)}.sw[aria-checked=true]::after{left:25px}
+  @media (prefers-reduced-motion:reduce){.sw::after{transition:none}}
+  .num{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .num button{width:44px;height:44px;border:0;background:var(--surface-2);font-size:18px;font-weight:600}.num button:disabled{opacity:.4;cursor:default}
+  .num output{min-width:56px;text-align:center;font:500 15px var(--f-mono)}
+  .inp{width:100%;min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px 12px;font-size:15px}
+  .lab{font-size:13px;font-weight:600;color:var(--ink-2);display:block;margin:12px 0 6px}.lab .muted{font-weight:400}
+  .linkbox{background:var(--surface-2);border-radius:var(--r);padding:10px 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kgrid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:var(--gap);align-items:start}
+  .okbox{border-left:4px solid var(--ok);background:var(--surface-2);border-radius:var(--r);padding:12px 14px;margin-bottom:12px}.okbox b{display:block;font-size:16px;margin-bottom:2px}
+  .sec{font:800 15px/1.1 var(--f-display);text-transform:uppercase;color:var(--muted);letter-spacing:.04em;margin:18px 0 0;padding-bottom:4px;border-bottom:1px solid var(--line)}
+  .steps{margin:6px 0 0;padding-left:20px;font-size:14px}.steps li{margin:4px 0}
+  @media (max-width:1100px){.kgrid{grid-template-columns:minmax(0,1fr)}}
+  @media (max-width:760px){.kl .hide-m{display:none}.kl .lk{flex-wrap:wrap}.fr{grid-template-columns:minmax(0,1fr)}.fr .seg,.fr .num,.fr .sw{justify-self:start}}
   @media (max-width:1100px){.cols,.vids{grid-template-columns:minmax(0,1fr)}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:minmax(0,1fr)}}
   .vids.one{grid-template-columns:minmax(0,1fr)}
   @media (max-width:760px){.app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr;align-content:start}
     aside{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:10px 12px;border-right:0;border-bottom:3px solid var(--accent)}
-    aside .brand{margin:0 12px 0 4px;font-size:18px}aside nav{flex-direction:row;flex-wrap:wrap}aside .foot{margin:0 0 0 auto;padding:0 4px;display:flex;gap:12px;align-items:center}aside .foot #at{display:none}aside .foot #set{min-height:44px;display:inline-flex;align-items:center;font-size:13px}aside .foot button{min-height:44px;font-size:13px}
+    aside .brand{margin:0 12px 0 4px;font-size:18px}aside nav{flex-direction:row;flex-wrap:nowrap;order:3;width:100%;overflow-x:auto;scrollbar-width:none}aside nav a{flex:none;padding:0 10px}aside .foot{margin:0 0 0 auto;padding:0 4px;display:flex;gap:12px;align-items:center}aside .foot #at{display:none}aside .foot #set{min-height:44px;display:inline-flex;align-items:center;font-size:13px}aside .foot button{min-height:44px;font-size:13px}
     .vsw{display:flex}.vids .vlist{display:none}.pv .stage{height:min(58vh,520px)}
     .top,.pg{padding-left:16px;padding-right:16px}.tabs{padding:0 16px}.search{width:100%}}
 </style>
@@ -227,6 +253,7 @@
       <a href="#pulpit" data-v="pulpit">Pulpit</a>
       <a href="#filmy" data-v="filmy">Filmy <em id="n-filmy"></em></a>
       <a href="#bloki" data-v="bloki">Bloki <em id="n-bloki"></em></a>
+      <a href="#klienci" data-v="klienci">Klienci</a>
       <a href="./" id="mine">Mój trening ›</a>
     </nav>
     <div class="foot"><span id="at"></span><br><a id="set" href="#ustawienia">Ustawienia</a> · <button id="recalc" type="button">Przelicz teraz</button> · <button id="logout" type="button">Wyloguj</button></div>
@@ -285,7 +312,7 @@ async function guard(p){
   finally { $('#busy').hidden = true; }
 }
 
-/* ---------- start i nawigacja (#pulpit, #filmy, #bloki, #k/<id>/<zakładka>) ---------- */
+/* ---------- start i nawigacja (#pulpit, #filmy, #bloki, #klienci[/nowy|/<id>], #k/<id>/<zakładka>) ---------- */
 async function start(){
   if (!tokenGet()) return login();
   $('#login').hidden = true; $('#app').hidden = false;
@@ -307,6 +334,7 @@ function route(){
   if (v === 'filmy') return renderFilmy(h[1] || '');
   if (v === 'bloki') return renderBloki();
   if (v === 'ustawienia') return renderUstawienia();
+  if (v === 'klienci') return renderKlienci(decodeURIComponent(h[1] || ''));
   renderPulpit();
 }
 window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
@@ -684,6 +712,150 @@ async function renderUstawienia(){
   const del = $('#aikey-del'); if (del) del.onclick = () => { if (!AIM.del) { Object.assign(AIM, { del: true, ok: '', err: '' }); renderUstawienia(); return; } save(''); };
 }
 
+/* ---------- klienci: lista, ustawienia (trKlientUstaw), nowy klient (trKlientNowy), nowy link (trKlientLink) ----------
+ * Flagi z zakładki Klienci w jednym miejscu (menu „Dodaj klienta” w arkuszu nie działa na telefonie). Usuwania nie ma: „Aktywny” wyłączony
+ * zostawia historię. Lista i szkice ustawień żyją tylko w pamięci strony. */
+let KL = null, KLD = {}, KLM = { ok: '', err: '', busy: false, rekey: '' }, KLC = '', NK = null;
+const slug = s => String(s || '').replace(/[łŁ]/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+const KL_F = ['on', 'mode', 'scale', 'swap', 'pain', 'masters', 'extra', 'oly', 'own', 'edit'];
+const klLink = 'style="display:inline-flex;align-items:center;text-decoration:none"';
+const klFlags = k => [k.mode === 'PROSTY' ? 'Prosty' : 'PRO', k.mode === 'PRO' && k.scale === 'RIR' ? 'RIR' : '', k.swap === 'DOWOLNA' ? 'zamiana dowolna' : k.swap === 'TRENER' ? 'zamiana od trenera' : '',
+  k.edit ? 'zmiany w treningu' : '', k.masters ? 'masters' : '', k.pain ? 'ból zawsze' : '', k.extra ? '+' + k.extra + (k.extra === 1 ? ' seria' : ' serie') : '', k.own ? '' : 'bez własnych',
+  k.oly !== 5 ? 'sufit ' + pl(k.oly) + '%' : ''].filter(Boolean).join(' · ');
+async function copyTxt(t){
+  try { await navigator.clipboard.writeText(t); return true; } catch (e) {}
+  const a = document.createElement('textarea'); a.value = t; a.setAttribute('readonly', ''); a.style.position = 'fixed'; a.style.opacity = '0'; document.body.appendChild(a); a.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} a.remove(); return ok;
+}
+const cpBtn = (k, cls) => k.link ? '<button class="cp' + (KLC === k.id ? ' done' : '') + (cls || '') + '" type="button" data-copy="' + esc(k.id) + '">' + (KLC === k.id ? '✓ Skopiowano' : '⧉ Kopiuj link') + '</button>' +
+  (navigator.share ? '<button class="cp" type="button" data-share="' + esc(k.id) + '">↗ Wyślij…</button>' : '') : '';
+function klBind(){
+  document.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
+    const k = KL.find(x => x.id === b.dataset.copy); if (!k) return;
+    if (await copyTxt(k.link)) { KLC = k.id; renderKlienci(curSub()); setTimeout(() => { if (KLC === k.id) { KLC = ''; if (location.hash.startsWith('#klienci')) renderKlienci(curSub()); } }, 2500); }
+    else alertBox(new Error('Nie udało się skopiować. Zaznacz link i skopiuj ręcznie: ' + k.link));
+  });
+  document.querySelectorAll('[data-share]').forEach(b => b.onclick = () => {
+    const k = KL.find(x => x.id === b.dataset.share); if (!k) return;
+    navigator.share({ title: 'Siła z Ruchu', text: 'Twój link do aplikacji treningowej:', url: k.link }).catch(() => {});
+  });
+}
+const curSub = () => decodeURIComponent((location.hash.split('/')[1]) || '');
+async function renderKlienci(sub){
+  if (!KL) { $('#main').innerHTML = head('Panel trenera', 'Klienci') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
+    try { KL = await guard(api('trKlienci')); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Klienci') + errBox(e); return; }
+    if (!location.hash.startsWith('#klienci')) return; }
+  if (sub === 'nowy') return renderNowyKlient();
+  if (sub) return renderKlientUst(sub);
+  NK = null; KLD = {}; KLM = { ok: '', err: '', busy: false, rekey: '' };
+  const on = KL.filter(k => k.on).length, off = KL.length - on;
+  const rows = KL.slice().sort((a, b) => (b.on - a.on) || a.name.localeCompare(b.name, 'pl')).map(k => {
+    const c = PUL.clients.find(x => x.id === k.id);
+    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="#klienci/' + encodeURIComponent(k.id) + '"><span class="dot ' + (k.on ? 'lv-ok' : '') + '"></span>' + esc(k.name) + '</a><div class="flags mono">' + esc(k.id) + '</div></td>' +
+      '<td class="flags">' + (k.on ? '' : '<b>nieaktywny</b> · ') + esc(klFlags(k)) + '</td>' +
+      '<td class="nw hide-m">' + (c ? agoTxt(c) : '–') + '</td><td class="nw hide-m">' + (!c || c.planLeft === null ? '–' : c.planLeft < 0 ? 'skończony' : 'za ' + c.planLeft + ' dni') + '</td>' +
+      '<td class="nw"><span class="lk">' + (k.on ? cpBtn(k) : '') + '<a class="cp" href="#klienci/' + encodeURIComponent(k.id) + '">Ustawienia ›</a></span></td></tr>';
+  }).join('');
+  $('#main').innerHTML = head(on + ' ' + (on === 1 ? 'aktywny' : 'aktywnych') + (off ? ' · ' + off + ' ' + (off === 1 ? 'nieaktywny' : 'nieaktywnych') : ''), 'Klienci', '<a class="b p" ' + klLink + ' href="#klienci/nowy">+ Nowy klient</a>') +
+    '<div class="pg"><div class="card">' + (rows ? '<div class="tw"><table class="kl"><thead><tr><th>Klient</th><th>Ustawienia</th><th class="hide-m">Ostatni trening</th><th class="hide-m">Koniec planu</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="legend">„Kopiuj link” kopiuje link do aplikacji tej osoby, gotowy do wklejenia w SMS albo WhatsApp. Nieaktywny klient nie wejdzie do aplikacji, ale jego dane zostają.</p>'
+      : '<div class="es"><b>Nie ma jeszcze klientów</b>Dodaj pierwszego przyciskiem „+ Nowy klient”.</div>') + '</div></div>';
+  klBind();
+}
+const segH = (f, opts, v) => '<div class="seg" role="group">' + opts.map(([k, t]) => '<button type="button" data-seg="' + f + '" data-val="' + k + '" aria-pressed="' + (k === v) + '">' + t + '</button>').join('') + '</div>';
+const swH = (f, v, lbl) => '<button type="button" class="sw" role="switch" data-sw="' + f + '" aria-checked="' + !!v + '" aria-label="' + esc(lbl) + '"></button>';
+const numH = (f, v, mn, mx, st, u) => '<div class="num"><button type="button" data-num="' + f + '" data-d="-' + st + '"' + (v <= mn ? ' disabled' : '') + ' aria-label="mniej">−</button><output>' + pl(v) + (u || '') + '</output><button type="button" data-num="' + f + '" data-d="' + st + '"' + (v >= mx ? ' disabled' : '') + ' aria-label="więcej">+</button></div>';
+const frH = (t, d, ctl) => '<div class="fr"><div><b>' + t + '</b><small>' + d + '</small></div>' + ctl + '</div>';
+const KL_LIM = { extra: [0, 5, 1], oly: [0, 20, 2.5] };
+function klCtl(st, re){   // przełączniki formularza zmieniają stan st i rysują stronę od nowa
+  document.querySelectorAll('[data-seg]').forEach(b => b.onclick = () => { st[b.dataset.seg] = b.dataset.val; re(); });
+  document.querySelectorAll('[data-sw]').forEach(b => b.onclick = () => { st[b.dataset.sw] = !st[b.dataset.sw]; re(); });
+  document.querySelectorAll('[data-num]').forEach(b => b.onclick = () => { const f = b.dataset.num, l = KL_LIM[f]; st[f] = Math.min(l[1], Math.max(l[0], Math.round((st[f] + Number(b.dataset.d)) * 10) / 10)); re(); });
+}
+function renderKlientUst(id){
+  const k = KL.find(x => x.id === id);
+  if (!k) { $('#main').innerHTML = head('Klienci', 'Nie ma klienta') + '<div class="pg"><div class="card es"><b>Nie ma klienta „' + esc(id) + '”</b><a href="#klienci">Wróć do listy</a></div></div>'; return; }
+  const d = KLD[id] = KLD[id] || Object.assign({}, k), m = KLM, ch = KL_F.filter(f => d[f] !== k[f]).length, dis = m.busy ? ' disabled' : '';
+  const f = '<div class="frm">' +
+    frH('Aktywny', 'Wyłączony nie wejdzie do aplikacji. Dane i historia zostają.', swH('on', d.on, 'Aktywny')) +
+    '<div class="sec">Wygląd aplikacji</div>' +
+    frH('Tryb', 'Prosty: słowa i duże przyciski, bez % i prędkości. PRO: liczby RPE, % i VBT.', segH('mode', [['PROSTY', 'Prosty'], ['PRO', 'PRO']], d.mode)) +
+    frH('Skala wysiłku', 'Tylko widok w PRO. Arkusz zawsze zapisuje RPE.', segH('scale', [['RPE', 'RPE'], ['RIR', 'RIR']], d.scale)) +
+    frH('Ból zawsze widoczny', 'Pytanie o ból przy każdym podsumowaniu treningu.', swH('pain', d.pain, 'Ból zawsze widoczny')) +
+    '<div class="sec">Co klient może zmieniać</div>' +
+    frH('Zamiana ćwiczenia', 'Od trenera: tylko zamienniki z planu i bazy. Dowolna: cała baza i własna nazwa.', segH('swap', [['NIE', 'Nie'], ['TRENER', 'Od trenera'], ['DOWOLNA', 'Dowolna']], d.swap)) +
+    frH('Zmiany w treningu trenera', 'Dodanie i usunięcie ćwiczenia w Twojej jednostce, też na stałe.', swH('edit', d.edit, 'Zmiany w treningu trenera')) +
+    frH('Własne treningi', 'Kreator własnego treningu poza planem.', swH('own', d.own, 'Własne treningi')) +
+    frH('Dodatkowe serie', 'Ile serii ponad plan klient może dodać w ćwiczeniu (gdy plan nie mówi inaczej).', numH('extra', d.extra, 0, 5, 1)) +
+    '<div class="sec">Obciążenie</div>' +
+    frH('Masters', 'Ostrzejsze progi „za dużo / uwaga” w podsumowaniu.', swH('masters', d.masters, 'Masters')) +
+    frH('Sufit w bojach', 'O ile ponad plan (w % maksa) klient może pójść w rwaniu i podrzucie.', numH('oly', d.oly, 0, 20, 2.5, '%')) + '</div>' +
+    '<div class="row2" style="margin-top:14px"><button class="b p" type="button" id="kl-save"' + (ch && !m.busy ? '' : ' disabled') + '>' + (m.busy === 'save' ? 'Zapisuję…' : 'Zapisz zmiany') + '</button>' +
+    (ch ? '<button class="b" type="button" id="kl-undo"' + dis + '>Cofnij</button><span class="hint">Zmienione: ' + ch + '</span>' : m.ok ? '<span class="saved" role="status">' + esc(m.ok) + '</span>' : '') + '</div>' +
+    (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '');
+  const side = '<div class="card"><h2>Link do aplikacji</h2>' + (k.link ? '<div class="linkbox mono" id="kl-link">' + esc(k.link) + '</div><div class="row2">' + cpBtn(k) + '</div>' +
+      '<p class="legend">„Wyślij…” (na telefonie) otwiera SMS, WhatsApp albo mail. Na iPhonie klient po dodaniu aplikacji do ekranu głównego wkleja ten link jeszcze raz.</p>'
+      : '<p class="muted">Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL.</p>') +
+    '<div class="sec" style="border:0">Nowy link</div><p class="legend" style="font-size:13px">Gdy link trafił do niewłaściwej osoby. Stary link przestaje działać, a klient musi dostać nowy. Treningi i historia zostają.</p>' +
+    '<button class="cp danger" type="button" id="kl-rekey"' + dis + '>' + (m.busy === 'rekey' ? 'Generuję…' : m.rekey === id ? 'Na pewno? Stary link przestanie działać' : 'Wygeneruj nowy link') + '</button></div>' +
+    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>';
+  $('#main').innerHTML = head('<a href="#klienci" style="color:inherit">Klienci</a> › ustawienia', k.name, '<a class="b" ' + klLink + ' href="#k/' + encodeURIComponent(id) + '">Karta klienta ›</a>') +
+    '<div class="pg"><div class="kgrid"><div class="card" id="kl-form">' + f + '</div><div class="stack">' + side + '</div></div></div>';
+  const re = () => { KLM = { ok: '', err: '', busy: false, rekey: '' }; renderKlientUst(id); };
+  klCtl(d, re); klBind();
+  const u = $('#kl-undo'); if (u) u.onclick = () => { KLD[id] = Object.assign({}, k); re(); };
+  $('#kl-save').onclick = async () => {
+    KLM = { ok: '', err: '', busy: 'save', rekey: '' }; renderKlientUst(id);
+    try { const r = await guard(api('trKlientUstaw', id, d)); KL[KL.indexOf(k)] = r; KLD[id] = Object.assign({}, r); delete CK[id];
+      KLM = { ok: '✓ Zapisano. Klient zobaczy zmiany przy następnym otwarciu aplikacji.', err: '', busy: false, rekey: '' }; }
+    catch (e) { KLM = { ok: '', err: e.auth ? '' : e.message, busy: false, rekey: '' }; }
+    if (location.hash.startsWith('#klienci/')) renderKlientUst(id);
+  };
+  $('#kl-rekey').onclick = async () => {
+    if (KLM.rekey !== id) { KLM = { ok: '', err: '', busy: false, rekey: id }; renderKlientUst(id); return; }
+    KLM = { ok: '', err: '', busy: 'rekey', rekey: '' }; renderKlientUst(id);
+    try { const r = await guard(api('trKlientLink', id)); KL[KL.findIndex(x => x.id === id)] = r; KLC = '';
+      KLM = { ok: 'Nowy link gotowy. Stary już nie działa: wyślij klientowi ten z prawej.', err: '', busy: false, rekey: '' }; }
+    catch (e) { KLM = { ok: '', err: e.auth ? '' : e.message, busy: false, rekey: '' }; }
+    if (location.hash.startsWith('#klienci/')) renderKlientUst(id);
+  };
+}
+function renderNowyKlient(){
+  const n = NK = NK || { imie: '', id: '', touched: false, mode: 'PROSTY', swap: 'TRENER', masters: false, err: '', busy: false, done: null };
+  const top = head('<a href="#klienci" style="color:inherit">Klienci</a>', 'Nowy klient');
+  if (n.done) {
+    const k = n.done;
+    $('#main').innerHTML = top + '<div class="pg"><div class="card" style="max-width:640px"><div class="okbox" role="status"><b>✓ Dodano: ' + esc(k.name) + '</b>W planach JSON: „klient”: <span class="mono">"' + esc(k.id) + '"</span>. Folder na filmy jest gotowy.</div>' +
+      (k.link ? '<span class="lab">Link do aplikacji</span><div class="linkbox mono" id="kl-link">' + esc(k.link) + '</div><div class="row2">' + cpBtn(k) + '</div>' : '<p class="err">Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL, potem link będzie w ustawieniach klienta.</p>') +
+      '<div class="sec" style="border:0">Co dalej</div><ol class="steps"><li>Wyślij link (' + esc(k.name) + ' otwiera go na telefonie i dodaje aplikację do ekranu głównego).</li><li>Przygotuj plan z „klient”: "' + esc(k.id) + '".</li>' +
+      '<li>Do czasu planu aplikacja pokazuje „Jeszcze nie masz planu”. Na pulpicie osoba pojawi się po „Przelicz teraz”.</li></ol>' +
+      '<div class="row2" style="margin-top:14px"><a class="b" ' + klLink + ' href="#klienci/' + encodeURIComponent(k.id) + '">Ustawienia: ' + esc(k.name) + ' ›</a><button class="b" type="button" id="kl-next">Dodaj kolejnego</button></div></div></div>';
+    klBind(); $('#kl-next').onclick = () => { NK = null; renderNowyKlient(); };
+    return;
+  }
+  const dis = n.busy ? ' disabled' : '';
+  $('#main').innerHTML = top + '<div class="pg"><div class="card" style="max-width:640px" id="kl-new">' +
+    '<label class="lab" for="kl-imie" style="margin-top:0">Imię <span class="muted">(widzi je klient w aplikacji)</span></label><input class="inp" id="kl-imie" autocomplete="off" value="' + esc(n.imie) + '"' + dis + '>' +
+    '<label class="lab" for="kl-id">ID w planach <span class="muted">(podpowiada się samo z imienia)</span></label><input class="inp mono" id="kl-id" autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(n.id) + '"' + dis + '>' +
+    '<div class="frm" style="margin-top:8px">' +
+    frH('Tryb', 'Prosty dla początkujących, PRO dla tych, którzy znają RPE.', segH('mode', [['PROSTY', 'Prosty'], ['PRO', 'PRO']], n.mode)) +
+    frH('Zamiana ćwiczenia', 'Od trenera: zamienniki z planu i bazy. Dowolna: cała baza i własna nazwa.', segH('swap', [['NIE', 'Nie'], ['TRENER', 'Od trenera'], ['DOWOLNA', 'Dowolna']], n.swap)) +
+    frH('Masters', 'Ostrzejsze progi obciążenia.', swH('masters', n.masters, 'Masters')) + '</div>' +
+    '<p class="legend" style="font-size:13px">Pozostałe ustawienia (skala, ból, dodatkowe serie, zmiany w treningu, sufit w bojach) mają wartości domyślne i zmienisz je po dodaniu.</p>' +
+    '<div class="row2" style="margin-top:12px"><button class="b p" type="button" id="kl-add"' + dis + '>' + (n.busy ? 'Dodaję…' : 'Dodaj klienta') + '</button><a class="b" ' + klLink + ' href="#klienci">Anuluj</a></div>' +
+    (n.err ? '<p class="err" role="alert">' + esc(n.err) + '</p>' : '') + '</div></div>';
+  $('#kl-imie').oninput = e => { n.imie = e.target.value; if (!n.touched) { n.id = slug(n.imie); $('#kl-id').value = n.id; } };
+  $('#kl-id').oninput = e => { n.id = e.target.value; n.touched = !!n.id; };
+  klCtl(n, () => { n.err = ''; renderNowyKlient(); });
+  $('#kl-add').onclick = async () => {
+    if (!n.imie.trim()) { n.err = 'Podaj imię.'; renderNowyKlient(); $('#kl-imie').focus(); return; }
+    n.busy = true; n.err = ''; renderNowyKlient();
+    try { const k = await guard(api('trKlientNowy', { imie: n.imie.trim(), id: n.id.trim(), mode: n.mode, swap: n.swap, masters: n.masters })); KL.push(k); n.done = k; }
+    catch (e) { n.err = e.auth ? '' : e.message; }
+    n.busy = false; if (location.hash === '#klienci/nowy') renderNowyKlient();
+  };
+}
+
 /* ---------- karta klienta ---------- */
 async function renderKlient(id, tab){
   const c = PUL.clients.find(x => x.id === id) || { id, name: id, signals: [], load: [], week: '' };
@@ -708,7 +880,7 @@ async function renderKlient(id, tab){
   else if (tab === 'bloki') body = blokList(d);
   else if (tab === 'dyspozycja') body = dyspList(d);
   else body = przeglad(d, c, sets, dates, today);
-  $('#main').innerHTML = head(eb, d.cfg.name || c.name, '<a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#filmy/' + encodeURIComponent(id) + '">Filmy klienta</a>') + tabs + '<div class="pg">' + body + '</div>';
+  $('#main').innerHTML = head(eb, d.cfg.name || c.name, '<a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#filmy/' + encodeURIComponent(id) + '">Filmy klienta</a><a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#klienci/' + encodeURIComponent(id) + '">Ustawienia</a>') + tabs + '<div class="pg">' + body + '</div>';
 }
 function painOf(s){
   let top = ['', NaN];
