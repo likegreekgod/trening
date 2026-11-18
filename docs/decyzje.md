@@ -8,6 +8,18 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Przyczyną czarnego obrazu z dźwiękiem u Damiana było ustawienie Edge „Rozszerz klipy wideo” (ulepszanie wideo), nie kodek ani nasz kod. Po wyłączeniu obraz jest. Porada trafiła do pomocy „Czarny obraz, a słychać dźwięk?”.
 - `<video>` w odtwarzaczu: `width: 100%; height: 100%; object-fit: contain` zamiast `width: auto; height: 100%` (w siatce szerokość wychodziła zła i obraz był rozciągnięty albo zwężony).
 
+## 2026-11-18 · Nowa ikona: talerz z nazwą marki (v67)
+
+- Ikona z v55 („Duet”, zbliżenie końca toru z animacji) wyszła „tak sobie”: w karcie przeglądarki (16 px) zostawał z niej haczyk z kółkiem. Poprawka z tej samej nocy (ten sam rysunek grubszą kreską, w trzech kolorach tła) też odpadła. Damian: zbliżenie na końcówkę ruchu nie działa, animacja jest super, potrzebny jest nowy pomysł na ikonę. Wniosek: wycinek linii z animacji nie jest znakiem, bo poza animacją nie widać, co przedstawia.
+- Damian dostał planszę z czterema pomysłami niezwiązanymi z torem: 1 sztangista (rwanie w przysiadzie), 2 talerz z nazwą na obwodzie, 3 litery „SR” pod sztangą, 4 litera „S” wygięta ze sztangi. Wybrał talerz.
+- Talerz: pomarańczowy krążek na ciemnym tle marki, napis „SIŁA Z RUCHU” czcionką marki po obwodzie u góry i u dołu (jak na prawdziwych talerzach), rowek, mała jasna piasta i ciemny otwór na gryf. W karcie przeglądarki i w nagłówku aplikacji (16–32 px) jest sam talerz bez napisu, bo litery zlałyby się w plamę; jasny krążek widać tam także na ciemnym pasku kart.
+- Odrzucone na próbach: duża jasna piasta z ciemnym otworem (wygląda jak oko), piasta bez otworu (jajko sadzone), „S” z dwóch łuków z talerzami (haczyk albo znak dolara), sztanga wygięta w falę (wykres tętna), cała sylwetka sztangisty w 16 px (plama; mały znak musiałby być samym popiersiem).
+- Litery na ikonie to kontury wyciągnięte z czcionki marki (`tools/icon-glyphs.json`, tworzy je `tools/icon-glyphs.py`), bo plik SVG używany jako ikona nie może wczytać czcionki. Kolory dalej z tokenów `--intro-*`: o kolory marki nie pytamy osobno, zostają trzy kolory animacji.
+- Ikona jednobarwna (motyw Androida): czarny talerz, w którym napis, rowek, obrys piasty i otwór są wycięte na wylot, więc w kolorach motywu dalej widać napis.
+- Test „Ikona …” nie wymaga już krzywych animacji w plikach ikony. Sprawdza napis w punktach kontrolnych, udziały kolorów (talerz ponad 30% pola, w ikonie przycinanej przez Androida ponad 25%, piasta ponad 2%), pole bezpieczne ikony przycinanej i wycięcia w ikonie jednobarwnej. Sprawdzony 11 celowymi błędami (m.in. brak liter, brak otworu, plik poprawiony ręcznie, talerz za duży dla Androida): każdy wykrywa.
+- Animacja otwarcia zostaje bez zmian; ikona nie jest już jej wycinkiem.
+
+
 ## 2026-11-18 · Odtwarzacz w panelu bez zaokrąglonego przycinania filmu (v66)
 
 - Damian: w Edge na Windows tylko panel pokazuje czarny obraz z dźwiękiem, inne strony z filmami działają. Podejrzenie: `.pv` miał `border-radius` z `overflow: hidden` nad `<video>`; zaokrąglona maska nad filmem wyłącza albo psuje sprzętową nakładkę wideo w Chromium na Windows (znany błąd sterowników). Teraz rogi robi tło `.pv` (film niżej o promień), a pasek sterowania ma własne dolne rogi; wygląd bez zmian. Nie zaokrąglaj ani nie maskuj (clip-path, mask) elementów nad `<video>`.
@@ -577,6 +589,7 @@ Komunikacja ekranu z mózgiem przez jedną funkcję `call()`: POST typu text/pla
 
 ### Odrzucone i dlaczego
 
+- Ikona będąca wycinkiem toru z animacji otwarcia (v55 „Duet” i jej pogrubiona wersja, 18.11): poza animacją nie widać, co przedstawia. Ikona ma od razu mówić, czym jest, także w 16 px.
 - Zmiany UI pod konkretnego klienta: Index jest wspólny; różnice flagami w zakładce Klienci i kolumnami planu.
 - ACWR w wariancie EWMA: przy 3 jednostkach w tygodniu zbyt tłumiony (podwojone obciążenie dało ~1,15).
 - e1RM z RPE dla rwania i podrzutu: boje ogranicza technika, a nie zapas powtórzeń.
