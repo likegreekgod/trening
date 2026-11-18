@@ -37,6 +37,9 @@ const SES_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data',
   'bol_kolano', 'bol_bark', 'samopoczucie', 'czas_min', 'uwagi', 'start', 'koniec', 'bol', 'bol_max', 'rpe_sesji', 'komentarz_trenera'];
 const DYS_HEADERS = ['id', 'zapisano', 'klient', 'data', 'cmj1', 'cmj2', 'cmj3', 'cmj_sr',
   'sen', 'stres', 'zmeczenie', 'bolesnosc', 'hooper_suma', 'vbt_test', 'werdykt', 'powody', 'cmj_wykluczone', 'film_link'];
+// Stan ciała: ból / napięcie zapisane w dowolny dzień (zakładka „Stan”, Dyspozycja w aplikacji); id = klient|data|miejsce z stroną
+const STAN_HEADERS = ['id', 'zapisano', 'klient', 'data', 'miejsce', 'strona', 'ocena', 'kontekst', 'cwiczenie', 'notatka'];
+const STAN_KONTEKST = ['spoczynek', 'przy rozciąganiu', 'w ćwiczeniu', 'po treningu'];
 const OCENY = ['L', 'S', 'W', 'X'];   // boje: Łatwo / Średnio / Walka / Spalone
 
 /* ---------- WEB ---------- */
@@ -59,7 +62,7 @@ function oldLinkText_(pwa) {
  * POST (Content-Type text/plain, bez preflight CORS), body: {fn, key, args:[…]} → {ok:true, result} | {ok:false, error}
  */
 const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError,
-  logNote, logReadyVideo, editPlan };
+  logNote, logReadyVideo, editPlan, saveStan, deleteStan };
 
 function doPost(e) {
   let out;
@@ -125,7 +128,7 @@ function clientData_(client, t0) {
   return { cfg: { name: client.name, pain: client.pain, simple: client.simple, extra: client.extra,
       swap: client.swap, scale: client.scale, olyCeil: client.olyCeil, own: client.own, edit: client.edit },
     plan: rows, removed: removed, logs: logs, sessions: sessions,
-    readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id), blockNotes: blockNotes_(tableOf_('Bloki'), client.id),
+    readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id), stan: readRows_('Stan', STAN_HEADERS, client.id), blockNotes: blockNotes_(tableOf_('Bloki'), client.id),
     parts: pm, ms: Object.assign(ms, { razem: Date.now() - t0 }) };
 }
 
@@ -168,6 +171,53 @@ function saveDyspozycja(key, d) {
     v(h.sen), v(h.stres), v(h.zmeczenie), v(h.bolesnosc), v(h.suma), v(d.vbt),
     String(d.verdict || ''), [].concat(d.reasons || []).join('; '), cmjExcl_(d.excl)]);
   return { ok: true, id: id };
+}
+
+/**
+ * Czysta funkcja: wpisy „Ból / napięcie” z aplikacji → wiersze zakładki Stan (STAN_HEADERS); błędne pomijane.
+ * e = {date, place, side (L/P/''), score 0–10, context (STAN_KONTEKST), exercise (tylko „w ćwiczeniu”), note}.
+ */
+function stanRows_(clientId, list, savedAt, today) {
+  const t = (v, n) => String(v === undefined || v === null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  const out = [], seen = {};
+  [].concat(list || []).forEach(e => {
+    if (!e) return;
+    const place = t(e.place, 40), side = /^[LP]$/.test(String(e.side || '').toUpperCase()) ? String(e.side).toUpperCase() : '';
+    const score = Number(e.score), ctx = STAN_KONTEKST.indexOf(t(e.context, 30)) >= 0 ? t(e.context, 30) : '';
+    if (!place || e.score === '' || e.score === null || !(score >= 0 && score <= 10) || Math.round(score) !== score) return;
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(e.date || '')) ? e.date : today;
+    const id = [clientId, date, place + (side ? ' ' + side : '')].join('|');
+    if (seen[id] !== undefined) out.splice(seen[id], 1);                       // dwa razy to samo miejsce = ostatni wpis
+    seen[id] = out.length;
+    out.push([id, savedAt, clientId, date, place, side, score, ctx, ctx === 'w ćwiczeniu' ? t(e.exercise, 80) : '', t(e.note, 300)]);
+  });
+  return out;
+}
+
+/** Ból / napięcie w dowolny dzień (też bez treningu): kilka miejsc naraz; ten sam dzień i miejsce = nadpisanie. */
+function saveStan(key, list) {
+  const client = mustClient_(key);
+  const rows = stanRows_(client.id, list, new Date(), today_());
+  if (!rows.length) throw new Error('Brak poprawnego wpisu (miejsce i ocena 0–10).');
+  const sh = sheet_('Stan', STAN_HEADERS);
+  sh.getRange(1, STAN_HEADERS.indexOf('data') + 1, sh.getMaxRows(), 1).setNumberFormat('@');   // data jako tekst, nie data arkusza
+  rows.forEach(r => upsert_('Stan', STAN_HEADERS, r[0], r));
+  return { ok: true, ids: rows.map(r => r[0]) };
+}
+
+/** Usunięcie wpisu Stanu: {date, place, side}. */
+function deleteStan(key, e) {
+  const client = mustClient_(key);
+  const side = /^[LP]$/.test(String(e && e.side || '').toUpperCase()) ? String(e.side).toUpperCase() : '';
+  const id = [client.id, String(e && e.date || ''), String(e && e.place || '').replace(/\s+/g, ' ').trim() + (side ? ' ' + side : '')].join('|');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Stan', STAN_HEADERS);
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(id).matchEntireCell(true).findNext();
+    if (hit && hit.getRow() > 1) sh.deleteRow(hit.getRow());
+  } finally { lock.releaseLock(); }
+  return { ok: true };
 }
 
 /** Wykluczone skoki CMJ (nie wchodzą do cmj_sr, zostają w cmj1–3): [false, true, false] / [2] → „2”. */

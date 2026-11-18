@@ -3,6 +3,15 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-18 · Zejście po 🟡 / 🔴 w bojach, rekord po zamknięciu ćwiczenia, stan ciała poza sesją (v70)
+
+- Powód: 17.11 w rwaniu (5×2 na kg z planu, „max dziś” = plan + 5% 1RM) seria na sufit dostała Średnio, a aplikacja kazała „zostać przy tym ciężarze”, więc następna seria znów poszła na sufit i wyszła Walka. Reguła trenera: sufit = plan, dokładanie tylko przy samych 🟢, jakakolwiek 🟡 = zostajesz przy planie.
+- Pierwsze zaliczone podejście robocze 🟡 / 🔴 / ✖ blokuje „max dziś” do końca ćwiczenia (szare, „zablokowane”). Nad planem → „wracasz do planu (X kg)”; na planie i poniżej zostają dawne zejścia (druga Walka −2,5 kg, dwie spalone −5% 1RM). Propozycja to tylko placeholder w pustych polach: wpisany ręcznie ciężar zostaje.
+- 🔴 / ✖ na ostatniej serii z planu → podpowiedź „+ drop set” −10% od ostatniej serii w dół do 2,5 kg (zwykły „+ drop set” dalej proponuje ~80%).
+- Łatwo przy samych 🟢 dalej proponuje +2,5 kg do „max dziś” (uwaga w planie mówi o +5 kg; bez zmiany, dopóki Damian nie zdecyduje).
+- Pasek „★ Rekord” dopiero po zamknięciu ćwiczenia (wszystkie serie robocze, zwinięcie karty, seria w dalszym ćwiczeniu albo krok dalej w trybie skupienia), żeby nie zachęcał do dokładania między seriami.
+- Ból / napięcie w dowolny dzień: osobna zakładka Stan (nie Dyspozycja, bo ta ma jeden wiersz dziennie; nie Sesje.bol, bo to ból z treningu). Id z miejscem i stroną, bo lewe i prawe kolano tego samego dnia to dwa wpisy. Podgląd dla Claude dostał ból z sesji i zakładkę „Stan ciała” (28 dni) na prośbę trenera, mimo wcześniejszej zasady „bez bólu w podglądzie”.
+
 ## 2026-11-18 · Czarny film w Edge = „Rozszerz klipy wideo”; proporcje filmu (v68)
 
 - Przyczyną czarnego obrazu z dźwiękiem u Damiana było ustawienie Edge „Rozszerz klipy wideo” (ulepszanie wideo), nie kodek ani nasz kod. Po wyłączeniu obraz jest. Porada trafiła do pomocy „Czarny obraz, a słychać dźwięk?”.

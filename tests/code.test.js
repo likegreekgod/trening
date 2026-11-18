@@ -672,8 +672,7 @@ test('podglad_: 5 ostatnich sesji każdej osoby, plan vs wykonanie, notatki', ()
   assert.match(b[0][H('notatki')], /niezakończona/);
   assert.equal(b[1][H('plan_kg')], '75%');
   assert.deepEqual([a[0][H('data')], a[0][H('sesja')]], ['2026-10-06', 'B1 · tydz. 1 · T1 · Siła']);
-  assert.equal(a[0][H('notatki')], 'RPE sesji 7 · samopoczucie 4/5 · 60 min · uwagi: dobrze');
-  assert.doesNotMatch(JSON.stringify(rows), /kolano:5/);   // bez bólu
+  assert.equal(a[0][H('notatki')], 'RPE sesji 7 · samopoczucie 4/5 · 60 min · uwagi: dobrze · ból: kolano 5/10');   // ból z Sesje.bol (od 18.11)
   const sq = a[1];
   assert.deepEqual([sq[H('cwiczenie')], sq[H('plan_kg')], sq[H('plan_serie_x_powt')], sq[H('plan_rpe')]], ['Przysiad', '100', '3×5', '≤8']);
   assert.deepEqual([sq[H('wyk_kg')], sq[H('wyk_serie_x_powt')], sq[H('wyk_rpe')]], ['102,5', '5, 5, 4', '7,5–8']);
@@ -695,6 +694,56 @@ test('podglad_: 5 ostatnich sesji każdej osoby, plan vs wykonanie, notatki', ()
   assert.deepEqual(r2.filter(r => r[H('klient')] === 'Damian').map(r => r[H('data')]), ['2026-09-17', '2026-09-16', '2026-09-15', '2026-09-14', '2026-09-13']);
   assert.equal(r2.filter(r => r[H('klient')] === 'Anna')[0][H('data')], '2026-10-22');
   assert.equal(C.podglad_([], many, [], kl, { limit: 2 }).filter(r => r[H('cwiczenie')] === '— sesja —').length, 8);
+});
+
+test('pgBol_: Sesje.bol → „miejsce n/10”', () => {
+  assert.equal(C.pgBol_('kolano:3; bark:0; biodro L:2,5'), 'kolano 3/10; bark 0/10; biodro L 2,5/10');
+  assert.equal(C.pgBol_('kolano:; bark:2'), 'bark 2/10');
+  assert.equal(C.pgBol_(''), '');
+  assert.equal(C.pgBol_(undefined), '');
+});
+
+test('stanRows_: wpisy „Ból / napięcie” → wiersze Stanu (id z miejscem i stroną, walidacja, ćwiczenie tylko „w ćwiczeniu”)', () => {
+  const at = new Date('2026-11-18T10:00:00Z');
+  const rows = C.stanRows_('anna', [
+    { date: '2026-11-18', place: 'Kolano', side: 'L', score: 3, context: 'w ćwiczeniu', exercise: 'Przysiad tylny', note: 'kłucie przy zejściu' },
+    { date: '2026-11-18', place: 'Kolano', side: 'P', score: 0, context: 'spoczynek', exercise: 'nie zapisze się' },
+    { place: ' Czworoboczny   lędźwi ', side: 'x', score: 5, context: 'zła wartość' },
+    { place: 'Bark', side: 'L', score: 11 }, { place: '', score: 2 }, { place: 'Bark', side: 'L', score: '' }, { place: 'Bark', score: 2.5 },
+    { date: '2026-11-18', place: 'Kolano', side: 'L', score: 4, context: 'po treningu' }      // drugi raz to samo miejsce: wygrywa ostatni
+  ], at, '2026-11-17');
+  assert.deepEqual(rows.map(r => r[0]), ['anna|2026-11-18|Kolano P', 'anna|2026-11-17|Czworoboczny lędźwi', 'anna|2026-11-18|Kolano L']);
+  assert.ok(rows.every(r => r.length === C.STAN_HEADERS.length));
+  const H = k => C.STAN_HEADERS.indexOf(k);
+  assert.deepEqual(rows[0].slice(H('miejsce')), ['Kolano', 'P', 0, 'spoczynek', '', '']);
+  assert.deepEqual(rows[1].slice(H('data')), ['2026-11-17', 'Czworoboczny lędźwi', '', 5, '', '', '']);
+  assert.deepEqual(rows[2].slice(H('ocena')), [4, 'po treningu', '', '']);
+  assert.equal(rows[0][1], at);
+  const one = C.stanRows_('anna', [{ date: '2026-11-18', place: 'Kolano', side: 'L', score: 3, context: 'w ćwiczeniu', exercise: 'Przysiad tylny', note: 'x'.repeat(400) }], at, '2026-11-18')[0];
+  assert.deepEqual([one[H('cwiczenie')], one[H('notatka')].length], ['Przysiad tylny', 300]);
+  assert.deepEqual(Array.from(C.STAN_HEADERS), ['id', 'zapisano', 'klient', 'data', 'miejsce', 'strona', 'ocena', 'kontekst', 'cwiczenie', 'notatka']);
+  assert.ok(C.API_FNS.saveStan && C.API_FNS.deleteStan);
+  assert.ok(!Object.keys(C.TR_FNS).some(k => k in C.API_FNS));
+});
+
+test('podgladStan_: „Stan ciała” – ostatnie 28 dni, wszyscy klienci, od najnowszych', () => {
+  const kl = [{ klient_id: 'anna', imie: 'Anna' }, { klient_id: 'bob', imie: 'Bob', aktywny: 'NIE' }];
+  const S = (klient, data, miejsce, strona, ocena, zapisano, x) => Object.assign({ klient, data, miejsce, strona, ocena, kontekst: 'spoczynek', cwiczenie: '', notatka: '', zapisano }, x || {});
+  const rows = C.podgladStan_([
+    S('anna', '2026-11-18', 'Kolano', 'L', 3, '2026-11-18T08:00:00Z', { kontekst: 'w ćwiczeniu', cwiczenie: 'Przysiad', notatka: 'kłuje' }),
+    S('bob', '2026-11-18', 'Bark', 'P', 2, '2026-11-18T09:00:00Z'),
+    S('anna', '2026-10-22', 'Biodro', 'P', 1, '2026-10-22T08:00:00Z'),          // 28. dzień wstecz (licząc dziś) — jest
+    S('anna', '2026-10-21', 'Biodro', 'P', 6, '2026-10-21T08:00:00Z'),          // starsze — nie ma
+    S('anna', '2026-11-19', 'Bark', 'L', 2, '2026-11-18T08:00:00Z'),            // przyszłość — nie ma
+    S('ola', '2026-11-10T00:00:00.000Z', 'Łokieć', 'L', 4, '')               // data jako ISO, klient spoza Klientów
+  ], kl, '2026-11-18', 28);
+  assert.deepEqual(rows, [
+    ['2026-11-18', 'Bob', 'Bark', 'P', '2', 'spoczynek', '', ''],
+    ['2026-11-18', 'Anna', 'Kolano', 'L', '3', 'w ćwiczeniu', 'Przysiad', 'kłuje'],
+    ['2026-11-10', 'ola', 'Łokieć', 'L', '4', 'spoczynek', '', ''],
+    ['2026-10-22', 'Anna', 'Biodro', 'P', '1', 'spoczynek', '', '']
+  ]);
+  assert.ok(rows.every(r => r.length === C.PODGLAD_STAN_HEADERS.length));
 });
 
 test('ćwiczenie na czas („30 s”): seria się liczy, sekundy nie wchodzą do tonażu, e1RM ani NL', () => {

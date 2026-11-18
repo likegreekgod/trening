@@ -71,6 +71,30 @@
   };
 
   /* ---------- daty jednostek (RRRR-MM-DD, liczone w UTC, bez stref) ---------- */
+
+  /* ---------- stan ciała: ból / napięcie w dowolny dzień (zakładka Stan; id = klient|data|miejsce ze stroną) ---------- */
+  L.STAN_PLACES = ['Kolano', 'Biodro', 'Czworoboczny lędźwi', 'Bark', 'Łokieć', 'Nadgarstek'];
+  L.STAN_CTX = ['spoczynek', 'przy rozciąganiu', 'w ćwiczeniu', 'po treningu'];
+  /** klucz wpisu jak w arkuszu (bez klienta): „2026-11-18|Kolano L” */
+  L.stanKey = (date, place, side) => [date, String(place || '').replace(/\s+/g, ' ').trim() + (side ? ' ' + side : '')].join('|');
+  /** dzień wpisu: tekst RRRR-MM-DD albo ISO z arkusza (data zamieniona przez Arkusze) w strefie telefonu */
+  L.stanDay = v => /T/.test(String(v || '')) ? L.localDate(new Date(v)) : String(v || '').slice(0, 10);
+  /** wpisy z ostatnich `days` dni (licząc dziś), od najnowszych (dzień, potem chwila zapisu) */
+  L.stanRecent = (rows, today, days = 14) => {
+    const from = new Date(utc(today) - (days - 1) * 864e5).toISOString().slice(0, 10), t = v => Date.parse(String(v || '')) || 0;
+    return (rows || []).map(r => Object.assign({}, r, { day: L.stanDay(r.data) })).filter(r => r.day && r.day >= from && r.day <= today)
+      .sort((a, b) => (b.day > a.day ? 1 : b.day < a.day ? -1 : t(b.zapisano) - t(a.zapisano)));
+  };
+  /** zapisane wpisy (z aplikacji, także czekające w kolejce) nadpisują te same dzień + miejsce + stronę */
+  L.stanApply = (rows, list, at) => {
+    const add = [].concat(list || []).map(e => ({ id: 'local|' + L.stanKey(e.date, e.place, e.side), zapisano: at || '', data: e.date, miejsce: String(e.place || '').replace(/\s+/g, ' ').trim(),
+      strona: e.side || '', ocena: e.score, kontekst: e.context || '', cwiczenie: e.context === 'w ćwiczeniu' ? e.exercise || '' : '', notatka: e.note || '' }));
+    const keys = add.map(r => L.stanKey(r.data, r.miejsce, r.strona));
+    return (rows || []).filter(r => keys.indexOf(L.stanKey(L.stanDay(r.data), r.miejsce, r.strona)) < 0).concat(add);
+  };
+  /** usunięcie wpisu: e = {date, place, side} */
+  L.stanDrop = (rows, e) => (rows || []).filter(r => L.stanKey(L.stanDay(r.data), r.miejsce, r.strona) !== L.stanKey(e.date, e.place, e.side));
+
   const utc = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
   L.addDays = (s, n) => new Date(utc(s) + n * 864e5).toISOString().slice(0, 10);
   L.dayDiff = (a, b) => Math.round((utc(b) - utc(a)) / 864e5);
@@ -277,36 +301,60 @@
     if (!(pct > 0) || !(planKg > 0)) return weak && planKg > 0 ? planKg : null;
     return weak ? planKg : L.floor25(planKg / pct * (pct + (ceil >= 0 ? ceil : 0.05)));
   };
+  /** sufit dnia zablokowany: jest już zaliczone podejście robocze 🟡 / 🔴 / ✖ (Średnio, Walka, Spalone) → od teraz sufit = kg z planu */
+  L.olyLocked = rows => (rows || []).some(x => x && x.done && /^[SWX]$/.test(x.rate || ''));
+  /** kolor oceny do komunikatu: Średnio 🟡, Walka i Spalone 🔴 */
+  const olyMark = q => q === 'S' ? '🟡' : q === 'W' || q === 'X' ? '🔴' : '🟢';
   /**
-   * Propozycja pod ostatnio ocenionym podejściem, gdy zostały niezrobione serie.
-   * rows: podejścia robocze w kolejności [{kg, rate, done}], i: indeks ocenionego; o: {cap, one, weak, why}
-   * → {lvl: up|stay|down, kg, txt} albo null
+   * Propozycja pod ostatnio ocenionym podejściem.
+   * rows: podejścia robocze (bez rozgrzewki i drop setów) w kolejności [{kg, rate, done}], i: indeks ocenionego;
+   * o: {cap, one, weak, why, plan (kg z planu)} → {lvl: up|stay|down|drop, kg, txt, lock?, drop?} albo null.
+   * Zejście (18.11.2026): pierwsze 🟡 / 🔴 / ✖ blokuje „max dziś”; kolejne serie wracają do kg z planu
+   * (poniżej planu dalej działają zejścia po drugiej walce i dwóch spalonych). 🔴 / ✖ na ostatniej serii → „+ drop set” −10%.
    */
   L.sugOly = (rows, i, o = {}) => {
     const r = rows[i];
     if (!r || !r.done || !r.rate) return null;
     if (rows.some((x, j) => j > i && x.done)) return null;                       // tylko ostatnie ocenione
-    if (!rows.some((x, j) => j > i && !x.done)) return null;                     // brak serii do zrobienia
-    const kg = r.kg, f = v => L.fmtKg(v) + ' kg', cap = o.cap;
+    const kg = r.kg, f = v => L.fmtKg(v) + ' kg', cap = o.cap, plan = o.plan > 0 ? o.plan : null;
+    if (!rows.some((x, j) => j > i && !x.done)) {                                // brak serii do zrobienia: po 🔴 / ✖ podpowiedź drop setu
+      if ((r.rate === 'W' || r.rate === 'X') && kg > 0) { const k = Math.max(2.5, L.floor25(kg * 0.9)); return { lvl: 'drop', kg: k, drop: true, txt: `🔴 → serie z planu zrobione. Jeśli chcesz dołożyć: + drop set ${f(k)} (−10%).` }; }
+      return null;
+    }
     const prev = rows.slice(0, i).reverse().find(x => x.done);
-    if (r.rate === 'L') {
-      if (cap === null || cap === undefined || kg + 2.5 <= cap)
-        return { lvl: 'up', kg: kg + 2.5, txt: 'Łatwo: możesz dołożyć 2,5 kg.' + (cap ? ' Sufit dziś ' + f(cap) + '.' : '') };
-      return { lvl: 'stay', kg, txt: o.weak ? `Łatwo, ale dyspozycja dnia: ${o.why || 'uwaga'}. Zostań przy ${f(kg)}.` : `Łatwo, ale to sufit dnia (${f(cap)}). Zostań.` };
+    const base = () => {
+      if (r.rate === 'L') {
+        if (cap === null || cap === undefined || kg + 2.5 <= cap)
+          return { lvl: 'up', kg: kg + 2.5, txt: 'Łatwo: możesz dołożyć 2,5 kg.' + (cap ? ' Sufit dziś ' + f(cap) + '.' : '') };
+        return { lvl: 'stay', kg, txt: o.weak ? `Łatwo, ale dyspozycja dnia: ${o.why || 'uwaga'}. Zostań przy ${f(kg)}.` : `Łatwo, ale to sufit dnia (${f(cap)}). Zostań.` };
+      }
+      if (r.rate === 'S') return { lvl: 'stay', kg, txt: `Średnio: zostań przy ${f(kg)}.` };
+      if (r.rate === 'W') {
+        if (prev && prev.rate === 'W') { const k = Math.max(2.5, kg - 2.5); return { lvl: 'down', kg: k, txt: `Druga walka z rzędu: zejdź do ${f(k)}.` }; }
+        return { lvl: 'stay', kg, txt: `Walka: nie dokładaj, zostań przy ${f(kg)}.` };
+      }
+      if (r.rate === 'X') {
+        let miss = 0;
+        for (let j = i; j >= 0; j--) { const x = rows[j]; if (!x.done) continue; if (x.rate === 'X' && x.kg === kg) miss++; else break; }
+        if (miss >= 2 && o.one > 0) { const k = Math.max(2.5, L.floor25(kg - o.one * 0.05)); return { lvl: 'down', kg: k, txt: `Dwie spalone na ${f(kg)}: zejdź o ok. 5% 1RM do ${f(k)}.` }; }
+        if (miss >= 2) { const k = Math.max(2.5, L.floor25(kg * 0.95)); return { lvl: 'down', kg: k, txt: `Dwie spalone na ${f(kg)}: zejdź do ${f(k)}.` }; }
+        return { lvl: 'stay', kg, txt: `Spalone: powtórz ${f(kg)}. Po drugiej spalonej zejdziesz o 5%.` };
+      }
+      return null;
+    };
+    const s = base();
+    if (!s || plan === null || !L.olyLocked(rows.slice(0, i + 1))) return s;
+    // zablokowany sufit: nad planem → plan; Łatwo nie podnosi ponad plan; zejścia poniżej planu bez zmian
+    const stop = rows.slice(0, i + 1).find(x => x.done && /^[SWX]$/.test(x.rate || ''));
+    const mark = olyMark(r.rate === 'L' ? stop.rate : r.rate);
+    if (kg > plan) return { lvl: 'down', kg: plan, lock: true, txt: `${mark} → wracasz do planu (${f(plan)}).` };
+    if (s.lvl === 'up') {
+      const k = Math.min(s.kg, plan);
+      return k > kg ? { lvl: 'up', kg: k, lock: true, txt: `Łatwo: możesz wrócić do planu (${f(k)}). Wyżej nie, po ${mark} sufit to plan.` }
+        : { lvl: 'stay', kg, lock: true, txt: `Łatwo, ale po ${mark} sufit to plan: zostań przy ${f(kg)}.` };
     }
-    if (r.rate === 'S') return { lvl: 'stay', kg, txt: `Średnio: zostań przy ${f(kg)}.` };
-    if (r.rate === 'W') {
-      if (prev && prev.rate === 'W') { const k = Math.max(2.5, kg - 2.5); return { lvl: 'down', kg: k, txt: `Druga walka z rzędu: zejdź do ${f(k)}.` }; }
-      return { lvl: 'stay', kg, txt: `Walka: nie dokładaj, zostań przy ${f(kg)}.` };
-    }
-    if (r.rate === 'X') {
-      let miss = 0;
-      for (let j = i; j >= 0; j--) { const x = rows[j]; if (!x.done) continue; if (x.rate === 'X' && x.kg === kg) miss++; else break; }
-      if (miss >= 2 && o.one > 0) { const k = Math.max(2.5, L.floor25(kg - o.one * 0.05)); return { lvl: 'down', kg: k, txt: `Dwie spalone na ${f(kg)}: zejdź o ok. 5% 1RM do ${f(k)}.` }; }
-      if (miss >= 2) { const k = Math.max(2.5, L.floor25(kg * 0.95)); return { lvl: 'down', kg: k, txt: `Dwie spalone na ${f(kg)}: zejdź do ${f(k)}.` }; }
-      return { lvl: 'stay', kg, txt: `Spalone: powtórz ${f(kg)}. Po drugiej spalonej zejdziesz o 5%.` };
-    }
-    return null;
+    if (r.rate === 'S' && kg === plan) return { lvl: 'stay', kg, lock: true, txt: `🟡 → zostajesz przy planie (${f(plan)}).` };
+    return Object.assign(s, { lock: true });
   };
 
   /* ---------- zamiana ćwiczenia ---------- */

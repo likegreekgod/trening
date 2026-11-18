@@ -4,7 +4,9 @@
  * osoby alfabetycznie po imieniu, w obrębie osoby od najnowszej. Nieaktywni (Klienci D = NIE) pominięci.
  * Jedna sesja = wiersz „— sesja —” (RPE sesji, samopoczucie, czas, uwagi) + wiersz na każde ćwiczenie
  * (plan: kg, serie×powt., RPE; wykonanie: kg, serie×powt., RPE, serie; notatki).
- * Bez bólu i komentarzy trenera (dane o zdrowiu w pliku czytanym przez konektor).
+ * Ból z Sesje.bol w notatkach wiersza „— sesja —” („ból: kolano 3/10; bark 2/10”; od 18.11.2026 na prośbę trenera).
+ * Druga zakładka „Stan ciała”: wpisy z zakładki Stan (ból / napięcie poza sesją) z ostatnich 28 dni, wszyscy klienci, od najnowszych.
+ * Bez komentarzy trenera.
  *
  * Tylko czyta arkusz z danymi i pisze do osobnego pliku; nie zmienia żadnej zakładki ani funkcji z Code.gs.
  * Odświeżanie: wyzwalacz co 10 min (`instalujPodglad`, uruchom raz z edytora); plik przepisywany tylko po zmianie.
@@ -16,6 +18,9 @@ const PODGLAD_ZAKLADKA = 'Ostatnie sesje';
 const PODGLAD_SESJE = 5;   // na osobę
 const PODGLAD_HEADERS = ['data', 'klient', 'sesja', 'cwiczenie', 'plan_kg', 'plan_serie_x_powt', 'plan_rpe',
   'wyk_kg', 'wyk_serie_x_powt', 'wyk_rpe', 'wyk_serie', 'notatki'];
+const PODGLAD_STAN = 'Stan ciała';
+const PODGLAD_STAN_DNI = 28;
+const PODGLAD_STAN_HEADERS = ['data', 'klient', 'miejsce', 'strona', 'ocena', 'kontekst', 'cwiczenie', 'notatka'];
 const PG_LOG_COLS = ['zapisano', 'klient', 'tydzien', 'jednostka', 'data', 'nr_cw', 'cwiczenie', 'seria', 'kg', 'powt',
   'rpe', 'wykonane', 'uwagi', 'typ', 'zamiana'];   // bez „sciezka” (duży JSON)
 
@@ -65,6 +70,8 @@ function podglad_(plan, log, ses, klienci, opts) {
       if (!blank_(s.samopoczucie)) sn.push('samopoczucie ' + num(s.samopoczucie) + '/5');
       if (!blank_(s.czas_min)) sn.push(num(s.czas_min) + ' min');
       if (s_(s.uwagi)) sn.push('uwagi: ' + s_(s.uwagi));
+      const bol = pgBol_(s.bol);
+      if (bol) sn.push('ból: ' + bol);
     } else sn.push('niezakończona (brak wpisu w Sesjach)');
     out.push(head.concat(['— sesja —', '', '', '', '', '', '', '', sn.join(' · ')]));
 
@@ -112,6 +119,31 @@ function podglad_(plan, log, ses, klienci, opts) {
   return out;
 }
 
+/** Czysta funkcja: Sesje.bol „kolano:3; bark:2” → „kolano 3/10; bark 2/10” (puste oceny pominięte). */
+function pgBol_(v) {
+  return String(v === undefined || v === null ? '' : v).split(';').map(x => {
+    const i = x.lastIndexOf(':'), m = (i < 0 ? x : x.slice(0, i)).trim(), o = i < 0 ? '' : x.slice(i + 1).trim();
+    return m && o !== '' ? m + ' ' + o.replace('.', ',') + '/10' : '';
+  }).filter(Boolean).join('; ');
+}
+
+/**
+ * Czysta funkcja: zakładka „Stan ciała” (bez nagłówka): wpisy Stanu z ostatnich `days` dni (licząc dziś), wszyscy klienci,
+ * od najnowszych (data, potem chwila zapisu); klient = imię z Klientów. today = 'RRRR-MM-DD'.
+ */
+function podgladStan_(stan, klienci, today, days) {
+  const s_ = v => blank_(v) ? '' : String(v).trim(), lc = v => s_(v).toLowerCase();
+  const dayOf = v => { if (blank_(v)) return ''; const d = day_(v); return isNaN(d) ? '' : iso_(d); };
+  const ts = v => { const t = v instanceof Date ? v.getTime() : Date.parse(String(v || '')); return isFinite(t) ? t : 0; };
+  const from = iso_(new Date(day_(today).getTime() - ((days || PODGLAD_STAN_DNI) - 1) * 864e5));
+  const imie = {};
+  (klienci || []).forEach(k => { if (!blank_(k.klient_id)) imie[lc(k.klient_id)] = s_(k.imie) || s_(k.klient_id); });
+  return (stan || []).map(r => ({ r, d: dayOf(r.data), t: ts(r.zapisano) }))
+    .filter(x => lc(x.r.klient) && x.d && x.d >= from && x.d <= today)
+    .sort((a, b) => (b.d > a.d ? 1 : b.d < a.d ? -1 : b.t - a.t))
+    .map(({ r, d }) => [d, imie[lc(r.klient)] || s_(r.klient), s_(r.miejsce), s_(r.strona), s_(r.ocena), s_(r.kontekst), s_(r.cwiczenie), s_(r.notatka)]);
+}
+
 /** Odczyt wybranych kolumn zakładki (ciągłe odcinki), żeby nie czytać dużych kolumn (ścieżki VBT). */
 function pgTable_(name, cols) {
   const sh = SpreadsheetApp.getActive().getSheetByName(name);
@@ -145,19 +177,25 @@ function podgladPlik_() {
 /** Wyzwalacz co 10 min (i ręcznie z edytora): przelicza widok i zapisuje go tylko po zmianie. */
 function odswiezPodglad() {
   const localDay = t => Utilities.formatDate(new Date(t), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  const rows = podglad_(tableOf_('Plan'), pgTable_('Log', PG_LOG_COLS), tableOf_('Sesje'), tableOf_('Klienci'), { localDay });
+  const klienci = tableOf_('Klienci');
+  const rows = podglad_(tableOf_('Plan'), pgTable_('Log', PG_LOG_COLS), tableOf_('Sesje'), klienci, { localDay });
+  const stan = podgladStan_(tableOf_('Stan'), klienci, localDay(Date.now()), PODGLAD_STAN_DNI);
   const props = PropertiesService.getScriptProperties();
-  const sig = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(rows)));
+  const sig = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify([rows, stan])));
   if (sig === props.getProperty('PODGLAD_SIG') && props.getProperty('PODGLAD_ID')) return;
   const ss = podgladPlik_();
-  const sh = ss.getSheetByName(PODGLAD_ZAKLADKA) || ss.insertSheet(PODGLAD_ZAKLADKA);
-  sh.clear();
-  const all = [PODGLAD_HEADERS].concat(rows);
-  sh.getRange(1, 1, all.length, PODGLAD_HEADERS.length).setNumberFormat('@').setValues(all);
-  sh.getRange(1, 1, 1, PODGLAD_HEADERS.length).setFontWeight('bold');
-  sh.setFrozenRows(1);
+  const put = (name, headers, data) => {
+    const sh = ss.getSheetByName(name) || ss.insertSheet(name);
+    sh.clear();
+    const all = [headers].concat(data);
+    sh.getRange(1, 1, all.length, headers.length).setNumberFormat('@').setValues(all);
+    sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  };
+  put(PODGLAD_ZAKLADKA, PODGLAD_HEADERS, rows);
+  put(PODGLAD_STAN, PODGLAD_STAN_HEADERS, stan);
   props.setProperty('PODGLAD_SIG', sig);
-  Logger.log('Podgląd: ' + rows.length + ' wierszy → ' + ss.getUrl());
+  Logger.log('Podgląd: ' + rows.length + ' wierszy, stan ciała: ' + stan.length + ' → ' + ss.getUrl());
 }
 
 /** Uruchom raz z edytora: wyzwalacz odswiezPodglad co 10 min (inne wyzwalacze bez zmian) i pierwsze odświeżenie. */
