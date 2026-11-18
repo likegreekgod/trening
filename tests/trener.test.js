@@ -496,6 +496,8 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   await s2.p.keyboard.press('f'); assert.ok(await s2.p.$('.pv.fs')); await s2.p.keyboard.press('f'); assert.equal(await s2.p.$('.pv.fs'), null);
   assert.equal(await s2.p.isVisible('.vsw'), false);
   await shot(s2.p, 'trener-filmy-odtwarzacz-jasny.png');
+  // film ma proporcje pliku (rozmiar w pikselach z wymiarów filmu), a nie sceny
+  assert.ok(await s2.p.evaluate(() => { const v = document.querySelector('#pvv'), r = v.getBoundingClientRect(); return v.videoWidth > 0 && Math.abs(r.width / r.height - v.videoWidth / v.videoHeight) < 0.02; }));
   assert.deepEqual(s2.p.errors, []);
   await s2.ctx.close();
   // drugie wejście (service worker już działa): film gra od razu z film-strumien/, sw.js dokłada nagłówek i przekazuje Range

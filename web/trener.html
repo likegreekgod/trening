@@ -551,7 +551,14 @@ function playerBind(v, redraw){
     pv.querySelector('[data-pv="play"]').textContent = vid.paused ? '▶' : '❚❚'; pv.querySelector('[data-pv="play"]').setAttribute('aria-label', vid.paused ? 'Odtwarzaj' : 'Pauza');
     const w = $('#kf-ins'); if (w) w.textContent = '⏱ Wstaw chwilę ' + tFmt(vid.currentTime); };
   let raf = 0; const loop = () => { tick(); raf = vid.paused ? 0 : requestAnimationFrame(loop); };
-  vid.addEventListener('loadedmetadata', () => { $('#pvd').textContent = tFmt(vid.duration, true); marks(); tick(); noPic(); });
+  // rozmiar filmu liczony z jego wymiarów i wpisany w piksele: Edge potrafi zignorować object-fit i rozciągnąć obraz na całą scenę
+  const fit = () => { const vw = vid.videoWidth, vh = vid.videoHeight, sw = st.clientWidth, sh = st.clientHeight;
+    if (!vw || !vh || !sw || !sh) { vid.style.width = vid.style.height = ''; return; }
+    let w = sw, h = sw * vh / vw; if (h > sh) { h = sh; w = sh * vw / vh; }
+    vid.style.width = Math.round(w) + 'px'; vid.style.height = Math.round(h) + 'px'; };
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(st);
+  vid.addEventListener('resize', fit);
+  vid.addEventListener('loadedmetadata', () => { $('#pvd').textContent = tFmt(vid.duration, true); fit(); marks(); tick(); noPic(); });
   vid.addEventListener('loadeddata', noPic);
   vid.addEventListener('play', () => { if (!raf) raf = requestAnimationFrame(loop); tick(); });
   vid.addEventListener('pause', tick); vid.addEventListener('seeked', tick);
