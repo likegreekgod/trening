@@ -3,6 +3,10 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-18 · Odtwarzacz w panelu bez zaokrąglonego przycinania filmu (v66)
+
+- Damian: w Edge na Windows tylko panel pokazuje czarny obraz z dźwiękiem, inne strony z filmami działają. Podejrzenie: `.pv` miał `border-radius` z `overflow: hidden` nad `<video>`; zaokrąglona maska nad filmem wyłącza albo psuje sprzętową nakładkę wideo w Chromium na Windows (znany błąd sterowników). Teraz rogi robi tło `.pv` (film niżej o promień), a pasek sterowania ma własne dolne rogi; wygląd bez zmian. Nie zaokrąglaj ani nie maskuj (clip-path, mask) elementów nad `<video>`.
+
 ## 2026-11-17 · Serie bez ✓ w panelu, film bez obrazu (v65)
 
 - Sesja klienta (boje z filmami) miała w Logu serie z filmem albo z ciężarem, ale bez ✓ (`wykonane` puste: `logVideo` dopisuje sam link, a seria nieodhaczona zostaje pusta). Panel i `trSzkicSets_` liczyły tylko `wykonane = TAK`, więc pokazywały „Brak zapisanych serii” i blokowały szkic AI.

@@ -125,7 +125,7 @@ async function page(calls, opt = {}) {
     const cors = { 'Access-Control-Allow-Origin': '*' };
     if (tok !== 'tok-film' || (opt.mediaExpired && u.searchParams.get('alt') === 'media' && !st.fresh)) return r.fulfill({ status: 401, headers: cors, body: '' });
     if (opt.film404) return r.fulfill({ status: 404, headers: cors, body: '' });
-    if (opt.sniff && h.range === 'bytes=0-262143') return r.fulfill({ status: 206, headers: { ...cors, 'Content-Type': 'video/mp4' }, body: opt.sniff });   // początek pliku do odczytu formatu
+    if (opt.sniff && /^bytes=0-\d+$/.test(h.range || '')) return r.fulfill({ status: 206, headers: { ...cors, 'Content-Type': 'video/mp4' }, body: opt.sniff });   // początek pliku do odczytu formatu
     if (u.searchParams.get('alt') !== 'media') return r.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify({ size: String(opt.filmSize || FILM.length), mimeType: 'video/webm' }) });
     const m = /bytes=(\d+)-(\d*)/.exec(h.range || '');
     if (!m) return r.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes', 'Content-Length': String(FILM.length) }, body: FILM });
@@ -510,7 +510,7 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   const sm = s5.p.st.drive.filter(d => d.alt === 'media');
   assert.ok(sm.length && sm.every(d => d.tok === 'tok-film') && sm.some(d => d.range));   // bilet w nagłówku i zapytania o kawałek
   // „Czarny obraz, a słychać dźwięk?”: format z pliku i wymiary obrazu w przeglądarce, porady
-  await s5.p.click('#pvh summary'); await s5.p.waitForFunction(() => /Plik:/.test(document.querySelector('#pvh-b').textContent));
+  await s5.p.click('#pvh summary'); await s5.p.waitForFunction(() => /Plik: VP8/.test(document.querySelector('#pvh-b').textContent));
   assert.match(await s5.p.textContent('#pvh-b'), /Plik: VP8\. Przeglądarka widzi obraz \d+×\d+[\s\S]*przyspieszenie graficzne[\s\S]*Otwórz na Dysku/);
   assert.deepEqual(s5.p.errors, []);
   await s5.ctx.close();
