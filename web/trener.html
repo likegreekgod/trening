@@ -117,7 +117,9 @@
   .vi{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;font-size:13.5px}
   .vi[aria-current="true"]{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
   .vi b{display:block}.vi .d{color:var(--muted);font-size:12.5px}
-  .pv{background:var(--pv-bg);border-radius:var(--r);overflow:hidden;position:relative}
+  /* bez zaokrąglonego przycinania nad <video>: w Edge/Chrome na Windows maska z border-radius + overflow nad filmem daje czarny obraz z dźwiękiem
+     (obraz idzie przez nakładkę sprzętową). Rogi robi tło .pv, film leży niżej o promień, a pasek sterowania ma własne dolne rogi. */
+  .pv{background:var(--pv-bg);border-radius:var(--r);position:relative;padding-top:var(--r)}
   .pv .stage{position:relative;height:min(62vh,560px);display:grid;place-items:center;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
   .pv video{max-width:100%;max-height:100%;width:auto;height:100%;display:block;transform-origin:50% 50%;background:var(--pv-bg)}
   .pv .zoom{position:absolute;top:10px;left:10px;background:var(--pv-glass);color:var(--pv-white);font:600 12.5px/1 var(--f-body);padding:7px 10px;border-radius:999px;pointer-events:none}
@@ -126,7 +128,7 @@
   .pvh{margin:8px 0 4px}.pvh summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600;color:var(--ink-2)}.pvh p,.pvh ul{margin:4px 0 8px}.pvh li{margin:4px 0}
   .pv .ld{display:block;width:220px;height:6px;border-radius:3px;background:var(--pv-line);overflow:hidden}.pv .ld b{display:block;height:100%;background:var(--accent);transition:width .15s}
   .pv .buf{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--pv-glass);color:var(--pv-white);font:600 13px/1 var(--f-body);padding:9px 14px;border-radius:999px;pointer-events:none}
-  .pv .ctl{background:var(--surface-2);padding:10px 12px 12px;display:grid;gap:10px}
+  .pv .ctl{background:var(--surface-2);padding:10px 12px 12px;display:grid;gap:10px;border-radius:0 0 var(--r) var(--r)}
   .pv .tl{display:flex;align-items:center;gap:10px;font:500 13px/1 var(--f-mono)}
   .pv .bar{flex:1;position:relative;height:32px;display:flex;align-items:center}
   .pv .bar input{width:100%;margin:0;height:32px;background:transparent;-webkit-appearance:none;appearance:none;--p:0%}
@@ -146,9 +148,9 @@
   .pv .sp,.row2 .sp{flex:1}
   .hint{font-size:12.5px;color:var(--muted)}
   .pv .fsx{display:none}
-  .pv.fs{position:fixed;inset:0;z-index:60;border-radius:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--pv-bg)}
+  .pv.fs{position:fixed;inset:0;z-index:60;border-radius:0;padding-top:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--pv-bg)}
   .pv.fs .stage{height:auto}.pv.fs .fsb{display:none}.pv.fs .fsx{display:inline-flex}.pv.fs .tch{display:none}
-  .pv.fs .ctl{background:var(--pv-ctl);color:var(--pv-ink);padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .pv.fs .ctl{background:var(--pv-ctl);color:var(--pv-ink);padding-bottom:max(12px,env(safe-area-inset-bottom));border-radius:0}
   .pv.fs .ib{background:var(--pv-btn);color:var(--pv-ink);border-color:var(--pv-line)}.pv.fs .ib.big,.pv.fs .ib[aria-pressed=true]{background:var(--pv-on);color:var(--pv-on-ink)}
   body.pvfs{overflow:hidden}
   .vsw{display:none;align-items:center;gap:8px;margin-bottom:10px}.vsw .t{flex:1;min-width:0}.vsw .t b{display:block;font-size:15px}.vsw .t span{font-size:12.5px;color:var(--muted)}
