@@ -3,6 +3,11 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-18 · Czarny film w Edge = „Rozszerz klipy wideo”; proporcje filmu (v67)
+
+- Przyczyną czarnego obrazu z dźwiękiem u Damiana było ustawienie Edge „Rozszerz klipy wideo” (ulepszanie wideo), nie kodek ani nasz kod. Po wyłączeniu obraz jest. Porada trafiła do pomocy „Czarny obraz, a słychać dźwięk?”.
+- `<video>` w odtwarzaczu: `width: 100%; height: 100%; object-fit: contain` zamiast `width: auto; height: 100%` (w siatce szerokość wychodziła zła i obraz był rozciągnięty albo zwężony).
+
 ## 2026-11-18 · Odtwarzacz w panelu bez zaokrąglonego przycinania filmu (v66)
 
 - Damian: w Edge na Windows tylko panel pokazuje czarny obraz z dźwiękiem, inne strony z filmami działają. Podejrzenie: `.pv` miał `border-radius` z `overflow: hidden` nad `<video>`; zaokrąglona maska nad filmem wyłącza albo psuje sprzętową nakładkę wideo w Chromium na Windows (znany błąd sterowników). Teraz rogi robi tło `.pv` (film niżej o promień), a pasek sterowania ma własne dolne rogi; wygląd bez zmian. Nie zaokrąglaj ani nie maskuj (clip-path, mask) elementów nad `<video>`.
