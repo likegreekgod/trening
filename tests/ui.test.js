@@ -68,6 +68,9 @@ test('bez klucza (iOS z ekranu głównego): wklejenie linku od trenera → klucz
   assert.equal(await p.evaluate(() => localStorage.getItem('key')), 'k0123456789a');
   assert.equal(calls.find(c => c.fn === 'getData').key, 'k0123456789a');
   assert.equal(await p.textContent('#title'), 'FBW A');
+  assert.doesNotMatch(p.url(), /k0123456789a/);                   // klucz zapamiętany i usunięty z paska adresu
+  await p.goto(base + '?x=1&k=k0123456789a#plan'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal(new URL(p.url()).search + new URL(p.url()).hash, '?x=1#plan');   // inne parametry i # zostają
   await p.goto(base); await p.waitForSelector('.set[data-o="1"]');      // kolejne uruchomienie bez ?k=
   assert.deepEqual(p.errors, []);
   await ctx.close();

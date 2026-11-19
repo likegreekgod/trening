@@ -859,9 +859,17 @@ function introShow(el){                                  // true = zasłona stoi
 <script>
 /* ---------- konfiguracja: klucz z linku (?k=…) zapamiętany w telefonie; ustawienia klienta przychodzą z getData ---------- */
 const API_URL = window.API_URL;                    // z config.js
+// Klucz działa jak hasło: po zapamiętaniu znika z paska adresu (historia przeglądarki, zrzuty ekranu, udostępniony adres).
+// Gdy pamięć telefonu nie działa (np. tryb prywatny), klucz zostaje w adresie, bo inaczej przeładowanie zgubiłoby plan.
 const KEY = (() => {
   const k = new URLSearchParams(location.search).get('k');
-  try { if (k) localStorage.setItem('key', k); return k || localStorage.getItem('key') || ''; } catch (e) { return k || ''; }
+  try {
+    if (k) {
+      localStorage.setItem('key', k);
+      if (localStorage.getItem('key') === k) history.replaceState(history.state, '', TL.urlNoKey(location.pathname, location.search, location.hash));
+    }
+    return k || localStorage.getItem('key') || '';
+  } catch (e) { return k || ''; }
 })();
 let PAIN = false;      // Klienci F „bol” = TAK → kolano i bark zawsze zaznaczone
 let SIMPLE = false;    // Klienci G „tryb” = PROSTY
