@@ -523,6 +523,13 @@ test('skipText / parseSkip i cutPlan: kolejność cięcia, serie_min, domyślnie
   assert.deepEqual(L.cutPlan(plan, 999).cuts, []);
 });
 
+test('urlNoKey: adres bez klucza klienta, reszta parametrów zostaje', () => {
+  assert.equal(L.urlNoKey('/trening/', '?k=k0123456789a', ''), '/trening/');
+  assert.equal(L.urlNoKey('/trening/', '?a=1&k=kabc&b=2', '#plan'), '/trening/?a=1&b=2#plan');
+  assert.equal(L.urlNoKey('/trening/index.html', '?kk=1&k=', ''), '/trening/index.html?kk=1');
+  assert.equal(L.urlNoKey('/trening/', '', ''), '/trening/');
+});
+
 test('keyFrom: klucz z linku albo samego kodu', () => {
   assert.equal(L.keyFrom('https://x.github.io/trening/?k=k0123456789a'), 'k0123456789a');
   assert.equal(L.keyFrom('  https://x/exec?a=1&k=kabc&b=2 '), 'kabc');

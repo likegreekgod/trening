@@ -3,6 +3,14 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-19 · Bezpieczeństwo danych klientów (v72)
+
+- Damian zapytał, czy przesyłanie danych jest zabezpieczone. Przegląd: HTTPS wszędzie, każde zapytanie po kluczu klienta (tylko jego dane, nieaktywny = odmowa), panel po logowaniu Google sprawdzanym na serwerze, arkusz, folder klientów i filmy prywatne (sprawdzone na Dysku). Ryzyka: konto Google trenera (weryfikacja dwuetapowa), link bez wygasania, bilet Dysku w przeglądarce panelu, formalności RODO.
+- **Odrzucone: własne loginy i hasła klientów oraz dodatkowe szyfrowanie.** Klucz w linku to długie losowe hasło; własne hasła to przechowywanie, reset i ponowne logowanie na iOS, a ochrona prawie ta sama. Transmisja jest szyfrowana (HTTPS), dane u Google też; szyfrowanie „end-to-end” wyłączyłoby podsumowania w arkuszu, panel i AI. Gdyby klienci przekazywali sobie linki: PIN klienta albo logowanie Google (do rozważenia wtedy).
+- Wybrane: klucz znika z paska adresu po zapamiętaniu (zostaje, gdy pamięć telefonu nie działa) i CSP w panelu trenera bez `'unsafe-inline'` dla skryptów (kod w `web/trener.js`). Nowy adres zewnętrzny w panelu = dopisać go do CSP w `trener.html`; testy panelu traktują naruszenie CSP jako błąd.
+- **Bez zawężania uprawnień skryptu** (`oauthScopes`): bilet z `trFilm` i tak musi mieć Dysk i Arkusze, a ręczna lista zakresów grozi tym, że po wdrożeniu aplikacja klientów przestanie zapisywać do czasu ponownej zgody. Bilet chroni CSP i to, że panel otwiera tylko trener na swoim urządzeniu.
+- Formularz zgody i klauzula RODO (dane o zdrowiu, filmy, AI bez imienia) to sprawa Damiana poza kodem.
+
 ## 2026-11-18 · Klienci w panelu trenera (v71)
 
 - Damian zapytał, co jeszcze usprawnić; z listy 8 propozycji przyjął rekomendację „Klienci w panelu”, bo menu „Dodaj klienta” i flagi w arkuszu nie działają na telefonie, a przyda się to pod sprzedaż przez stronę. Szkic zaakceptowany bez zmian.

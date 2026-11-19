@@ -151,6 +151,8 @@ async function page(calls, opt = {}) {
   if (opt.noPic) await ctx.addInitScript(() => { for (const k of ['videoWidth', 'videoHeight']) Object.defineProperty(HTMLVideoElement.prototype, k, { get: () => 0 }); });
   await ctx.addInitScript(([j, tok]) => { window.__jwt = j; if (tok) try { localStorage.setItem('tr_tok', j); } catch (e) {} }, [JWT(exp), !!opt.loggedIn]);
   const p = await ctx.newPage(); p.errors = []; p.on('pageerror', e => p.errors.push(e.message));
+  // blokada obcych skryptów (CSP w trener.html): każde jej naruszenie to błąd testu, żeby nowy adres zewnętrzny nie przepadł po cichu
+  p.on('console', m => { if (/Content Security Policy/i.test(m.text())) p.errors.push(m.text()); });
   p.st = st;
   return { ctx, p };
 }
@@ -659,4 +661,18 @@ test('panel: Klienci (lista, kopiowanie linku, ustawienia klienta, nowy link, no
     assert.deepEqual(s2.p.errors, []);
     await s2.ctx.close();
   }
+});
+
+test('panel: blokada obcych skryptów (CSP) zatrzymuje wstrzyknięty kod', async () => {
+  const { ctx, p } = await page([], { loggedIn: true });
+  await p.goto(base + 'trener.html'); await p.waitForSelector('tr.row[data-k="ania"]');
+  // tak wyglądałby atak przez tekst klienta, gdyby gdzieś zabrakło esc(): obrazek z kodem w onerror i wstawiony <script>
+  await p.evaluate(() => {
+    const d = document.createElement('div'); d.innerHTML = '<img src="nie-ma.png" onerror="window.__xss = 1">'; document.body.append(d);
+    const s = document.createElement('script'); s.textContent = 'window.__xss2 = 1'; document.body.append(s);
+  });
+  await p.waitForTimeout(300);
+  assert.equal(await p.evaluate(() => [window.__xss, window.__xss2].join()), ',');
+  assert.ok(p.errors.length >= 2 && p.errors.every(e => /Content Security Policy/i.test(e)), p.errors.join('\n'));   // przeglądarka zgłosiła obie blokady
+  await ctx.close();
 });

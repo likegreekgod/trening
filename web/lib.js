@@ -1039,6 +1039,11 @@
   L.nextTip = (order, seen, avail) => (order || []).find(id => !(seen || []).includes(id) && (avail || []).includes(id)) || '';
 
   /** klucz klienta z wklejonego linku (…?k=k…) albo samego kodu „k” + 11 znaków hex; '' gdy nie rozpoznano */
+  /** Adres strony bez parametru k (klucza klienta); reszta parametrów i # zostają. */
+  L.urlNoKey = (path, search, hash) => {
+    const q = String(search || '').replace(/^\?/, '').split('&').filter(x => x && !/^k(=|$)/.test(x)).join('&');
+    return String(path || '') + (q ? '?' + q : '') + String(hash || '');
+  };
   L.keyFrom = v => {
     const t = String(v || '').trim();
     const m = t.match(/[?&#]k=([^&#\s]+)/);
