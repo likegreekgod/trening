@@ -490,7 +490,18 @@ test('anchorSec_, commentLines_, fileIdOf_: komentarze Dysku z czasem w filmie',
   assert.equal(c.text, '0:15 Dobre zejście\n1:15 Łokcie wyżej przy 2. powtórzeniu\nOgólnie lepiej niż tydzień temu\nbez czasu');
   assert.equal(c.raw, '{"strona":2}');                                           // nierozpoznana kotwica wraca do pokazania w menu
   assert.deepEqual(plain(C.commentLines_([])), { text: '', raw: '' });
-  assert.deepEqual([C.LOG_HEADERS.slice(-2), C.SES_HEADERS.slice(-1), C.LOG_HEADERS.length, C.SES_HEADERS.length].map(x => plain(x)), [['komentarz_trenera', 'komentarz_dysk'], ['komentarz_trenera'], 24, 17]);
+  // kolumny komentarzy zostają na swoich miejscach, odpowiedź klienta dopisana na końcu (stare wiersze się nie przesuwają)
+  assert.deepEqual([C.LOG_HEADERS.slice(22), C.SES_HEADERS.slice(16), C.LOG_HEADERS.length, C.SES_HEADERS.length].map(x => plain(x)),
+    [['komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at'], ['komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at'], 26, 19]);
+});
+
+test('replyRow_: odpowiedź klienta tylko w jego wierszu, długość, pusty tekst = usunięcie', () => {
+  assert.deepEqual(plain(C.replyRow_('ania', { kind: 'L', id: 'ania|7|T1|1|2', text: '  Dzięki!\r\nJasne  ' })), { kind: 'L', id: 'ania|7|T1|1|2', text: 'Dzięki!\nJasne' });
+  assert.deepEqual(plain(C.replyRow_('ania', { kind: 'S', id: 'ania|7|T1', text: '' })), { kind: 'S', id: 'ania|7|T1', text: '' });
+  assert.throws(() => C.replyRow_('ania', { kind: 'L', id: 'bartek|7|T1|1|2', text: 'x' }), /Brak dostępu/);   // cudzy wiersz
+  assert.throws(() => C.replyRow_('ania', { kind: 'L', id: 'aniak|7|T1|1|2', text: 'x' }), /Brak dostępu/);   // podobne id innego klienta
+  assert.throws(() => C.replyRow_('ania', { kind: 'X', id: 'ania|7|T1', text: 'x' }), /Nieznany/);
+  assert.throws(() => C.replyRow_('ania', { kind: 'S', id: 'ania|7|T1', text: 'a'.repeat(601) }), /za długa/);
 });
 
 test('fillBlocks_: pusty blok = ostatni blok klienta albo B1', () => {
@@ -930,10 +941,15 @@ test('trPulpit_: klienci z Przeglądu, sygnały czerwone i pomarańczowe, 12 tyg
       { klient: 'anna', zapisano: '2026-11-17T09:30:00Z', tydzien: 13, jednostka: 'T2', nr_cw: 1, cwiczenie: 'Przysiad', seria: 2, kg: 120, powt: 5, rpe: 8,
         film_link: 'https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view', uwagi: 'kolano', komentarz_dysk: '', komentarz_trenera: '' },
       { klient: 'anna', zapisano: '2026-11-12T09:30:00Z', tydzien: 12, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Rwanie', seria: 1, kg: 70, powt: 1, rpe: 8, ocena: 'S',
-        film_link: 'https://drive.google.com/file/d/1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765/view', komentarz_dysk: '0:03 łokcie', komentarz_trenera: 'lepiej' },
+        film_link: 'https://drive.google.com/file/d/1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765/view', komentarz_dysk: '0:03 łokcie', komentarz_trenera: 'lepiej',
+        odpowiedz_klienta: ' Dzięki, spróbuję ', odpowiedz_at: '2026-11-13T18:00:00Z' },
       { klient: 'anna', zapisano: '2026-10-01T09:30:00Z', tydzien: 5, jednostka: 'T1', nr_cw: 1, cwiczenie: 'Stary', seria: 1, film_link: 'https://drive.google.com/file/d/1OldOldOldOldOldOldOldOldOld0/view' },
-      { klient: 'anna', zapisano: '2026-11-17T09:31:00Z', tydzien: 13, jednostka: 'T2', nr_cw: 2, cwiczenie: 'Bez filmu', seria: 1, film_link: '' }
-    ]
+      { klient: 'anna', zapisano: '2026-11-17T09:31:00Z', tydzien: 13, jednostka: 'T2', nr_cw: 2, cwiczenie: 'Bez filmu', seria: 1, film_link: '' },
+      { klient: 'anna', zapisano: '2026-10-01T09:30:00Z', tydzien: 5, jednostka: 'T1', nr_cw: 2, cwiczenie: 'Stara', seria: 1, komentarz_trenera: 'x', odpowiedz_klienta: 'stara', odpowiedz_at: '2026-10-02T10:00:00Z' }
+    ],
+    ses: [{ klient: 'bartek', tydzien: 2, jednostka: 'T1', komentarz_trenera: 'Dobra sesja', odpowiedz_klienta: 'Kolano ok', odpowiedz_at: '2026-11-16T20:00:00Z' },
+      { klient: 'bartek', tydzien: 2, jednostka: 'T2', komentarz_trenera: 'x', odpowiedz_klienta: '  ', odpowiedz_at: '' },
+      { klient: 'obcy', tydzien: 2, jednostka: 'T2', komentarz_trenera: 'x', odpowiedz_klienta: 'nieznany klient', odpowiedz_at: '2026-11-16T20:00:00Z' }]
   };
   const r = C.trPulpit_(t, { today, at: '2026-11-17T04:02:00Z' });
   assert.equal(r.clients.length, 2);
@@ -949,6 +965,11 @@ test('trPulpit_: klienci z Przeglądu, sygnały czerwone i pomarańczowe, 12 tyg
   assert.equal(r.videos[0].file, '1AbCdEfGhIjKlMnOpQrStUvWxYz012345'); assert.equal(r.videos[0].kom, ''); assert.equal(r.videos[0].note, 'kolano');
   assert.equal(r.videos[1].kom, '0:03 łokcie\nlepiej');
   assert.equal(r.at, '2026-11-17T04:02:00Z');
+  // odpowiedzi klientów: 14 dni, najnowsze pierwsze, bez pustych, starych i spoza Klientów; film = przejście do filmu
+  assert.deepEqual(r.videos.map(v => v.rep), ['', 'Dzięki, spróbuję']);
+  assert.deepEqual(plain(r.replies.map(x => [x.kind, x.name, x.at, x.title, x.text, x.film, x.kom])),
+    [['S', 'Bartek', '2026-11-16', 'Trening T1', 'Kolano ok', false, 'Dobra sesja'], ['L', 'Anna', '2026-11-13', 'Rwanie · seria 1', 'Dzięki, spróbuję', true, '0:03 łokcie\nlepiej']]);
+  assert.equal(r.replies[1].file + '|' + r.replies[1].set, '1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765|1');
 });
 
 test('doGet: stary link dostaje zwykły tekst (bez strony HtmlService, więc bez google.script.run)', () => {

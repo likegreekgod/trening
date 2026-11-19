@@ -32,9 +32,9 @@ const CHUNK = 4 * 1024 * 1024; // musi być wielokrotnością 256 KB
 
 const LOG_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data', 'nr_cw', 'cwiczenie',
   'seria', 'kg', 'powt', 'rpe', 'vbt_ms', 'wykonane', 'film_link', 'uwagi', 'typ',
-  'ocena', 'vbt_peak', 'wysokosc_cm', 'sciezka', 'zamiana', 'komentarz_trenera', 'komentarz_dysk'];
+  'ocena', 'vbt_peak', 'wysokosc_cm', 'sciezka', 'zamiana', 'komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at'];
 const SES_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data',
-  'bol_kolano', 'bol_bark', 'samopoczucie', 'czas_min', 'uwagi', 'start', 'koniec', 'bol', 'bol_max', 'rpe_sesji', 'komentarz_trenera'];
+  'bol_kolano', 'bol_bark', 'samopoczucie', 'czas_min', 'uwagi', 'start', 'koniec', 'bol', 'bol_max', 'rpe_sesji', 'komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at'];
 const DYS_HEADERS = ['id', 'zapisano', 'klient', 'data', 'cmj1', 'cmj2', 'cmj3', 'cmj_sr',
   'sen', 'stres', 'zmeczenie', 'bolesnosc', 'hooper_suma', 'vbt_test', 'werdykt', 'powody', 'cmj_wykluczone', 'film_link'];
 // Stan ciała: ból / napięcie zapisane w dowolny dzień (zakładka „Stan”, Dyspozycja w aplikacji); id = klient|data|miejsce z stroną
@@ -62,7 +62,7 @@ function oldLinkText_(pwa) {
  * POST (Content-Type text/plain, bez preflight CORS), body: {fn, key, args:[…]} → {ok:true, result} | {ok:false, error}
  */
 const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError,
-  logNote, logReadyVideo, editPlan, saveStan, deleteStan };
+  logNote, logReadyVideo, editPlan, saveStan, deleteStan, replyNote };
 
 function doPost(e) {
   let out;
@@ -302,6 +302,37 @@ function logNote(key, n) {
     ids.forEach((r, i) => { if (String(r[0]).indexOf(pre) === 0) { sh.getRange(i + 2, col).setValue(note); k++; } });
     return { ok: true, rows: k };
   } finally { lock.releaseLock(); }
+}
+
+/* ---------- odpowiedź klienta na komentarz trenera ----------
+ * r = {kind: 'L' (seria, Log) | 'S' (trening, Sesje), id, text}. Tekst do REPLY_MAX znaków, pusty = odpowiedź usunięta.
+ * Zapis tylko w wierszu tego klienta (id zaczyna się od jego klient_id) i tylko w kolumnach odpowiedz_klienta / odpowiedz_at,
+ * więc komentarz trenera i seria zostają bez zmian. Trener widzi odpowiedź w panelu (pulpit, Sesje, Filmy).
+ */
+const REPLY_MAX = 600;
+function replyRow_(clientId, r) {
+  const kind = r && r.kind === 'S' ? 'S' : r && r.kind === 'L' ? 'L' : '', id = String(r && r.id || '').trim();
+  if (!kind) throw new Error('Nieznany rodzaj komentarza.');
+  if (id.toLowerCase().indexOf(String(clientId).toLowerCase() + '|') !== 0) throw new Error('Brak dostępu.');
+  const text = String(r.text === undefined || r.text === null ? '' : r.text).replace(/\r\n?/g, '\n').trim();
+  if (text.length > REPLY_MAX) throw new Error('Odpowiedź jest za długa (najwyżej ' + REPLY_MAX + ' znaków).');
+  return { kind: kind, id: id, text: text };
+}
+function replyNote(key, r) {
+  const client = mustClient_(key), x = replyRow_(client.id, r);
+  const name = x.kind === 'L' ? 'Log' : 'Sesje', headers = x.kind === 'L' ? LOG_HEADERS : SES_HEADERS, at = new Date();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_(name, headers);
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(x.id).matchEntireCell(true).findNext();
+    if (!hit || hit.getRow() < 2) throw new Error('Nie ma już tego komentarza.');
+    const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0], cT = h.indexOf('odpowiedz_klienta') + 1, cA = h.indexOf('odpowiedz_at') + 1;
+    if (cT < 1 || cA < 1) throw new Error('Brak kolumn odpowiedzi w zakładce ' + name + '.');
+    sh.getRange(hit.getRow(), cT).setValue(x.text);
+    sh.getRange(hit.getRow(), cA).setValue(x.text ? at : '');
+  } finally { lock.releaseLock(); }
+  return { ok: true, text: x.text, at: x.text ? at.toISOString() : '' };
 }
 
 /** Usunięcie serii dodanej przez klienta (rozgrzewka / dodatkowa / drop) — kasuje wiersz w Log. */
