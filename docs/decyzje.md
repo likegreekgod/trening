@@ -3,6 +3,13 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-20 · Odpowiedź klienta na komentarz trenera (v73)
+
+- Punkt 1 z listy usprawnień z 18.11. Szkic zaakceptowany bez zmian 20.11.
+- Jedna odpowiedź na komentarz (seria albo cały trening), do 600 znaków, którą klient może zmienić albo usunąć. **Bez wątku rozmowy**: trener dopisuje coś, poprawiając swój komentarz. Czat w aplikacji to osobny temat, gdyby kiedyś był potrzebny.
+- Zapis w nowych kolumnach na końcu Log i Sesje (`odpowiedz_klienta`, `odpowiedz_at`), w tym samym wierszu co komentarz trenera, bez nowej zakładki. Serwer pozwala pisać tylko w wierszu tego klienta i tylko w tych dwóch kolumnach.
+- Panel: karta „Odpowiedzi klientów · 14 dni” na pulpicie (bez znacznika „przeczytane”, bo panel nie trzyma danych klientów w przeglądarce), odpowiedź pod komentarzem w Sesjach i Filmach. Bez maila o odpowiedzi: przy porannym mailu (punkt 7) można dopisać.
+
 ## 2026-11-19 · Bezpieczeństwo danych klientów (v72)
 
 - Damian zapytał, czy przesyłanie danych jest zabezpieczone. Przegląd: HTTPS wszędzie, każde zapytanie po kluczu klienta (tylko jego dane, nieaktywny = odmowa), panel po logowaniu Google sprawdzanym na serwerze, arkusz, folder klientów i filmy prywatne (sprawdzone na Dysku). Ryzyka: konto Google trenera (weryfikacja dwuetapowa), link bez wygasania, bilet Dysku w przeglądarce panelu, formalności RODO.

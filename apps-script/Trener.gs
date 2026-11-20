@@ -17,6 +17,7 @@ const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
 const TR_TYG = 12;                     // obciążenie na pulpicie: 12 tygodni
+const TR_ODP_DNI = 14;                // odpowiedzi klientów na komentarze na pulpicie: ostatnie 14 dni
 
 /** Ustawienia panelu z właściwości skryptu. */
 function trCfg_() {
@@ -90,8 +91,9 @@ function ustawPanel() {
 function trPulpit() {
   const tz = Session.getScriptTimeZone(), localDay = t => Utilities.formatDate(new Date(t), tz, 'yyyy-MM-dd');
   const log = pgTable_('Log', ['klient', 'zapisano', 'tydzien', 'jednostka', 'nr_cw', 'cwiczenie', 'seria', 'kg', 'powt', 'rpe', 'film_link',
-    'uwagi', 'typ', 'ocena', 'komentarz_trenera', 'komentarz_dysk']);
-  return trPulpit_({ prz: tableOf_('Przegląd'), sum: tableOf_('Podsumowanie'), bloki: tableOf_('Bloki'), klienci: tableOf_('Klienci'), log: log },
+    'uwagi', 'typ', 'ocena', 'komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at']);
+  const ses = pgTable_('Sesje', ['klient', 'tydzien', 'jednostka', 'komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at']);
+  return trPulpit_({ prz: tableOf_('Przegląd'), sum: tableOf_('Podsumowanie'), bloki: tableOf_('Bloki'), klienci: tableOf_('Klienci'), log: log, ses: ses },
     { today: today_(), localDay: localDay, at: PropertiesService.getScriptProperties().getProperty('PODSUM_AT') || '' });
 }
 
@@ -102,8 +104,9 @@ function trPrzelicz() {
 }
 
 /**
- * Czysta funkcja pulpitu. t: {prz, sum, bloki, klienci, log} jako wiersze-obiekty z zakładek (tableOf_),
- * o: {today 'RRRR-MM-DD', localDay, at}. → {today, at, clients, blocks, videos}
+ * Czysta funkcja pulpitu. t: {prz, sum, bloki, klienci, log, ses} jako wiersze-obiekty z zakładek (tableOf_ / pgTable_),
+ * o: {today 'RRRR-MM-DD', localDay, at}. → {today, at, clients, blocks, videos, replies}
+ * replies: odpowiedzi klientów na komentarze trenera z TR_ODP_DNI dni (Log i Sesje odpowiedz_klienta), najnowsze pierwsze
  */
 function trPulpit_(t, o) {
   const localDay = o.localDay || localDayDefault_, lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
@@ -138,11 +141,23 @@ function trPulpit_(t, o) {
     order: l.nr_cw, ex: String(l.cwiczenie || ''), set: String(l.seria), kg: l.kg === '' ? '' : l.kg, reps: String(l.powt === undefined ? '' : l.powt),
     rpe: l.rpe === '' ? '' : l.rpe, ocena: String(l.ocena || ''), typ: String(l.typ || ''), note: String(l.uwagi || ''),
     file: fileIdOf_(l.film_link), link: String(l.film_link), kom: [l.komentarz_dysk, l.komentarz_trenera].filter(x => !blank_(x)).map(String).join('\n'),
-    komT: blank_(l.komentarz_trenera) ? '' : String(l.komentarz_trenera), komD: blank_(l.komentarz_dysk) ? '' : String(l.komentarz_dysk) }))
+    komT: blank_(l.komentarz_trenera) ? '' : String(l.komentarz_trenera), komD: blank_(l.komentarz_dysk) ? '' : String(l.komentarz_dysk),
+    rep: blank_(l.odpowiedz_klienta) ? '' : String(l.odpowiedz_klienta).trim(), repAt: d10(l.odpowiedz_at) }))
     .filter(v => v.at && Math.round((day_(o.today) - day_(v.at)) / 864e5) < TR_FILM_DNI && Math.round((day_(o.today) - day_(v.at)) / 864e5) >= 0)
     .sort((a, b) => b.at.localeCompare(a.at) || a.name.localeCompare(b.name) || Number(a.order) - Number(b.order) || a.set.localeCompare(b.set));
 
-  return { today: o.today, at: o.at || '', weeks: weeks, clients: clients, blocks: blocks, videos: videos };
+  // odpowiedzi klientów na komentarze trenera (seria albo cały trening), z ostatnich TR_ODP_DNI dni
+  const age = d => Math.round((day_(o.today) - day_(d)) / 864e5), rep = r => !blank_(r.odpowiedz_klienta) && String(r.odpowiedz_klienta).trim() !== '';
+  const kom = r => [r.komentarz_dysk, r.komentarz_trenera].filter(x => !blank_(x)).map(String).join('\n');
+  const replies = (t.log || []).filter(rep).map(l => ({ kind: 'L', id: lc(l.klient), week: l.tydzien, day: String(l.jednostka || ''), order: l.nr_cw, set: String(l.seria),
+    title: String(l.cwiczenie || '') + ' · seria ' + String(l.seria), film: !blank_(l.film_link) && !!fileIdOf_(l.film_link), file: blank_(l.film_link) ? '' : fileIdOf_(l.film_link) || '', kom: kom(l), text: String(l.odpowiedz_klienta).trim(), at: d10(l.odpowiedz_at) }))
+    .concat((t.ses || []).filter(rep).map(x => ({ kind: 'S', id: lc(x.klient), week: x.tydzien, day: String(x.jednostka || ''), order: '', set: '',
+      title: 'Trening ' + String(x.jednostka || ''), film: false, file: '', kom: kom(x), text: String(x.odpowiedz_klienta).trim(), at: d10(x.odpowiedz_at) })))
+    .filter(r => names[r.id] !== undefined && r.at && age(r.at) >= 0 && age(r.at) < TR_ODP_DNI)
+    .map(r => Object.assign(r, { name: names[r.id] }))
+    .sort((a, b) => b.at.localeCompare(a.at) || a.name.localeCompare(b.name));
+
+  return { today: o.today, at: o.at || '', weeks: weeks, clients: clients, blocks: blocks, videos: videos, replies: replies };
 }
 
 /** Karta klienta: to samo co getData klienta (bez klucza), plus jego Bloki z wnioskami i tygodnie z Podsumowania. */

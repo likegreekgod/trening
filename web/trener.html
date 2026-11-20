@@ -171,6 +171,16 @@
   details.ses summary{cursor:pointer;display:flex;gap:12px;flex-wrap:wrap;align-items:baseline;min-height:32px}
   details.ses summary b{min-width:220px}
   .note{white-space:pre-wrap;font-size:14px}
+  /* odpowiedź klienta na komentarz trenera: pod komentarzem, z kreską akcentu */
+  .rep{margin:8px 0 0;padding:8px 12px;border-left:4px solid var(--accent);background:var(--surface);border-radius:0 var(--r) var(--r) 0}
+  .rep .eb{margin:0 0 2px}
+  .rep p{margin:0;white-space:pre-wrap;font-size:14px}
+  .reps .it{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px 0;border-top:1px solid var(--line);font-size:14px;align-items:start}
+  .reps .it:first-of-type{border-top:0}
+  .reps .h,.reps .q,.reps .a{grid-column:1;margin:0}
+  .reps .sb{grid-column:2;grid-row:1 / span 3;align-self:center}
+  .reps .q{color:var(--muted);font-size:13px;white-space:pre-wrap;padding-left:10px;border-left:2px solid var(--line)}
+  .reps .a{white-space:pre-wrap;padding-left:10px;border-left:2px solid var(--accent)}
   .es{text-align:center;padding:32px 16px;color:var(--muted)}
   .es b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
   .err{color:var(--bad);font-weight:600}
