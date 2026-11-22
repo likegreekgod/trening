@@ -202,7 +202,7 @@ function trKomentarz(id, week, day, text) {
     const col = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].indexOf('komentarz_trenera') + 1;
     const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(sid).matchEntireCell(true).findNext();
     if (!hit || col < 1) throw new Error('Nie ma tej jednostki w zakładce Sesje (' + sid + '). Komentarz da się dodać po „Zakończ i zapisz” u klienta.');
-    sh.getRange(hit.getRow(), col).setValue(text);
+    sh.getRange(hit.getRow(), col).setValue(plain_(text));
   } finally { lock.releaseLock(); }
   return { text: text, at: new Date().toISOString() };
 }
@@ -233,7 +233,7 @@ function trKomentarzFilm(id, week, day, order, set, text) {
     const col = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].indexOf('komentarz_trenera') + 1;
     const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(lid).matchEntireCell(true).findNext();
     if (!hit || col < 1) throw new Error('Nie ma tej serii w zakładce Log (' + lid + ').');
-    sh.getRange(hit.getRow(), col).setValue(text);
+    sh.getRange(hit.getRow(), col).setValue(plain_(text));
   } finally { lock.releaseLock(); }
   return { text: text, at: new Date().toISOString() };
 }
@@ -437,7 +437,7 @@ function aiCall_(req, log) {
   try {
     n = aiDay_(props.getProperty('AI_DZIEN'), pre.today, pre.limit).n + 1;
     props.setProperty('AI_DZIEN', JSON.stringify({ d: pre.today, n: n }));
-    sheet_('AI', AI_HEADERS).appendRow([new Date()].concat(log, [String(j.model || AI_MODEL), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0, cost]));
+    sheet_('AI', AI_HEADERS).appendRow(plainRow_([new Date()].concat(log, [String(j.model || AI_MODEL), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0, cost])));
   } finally { lock.releaseLock(); }
   return { text: text, cost: cost, n: n, limit: pre.limit, model: String(j.model || AI_MODEL) };
 }
@@ -507,8 +507,8 @@ function trBlok(id, blok, wnioski, dla) {
     if (ck < 0 || cb < 0 || cw < 0 || cd < 0) throw new Error('Zakładka Bloki nie ma kolumn wnioski i dla_klienta. Kliknij „Przelicz teraz”.');
     const i = v.findIndex((r, k) => k > 0 && String(r[ck]).trim().toLowerCase() === id && String(r[cb]).trim() === blok);
     if (i < 1) throw new Error('Nie ma bloku ' + blok + ' tego klienta w zakładce Bloki. Kliknij „Przelicz teraz”.');
-    sh.getRange(i + 1, cw + 1).setValue(wnioski);
-    sh.getRange(i + 1, cd + 1).setValue(dla);
+    sh.getRange(i + 1, cw + 1).setValue(plain_(wnioski));
+    sh.getRange(i + 1, cd + 1).setValue(plain_(dla));
   } finally { lock.releaseLock(); }
   return { wnioski: wnioski, dla_klienta: dla };
 }
@@ -935,7 +935,7 @@ const KL_DOMYSLNE = { on: true, mode: 'PRO', scale: 'RPE', swap: 'NIE', pain: fa
 function klSheet_() {
   const sh = sheet_('Klienci', KL_HEAD.slice(0, 9));
   const h = sh.getRange(1, 1, 1, KL_HEAD.length).getValues()[0];
-  if (h.some((x, i) => String(x).trim() === '')) sh.getRange(1, 1, 1, KL_HEAD.length).setValues([h.map((x, i) => String(x).trim() === '' ? KL_HEAD[i] : x)]);
+  if (h.some((x, i) => String(x).trim() === '')) sh.getRange(1, 1, 1, KL_HEAD.length).setValues(plainRows_([h.map((x, i) => String(x).trim() === '' ? KL_HEAD[i] : x)]));
   return sh;
 }
 function klRows_(sh) {
@@ -964,7 +964,7 @@ function trKlientUstaw(id, f) {
     Object.keys(v.vals).forEach(k => { r[k] = v.vals[k]; });
     if (base) r[4] = base + '?k=' + String(r[0]).trim();
     sh.getRange(i + 2, 15).setNumberFormat('@');                  // e-mail jako tekst
-    sh.getRange(i + 2, 4, 1, KL_HEAD.length - 3).setValues([r.slice(3)]);
+    sh.getRange(i + 2, 4, 1, KL_HEAD.length - 3).setValues(plainRows_([r.slice(3)]));
     return trKlientOf_(r, base);
   } finally { lock.releaseLock(); }
 }
@@ -987,7 +987,7 @@ function trKlientNowy(f) {
     if (base) r[4] = base + '?k=' + r[0];
     const n = sh.getLastRow() + 1;
     sh.getRange(n, 1).setNumberFormat('@');                       // klucz zawsze jako tekst
-    sh.getRange(n, 1, 1, r.length).setValues([r]);
+    sh.getRange(n, 1, 1, r.length).setValues(plainRows_([r]));
     rootFolder_();                                                // folder na filmy (Trening – Klienci) istnieje
     return trKlientOf_(r, base);
   } finally { lock.releaseLock(); }
@@ -1005,8 +1005,8 @@ function trKlientLink(id) {
     r[0] = newKey_();
     r[4] = base ? base + '?k=' + r[0] : '';
     sh.getRange(i + 2, 1).setNumberFormat('@');
-    sh.getRange(i + 2, 1).setValue(r[0]);
-    sh.getRange(i + 2, 5).setValue(r[4]);
+    sh.getRange(i + 2, 1).setValue(plain_(r[0]));
+    sh.getRange(i + 2, 5).setValue(plain_(r[4]));
     return trKlientOf_(r, base);
   } finally { lock.releaseLock(); }
 }
@@ -1143,9 +1143,9 @@ function trPlan(id, e) {
     if (res.set.length) {
       const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
       const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
-      PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(k); h.push(k); } });
+      PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(plain_(k)); h.push(k); } });
       planTextCols_();
-      res.set.forEach(([i, o]) => Object.keys(o).forEach(k => sh.getRange(i + 2, h.indexOf(k) + 1).setValue(o[k])));
+      res.set.forEach(([i, o]) => Object.keys(o).forEach(k => sh.getRange(i + 2, h.indexOf(k) + 1).setValue(plain_(o[k]))));
     }
     return { n: res.n, weeks: res.weeks, rows: res.rows };
   } finally { lock.releaseLock(); }

@@ -240,10 +240,10 @@ function logReadyVideo(key, v) {
     const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(id).matchEntireCell(true).findNext();
     if (hit) {
       const c = sh.getRange(hit.getRow(), col), was = String(c.getValue() || '');
-      if (was.indexOf(v.link) < 0) c.setValue(was ? was + ' ; ' + v.link : v.link);
+      if (was.indexOf(v.link) < 0) c.setValue(plain_(was ? was + ' ; ' + v.link : v.link));
     } else {
       const row = DYS_HEADERS.map(() => ''); row[0] = id; row[1] = new Date(); row[2] = client.id; row[3] = date; row[col - 1] = v.link;
-      sh.appendRow(row);
+      sh.appendRow(plainRow_(row));
     }
   } finally { lock.releaseLock(); }
   return { ok: true, id: id };
@@ -261,7 +261,7 @@ function przesunJednostke(key, moves) {
     if (res.rows.length) {
       planTextCols_();
       const col = h.indexOf('data') + 1;
-      res.rows.forEach(([i, date]) => sh.getRange(i + 2, col).setValue(date));
+      res.rows.forEach(([i, date]) => sh.getRange(i + 2, col).setValue(plain_(date)));
     }
     return { ok: true, moved: res.moved, skipped: res.skipped };
   } finally { lock.releaseLock(); }
@@ -299,7 +299,7 @@ function logNote(key, n) {
     if (last < 2) return { ok: true, rows: 0 };
     const ids = sh.getRange(2, 1, last - 1, 1).getValues(), col = LOG_HEADERS.indexOf('uwagi') + 1;
     let k = 0;
-    ids.forEach((r, i) => { if (String(r[0]).indexOf(pre) === 0) { sh.getRange(i + 2, col).setValue(note); k++; } });
+    ids.forEach((r, i) => { if (String(r[0]).indexOf(pre) === 0) { sh.getRange(i + 2, col).setValue(plain_(note)); k++; } });
     return { ok: true, rows: k };
   } finally { lock.releaseLock(); }
 }
@@ -329,8 +329,8 @@ function replyNote(key, r) {
     if (!hit || hit.getRow() < 2) throw new Error('Nie ma już tego komentarza.');
     const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0], cT = h.indexOf('odpowiedz_klienta') + 1, cA = h.indexOf('odpowiedz_at') + 1;
     if (cT < 1 || cA < 1) throw new Error('Brak kolumn odpowiedzi w zakładce ' + name + '.');
-    sh.getRange(hit.getRow(), cT).setValue(x.text);
-    sh.getRange(hit.getRow(), cA).setValue(x.text ? at : '');
+    sh.getRange(hit.getRow(), cT).setValue(plain_(x.text));
+    sh.getRange(hit.getRow(), cA).setValue(plain_(x.text ? at : ''));
   } finally { lock.releaseLock(); }
   return { ok: true, text: x.text, at: x.text ? at.toISOString() : '' };
 }
@@ -448,8 +448,8 @@ function logVideo(key, v) {
   try {
     const sh = sheet_('Log', LOG_HEADERS);
     const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(id).matchEntireCell(true).findNext();
-    if (hit) sh.getRange(hit.getRow(), LOG_HEADERS.indexOf('film_link') + 1).setValue(v.link);
-    else sh.appendRow([id, new Date(), client.id, v.week, v.day, v.date || today_(), v.order, v.name, v.set, '', '', '', '', '', v.link, '', '']);
+    if (hit) sh.getRange(hit.getRow(), LOG_HEADERS.indexOf('film_link') + 1).setValue(plain_(v.link));
+    else sh.appendRow(plainRow_([id, new Date(), client.id, v.week, v.day, v.date || today_(), v.order, v.name, v.set, '', '', '', '', '', v.link, '', '']));
   } finally { lock.releaseLock(); }
   return { ok: true, id: id };
 }
@@ -498,12 +498,30 @@ function mustClient_(key) {
   return c;
 }
 
+/* ---------- zapis do arkusza: tekst zostaje tekstem ----------
+ * Arkusze traktują wpis zaczynający się od „=” jak formułę (przy wpisie ręcznym także od „+” i „-”). Skrypt nigdy
+ * nie zapisuje formuł, więc KAŻDY zapis (setValue, setValues, appendRow) idzie przez plain_ / plainRow_ / plainRows_:
+ * tekst zaczynający się od = + - @ dostaje z przodu apostrof, którym Arkusze oznaczają zwykły tekst (w komórce
+ * i w getValues() apostrofu nie ma). Dotyczy też przepisywania danych odczytanych z arkusza (podsumowania, import
+ * planu, podgląd), bo getValues() oddaje tekst już bez apostrofu. Liczby zapisane jako tekst („-2,5”, „+10”)
+ * i sam znak („-”) zostają bez zmian. Test „zapis do arkusza” pilnuje, że w apps-script/ nie ma zapisu obok tych funkcji.
+ */
+function plain_(v) {
+  if (typeof v !== 'string') return v;
+  const s = v.replace(/^[\s\u0000-\u001f\u200b]+/, ''), c = s.charAt(0);
+  if (c !== '=' && c !== '+' && c !== '-' && c !== '@') return v;
+  if ((c === '+' || c === '-') && /^[+-]\s*(?:(?:\d+(?:[.,]\d*)?|[.,]\d+)\s*%?)?\s*$/.test(s)) return v;   // liczba albo sam znak
+  return "'" + v;
+}
+function plainRow_(row) { return row.map(plain_); }
+function plainRows_(rows) { return rows.map(plainRow_); }
+
 function sheet_(name, headers) {
   const ss = SpreadsheetApp.getActive();
   let sh = ss.getSheetByName(name);
   if (!sh) { sh = ss.insertSheet(name); }
-  if (sh.getLastRow() === 0) { sh.appendRow(headers); sh.setFrozenRows(1); }
-  else if (sh.getLastColumn() < headers.length) sh.getRange(1, 1, 1, headers.length).setValues([headers]); // nowe kolumny
+  if (sh.getLastRow() === 0) { sh.appendRow(plainRow_(headers)); sh.setFrozenRows(1); }
+  else if (sh.getLastColumn() < headers.length) sh.getRange(1, 1, 1, headers.length).setValues(plainRows_([headers])); // nowe kolumny
   return sh;
 }
 
@@ -514,8 +532,8 @@ function upsert_(name, headers, id, row) {
     const sh = sheet_(name, headers);
     const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1)
       .createTextFinder(id).matchEntireCell(true).findNext();
-    if (hit) sh.getRange(hit.getRow(), 1, 1, row.length).setValues([row]);
-    else sh.appendRow(row);
+    if (hit) sh.getRange(hit.getRow(), 1, 1, row.length).setValues(plainRows_([row]));
+    else sh.appendRow(plainRow_(row));
   } finally { lock.releaseLock(); }
 }
 
@@ -604,21 +622,21 @@ function setup() {
   if (typeof seedPlan === 'function') seedPlan();   // stary sposób (Plan.gs); nowy: wczytajPlany() z Drive
   const kl = sheet_('Klienci', ['klucz', 'klient_id', 'imie', 'aktywny']);
   kl.getRange('A:A').setNumberFormat('@');
-  if (kl.getLastRow() < 2) kl.appendRow([newKey_(), 'damian', 'Damian', 'TAK']);
-  if (!kl.getRange(1, 5).getValue()) kl.getRange(1, 5).setValue('link');
-  if (!kl.getRange(1, 6).getValue()) kl.getRange(1, 6).setValue('bol');
-  if (!kl.getRange(1, 7).getValue()) kl.getRange(1, 7).setValue('tryb');
-  if (!kl.getRange(1, 8).getValue()) kl.getRange(1, 8).setValue('dod_serie');
-  if (!kl.getRange(1, 9).getValue()) kl.getRange(1, 9).setValue('masters');
-  if (!kl.getRange(1, 10).getValue()) kl.getRange(1, 10).setValue('zamiana');
-  if (!kl.getRange(1, 11).getValue()) kl.getRange(1, 11).setValue('skala');
-  if (!kl.getRange(1, 12).getValue()) kl.getRange(1, 12).setValue('sufit_oly');
-  if (!kl.getRange(1, 13).getValue()) kl.getRange(1, 13).setValue('wlasne');
-  if (!kl.getRange(1, 14).getValue()) kl.getRange(1, 14).setValue('edycja');
+  if (kl.getLastRow() < 2) kl.appendRow(plainRow_([newKey_(), 'damian', 'Damian', 'TAK']));
+  if (!kl.getRange(1, 5).getValue()) kl.getRange(1, 5).setValue(plain_('link'));
+  if (!kl.getRange(1, 6).getValue()) kl.getRange(1, 6).setValue(plain_('bol'));
+  if (!kl.getRange(1, 7).getValue()) kl.getRange(1, 7).setValue(plain_('tryb'));
+  if (!kl.getRange(1, 8).getValue()) kl.getRange(1, 8).setValue(plain_('dod_serie'));
+  if (!kl.getRange(1, 9).getValue()) kl.getRange(1, 9).setValue(plain_('masters'));
+  if (!kl.getRange(1, 10).getValue()) kl.getRange(1, 10).setValue(plain_('zamiana'));
+  if (!kl.getRange(1, 11).getValue()) kl.getRange(1, 11).setValue(plain_('skala'));
+  if (!kl.getRange(1, 12).getValue()) kl.getRange(1, 12).setValue(plain_('sufit_oly'));
+  if (!kl.getRange(1, 13).getValue()) kl.getRange(1, 13).setValue(plain_('wlasne'));
+  if (!kl.getRange(1, 14).getValue()) kl.getRange(1, 14).setValue(plain_('edycja'));
   klienciListy_(kl);
   // klucze liczbowe (Arkusze potrafią zamienić je na liczbę) → nowy klucz tekstowy
   const keys = kl.getRange(2, 1, kl.getLastRow() - 1, 1).getValues();
-  keys.forEach((r, i) => { if (!/^k[0-9a-f]{11}$/.test(String(r[0]))) kl.getRange(i + 2, 1).setValue(newKey_()); });
+  keys.forEach((r, i) => { if (!/^k[0-9a-f]{11}$/.test(String(r[0]))) kl.getRange(i + 2, 1).setValue(plain_(newKey_())); });
   sheet_('Log', LOG_HEADERS);
   sheet_('Sesje', SES_HEADERS);
   sheet_('Dyspozycja', DYS_HEADERS);
@@ -652,11 +670,11 @@ function linki() {
   if (!base) { Logger.log('Brak wdrożenia — najpierw Wdróż → Nowe wdrożenie.'); return; }
   const sh = SpreadsheetApp.getActive().getSheetByName('Klienci');
   if (!sh) { Logger.log('Brak zakładki Klienci — uruchom najpierw setup.'); return; }
-  sh.getRange(1, 5).setValue('link');
+  sh.getRange(1, 5).setValue(plain_('link'));
   const v = sh.getDataRange().getValues();
   for (let i = 1; i < v.length; i++) {
     const link = base + '?k=' + v[i][0];
-    sh.getRange(i + 1, 5).setValue(link);
+    sh.getRange(i + 1, 5).setValue(plain_(link));
     Logger.log(v[i][2] + ': ' + link);
   }
 }
@@ -703,7 +721,7 @@ function dodajKlientaZapisz(f) {
     if (base) res.row[4] = base + '?k=' + res.row[0];
     const r = sh.getLastRow() + 1;
     sh.getRange(r, 1).setNumberFormat('@');                       // klucz zawsze jako tekst
-    sh.getRange(r, 1, 1, res.row.length).setValues([res.row]);
+    sh.getRange(r, 1, 1, res.row.length).setValues(plainRows_([res.row]));
     rootFolder_();                                                // folder na filmy (Trening – Klienci) istnieje
     return { ok: true, id: res.id, link: res.row[4] || '' };
   } finally { lock.releaseLock(); }
@@ -813,7 +831,8 @@ function menuWyzwalacze() {
 
 /**
  * Czysta funkcja: lista uwag do arkusza, [['błąd' | 'uwaga' | 'info', tekst], …]; pusta = wszystko w porządku.
- * d: {klienci, plan (tableOf_), pwaUrl, triggers (nazwy funkcji), bledy, czeka (liczba plików w _plany/bledy i _plany), today}
+ * d: {klienci, plan (tableOf_), pwaUrl, triggers (nazwy funkcji), bledy, czeka (liczba plików w _plany/bledy i _plany), today,
+ *     formuly ([{tab, cells: ['P12', …]}] z formulasIn_)}
  */
 function diagnose_(d) {
   const out = [], lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
@@ -853,18 +872,46 @@ function diagnose_(d) {
     }
     if (ids[c] && p.noBlock === p.n) add('info', c + ': plan bez kolumny blok; kolejny blok nazwij np. B2 i numeruj tygodnie dalej.');
   });
+  // formuły w danych: skrypt zapisuje tam tylko wartości (plain_), więc formułę ktoś wpisał ręcznie albo polem tekstowym aplikacji
+  (d.formuly || []).forEach(f => {
+    const cells = (f && f.cells) || [];
+    if (cells.length) add(f.tab === 'Plan' ? 'uwaga' : 'błąd', 'Formuły w zakładce ' + f.tab + ' (' + cells.length + '): ' + cells.slice(0, 5).join(', ') + (cells.length > 5 ? '…' : '') +
+      '. Skrypt nie zapisuje tam formuł: obejrzyj te komórki i usuń formuły, których nie wpisałeś sam.');
+  });
   if (d.bledy > 0) add('uwaga', 'Pliki w _plany/bledy: ' + d.bledy + ' (opis błędu w zakładce Import).');
   if (d.czeka > 0) add('info', 'Pliki czekające w _plany: ' + d.czeka + ' (menu Trening → Wczytaj plany z Drive).');
   return out;
 }
 
+/** Zakładki z danymi od klientów: skrypt zapisuje w nich same wartości, więc formuła nie pochodzi od skryptu. */
+const DANE_TABS = ['Log', 'Sesje', 'Dyspozycja', 'Stan', 'Błędy', 'Plan'];
+/** Numer kolumny → litery (1 → A, 27 → AA). */
+function colA1_(n) { let s = ''; for (; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; }
+/** Czysta funkcja: wynik getFormulas() od wiersza 2 → adresy komórek z formułą („P12”). */
+function formulaCells_(f) {
+  const out = [];
+  (f || []).forEach((r, i) => (r || []).forEach((x, j) => { if (String(x === undefined || x === null ? '' : x) !== '') out.push(colA1_(j + 1) + (i + 2)); }));
+  return out;
+}
+function formulasIn_(names) {
+  const ss = SpreadsheetApp.getActive(), out = [];
+  names.forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 2) return;
+    const cells = formulaCells_(sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getFormulas());
+    if (cells.length) out.push({ tab: name, cells: cells });
+  });
+  return out;
+}
+
 function sprawdzArkusz() {
-  let bledy = 0, czeka = 0;
+  let bledy = 0, czeka = 0, formuly = [];
+  try { formuly = formulasIn_(DANE_TABS); } catch (e) { /* odczyt formuł się nie udał: reszta sprawdzenia działa dalej */ }
   try {
     const dir = child_(rootFolder_(), '_plany'), count = it => { let n = 0; while (it.hasNext()) { if (/\.json$/i.test(it.next().getName())) n++; } return n; };
     czeka = count(dir.getFiles()); bledy = count(child_(dir, 'bledy').getFiles());
   } catch (e) { /* brak dostępu do Drive: pomijamy tę część */ }
-  const res = diagnose_({ klienci: tableOf_('Klienci'), plan: tableOf_('Plan'), today: today_(), bledy: bledy, czeka: czeka,
+  const res = diagnose_({ klienci: tableOf_('Klienci'), plan: tableOf_('Plan'), today: today_(), bledy: bledy, czeka: czeka, formuly: formuly,
     pwaUrl: PropertiesService.getScriptProperties().getProperty('PWA_URL'), triggers: ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()) });
   const mark = { 'błąd': '✗', 'uwaga': '!', 'info': '·' };
   alert_('Sprawdzenie arkusza', res.length ? res.map(r => mark[r[0]] + ' ' + r[1]).join('\n') : '✓ Wszystko w porządku.');
@@ -920,8 +967,8 @@ function writeTable_(name, headers, rows, after) {
   const ss = SpreadsheetApp.getActive();
   const sh = ss.getSheetByName(name) || ss.insertSheet(name);
   sh.clear();
-  sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-  if (rows.length) sh.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  sh.getRange(1, 1, 1, headers.length).setValues(plainRows_([headers])).setFontWeight('bold');
+  if (rows.length) sh.getRange(2, 1, rows.length, headers.length).setValues(plainRows_(rows));
   sh.setFrozenRows(1);
   if (after) after(sh, rows.length);
 }
@@ -1414,7 +1461,7 @@ function cwSync_(baza, dictRows, wycofane) {
 function appendCw_(rows) {
   const sh = sheet_('Ćwiczenia', CW_HEADERS);
   rows = rows.map(r => r.concat(Array(Math.max(0, CW_HEADERS.length - r.length)).fill('')));     // krótsze wiersze dopełnione do nagłówków
-  if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, CW_HEADERS.length).setValues(rows);
+  if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, CW_HEADERS.length).setValues(plainRows_(rows));
   sh.activate();
 }
 
@@ -1425,7 +1472,7 @@ function appendCw_(rows) {
 function wczytajBazeCwiczen() {
   const sh = sheet_('Ćwiczenia', CW_HEADERS), s = cwSync_(cwBaza_(CW_BAZA, CW_ALIASY, CW_DODATKI, CW_FEDB), tableOf_('Ćwiczenia'), CW_WYCOFANE);
   const col = CW_HEADERS.indexOf('aliasy') + 1;
-  s.aliases.forEach(a => sh.getRange(a.i + 2, col).setValue(a.value));
+  s.aliases.forEach(a => sh.getRange(a.i + 2, col).setValue(plain_(a.value)));
   s.drop.slice().sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
   appendCw_(s.add); cwCacheClear_();
   const left = missingExercises_(tableOf_('Plan'), tableOf_('Ćwiczenia')).length;
@@ -1436,7 +1483,7 @@ function wczytajBazeCwiczen() {
 /** Menu Trening → Uzupełnij listę ćwiczeń: dopisuje nazwy z Planu, których nie udało się dopasować do bazy. */
 function uzupelnijCwiczenia() {
   const sh0 = sheet_('Ćwiczenia', CW_HEADERS), mg = cwMerge_(tableOf_('Ćwiczenia')), col = CW_HEADERS.indexOf('aliasy') + 1;
-  mg.aliases.forEach(a => sh0.getRange(a.i + 2, col).setValue(a.value));
+  mg.aliases.forEach(a => sh0.getRange(a.i + 2, col).setValue(plain_(a.value)));
   mg.drop.slice().sort((a, b) => b - a).forEach(i => sh0.deleteRow(i + 2));
   const dict = tableOf_('Ćwiczenia'), have = {};
   dict.forEach(r => { have[exKey_(r.cwiczenie)] = 1; });
@@ -1659,8 +1706,8 @@ function editPlan(key, e) {
     if (res.error) throw new Error(res.error);
     const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
     const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
-    PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(k); h.push(k); } });
-    res.set.forEach(([i, o]) => Object.keys(o).forEach(k => sh.getRange(i + 2, h.indexOf(k) + 1).setValue(o[k])));
+    PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(plain_(k)); h.push(k); } });
+    res.set.forEach(([i, o]) => Object.keys(o).forEach(k => sh.getRange(i + 2, h.indexOf(k) + 1).setValue(plain_(o[k]))));
     if (res.add.length) planAppend_(sh, h, res.add);
     return { ok: true, n: res.n };
   } finally { lock.releaseLock(); }
@@ -1670,7 +1717,7 @@ function editPlan(key, e) {
 function planAppend_(sh, h, rows) {
   const start = sh.getLastRow() + 1;
   ['data', 'powt', 'kg'].forEach(k => sh.getRange(start, h.indexOf(k) + 1, rows.length, 1).setNumberFormat('@'));
-  sh.getRange(start, 1, rows.length, h.length).setValues(rows.map(r => h.map(k => r[k] === undefined || r[k] === null ? '' : r[k])));
+  sh.getRange(start, 1, rows.length, h.length).setValues(plainRows_(rows.map(r => h.map(k => r[k] === undefined || r[k] === null ? '' : r[k]))));
 }
 
 const OWN_MAX = 20;
@@ -1782,7 +1829,7 @@ function logError(key, e) {
   const client = mustClient_(key), row = errRow_(client.id, e, new Date());
   if (!row) return { ok: false };
   const sh = sheet_('Błędy', ERR_HEADERS);
-  sh.appendRow(row);
+  sh.appendRow(plainRow_(row));
   if (sh.getLastRow() > 3001) sh.deleteRows(2, sh.getLastRow() - 3001);       // najwyżej 3000 ostatnich wpisów
   return { ok: true };
 }
@@ -1802,7 +1849,7 @@ function errRecent_(errs, clientId, today, days) {
 function ownWrite_(clientId, week, day, rows) {
   const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
   const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
-  PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(k); h.push(k); } });   // brakujące kolumny (np. zrodlo)
+  PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(plain_(k)); h.push(k); } });   // brakujące kolumny (np. zrodlo)
   const n = sh.getLastRow() - 1, ci = h.indexOf('klient'), wi = h.indexOf('tydzien'), di = h.indexOf('jednostka');
   if (n > 0) {
     const v = sh.getRange(2, 1, n, h.length).getValues(), hit = [];
@@ -1930,7 +1977,7 @@ function syncComments_() {
     if (r.getResponseCode() !== 200) { out.errors++; return; }
     let c; try { c = commentLines_(JSON.parse(r.getContentText()).comments); } catch (e) { out.errors++; return; }
     if (c.raw && !out.raw) out.raw = c.raw;
-    by[ids[n]].forEach(i => { if (String(v[i][ki] === undefined ? '' : v[i][ki]) !== c.text) { sh.getRange(i + 2, ki + 1).setValue(c.text); out.changed++; } });
+    by[ids[n]].forEach(i => { if (String(v[i][ki] === undefined ? '' : v[i][ki]) !== c.text) { sh.getRange(i + 2, ki + 1).setValue(plain_(c.text)); out.changed++; } });
   });
   return out;
 }
@@ -1978,7 +2025,7 @@ function uzupelnijBloki() {
   if (ui.alert('Bloki', 'Wiersze Planu bez bloku:\n' + list + '\n\nWpisać blok? Klient bez żadnego bloku dostanie B1, pozostali swój ostatni wpisany blok.', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   const rng = sh.getRange(2, col, sh.getLastRow() - 1, 1), v = rng.getValues();
   o.rows.forEach(([i, b]) => { v[i][0] = b; });
-  rng.setValues(v);
+  rng.setValues(plainRows_(v));
   alert_('Bloki', 'Uzupełniono wierszy: ' + o.rows.length + '. Zakładka Bloki odświeży się przy najbliższym podsumowaniu (albo teraz: Trening → Odśwież podsumowanie).');
 }
 
@@ -2002,7 +2049,7 @@ function usunPlanyBezKlienta() {
   const sh = SpreadsheetApp.getActive().getSheetByName('Plan'), v = sh.getDataRange().getValues(), h = v.shift(), ci = h.indexOf('klient');
   const keep = v.filter(r => !o.ids[String(r[ci]).trim().toLowerCase()]);
   sh.getRange(2, 1, v.length, h.length).clearContent();
-  if (keep.length) sh.getRange(2, 1, keep.length, h.length).setValues(keep);
+  if (keep.length) sh.getRange(2, 1, keep.length, h.length).setValues(plainRows_(keep));
   alert_('Plany bez klienta', 'Usunięto wierszy: ' + (v.length - keep.length) + '.');
 }
 
@@ -2230,11 +2277,11 @@ function writePlanRows_(all0) {
   const all = [PLAN_HEADERS].concat(all0.map(toRow));
   sh.clearContents();
   ['E:E', 'J:J', 'L:L'].forEach(a => sh.getRange(a).setNumberFormat('@'));   // przed zapisem: „6-8” nie zmieni się w datę
-  sh.getRange(1, 1, all.length, PLAN_HEADERS.length).setValues(all);
+  sh.getRange(1, 1, all.length, PLAN_HEADERS.length).setValues(plainRows_(all));
   sh.setFrozenRows(1);
 }
 
 function importLog_(file, status, n, clients, msg) {
   const sh = sheet_('Import', ['kiedy', 'plik', 'status', 'wierszy', 'klienci', 'bledy']);
-  sh.appendRow([new Date(), file, status, n, clients, msg]);
+  sh.appendRow(plainRow_([new Date(), file, status, n, clients, msg]));
 }

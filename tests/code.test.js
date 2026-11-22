@@ -1269,3 +1269,122 @@ test('trPlanEdit_, trPlanVal_: szybka zmiana planu z panelu (tylko niezrobione, 
   assert.match(ed({ week: 9, day: 'T1', ex: [{ order: 1, sets: '50' }] }).error, /Przysiad: Serie/);
   assert.ok(C.TR_FNS.trPlan && !C.API_FNS.trPlan);                                 // tylko zalogowany trener
 });
+
+// --- zapis do arkusza: tekst zostaje tekstem ---
+test('plain_: tekst zaczynający się jak formuła dostaje apostrof, liczby i zwykły tekst zostają bez zmian', () => {
+  for (const v of ['=1+1', '=IMPORTRANGE("x";"Klienci!A:C")', ' =A1', '\t=A1', '\n=A1', '+SUM(A1)', '-A1', '- bolało kolano', '+48 600 100 200', '@x', '--', '-%'])
+    assert.equal(C.plain_(v), "'" + v, JSON.stringify(v));
+  for (const v of ['', 'Przysiad', '6-8', '8/str', '1+1', '30 s', 'BW', 'guma', '-', '+', '-5', '+10', '-2,5', '- 5', '-.5', '-5%', "'=1+1", 'a=b', '2026-11-22', 'https://drive.google.com/file/d/x/view'])
+    assert.equal(C.plain_(v), v, JSON.stringify(v));
+  for (const v of [0, 7.5, -3, true, false, null, undefined, new Date(0)]) assert.strictEqual(C.plain_(v), v);
+  assert.deepEqual(Array.from(C.plainRow_(['=1', 5, 'x'])), ["'=1", 5, 'x']);
+  assert.deepEqual(C.plainRows_([['=1'], ['-a', 2]]).map(r => Array.from(r)), [["'=1"], ["'-a", 2]]);
+});
+
+test('zapis do arkusza: każdy setValue / setValues / appendRow w apps-script/ idzie przez plain_', () => {
+  const fs = require('fs'), path = require('path'), dir = path.join(__dirname, '..', 'apps-script'), bad = [];
+  const raw = /\.(?:setValues\((?!plainRows_\()|setValue\((?!plain_\()|appendRow\((?!plainRow_\()|setFormulas?(?:R1C1)?\(|setRichTextValues?\(|replaceAllWith\(|replaceWith\()/g;
+  for (const f of fs.readdirSync(dir).filter(f => /\.gs$/.test(f)))
+    fs.readFileSync(path.join(dir, f), 'utf8').split('\n').forEach((line, i) => { const hit = line.match(raw); if (hit) bad.push(f + ':' + (i + 1) + ' ' + hit.join(' ')); });
+  assert.deepEqual(bad, []);
+});
+
+// Atrapa Arkuszy: komórka przyjmuje wpis jak prawdziwy arkusz przy zapisie ze skryptu: „=…” (oraz „+…” / „-…”, które nie są liczbą)
+// staje się formułą {f}, „'…” zwykłym tekstem bez apostrofu, reszta zostaje bez zmian.
+function fakeSheets(tabs) {
+  const enter = v => typeof v !== 'string' ? v : v.charAt(0) === "'" ? v.slice(1)
+    : v.charAt(0) === '=' || (/^[+-]/.test(v) && !/^[+-]\s*(\d+([.,]\d*)?)?%?$/.test(v)) ? { f: v } : v;
+  const isF = c => !!c && typeof c === 'object' && !(c instanceof Date) && 'f' in c;
+  const val = c => isF(c) ? '#WYNIK FORMUŁY' : (c === undefined ? '' : c);
+  const sheets = {};
+  const mk = (name, rows) => {
+    const g = rows.map(r => r.slice());
+    const width = () => g.reduce((m, r) => Math.max(m, r.length), 0);
+    const cell = (r, c) => (g[r - 1] || [])[c - 1];
+    const grid = (r, c, nr, nc, fn) => Array.from({ length: nr }, (_, i) => Array.from({ length: nc }, (_, j) => fn(cell(r + i, c + j))));
+    const put = (r, c, x) => { while (g.length < r) g.push([]); g[r - 1][c - 1] = enter(x); };
+    const range = (r, c, nr, nc) => ({
+      getValues: () => grid(r, c, nr, nc, val), getFormulas: () => grid(r, c, nr, nc, x => isF(x) ? x.f : ''), getValue: () => val(cell(r, c)), getRow: () => r,
+      setValues(v) { v.forEach((row, i) => row.forEach((x, j) => put(r + i, c + j, x))); return this; },
+      setValue(x) { put(r, c, x); return this; },
+      setNumberFormat() { return this; }, setFontWeight() { return this; }, clearContent() { return this; },
+      createTextFinder: t => ({ matchEntireCell() { return this; }, findNext() { for (let i = 0; i < nr; i++) if (String(val(cell(r + i, c))) === String(t)) return { getRow: () => r + i }; return null; } })
+    });
+    return sheets[name] = { grid: g, getLastRow: () => g.length, getLastColumn: width, getMaxRows: () => 1000,
+      getDataRange: () => range(1, 1, Math.max(g.length, 1), Math.max(width(), 1)),
+      getRange: (r, c, nr, nc) => typeof r === 'string' ? { setNumberFormat() { return this; } } : range(r, c, nr || 1, nc || 1),
+      appendRow(row) { g.push(row.map(enter)); return this; }, deleteRow(r) { g.splice(r - 1, 1); }, deleteRows(r, n) { g.splice(r - 1, n); },
+      setFrozenRows() {}, clear() { g.length = 0; }, clearContents() { g.length = 0; }, activate() {} };
+  };
+  Object.keys(tabs).forEach(n => mk(n, tabs[n]));
+  return { sheets, ss: { getSheetByName: n => sheets[n] || null, insertSheet: n => mk(n, []), getSheets: () => Object.values(sheets) },
+    formulas: () => Object.keys(sheets).flatMap(n => sheets[n].grid.flatMap((r, i) => r.map((c, j) => isF(c) ? n + ' w' + (i + 1) + ' k' + (j + 1) + ': ' + c.f : '').filter(Boolean))) };
+}
+
+test('zapis do arkusza: zapisy klienta z tekstem jak formuła zostają tekstem (atrapa arkusza), liczby zostają liczbami', () => {
+  const S = require('./load-code')(), KEY = 'k0123456789a', evil = '=IMPORTRANGE("x";"Klienci!A:C")', plus = '+SUM(Klienci!A:A)', minus = '-Klienci!A2';
+  const head = n => S[n].slice ? Array.from(S[n]) : [];
+  const planRow = (week, nr, name) => Array.from(S.PLAN_HEADERS).map(h => ({ klient: 'anna', tydzien: week, jednostka: 'A', tytul: 'Siła', data: '2026-11-2' + week, nr: nr, cwiczenie: name, prio: 'A', serie: 3, powt: '6-8', kg: 100, blok: 'B1' })[h] === undefined ? '' : ({ klient: 'anna', tydzien: week, jednostka: 'A', tytul: 'Siła', data: '2026-11-2' + week, nr: nr, cwiczenie: name, prio: 'A', serie: 3, powt: '6-8', kg: 100, blok: 'B1' })[h]);
+  const F = fakeSheets({
+    Klienci: [['klucz', 'klient_id', 'imie', 'aktywny', 'link', 'bol', 'tryb', 'dod_serie', 'masters', 'zamiana', 'skala', 'sufit_oly', 'wlasne', 'edycja'],
+      [KEY, 'anna', 'Anna', 'TAK', '', '', 'PRO', '', '', 'DOWOLNA', '', '', '', 'TAK']],
+    Plan: [head('PLAN_HEADERS'), planRow(1, 1, 'Przysiad'), planRow(2, 1, 'Przysiad')]
+  });
+  S.SpreadsheetApp = { getActive: () => F.ss };
+  S.LockService = { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) };
+  S.Utilities = { formatDate: d => d.toISOString().slice(0, 10) };
+  S.Session = { getScriptTimeZone: () => 'Europe/Warsaw' };
+  // atrapa naprawdę zamienia „=…” w formułę: zapis obok plain_ byłoby widać
+  F.sheets.Klienci.getRange(3, 1).setValue('=1+1');
+  assert.equal(F.formulas().length, 1);
+  F.sheets.Klienci.deleteRow(3);
+
+  S.logSet(KEY, { week: 1, day: 'A', order: 1, set: 1, name: evil, kg: 100, reps: '8', rpe: 8, done: true, note: minus, typ: evil, ocena: 'L', swap: evil, date: evil, video: evil, vbt: plus, vbtPeak: evil, height: evil, path: evil });
+  S.logSet(KEY, { week: 1, day: 'A', order: 1, set: 2, name: 'Przysiad', kg: '-2,5', reps: '6-8', rpe: '', done: true });
+  S.logSet(KEY, { week: 1, day: 'A', order: 1, set: 1, name: evil, kg: 102.5, reps: '8', rpe: 9, done: true, note: minus });          // poprawka tej samej serii = ten sam wiersz
+  S.logNote(KEY, { week: 1, day: 'A', order: 1, note: evil });
+  S.logVideo(KEY, { week: 1, day: evil, order: 2, set: 1, name: plus, date: evil, link: 'https://drive.google.com/file/d/x/view' });
+  S.logSession(KEY, { week: 1, day: 'A', date: evil, knee: evil, shoulder: evil, feel: 4, minutes: 55, note: evil, start: evil, end: evil, pain: evil, painMax: evil, rpeSession: plus });
+  S.replyNote(KEY, { kind: 'L', id: 'anna|1|A|1|1', text: evil });
+  S.replyNote(KEY, { kind: 'S', id: 'anna|1|A', text: minus });
+  S.saveStan(KEY, [{ date: '2026-11-22', place: evil, side: 'L', score: 3, context: 'w ćwiczeniu', exercise: evil, note: plus }]);
+  S.saveDyspozycja(KEY, { date: '2026-11-22', cmj: [evil, 30, 31], cmjAvg: evil, hooper: { sen: evil, stres: 2, zmeczenie: 2, bolesnosc: 2, suma: plus }, vbt: evil, verdict: evil, reasons: [evil, minus], excl: [evil] });
+  S.logError(KEY, { kind: 'js', msg: evil, ver: evil, ua: plus });
+  S.addOwnUnit(KEY, { week: 1, day: 'W1', date: '2026-11-22', title: evil, exercises: [{ name: evil, sets: 3, reps: '=1+1', kg: '=Log!A2' }, { name: 'Face pull', sets: 2, reps: '12', kg: 15 }] });
+  S.editPlan(KEY, { op: 'add', week: 1, day: 'A', name: evil, sets: 2, reps: '+1', kg: '=A1' });
+  S.editPlan(KEY, { op: 'swap', week: 1, day: 'A', order: 1, to: evil, forever: true });
+  assert.deepEqual(F.formulas(), []);
+
+  // tekst wraca do aplikacji dokładnie taki, jak wpisał klient (bez apostrofu), a liczby zostają liczbami
+  const log = S.readRows_('Log', S.LOG_HEADERS, 'anna'), s1 = log.find(r => r.id === 'anna|1|A|1|1'), s2 = log.find(r => r.id === 'anna|1|A|1|2');
+  assert.equal(log.length, 3);
+  assert.equal(s1.cwiczenie, evil); assert.equal(s1.uwagi, evil); assert.equal(s1.odpowiedz_klienta, evil);
+  assert.strictEqual(s1.kg, 102.5); assert.strictEqual(s1.rpe, 9);
+  assert.strictEqual(s2.kg, '-2,5'); assert.strictEqual(s2.powt, '6-8');
+  assert.equal(S.readRows_('Sesje', S.SES_HEADERS, 'anna')[0].uwagi, evil);
+  assert.equal(S.readRows_('Stan', S.STAN_HEADERS, 'anna')[0].notatka, plus);
+  const plan = S.tableOf_('Plan');
+  assert.equal(plan.filter(r => r.zrodlo === 'klient')[0].cwiczenie, evil);
+  assert.equal(plan.filter(r => r.zrodlo === 'dodane')[0].cwiczenie, evil);
+  assert.equal(plan.find(r => r.tydzien === 2 && r.nr === 1).cwiczenie, evil);
+
+  // drugi obieg: dane odczytane z arkusza (już bez apostrofu) i zapisane jeszcze raz też nie tworzą formuł
+  S.writeTable_('Kopia', Array.from(S.LOG_HEADERS), log.map(r => Array.from(S.LOG_HEADERS).map(h => r[h])));
+  const sh = F.sheets.Plan, all = sh.getDataRange().getValues();
+  sh.getRange(1, 1, all.length, all[0].length).setValues(S.plainRows_(all));
+  assert.deepEqual(F.formulas(), []);
+  assert.equal(F.sheets.Kopia.getRange(2, 8).getValue(), evil);
+});
+
+test('diagnose_, formulaCells_: formuła w danych od klientów = błąd, w Planie = uwaga', () => {
+  const base = { today: '2026-11-22', pwaUrl: 'https://example.github.io/trening/', triggers: ['podsumowanie', 'wczytajPlany'], klienci: [], plan: [] };
+  assert.deepEqual(Array.from(C.diagnose_(base)), []);
+  assert.deepEqual(Array.from(C.diagnose_(Object.assign({ formuly: [] }, base))), []);
+  const out = C.diagnose_(Object.assign({ formuly: [{ tab: 'Log', cells: ['P12', 'P13', 'Q2', 'R2', 'S2', 'T2'] }, { tab: 'Plan', cells: ['L7'] }, { tab: 'Sesje', cells: [] }] }, base)).map(r => Array.from(r));
+  assert.equal(out.length, 2);
+  assert.equal(out[0][0], 'błąd'); assert.match(out[0][1], /Formuły w zakładce Log \(6\): P12, P13, Q2, R2, S2…/);
+  assert.equal(out[1][0], 'uwaga'); assert.match(out[1][1], /Formuły w zakładce Plan \(1\): L7\./);
+  assert.deepEqual(Array.from(C.formulaCells_([['', '=1+1'], ['', ''], ['=A1', '']])), ['B2', 'A4']);
+  assert.deepEqual([1, 26, 27, 52, 703].map(n => C.colA1_(n)), ['A', 'Z', 'AA', 'AZ', 'AAA']);
+  assert.ok(Array.from(C.DANE_TABS).indexOf('Log') >= 0 && Array.from(C.DANE_TABS).indexOf('Sesje') >= 0);
+});

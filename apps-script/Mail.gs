@@ -153,7 +153,7 @@ function porannyMail() {
       log[x.c.id] = { at: at, day: today, title: units[0].title };
       sent.push(x.c.name);
     } catch (e) {
-      try { sheet_('Błędy', ERR_HEADERS).appendRow([new Date(), x.c.id, 'mail', ('poranny mail: ' + e).slice(0, 400), '', 'porannyMail']); } catch (e2) { Logger.log('mail: ' + e); }
+      try { sheet_('Błędy', ERR_HEADERS).appendRow(plainRow_([new Date(), x.c.id, 'mail', ('poranny mail: ' + e).slice(0, 400), '', 'porannyMail'])); } catch (e2) { Logger.log('mail: ' + e); }
     }
   });
   props.setProperty('MAIL_LOG', JSON.stringify(log).slice(0, 8000));

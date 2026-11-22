@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-22 · Przegląd v80 i zapis do arkusza jako tekst
+
+- Przegląd całej aplikacji (wygląd, układ, bezpieczeństwo, baza ćwiczeń) dał listę 17 punktów (`docs/stan.md`, „Do zrobienia”). Damian wybrał 22.11 kolejność: punkt 1 od razu, potem nowy układ panelu trenera i trening na żywo z telefonu; baza ćwiczeń może iść równolegle.
+- Punkt 1: skrypt zapisuje do arkusza wyłącznie wartości. Każdy `setValue` / `setValues` / `appendRow` idzie przez `plain_`, które tekstowi zaczynającemu się od = + - @ dokłada apostrof (znak zwykłego tekstu w Arkuszach). Jedna reguła w jednym miejscu zamiast pilnowania każdego pola osobno; test przerywa, gdy pojawi się zapis obok.
+- Zapisów nie odrzucamy: tekst zostaje taki, jak wpisał klient, zmienia się tylko sposób zapisu. Osobna kontrola typów pól (tydzień, seria, kg) odpadła: po tej zmianie żaden tekst nie stanie się formułą, a odrzucanie mogłoby zablokować zapis treningu ze starszej wersji aplikacji albo z kolejki offline.
+- Odrzucone: format tekstowy `@` dla całych zakładek (liczby w Logu stałyby się tekstem i podsumowania przestałyby liczyć); sprawdzanie formuł przy każdym `getData` (drugi odczyt Logu przy każdym otwarciu aplikacji). Formuły w danych pokazuje „Sprawdź arkusz”.
+- Z przeglądu, jako kierunek do dalszych PR-ów: klient nie widzi panelu trenera i nie trzeba tu nic zmieniać (przycisk tylko na urządzeniu trenera, serwer sprawdza konto przy każdym zapytaniu); trening na żywo jako tryb trenera w aplikacji klienta otwierany z panelu, nie drugi ekran treningu w panelu (jedna aplikacja do utrzymania); wyglądu aplikacji klienta nie zmieniamy poza miejscem na ćwiczenie w trakcie treningu (punkt 9); duplikatów w bazie nie scalamy automatycznie po podobieństwie nazw (w bojach kolejność słów zmienia ćwiczenie), tylko pary zatwierdzone przez Damiana.
+
 ## 2026-11-22 · Ekran powitalny dla klienta (v80)
 
 - Przy pierwszym wejściu z linku: powitanie → dodanie do ekranu głównego (iPhone / Android osobno, wykryte z przeglądarki) → jak wygląda trening. Raz na telefon, ponownie z zakładki Trener. Szkic zaakceptowany 22.11.
