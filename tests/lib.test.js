@@ -860,3 +860,12 @@ test('welPlatform / welInApp / keyManifest: ekran powitalny rozpoznaje telefon, 
   assert.equal(m.icons[0].src, 'https://x.github.io/trening/icons/icon-192.png');   // manifest z data: nie ma własnego adresu, więc adresy pełne
   assert.equal(m.name, 'Siła z Ruchu');
 });
+
+test('emomSegs / emomKg: pasek rund EMOM i zakres ciężarów', () => {
+  assert.deepEqual(Array.from(L.emomSegs([{ st: 'ok', rate: 'L' }, { st: 'ok', rpe: 8 }, { st: 'ok', rpe: '' }, { st: 'x' }, { st: 'ok', rate: 'W' }, { st: '' }, { st: '' }])),
+    ['g', 'y', 'd', 'x', 'r', 'now', '']);
+  assert.deepEqual(Array.from(L.emomSegs([])), []);
+  assert.equal(L.emomKg([105, 107.5, 110, '']), '105–110 kg');
+  assert.equal(L.emomKg([105, 105]), '105 kg');
+  assert.equal(L.emomKg(['', 'BW']), '');
+});

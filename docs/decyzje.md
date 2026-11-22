@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-22 · EMOM: rundy = serie robocze, pełny ekran
+
+- Liczba rund EMOM to liczba serii roboczych w tabeli (rozgrzewka i drop sety się nie liczą). Zmienia ją jeden licznik „Ile rund dziś − / +”; nie ma osobnego „+ runda” (Damian: dwa przyciski z „runda” myliły). Zegar kończy się po tylu minutach, ile jest rund.
+- Rundę zapisuje ✓ w tabeli albo ocena na pełnym ekranie; ocena nie kopiuje się z poprzedniej rundy (dawniej wszystkie rundy dostawały ocenę pierwszej).
+- Pełny ekran włącza się sam po „Start minut” (ustalenie 22.11). Jasny motyw zostaje jasny, bo czarne cyfry na jasnym tle czyta się z daleka najlepiej.
+
 ## 2026-11-22 · Nowy układ panelu trenera: menu i ekran „Dziś” (v81)
 
 - Damianowi nie podobał się wygląd i układ panelu. Wybrał (przegląd v80, punkt 2) wykonanie według szkiców, w 3 PR-ach: menu + „Dziś”, potem karta klienta + Plan, potem reszta ekranów.
