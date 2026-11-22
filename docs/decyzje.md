@@ -8,6 +8,11 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Odrzucone na teraz: subskrypcja kalendarza (adres `webcal` z Apps Script), która sama by się aktualizowała po zmianie dnia. Adres musiałby zawierać klucz klienta, a Google odświeża subskrypcje raz na kilka godzin do doby. Do rozważenia, gdy klienci będą prosić o automatyczne przesuwanie.
 - W opisie wydarzenia adres aplikacji bez klucza (wpis w kalendarzu bywa udostępniany innym osobom).
 
+## 2026-11-22 · Przypięta nazwa ćwiczenia bez zmiany wyglądu (v76)
+
+- Zgłoszenie Damiana: na granicy przewijania nazwa przeskakiwała i była inna niż w karcie (mniejsza, w jednej linii, ucięta wielokropkiem), a pod nią zostawała pusta przestrzeń.
+- Ustalenie: przypięty nagłówek ma tę samą czcionkę, łamanie, odstępy i wysokość co w karcie; `.ch.stuck` dokłada tylko kreskę (cień, bez zmiany wysokości). Nie wracaj do skróconej wersji w jednej linii. Koszt: długa nazwa przypięta zajmuje 2–3 linie.
+
 ## 2026-11-22 · Proponowana rozgrzewka przy ćwiczeniu A (v74)
 
 - Punkt 2 z listy usprawnień z 18.11. Szkic zaakceptowany bez zmian 22.11.

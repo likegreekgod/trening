@@ -1081,7 +1081,7 @@ test('Zmiany w jednostce bez sieci: kolejka, po ponownym otwarciu zmiana zostaje
   await ctx.close();
 });
 
-for (const scheme of ['light', 'dark']) test(`Przypięta nazwa ćwiczenia ${scheme}: przy przewijaniu długiej karty nazwa zostaje u góry w jednej linii i znika z końcem karty`, async () => {
+for (const scheme of ['light', 'dark']) test(`Przypięta nazwa ćwiczenia ${scheme}: przy przewijaniu długiej karty nazwa zostaje u góry bez zmiany wyglądu i znika z końcem karty`, async () => {
   const row = (order, name, sets) => ({ week: 1, day: 'T1', title: 'Siła', date: '2026-12-01', order, name, prio: 'A', sets, reps: '3', pct: null, kg: 60, rpe: 8, note: '', extra: null, drop: 0, group: '', swaps: [], infos: [], parts: [] });
   const data = Object.assign({}, PRO, { plan: [row(1, 'Hang power snatch poniżej kolan z pauzą', 12), row(2, 'Przysiad', 12)] });
   const { ctx, p } = await page([], false, { data, scheme });
@@ -1093,11 +1093,20 @@ for (const scheme of ['light', 'dark']) test(`Przypięta nazwa ćwiczenia ${sche
   let s = await st();
   assert.deepEqual(s.map(x => x.stuck), [false, false]);                            // na górze strony nic nie jest przypięte
   assert.ok(s[0].nameH > 40);                                                       // długa nazwa w karcie w dwóch liniach
-  // przewinięcie w dół w środek pierwszej karty: górny pasek schowany, nazwa na samej górze, jedna linia
+  // granica przypięcia (zgłoszenie 22.11): tuż przed i tuż po przypięciu nazwa wygląda tak samo i stoi w tym samym miejscu
+  const shot = async n => { if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `przypieta-${n}-${scheme}.png`) }); } };
+  const name = () => p.evaluate(() => { const n = document.querySelector('.card[data-card="1"] .ch .cn'), r = n.getBoundingClientRect(), cs = getComputedStyle(n);
+    return { y: Math.round(r.top), h: Math.round(r.height), fs: cs.fontSize, ell: n.scrollWidth > n.clientWidth }; });
+  await to(await cardTop(1) - 2); const n0 = await name(); s = await st(); assert.equal(s[0].stuck, false); await shot('przed');
+  await to(await cardTop(1) + 2); const n1 = await name(); s = await st(); assert.equal(s[0].stuck, true); await shot('po');
+  assert.deepEqual([n1.fs, n1.h, n1.ell], [n0.fs, n0.h, false], JSON.stringify([n0, n1]));
+  assert.ok(n1.y <= n0.y && n0.y - n1.y <= 4, JSON.stringify([n0, n1]));          // przesunięcie najwyżej o przewinięte 4 px
+  const firstRow = () => p.evaluate(() => Math.round(document.querySelector('.card[data-card="1"] .rx').getBoundingClientRect().top));
+  await to(await cardTop(1) + 60); const r0 = await firstRow(); await to(await cardTop(1) + 64); assert.equal(await firstRow(), r0 - 4);   // treść pod nazwą jedzie równo
+  // przewinięcie w dół w środek pierwszej karty: górny pasek schowany, nazwa na samej górze, cała (dwie linie, bez wielokropka)
   await to(await cardTop(1) + 400); s = await st();
   assert.deepEqual([s[0].stuck, s[0].top, s[0].head, s[1].stuck], [true, 0, 0, false]);
-  assert.ok(s[0].nameH <= 24 && s[0].h <= 52, JSON.stringify(s[0]));
-  assert.ok(await p.evaluate(() => { const c = document.querySelector('.card[data-card="1"] .ch .cn'); return c.scrollWidth > c.clientWidth; }));   // przycięta wielokropkiem
+  assert.deepEqual([s[0].nameH, (await name()).ell], [n0.h, false], JSON.stringify(s[0]));
   assert.deepEqual(await a11y(p), []);
   if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `przypieta-${scheme}.png`) }); }
   // ikony w przypiętym pasku działają: „⋯” otwiera akcje tego ćwiczenia
