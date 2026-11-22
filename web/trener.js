@@ -377,7 +377,7 @@ function playerBind(v, redraw){
     const mx = (Z.s - 1) * st.clientWidth / 2, my = (Z.s - 1) * st.clientHeight / 2; Z.x = Math.min(mx, Math.max(-mx, Z.x)); Z.y = Math.min(my, Math.max(-my, Z.y));
     vid.style.transform = Z.s === 1 ? '' : 'translate(' + Z.x + 'px,' + Z.y + 'px) scale(' + Z.s + ')';
     zl.hidden = Z.s === 1; zl.textContent = pl(Z.s.toFixed(1)) + '× · dotknij dwa razy, żeby wrócić'; };
-  const tick = () => { const d = vid.duration || 0; $('#pvt').textContent = tFmt(vid.currentTime, true); if (d) { rng.max = d; rng.value = vid.currentTime; rng.style.setProperty('--p', (vid.currentTime / d * 100) + '%'); }
+  const tick = () => { if (!vid.isConnected || !$('#pvt')) return; const d = vid.duration || 0; $('#pvt').textContent = tFmt(vid.currentTime, true); if (d) { rng.max = d; rng.value = vid.currentTime; rng.style.setProperty('--p', (vid.currentTime / d * 100) + '%'); }
     pv.querySelector('[data-pv="play"]').textContent = vid.paused ? '▶' : '❚❚'; pv.querySelector('[data-pv="play"]').setAttribute('aria-label', vid.paused ? 'Odtwarzaj' : 'Pauza');
     const w = $('#kf-ins'); if (w) w.textContent = '⏱ Wstaw chwilę ' + tFmt(vid.currentTime); };
   let raf = 0; const loop = () => { tick(); raf = vid.paused ? 0 : requestAnimationFrame(loop); };
@@ -388,7 +388,7 @@ function playerBind(v, redraw){
     vid.style.width = Math.round(w) + 'px'; vid.style.height = Math.round(h) + 'px'; };
   if (window.ResizeObserver) new ResizeObserver(fit).observe(st);
   vid.addEventListener('resize', fit);
-  vid.addEventListener('loadedmetadata', () => { $('#pvd').textContent = tFmt(vid.duration, true); fit(); marks(); tick(); noPic(); });
+  vid.addEventListener('loadedmetadata', () => { if (!vid.isConnected || !$('#pvd')) return; $('#pvd').textContent = tFmt(vid.duration, true); fit(); marks(); tick(); noPic(); });
   vid.addEventListener('loadeddata', noPic);
   vid.addEventListener('play', () => { if (!raf) raf = requestAnimationFrame(loop); tick(); });
   vid.addEventListener('pause', tick); vid.addEventListener('seeked', tick);

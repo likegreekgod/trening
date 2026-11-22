@@ -105,6 +105,7 @@ Zasady zgodności:
 - Nowe kolumny Log i Sesje dopisuj tylko **na końcu** nagłówków. `sheet_()` sam uzupełnia nagłówek w istniejącym arkuszu.
 - Nie zmieniaj formatu `id`.
 - Stare kolumny (bol_kolano, bol_bark) wypełniaj dalej.
+- Każdy zapis do arkusza (`setValue`, `setValues`, `appendRow`) idzie przez `plain_` / `plainRow_` / `plainRows_` (Code.gs, „zapis do arkusza”): tekst zaczynający się od = + - @ dostaje apostrof i zostaje tekstem, nigdy formułą; „zaczyna się” liczone z zapasem: z przodu pomijane są odstępy, znaki niewidoczne i symbole spoza ASCII, a odmiany znaków (np. „＝” pełnej szerokości) liczą się tak samo; zwykły tekst („6-8”, „a=b”, data, link), liczby wpisane jako tekst („-2,5”) i sam znak („-”) bez zmian; tablica albo obiekt w miejscu wartości zapisuje się jako tekst JSON. Dotyczy też danych przepisywanych z arkusza (podsumowania, import planu, podgląd), bo `getValues()` oddaje tekst już bez apostrofu. Skrypt nie zapisuje formuł: test „zapis do arkusza” przerywa przy zapisie obok tych funkcji (także `setFormula`). „Sprawdź arkusz” pokazuje formuły w zakładkach z danymi (`DANE_TABS`, `formulasIn_`, `formulaCells_`): poza Planem to błąd.
 
 Zmiany w arkuszu z v2 (`docs/ui-v2-spec.md`, „Zmiany w arkuszu”) są już w Code.gs (PR 1 v2); korzysta z nich interfejs w kolejnych PR-ach.
 Arkusz zawsze zapisuje RPE (RIR = 10 − RPE to tylko widok). Ocena podejścia w bojach trafia do `rpe`/`typ`, więc Podsumowanie_OLY liczy się bez zmian.
