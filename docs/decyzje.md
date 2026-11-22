@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-22 · Nowy układ panelu trenera: menu i ekran „Dziś” (v81)
+
+- Damianowi nie podobał się wygląd i układ panelu. Wybrał (przegląd v80, punkt 2) wykonanie według szkiców, w 3 PR-ach: menu + „Dziś”, potem karta klienta + Plan, potem reszta ekranów.
+- Komputer: menu po lewej z listą klientów. Telefon: menu na dole (Dziś, Klienci, Filmy, Więcej) zamiast przewijanego paska zakładek u góry.
+- „Dziś” zamiast pulpitu: najpierw kto dziś trenuje i co wymaga reakcji, wąski pasek liczb zamiast pięciu dużych kafli; obciążenie 12 tygodni zwinięte.
+- „Prowadź” (trening na żywo z telefonu trenera) to osobny punkt 3; w tym PR przycisk w tym miejscu otwiera plan klienta.
+- Odpowiedzi klientów nie są dublowane w „Wymaga uwagi”: mają własną kartę tuż pod spodem.
+
 ## 2026-11-22 · Ekran powitalny dla klienta (v80)
 
 - Przy pierwszym wejściu z linku: powitanie → dodanie do ekranu głównego (iPhone / Android osobno, wykryte z przeglądarki) → jak wygląda trening. Raz na telefon, ponownie z zakładki Trener. Szkic zaakceptowany 22.11.

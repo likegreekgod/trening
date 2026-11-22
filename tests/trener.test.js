@@ -31,6 +31,11 @@ const PULPIT = {
     { id: 'bartek', name: 'Bartek', at: addDays(TODAY, -6), week: 4, day: 'T1', order: 1, ex: 'Rwanie', set: 2, kg: 60, reps: 1, rpe: '', ocena: 'S', typ: '', note: '', file: 'film4', link: 'https://drive.google.com/file/d/film4/view', kom: 'Dobra pozycja startowa', komD: '', komT: 'Dobra pozycja startowa',
       rep: 'Dzięki, w końcu poczułem start z podłogi', repAt: addDays(TODAY, -1) }
   ],
+  dzis: [   // „Dziś trenują” (trDzis_): w trakcie, czeka, zrobione
+    { id: 'celina', name: 'Celina', week: 8, day: 'T2', title: 'Góra', own: false, ex: 4, sets: 12, done: 3, st: 'live', rpe: null, min: null },
+    { id: 'ania', name: 'Ania', week: 12, day: 'T2', title: 'Góra', own: false, ex: 5, sets: 15, done: 0, st: 'wait', rpe: null, min: null },
+    { id: 'bartek', name: 'Bartek', week: 4, day: 'T1', title: 'FBW', own: false, ex: 4, sets: 12, done: 12, st: 'done', rpe: 8, min: 55 }
+  ],
   replies: [   // odpowiedzi klientów na komentarze trenera (trPulpit_), najnowsze pierwsze
     { kind: 'S', id: 'ania', name: 'Ania', at: TODAY, week: 10, day: 'T1', order: '', set: '', title: 'Trening T1', film: false, file: '', kom: 'Bardzo równe serie, tak trzymaj.', text: 'Dzięki! Kolano dziś <b>1/10</b>.' },
     { kind: 'L', id: 'bartek', name: 'Bartek', at: addDays(TODAY, -1), week: 4, day: 'T1', order: 1, set: '2', title: 'Rwanie · seria 2', film: true, file: 'film4', kom: 'Dobra pozycja startowa', text: 'Dzięki, w końcu poczułem start z podłogi' }
@@ -186,7 +191,7 @@ async function page(calls, opt = {}) {
 }
 const shot = async (p, name) => { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, name), fullPage: true }); };
 
-test('panel: logowanie przyciskiem Google → pulpit z klientami, sygnałami i listą do zrobienia', async () => {
+test('panel: logowanie przyciskiem Google → ekran Dziś (liczby, kto dziś trenuje, co wymaga uwagi, klienci)', async () => {
   const calls = [];
   const { ctx, p } = await page(calls);
   await p.goto(base + 'trener.html');
@@ -203,21 +208,33 @@ test('panel: logowanie przyciskiem Google → pulpit z klientami, sygnałami i l
   assert.ok(pul.token && pul.token.split('.').length === 3, 'bilet idzie z każdym zapytaniem');
   assert.equal(pul.key, undefined, 'panel nie używa klucza klienta');
   const txt = await p.textContent('#main');
-  assert.match(txt, /Treningi w tym tyg\.\s*2\/9/);
-  assert.match(txt, /Czerwone sygnały\s*1\s*Ania/);
-  assert.match(txt, /Filmy bez komentarza\s*2/);
-  assert.match(txt, /Ania: ból 5\/10 kolano/);                   // do zrobienia: czerwony sygnał
-  assert.match(txt, /Bartek: koniec bloku B1/);
-  assert.match(txt, /Bartek: plan kończy się za 5 dni/);
+  assert.match(txt, /Dziś/);
+  assert.match(txt, /2\/9\s*treningi w tym tygodniu/);
+  assert.match(txt, /1\s*czerwony sygnał/);
+  assert.match(txt, /2\s*filmy bez komentarza/);
+  // „Dziś trenują”: w trakcie (pasek serii), czeka (przycisk do planu), zrobiony (sesja)
+  assert.deepEqual(await p.$$eval('.dr', a => a.map(x => [x.querySelector('b').textContent, x.querySelector('small').textContent, x.querySelector('.sb').textContent, x.querySelector('.sb').getAttribute('href')])), [
+    ['Celina', 'Góra · w trakcie, 3 z 12 serii', 'Podgląd', '#k/celina'],
+    ['Ania', 'Góra · 5 ćwiczeń · czeka', 'Plan', '#k/ania/plan'],
+    ['Bartek', 'FBW · zrobiony, 55 min, RPE 8', 'Sesja', '#k/bartek/sesje']]);
+  assert.equal(await p.$$eval('.dr .dbar', a => a.length), 1);
+  // „Wymaga uwagi”: czerwony sygnał, filmy, blok, koniec planu (odpowiedzi klientów w osobnej karcie)
+  const todo = await p.$$eval('.todo .it b', a => a.map(x => x.textContent));
+  assert.deepEqual(todo, ['Ania: ból 5/10 kolano', 'Ania: 2 filmy bez komentarza', 'Bartek: blok B1 do zamknięcia', 'Bartek: plan kończy się za 5 dni']);
   assert.equal(await p.textContent('#n-filmy'), '2');
+  assert.equal(await p.getAttribute('#nav a[data-v="dzis"]', 'aria-current'), 'page');
+  assert.deepEqual(await p.$$eval('#rail-kl a', a => a.map(x => x.textContent)), ['Ania', 'Bartek', 'Celina', 'Darek']);   // klienci w menu, alfabetycznie
   assert.equal(await p.$$eval('.heat i', a => a.length), 48);    // 4 klientów × 12 tygodni
-  assert.match(await p.textContent('#at'), /Przeliczone/);
+  assert.match(await p.textContent('#at'), /dane z/);
+  assert.equal(await p.textContent('#av'), 'T');                 // inicjał z biletu (atrapa ma tylko adres)
   await shot(p, 'trener-pulpit-jasny.png');
   // odświeżenie strony: bilet zapamiętany, bez ponownego logowania
   await p.reload(); await p.waitForSelector('tr.row[data-k="ania"]');
   assert.equal(await p.isVisible('#login'), false);
   // przeliczenie
   await p.click('#recalc'); await p.waitForFunction(() => /09:30|10:30/.test(document.querySelector('#at').textContent));
+  // stary adres pulpitu prowadzi do ekranu Dziś
+  await p.goto(base + 'trener.html#pulpit'); await p.waitForSelector('.dr');
   assert.ok(calls.some(c => c.fn === 'trPrzelicz'));
   // wylogowanie
   await p.click('#logout'); await p.waitForSelector('#login:not([hidden])');
@@ -325,16 +342,24 @@ test('panel: zrzuty w ciemnym motywie i na telefonie', async () => {
   }
 });
 
-test('panel na telefonie: pasek u góry nie rozciąga się przy krótkiej stronie, puste filmy bez powtórzonego komunikatu', async () => {
+test('panel na telefonie: pasek u góry i menu na dole, „Więcej” z wylogowaniem, puste filmy bez powtórzonego komunikatu', async () => {
   const { ctx, p } = await page([], { loggedIn: true, vp: { width: 390, height: 844 }, scheme: 'dark' });
   await p.route('**/macros/**', r => r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
     body: JSON.stringify({ ok: true, result: Object.assign({}, PULPIT, { videos: [] }) }) }));
   await p.goto(base + 'trener.html#filmy'); await p.waitForSelector('.vids');
-  const h = await p.$eval('aside', a => a.getBoundingClientRect().height);
-  assert.ok(h < 160, 'pasek ma ' + h + ' px');
-  assert.ok(await p.isVisible('#logout'), 'wylogowanie dostępne na telefonie');
+  assert.equal(await p.isVisible('aside'), false);                // na telefonie bez menu z boku: pasek u góry i menu na dole
+  const h = await p.$eval('.ab', a => a.getBoundingClientRect().height);
+  assert.ok(h < 70, 'pasek ma ' + h + ' px');
+  assert.equal(await p.getAttribute('#bnav a[data-v="filmy"]', 'aria-current'), 'page');
   assert.equal((await p.textContent('#main')).match(/Brak filmów/g).length, 1);
   await shot(p, 'trener-filmy-puste-telefon-ciemny.png');
+  // „Więcej”: bloki, ustawienia, mój trening, przeliczenie, wylogowanie (avatar u góry prowadzi tu samo)
+  await p.click('#bnav a[data-v="wiecej"]'); await p.waitForSelector('#logout-w');
+  assert.equal(await p.getAttribute('#av', 'href'), '#wiecej');
+  assert.match(await p.textContent('#main'), /Bloki do zamknięcia\s*1[\s\S]*Ustawienia[\s\S]*Mój trening[\s\S]*Przelicz dane teraz[\s\S]*Wyloguj/);
+  await p.click('.mo a[href="#bloki"]'); await p.waitForSelector('#main table');
+  assert.equal(await p.getAttribute('#bnav a[data-v="wiecej"]', 'aria-current'), 'page');
+  await p.click('#bnav a[data-v="wiecej"]'); await p.click('#logout-w'); await p.waitForSelector('#login:not([hidden])');
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
