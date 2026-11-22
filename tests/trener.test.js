@@ -28,7 +28,12 @@ const PULPIT = {
     { id: 'ania', name: 'Ania', at: TODAY, week: 12, day: 'T1', order: 1, ex: 'Przysiad tylny', set: 3, kg: 80, reps: 5, rpe: 8.5, ocena: '', typ: '', note: 'Ostatnie powtórzenie wolne', file: 'film1', link: 'https://drive.google.com/file/d/film1/view', kom: '' },
     { id: 'ania', name: 'Ania', at: TODAY, week: 12, day: 'T1', order: 1, ex: 'Przysiad tylny', set: 1, kg: 80, reps: 5, rpe: 7.5, ocena: '', typ: '', note: '', file: 'film2', link: 'https://drive.google.com/file/d/film2/view', kom: '' },
     { id: 'ania', name: 'Ania', at: addDays(TODAY, -5), week: 11, day: 'T2', order: 2, ex: 'Wyciskanie na ławce', set: 2, kg: 45, reps: 6, rpe: 9, ocena: '', typ: 'FAIL', note: '', file: 'film3', link: 'https://drive.google.com/file/d/film3/view', kom: '0:04 łokcie za szeroko', komD: '0:04 łokcie za szeroko', komT: '' },
-    { id: 'bartek', name: 'Bartek', at: addDays(TODAY, -6), week: 4, day: 'T1', order: 1, ex: 'Rwanie', set: 2, kg: 60, reps: 1, rpe: '', ocena: 'S', typ: '', note: '', file: 'film4', link: 'https://drive.google.com/file/d/film4/view', kom: 'Dobra pozycja startowa', komD: '', komT: 'Dobra pozycja startowa' }
+    { id: 'bartek', name: 'Bartek', at: addDays(TODAY, -6), week: 4, day: 'T1', order: 1, ex: 'Rwanie', set: 2, kg: 60, reps: 1, rpe: '', ocena: 'S', typ: '', note: '', file: 'film4', link: 'https://drive.google.com/file/d/film4/view', kom: 'Dobra pozycja startowa', komD: '', komT: 'Dobra pozycja startowa',
+      rep: 'Dzięki, w końcu poczułem start z podłogi', repAt: addDays(TODAY, -1) }
+  ],
+  replies: [   // odpowiedzi klientów na komentarze trenera (trPulpit_), najnowsze pierwsze
+    { kind: 'S', id: 'ania', name: 'Ania', at: TODAY, week: 10, day: 'T1', order: '', set: '', title: 'Trening T1', film: false, file: '', kom: 'Bardzo równe serie, tak trzymaj.', text: 'Dzięki! Kolano dziś <b>1/10</b>.' },
+    { kind: 'L', id: 'bartek', name: 'Bartek', at: addDays(TODAY, -1), week: 4, day: 'T1', order: 1, set: '2', title: 'Rwanie · seria 2', film: true, file: 'film4', kom: 'Dobra pozycja startowa', text: 'Dzięki, w końcu poczułem start z podłogi' }
   ]
 };
 const SZKIC = 'Przysiad 84 kg na 3×5 to Twój najlepszy wynik w tym bloku, a ostatnia seria była ciężka, ale czysta. W czwartek zostajemy przy tym ciężarze.\n\nKolano 5/10 traktuję poważnie: dłuższa rozgrzewka, a jeśli ból wróci powyżej 3/10, zejdź o 10% i napisz mi.';
@@ -43,7 +48,8 @@ function klient() {
       if (date > TODAY || (date === TODAY && day !== 'T1')) return;
       if (wk === 5 && day === 'T2') return;                    // jedna opuszczona jednostka
       ex.forEach(([name, , kg], k) => { for (let s = 1; s <= 3; s++) logs.push({ id: ['ania', wk, day, k + 1, s].join('|'), zapisano: date + 'T17:00:00.000Z', tydzien: wk, jednostka: day, data: date, nr_cw: k + 1, cwiczenie: name, seria: s, kg: kg || 'BW', powt: 5, rpe: 7 + s * 0.5, wykonane: 'TAK', typ: wk === 11 && k === 0 && s === 3 ? 'FAIL' : '', film_link: date === TODAY && k === 0 && s !== 2 ? 'https://drive.google.com/file/d/x/view' : '', uwagi: date === TODAY && k === 0 ? 'Ostatnie powtórzenie wolne' : '' }); });
-      sessions.push({ id: 'ania|' + wk + '|' + day, tydzien: wk, jednostka: day, data: date, start: date + 'T16:00:00.000Z', czas_min: 55 + (wk % 3) * 5, samopoczucie: 4, rpe_sesji: date === TODAY ? 8 : 7, bol: date === TODAY ? 'kolano:5' : '', bol_max: date === TODAY ? 5 : 0, uwagi: date === TODAY ? 'Kolano po przysiadach trochę ćmi' : '', komentarz_trenera: wk === 10 && day === 'T1' ? 'Bardzo równe serie, tak trzymaj.' : '' });
+      sessions.push({ id: 'ania|' + wk + '|' + day, tydzien: wk, jednostka: day, data: date, start: date + 'T16:00:00.000Z', czas_min: 55 + (wk % 3) * 5, samopoczucie: 4, rpe_sesji: date === TODAY ? 8 : 7, bol: date === TODAY ? 'kolano:5' : '', bol_max: date === TODAY ? 5 : 0, uwagi: date === TODAY ? 'Kolano po przysiadach trochę ćmi' : '', komentarz_trenera: wk === 10 && day === 'T1' ? 'Bardzo równe serie, tak trzymaj.' : '',
+        odpowiedz_klienta: wk === 10 && day === 'T1' ? 'Dzięki! Kolano dziś <b>1/10</b>.' : '', odpowiedz_at: wk === 10 && day === 'T1' ? TODAY + 'T07:30:00.000Z' : '' });
     });
     summary.push({ week: mon, srpe: 700 + i * 40, acwr: 1 + i * 0.03, ton: 5000 + i * 200, done: 100, hard: 6, status: i === 11 ? '🔴 za dużo' : '🟢 OK', why: '' });
     readiness.push({ data: addDays(mon, 1), werdykt: i === 11 ? 'Uwaga' : 'OK', cmj_sr: 31 + (i % 4) * 0.5, hooper_suma: 12 + (i % 3), vbt_test: 0.92, powody: i === 11 ? 'CMJ −6%' : '' });
@@ -661,6 +667,30 @@ test('panel: Klienci (lista, kopiowanie linku, ustawienia klienta, nowy link, no
     assert.deepEqual(s2.p.errors, []);
     await s2.ctx.close();
   }
+});
+
+test('panel: odpowiedzi klientów na komentarze (pulpit, sesja, film)', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, { loggedIn: true });
+  await p.goto(base + 'trener.html'); await p.waitForSelector('.reps .it');
+  // karta na pulpicie: kto, czego dotyczy, Twój komentarz, odpowiedź (tekst, nie HTML) i przejście
+  assert.deepEqual(await p.$$eval('.reps .it', a => a.map(x => [x.querySelector('.h b').textContent, x.querySelector('.q').textContent, x.querySelector('.a').textContent, x.querySelector('.sb').textContent])),
+    [['Ania', 'Bardzo równe serie, tak trzymaj.', 'Dzięki! Kolano dziś <b>1/10</b>.', 'Sesja ›'], ['Bartek', 'Dobra pozycja startowa', 'Dzięki, w końcu poczułem start z podłogi', 'Film ›']]);
+  assert.equal(await p.getAttribute('.reps .it:nth-of-type(1) .sb', 'href'), '#k/ania/sesje');
+  await shot(p, 'trener-odpowiedzi-pulpit.png');
+  // „Film ›”: skomentowany film, więc lista „Wszystkie” i od razu ten film z odpowiedzią pod komentarzem
+  await p.click('.reps .it:nth-of-type(2) .sb');
+  await p.waitForSelector('.pv[data-file="film4"]');
+  assert.equal(await p.getAttribute('[data-vall="1"]', 'aria-pressed'), 'true');
+  assert.match(await p.textContent('#kfw .rep'), /Bartek odpowiada · pn 16\.11\s*Dzięki, w końcu poczułem start z podłogi/);
+  // sesja: odpowiedź pod komentarzem trenera i znak w nagłówku sesji
+  await p.goto(base + 'trener.html#k/ania/sesje'); await p.waitForSelector('details.ses');
+  const box = 'details.ses:has-text("tydz. 10 · T1")';
+  assert.match(await p.textContent(box + ' summary'), /↩ odpowiedź klienta/);
+  assert.match(await p.textContent(box + ' .kedit .rep'), /Ania odpowiada · wt 17\.11\s*Dzięki! Kolano dziś <b>1\/10<\/b>\./);
+  assert.equal(await p.$(box + ' .rep b'), null);                                     // tekst klienta nie jest HTML-em
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
 });
 
 test('panel: blokada obcych skryptów (CSP) zatrzymuje wstrzyknięty kod', async () => {

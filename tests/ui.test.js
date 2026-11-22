@@ -1420,6 +1420,57 @@ test('Komentarze trenera: karta z nowymi, „Przeczytane”, zakładka Trener z 
   await t2.ctx.close();
 });
 
+test('Odpowiedź na komentarz trenera: pisanie, wysyłka (replyNote), zmiana, usunięcie, bez sieci przez kolejkę', async () => {
+  const data = Object.assign({}, PROG, { logs: PROG.logs.map((l, i) => i === 0 ? Object.assign({}, l, { komentarz_trenera: '0:15 Łokcie wyżej' }) : l),
+    sessions: PROG.sessions.map((s, i) => i === 0 ? Object.assign({}, s, { komentarz_trenera: 'Dobry trening', odpowiedz_klienta: 'Dzięki <b>!</b>', odpowiedz_at: '2026-10-01T10:00:00.000Z' }) : s) });
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.cnote');
+  await p.click('#nav [data-tab="trener"]'); await p.waitForSelector('#trener .cn-rep');
+  const sesId = data.sessions[0].id, logId = data.logs[0].id;
+  const rep = id => '#trener .cn-rep[data-rk="' + id + '"]';
+  // wcześniejsza odpowiedź jako tekst (nie HTML), z „Zmień”; komentarz bez odpowiedzi ma „↩ Odpowiedz”
+  assert.match(await p.textContent(rep('S|' + sesId)), /Twoja odpowiedź · 01\.10\s*Dzięki <b>!<\/b>\s*Zmień/);
+  assert.equal(await p.textContent(rep('L|' + logId) + ' button'), '↩ Odpowiedz');
+  await p.click(rep('L|' + logId) + ' [data-rep-ed]');
+  assert.ok(await p.$eval(rep('L|' + logId) + ' textarea', t => t === document.activeElement));   // pole od razu gotowe do pisania
+  await p.keyboard.type('Spróbuję z pauzą');
+  assert.equal(await p.textContent(rep('L|' + logId) + ' .cnt'), '16/600');
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'odpowiedz-pisanie.png') }); }
+  await p.click(rep('L|' + logId) + ' [data-rep-go]');
+  await p.waitForFunction(() => document.querySelector('#toast').textContent === 'Wysłano trenerowi.');
+  assert.deepEqual(calls.filter(c => c.fn === 'replyNote').map(c => c.args[0]), [{ kind: 'L', id: logId, text: 'Spróbuję z pauzą' }]);
+  assert.match(await p.textContent(rep('L|' + logId)), /Twoja odpowiedź · \d\d\.\d\d\s*Spróbuję z pauzą/);
+  // zmiana: pole z dotychczasowym tekstem, „Anuluj” nic nie wysyła, „Usuń” czyści odpowiedź
+  await p.click(rep('S|' + sesId) + ' [data-rep-ed]');
+  assert.equal(await p.inputValue(rep('S|' + sesId) + ' textarea'), 'Dzięki <b>!</b>');
+  await p.click(rep('S|' + sesId) + ' [data-rep-x]');
+  assert.equal(calls.filter(c => c.fn === 'replyNote').length, 1);
+  await p.click(rep('S|' + sesId) + ' [data-rep-ed]'); await p.click(rep('S|' + sesId) + ' [data-rep-del]');
+  assert.deepEqual(calls.filter(c => c.fn === 'replyNote').pop().args[0], { kind: 'S', id: sesId, text: '' });
+  assert.equal(await p.textContent(rep('S|' + sesId) + ' button'), '↩ Odpowiedz');
+  // pusta odpowiedź nic nie wysyła
+  await p.click(rep('S|' + sesId) + ' [data-rep-ed]'); await p.click(rep('S|' + sesId) + ' [data-rep-go]');
+  assert.equal(calls.filter(c => c.fn === 'replyNote').length, 2);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+  // bez sieci: odpowiedź czeka w kolejce i jest widoczna po ponownym otwarciu (dane z pamięci telefonu bez odpowiedzi)
+  const t2 = await page([], false, { data });
+  await t2.p.goto(base + '?k=kabc'); await t2.p.waitForSelector('.cnote');
+  await t2.ctx.unroute('**/macros/**'); await t2.ctx.route('**/macros/**', r => r.abort());
+  await t2.p.click('.cnote .cn-rep[data-rk="L|' + logId + '"] [data-rep-ed]');
+  await t2.p.keyboard.type('Bez sieci');
+  await t2.p.click('.cnote .cn-rep[data-rk="L|' + logId + '"] [data-rep-go]');
+  await t2.p.waitForFunction(() => /Brak sieci/.test(document.querySelector('#toast').textContent));
+  await t2.p.evaluate(k => { const d = JSON.parse(localStorage.getItem(k)); d.logs[0].odpowiedz_klienta = ''; localStorage.setItem(k, JSON.stringify(d)); }, 'd_kabc');
+  await t2.p.reload(); await t2.p.waitForSelector('.cnote');
+  assert.match(await t2.p.textContent('.cnote .cn-rep[data-rk="L|' + logId + '"]'), /Bez sieci/);
+  assert.equal(await t2.p.evaluate(() => JSON.parse(localStorage.getItem('q_kabc')).filter(q => q.fn === 'replyNote').length), 1);
+  assert.deepEqual(t2.p.errors, []);
+  await t2.ctx.close();
+});
+
 // --- kolejka filmów: wysyłka kawałkami prosto do Google, przerwana i wznowiona po ponownym otwarciu ---
 test('Film w kolejce: kawałki po 8 MB, przerwa w połowie, wznowienie po ponownym otwarciu od miejsca przerwania', async () => {
   const calls = [], UP = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,webViewLink&upload_id=ABC-123';

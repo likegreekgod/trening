@@ -126,6 +126,16 @@ function todoItems(){
   PUL.clients.forEach(c => { if (c.planLeft !== null && c.planLeft >= 0 && c.planLeft <= 7) out.push([3, c.name + ': plan kończy się za ' + c.planLeft + ' dni', 'czas na kolejny blok', '#k/' + encodeURIComponent(c.id), 'Otwórz']); });
   return out.sort((a, b) => a[0] - b[0]);
 }
+/** odpowiedź klienta na komentarz trenera (Log / Sesje odpowiedz_klienta), pokazywana pod komentarzem */
+const repBox = (text, at, name) => text ? '<div class="rep"><div class="eb">↩ ' + esc(name || 'Klient') + ' odpowiada' + (at ? ' · ' + esc(dowDm(String(at).slice(0, 10))) : '') + '</div><p>' + esc(text) + '</p></div>' : '';
+function repliesCard(){
+  const rs = PUL.replies || [];
+  const go = r => r.film ? '#filmy/' + encodeURIComponent(r.id) : '#k/' + encodeURIComponent(r.id) + '/sesje';
+  return '<div class="card reps"><h2>Odpowiedzi klientów · 14 dni</h2>' + (rs.length ? rs.map(r => '<div class="it"><div class="h"><b>' + esc(r.name) + '</b> <span class="muted">· ' + esc(dowDm(r.at)) + ' · tydz. ' + esc(r.week) + ' · ' + esc(r.title) + '</span></div>' +
+    (r.kom ? '<p class="q">' + esc(r.kom.length > 140 ? r.kom.slice(0, 140) + '…' : r.kom) + '</p>' : '') + '<p class="a">' + esc(r.text) + '</p>' +
+    '<a class="sb" href="' + go(r) + '"' + (r.film ? ' data-rvk="' + esc(r.file + '|' + r.set) + '"' : '') + ' style="display:inline-flex;align-items:center;text-decoration:none">' + (r.film ? 'Film ›' : 'Sesja ›') + '</a></div>').join('')
+    : '<p class="muted">Klienci nie odpowiadali na komentarze w ostatnich 14 dniach.</p>') + '</div>';
+}
 function renderPulpit(){
   const cl = PUL.clients, wk = cl.reduce((a, c) => { const f = frac(c.week); return [a[0] + f[0], a[1] + f[1]]; }, [0, 0]);
   const red = cl.reduce((a, c) => a + c.red, 0), nov = PUL.videos.filter(v => !v.kom).length, idle = cl.filter(c => c.ago !== null && c.ago >= 7).length;
@@ -157,7 +167,8 @@ function renderPulpit(){
   }).join('') + '</div><div class="legend">sRPE tygodnia względem najcięższego tygodnia tej osoby; puste = brak danych. Od ' + esc(dm(PUL.weeks[0])) + ' do ' + esc(dm(PUL.weeks[11])) + '.</div></div>';
   const td = todoItems(), todo = '<div class="card todo"><h2>Do zrobienia</h2>' + (td.length ? td.map(t => '<div class="it"><div>' + esc(t[1]) + '</div><a class="sb" href="' + t[3] + '" style="display:inline-flex;align-items:center;text-decoration:none">' + t[4] + '</a><div class="d">' + esc(t[2]) + '</div></div>').join('') : '<p class="muted">Nic pilnego.</p>') + '</div>';
   $('#main').innerHTML = head(dowDm(PUL.today) + ' · tydzień ' + dm(PUL.weeks[11]) + '–' + dm(TL.addDays(PUL.weeks[11], 6)), 'Pulpit') +
-    '<div class="pg">' + kpis + '<div class="cols"><div class="stack">' + table + heat + '</div><div class="stack">' + todo + '</div></div></div>';
+    '<div class="pg">' + kpis + '<div class="cols"><div class="stack">' + table + heat + '</div><div class="stack">' + todo + repliesCard() + '</div></div></div>';
+  document.querySelectorAll('[data-rvk]').forEach(a => a.onclick = () => { VALL = true; VSEL = a.dataset.rvk; });   // skomentowany film: lista „Wszystkie”, od razu ten film
 }
 
 /* ---------- filmy ---------- */
@@ -396,7 +407,7 @@ function komFilmDraw(v, who){
   w.innerHTML = '<div class="eb" style="margin:14px 0 6px">Twój komentarz</div><textarea id="kf-txt" aria-label="Twój komentarz do filmu" placeholder="Np. 0:03 Łokcie wyżej przy wejściu pod sztangę."' + dis + '>' + esc(text) + '</textarea>' +
     '<div class="row2"><button class="b" type="button" id="kf-ins"' + (FB[v.file] && FB[v.file].st === 'ok' ? '' : ' disabled') + '>⏱ Wstaw chwilę 0:00</button><span class="sp"></span>' +
     (st.ok ? '<span class="saved">✓ Zapisano</span>' : '') + '<button class="b p" type="button" id="kf-save"' + dis + '>' + (st.busy ? 'Zapisuję…' : 'Zapisz') + '</button></div>' +
-    (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') +
+    (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') + repBox(v.rep, v.repAt, v.name) +
     '<p class="hint" style="margin-top:8px">Klient zobaczy komentarz przy tej serii w zakładce Trener. Linia zaczynająca się od „0:03” to chwila filmu: w panelu pokazuje się jako kreska na pasku, którą możesz kliknąć.</p>';
   const ta = $('#kf-txt');
   ta.oninput = () => { (KF[k] = KF[k] || {}).text = ta.value; KF[k].ok = false; marks(); };
@@ -679,7 +690,7 @@ function sesList(d, dates){
   return '<div class="card"><h2>Sesje (' + ss.length + ')</h2>' + ss.map((x, i) => {
     const p = painOf(x.s), ex = setsOf(d, x.u);
     return '<details class="ses"' + (i === 0 ? ' open' : '') + '><summary><b>' + esc(dowDm(x.day)) + ' · tydz. ' + esc(x.s.tydzien) + ' · ' + esc(x.s.jednostka) + (x.title ? ' · ' + esc(x.title) : '') + '</b>' +
-      '<span class="muted">' + [x.s.czas_min ? x.s.czas_min + ' min' : '', nf(x.s.rpe_sesji) >= 0 ? 'RPE ' + pl(x.s.rpe_sesji) : '', nf(x.s.samopoczucie) > 0 ? 'samopoczucie ' + x.s.samopoczucie + '/5' : '', isFinite(p[1]) && p[1] > 0 ? 'ból ' + pl(p[1]) + (p[0] ? ' ' + p[0] : '') : ''].filter(Boolean).map(esc).join(' · ') + '</span></summary>' +
+      '<span class="muted">' + [x.s.czas_min ? x.s.czas_min + ' min' : '', nf(x.s.rpe_sesji) >= 0 ? 'RPE ' + pl(x.s.rpe_sesji) : '', nf(x.s.samopoczucie) > 0 ? 'samopoczucie ' + x.s.samopoczucie + '/5' : '', isFinite(p[1]) && p[1] > 0 ? 'ból ' + pl(p[1]) + (p[0] ? ' ' + p[0] : '') : '', sv(x.s.odpowiedz_klienta) ? '↩ odpowiedź klienta' : ''].filter(Boolean).map(esc).join(' · ') + '</span></summary>' +
       '<div class="tw"><table><tbody>' + ex.map(e => '<tr><td><b>' + esc(e.name) + '</b> <span class="muted">' + esc(e.prio) + '</span></td><td class="sets">' + e.sets.map(setTxt).join(', ') + '</td><td>' + esc(e.note) + '</td></tr>').join('') + '</tbody></table></div>' + ndNote(ex) +
       (x.s.uwagi ? '<p class="note"><span class="eb">Uwagi klienta</span><br>' + esc(x.s.uwagi) + '</p>' : '') +
       komBox(x.s, ex.length) + '</details>';
@@ -693,14 +704,15 @@ function komBox(s, nSets){
   if (nSets === undefined) nSets = setsOf(CUR, uKey(s.tydzien, s.jednostka)).length;
   const u = s.tydzien + '|' + s.jednostka, st = KD[kdKey(s)] || {}, saved = String(s.komentarz_trenera || '');
   const box = inner => '<div class="kedit" data-u="' + esc(u) + '"><div class="eb" style="margin-bottom:6px">Twój komentarz do sesji</div>' + inner + (st.err ? '<p class="err" role="alert">' + esc(st.err) + (/Ustawienia/.test(st.err) ? ' <a href="#ustawienia">Otwórz Ustawienia</a>' : '') + '</p>' : '') + '</div>';
-  if (saved && !st.edit) return box('<p class="kom" style="margin:0">' + esc(saved) + '</p><div class="row">' +
+  const nm = (PUL && (PUL.clients.find(c => c.id === CID) || {}).name) || (CUR && CUR.cfg && CUR.cfg.name) || '', rp = repBox(s.odpowiedz_klienta, s.odpowiedz_at, nm);
+  if (saved && !st.edit) return box('<p class="kom" style="margin:0">' + esc(saved) + '</p>' + rp + '<div class="row">' +
     (st.ok ? '<span class="saved">✓ Zapisano · klient zobaczy komentarz w aplikacji, w zakładce Trener</span>' : '') + '<span class="sp"></span><button class="b" type="button" data-k="edit">Edytuj</button></div>');
   const text = st.text !== undefined ? st.text : saved, dis = st.busy ? ' disabled' : '';
   const flag = st.ai ? '<div class="aiflag">' + SPARK + '<div><b>Szkic AI. Przeczytaj i popraw przed zapisem.</b>Klient nie zobaczy niczego, dopóki nie klikniesz „Zapisz”.</div></div>' : '';
   const chips = st.ai ? '<div class="row"><span class="hint">Popraw szkic:</span><div class="chips">' +
     [['krocej', 'Krócej'], ['cieplej', 'Cieplej'], ['technicznie', 'Bardziej technicznie'], ['inny', 'Inny szkic']].map(c => '<button class="chip" type="button" data-k="ai" data-t="' + c[0] + '"' + dis + '>' + c[1] + '</button>').join('') + '</div></div>' : '';
   const hint = st.busy ? 'AI pisze szkic, to trwa kilka–kilkanaście sekund…' : st.ai && st.cost !== undefined ? 'koszt szkicu ' + pl(st.cost.toFixed(3)) + ' $ · dziś ' + st.n + ' z ' + st.limit : !nSets ? 'Brak zapisanych serii, więc bez szkicu AI. Klient zobaczy komentarz w zakładce Trener.' : 'Klient zobaczy komentarz w aplikacji, w zakładce Trener.';
-  return box(flag + '<textarea aria-label="Komentarz do sesji ' + esc(u.replace('|', ' ')) + '" placeholder="Napisz klientowi, jak poszło…" data-k="txt"' + dis + '>' + esc(text) + '</textarea>' + chips +
+  return box(rp + flag + '<textarea aria-label="Komentarz do sesji ' + esc(u.replace('|', ' ')) + '" placeholder="Napisz klientowi, jak poszło…" data-k="txt"' + dis + '>' + esc(text) + '</textarea>' + chips +
     '<div class="row">' + (st.ai || !nSets ? '' : '<button class="b ai" type="button" data-k="ai"' + dis + '>' + SPARK + (st.busy ? 'Piszę szkic…' : 'Szkic AI') + '</button>') +
     '<span class="hint">' + hint + '</span><span class="sp"></span>' + (saved ? '<button class="b" type="button" data-k="cancel"' + dis + '>Anuluj</button>' : '') +
     '<button class="b p" type="button" data-k="save"' + dis + '>Zapisz</button></div>' +
