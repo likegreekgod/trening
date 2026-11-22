@@ -3,6 +3,12 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-22: „Dodaj do kalendarza” (v75)
+
+- Tylko w telefonie, bez Apps Script: plik .ics (lib `icsFile`) albo link Kalendarza Google (lib `gcalUrl`). Czas lokalny bez strefy; UID `trening-<tydzień>-<jednostka>@<host>`, żeby ponowne dodanie z pliku podmieniało wpis.
+- Odrzucone na teraz: subskrypcja kalendarza (adres `webcal` z Apps Script), która sama by się aktualizowała po zmianie dnia. Adres musiałby zawierać klucz klienta, a Google odświeża subskrypcje raz na kilka godzin do doby. Do rozważenia, gdy klienci będą prosić o automatyczne przesuwanie.
+- W opisie wydarzenia adres aplikacji bez klucza (wpis w kalendarzu bywa udostępniany innym osobom).
+
 ## 2026-11-22 · Proponowana rozgrzewka przy ćwiczeniu A (v74)
 
 - Punkt 2 z listy usprawnień z 18.11. Szkic zaakceptowany bez zmian 22.11.
