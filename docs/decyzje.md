@@ -2,6 +2,13 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-22 · Szybka zmiana planu w panelu (v78)
+
+- Punkt 6 z listy usprawnień z 18.11. Karta klienta → nowa zakładka Plan: niezrobione jednostki trenera (najbliższe 2 tygodnie, reszta pod „Pokaż dalsze”), „Edytuj” w miejscu: serie, powt., kg, %, RPE max, uwagi do ćwiczenia, notatka do jednostki (`uwagi_jedn`). Zapis `trPlan` od razu do zakładki Plan.
+- Zablokowane: jednostka zrobiona albo zaczęta (wpis w Sesjach albo seria w Logu, ta sama reguła co import), własne treningi klienta, ćwiczenia usunięte przez klienta. Zaległe starsze niż 14 dni nie są pokazywane.
+- „Także kolejne tygodnie tej jednostki” (ten sam blok, niezrobione, ćwiczenie po nazwie): kg i % o tę samą różnicę (progresja zostaje), serie, powt., RPE i uwagi tak samo; notatka do jednostki tylko w tym tygodniu.
+- Bez historii zmian i bez zmiany ćwiczenia, kolejności czy daty (data: przesuwa klient; ćwiczenie: plik planu). Ponowny import pliku z tym samym blokiem nadpisuje zmiany z panelu w niezrobionych jednostkach (jak każdy import).
+
 ## 2026-11-22 · Poranny mail do klienta (v77)
 
 - Punkt 7 z listy usprawnień z 18.11. Szkic zaakceptowany 22.11 („Ok”).
