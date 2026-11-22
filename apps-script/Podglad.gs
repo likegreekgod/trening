@@ -188,7 +188,7 @@ function odswiezPodglad() {
     const sh = ss.getSheetByName(name) || ss.insertSheet(name);
     sh.clear();
     const all = [headers].concat(data);
-    sh.getRange(1, 1, all.length, headers.length).setNumberFormat('@').setValues(all);
+    sh.getRange(1, 1, all.length, headers.length).setNumberFormat('@').setValues(plainRows_(all));
     sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');
     sh.setFrozenRows(1);
   };
