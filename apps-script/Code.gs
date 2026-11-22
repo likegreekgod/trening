@@ -502,15 +502,33 @@ function mustClient_(key) {
  * Arkusze traktują wpis zaczynający się od „=” jak formułę (przy wpisie ręcznym także od „+” i „-”). Skrypt nigdy
  * nie zapisuje formuł, więc KAŻDY zapis (setValue, setValues, appendRow) idzie przez plain_ / plainRow_ / plainRows_:
  * tekst zaczynający się od = + - @ dostaje z przodu apostrof, którym Arkusze oznaczają zwykły tekst (w komórce
- * i w getValues() apostrofu nie ma). Dotyczy też przepisywania danych odczytanych z arkusza (podsumowania, import
- * planu, podgląd), bo getValues() oddaje tekst już bez apostrofu. Liczby zapisane jako tekst („-2,5”, „+10”)
- * i sam znak („-”) zostają bez zmian. Test „zapis do arkusza” pilnuje, że w apps-script/ nie ma zapisu obok tych funkcji.
+ * i w getValues() apostrofu nie ma). „Zaczyna się” liczymy z zapasem: z przodu pomijamy odstępy i wszystko, co nie
+ * jest widocznym znakiem ASCII ani literą (znaki niewidoczne, sterujące, symbole spoza ASCII), bo nie wiemy, co
+ * Arkusze same pomijają; odmiany znaków (pełna szerokość „＝”, małe, indeksy, minus typograficzny) liczą się tak samo.
+ * Zwykły tekst („6-8”, „a=b”, data, link), liczby zapisane jako tekst („-2,5”, „+10”) i sam znak („-”) zostają bez
+ * zmian. Tablica albo obiekt w miejscu wartości (aplikacja ich nie wysyła) zapisuje się jako tekst JSON.
+ * Dotyczy też przepisywania danych odczytanych z arkusza (podsumowania, import planu, podgląd), bo getValues()
+ * oddaje tekst już bez apostrofu. Test „zapis do arkusza” pilnuje, że w apps-script/ nie ma zapisu obok tych funkcji.
  */
+const PLAIN_SIGN = /[=+\-@\u2212\u207a-\u207c\u208a-\u208c\u2a75\u2a76\ufb29\ufe62\ufe63\ufe66\ufe6b\uff0b\uff0d\uff1d\uff20]/;
 function plain_(v) {
-  if (typeof v !== 'string') return v;
-  const s = v.replace(/^[\s\u0000-\u001f\u200b]+/, ''), c = s.charAt(0);
-  if (c !== '=' && c !== '+' && c !== '-' && c !== '@') return v;
-  if ((c === '+' || c === '-') && /^[+-]\s*(?:(?:\d+(?:[.,]\d*)?|[.,]\d+)\s*%?)?\s*$/.test(s)) return v;   // liczba albo sam znak
+  if (v === null || v === undefined) return v;
+  const t = typeof v;
+  if (t === 'number' || t === 'boolean') return v;
+  if (t !== 'string') {
+    if (Object.prototype.toString.call(v) === '[object Date]') return v;
+    try { v = JSON.stringify(v); } catch (e) { v = ''; }
+    if (typeof v !== 'string') v = '';
+  }
+  let i = 0, c = '';
+  for (; i < v.length; i++) {                                                      // pierwszy znak, którego arkusz na pewno nie pominie
+    const k = v.charCodeAt(i);
+    c = v.charAt(i);
+    if (k > 32 && k < 127) break;                                                  // widoczny znak ASCII
+    if (k > 127 && (c.toLowerCase() !== c.toUpperCase() || PLAIN_SIGN.test(c))) break;   // litera albo odmiana znaku = + - @
+  }
+  if (i >= v.length || !PLAIN_SIGN.test(c)) return v;
+  if (/^\s*[+-]\s*(?:(?:\d+(?:[.,]\d*)?|[.,]\d+)\s*%?)?\s*$/.test(v)) return v;   // liczba albo sam znak
   return "'" + v;
 }
 function plainRow_(row) { return row.map(plain_); }

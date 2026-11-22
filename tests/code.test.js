@@ -1274,9 +1274,28 @@ test('trPlanEdit_, trPlanVal_: szybka zmiana planu z panelu (tylko niezrobione, 
 test('plain_: tekst zaczynający się jak formuła dostaje apostrof, liczby i zwykły tekst zostają bez zmian', () => {
   for (const v of ['=1+1', '=IMPORTRANGE("x";"Klienci!A:C")', ' =A1', '\t=A1', '\n=A1', '+SUM(A1)', '-A1', '- bolało kolano', '+48 600 100 200', '@x', '--', '-%'])
     assert.equal(C.plain_(v), "'" + v, JSON.stringify(v));
-  for (const v of ['', 'Przysiad', '6-8', '8/str', '1+1', '30 s', 'BW', 'guma', '-', '+', '-5', '+10', '-2,5', '- 5', '-.5', '-5%', "'=1+1", 'a=b', '2026-11-22', 'https://drive.google.com/file/d/x/view'])
+  for (const v of ['', 'Przysiad', '6-8', '8/str', '1+1', '30 s', 'BW', 'guma', '-', '+', '-5', '+10', '-2,5', '- 5', '-.5', '-5%', ' -5', '\t+10 ', "'=1+1", 'a=b', '2026-11-22', 'https://drive.google.com/file/d/x/view',
+    'https://youtu.be/abc-def?v=1', 'jan@example.com', 'x =A1', '(8-10)', '(=A1', '"=A1"', ':-)', '[[-0.3,1.2],[0,0]]', '{"a":"=1"}', 'RPE 8 - lekko', 'żółw - wolno', 'Łydki + brzuch', 'привет - мир', '🟢 Lekko', '(lewa strona)', "'tekst", '— brak', '→ 100 kg'])
     assert.equal(C.plain_(v), v, JSON.stringify(v));
   for (const v of [0, 7.5, -3, true, false, null, undefined, new Date(0)]) assert.strictEqual(C.plain_(v), v);
+  // przed znakiem = + - @ stoi coś, co arkusz mógłby pominąć (odstęp, znak niewidoczny albo sterujący, symbol spoza ASCII): też apostrof
+  for (const v of ['\u200b=A1', '\u200d=A1', '\u2060=A1', '\ufeff=A1', '\u00a0=A1', '\u00ad=A1', '\u202e=A1', '\u0600=A1', '\ue000=A1', '\ufe0f=A1', '\u0301=A1', '\u3000=A1', '\u0000=A1', '\u007f=A1', '\u0085=A1', '\r\n =A1', '\u200b-5',
+    '„=A1”', '😀=A1', '日本=A1', '• - punkt', '→ +2,5 kg', '\ud83d=A1'])
+    assert.equal(C.plain_(v), "'" + v, JSON.stringify(v));
+  // odmiany znaków: pełna szerokość, małe, indeksy, minus typograficzny
+  for (const v of ['\uff1d1+1', '\uff0bSUM(A1)', '\uff0dA1', '\uff20x', '\ufe66A1', '\ufe62A1', '\ufe63A1', '\ufe6bx', '\u2212A1', '\u207aA1', '\u207bA1', '\u207cA1', '\u208aA1', '\u208bA1', '\u208cA1', '\u2a75A1', '\u2a76A1', '\ufb29A1', ' \uff1dA1', '\u200b\uff1dA1'])
+    assert.equal(C.plain_(v), "'" + v, JSON.stringify(v));
+  // tablica albo obiekt w miejscu wartości: zawsze tekst (JSON), nigdy coś, co arkusz sam zamieni na „=…”
+  assert.strictEqual(C.plain_(['=1+1']), '["=1+1"]');
+  assert.strictEqual(C.plain_([['=1+1']]), '[["=1+1"]]');
+  assert.strictEqual(C.plain_(['x', 5]), '["x",5]');
+  assert.strictEqual(C.plain_({ a: '=1+1' }), '{"a":"=1+1"}');
+  assert.strictEqual(C.plain_(JSON.parse('{"toString":1,"valueOf":1,"toJSON":1}')), '{"toString":1,"valueOf":1,"toJSON":1}');
+  assert.strictEqual(C.plain_(() => 1), '');
+  const cyc = []; cyc.push(cyc);
+  assert.strictEqual(C.plain_(cyc), '');
+  assert.strictEqual(C.plain_(new Date(0)).getTime(), 0);                         // data z innego kontekstu zostaje datą
+  for (const v of [['=1+1'], { a: 1 }, [], {}]) assert.equal(typeof C.plain_(v), 'string');
   assert.deepEqual(Array.from(C.plainRow_(['=1', 5, 'x'])), ["'=1", 5, 'x']);
   assert.deepEqual(C.plainRows_([['=1'], ['-a', 2]]).map(r => Array.from(r)), [["'=1"], ["'-a", 2]]);
 });
@@ -1290,10 +1309,23 @@ test('zapis do arkusza: każdy setValue / setValues / appendRow w apps-script/ i
 });
 
 // Atrapa Arkuszy: komórka przyjmuje wpis jak prawdziwy arkusz przy zapisie ze skryptu: „=…” (oraz „+…” / „-…”, które nie są liczbą)
-// staje się formułą {f}, „'…” zwykłym tekstem bez apostrofu, reszta zostaje bez zmian.
+// staje się formułą {f}, „'…” zwykłym tekstem bez apostrofu, reszta zostaje bez zmian. Tam, gdzie zachowania Arkuszy nie znamy,
+// atrapa przyjmuje najgorszy przypadek: tablicę albo obiekt zamienia na tekst (jak String()), pomija z przodu wszystko, co nie jest
+// widocznym znakiem ASCII ani literą (odstępy, znaki niewidoczne i sterujące, symbole spoza ASCII), a odmiany znaków
+// (np. „＝” pełnej szerokości, minus typograficzny) traktuje jak zwykłe = + -.
 function fakeSheets(tabs) {
-  const enter = v => typeof v !== 'string' ? v : v.charAt(0) === "'" ? v.slice(1)
-    : v.charAt(0) === '=' || (/^[+-]/.test(v) && !/^[+-]\s*(\d+([.,]\d*)?)?%?$/.test(v)) ? { f: v } : v;
+  const sign = c => { const n = c.normalize('NFKC').replace(/^\u2212/, '-').charAt(0); return n === '=' || n === '+' || n === '-' ? n : ''; };
+  const solid = (c, k) => (k > 32 && k < 127) || (k > 127 && c.toLowerCase() !== c.toUpperCase());
+  const enter = v => {
+    if (v === null || v === undefined || typeof v === 'number' || typeof v === 'boolean' || Object.prototype.toString.call(v) === '[object Date]') return v;
+    if (typeof v !== 'string') { try { v = String(v); } catch (e) { v = '[object Object]'; } }
+    if (v.charAt(0) === "'") return v.slice(1);
+    let i = 0;
+    while (i < v.length && !solid(v.charAt(i), v.charCodeAt(i)) && !sign(v.charAt(i))) i++;
+    const g = i < v.length ? sign(v.charAt(i)) : '';
+    if (!g) return v;                                                              // pierwszy jest zwykły znak: zwykły wpis
+    return g === '=' || !/^[+-]\s*(?:(?:\d+(?:[.,]\d*)?|[.,]\d+)\s*%?)?\s*$/.test(g + v.slice(i + 1)) ? { f: v } : v;
+  };
   const isF = c => !!c && typeof c === 'object' && !(c instanceof Date) && 'f' in c;
   const val = c => isF(c) ? '#WYNIK FORMUŁY' : (c === undefined ? '' : c);
   const sheets = {};
@@ -1368,8 +1400,21 @@ test('zapis do arkusza: zapisy klienta z tekstem jak formuła zostają tekstem (
   assert.equal(plan.filter(r => r.zrodlo === 'dodane')[0].cwiczenie, evil);
   assert.equal(plan.find(r => r.tydzien === 2 && r.nr === 1).cwiczenie, evil);
 
+  // wartości, których aplikacja nie wysyła, ale ktoś mógłby: tablica albo obiekt w miejscu tekstu / liczby, „＝” pełnej szerokości, znak niewidoczny z przodu
+  const wide = '\uff1dIMPORTRANGE("x";"Klienci!A:C")', hid = '\u200b' + evil;
+  for (const x of [[evil], [[evil]], { a: evil }, wide, hid, [wide], '\uff0bSUM(Klienci!A:A)', '\u2212Klienci!A2']) {
+    S.logSet(KEY, { week: 1, day: 'A', order: 3, set: 1, name: x, kg: x, reps: x, rpe: x, vbt: x, done: true, video: x, note: x, typ: x, date: x, vbtPeak: x, height: x, swap: x });
+    S.logSet(KEY, { week: x, day: x, order: x, set: x, name: 'Przysiad', kg: 100, reps: '8', done: true });
+    S.logNote(KEY, { week: 1, day: 'A', order: 3, note: x });
+    S.logSession(KEY, { week: 1, day: 'B', date: x, knee: x, shoulder: x, feel: x, minutes: x, note: x, start: x, end: x, pain: x, painMax: x, rpeSession: x });
+    S.saveDyspozycja(KEY, { date: '2026-11-21', cmj: [x, x, x], cmjAvg: x, hooper: { sen: x, stres: x, zmeczenie: x, bolesnosc: x, suma: x }, vbt: x, verdict: x, reasons: [x], excl: x });
+    S.logError(KEY, { kind: x, msg: x, ver: x, ua: x });
+    assert.deepEqual(F.formulas(), [], JSON.stringify(x));
+  }
+  assert.equal(S.readRows_('Log', S.LOG_HEADERS, 'anna').find(r => r.id === 'anna|1|A|3|1').uwagi, '\u2212Klienci!A2');   // tekst wraca bez apostrofu
+
   // drugi obieg: dane odczytane z arkusza (już bez apostrofu) i zapisane jeszcze raz też nie tworzą formuł
-  S.writeTable_('Kopia', Array.from(S.LOG_HEADERS), log.map(r => Array.from(S.LOG_HEADERS).map(h => r[h])));
+  S.writeTable_('Kopia', Array.from(S.LOG_HEADERS), S.readRows_('Log', S.LOG_HEADERS, 'anna').map(r => Array.from(S.LOG_HEADERS).map(h => r[h])));
   const sh = F.sheets.Plan, all = sh.getDataRange().getValues();
   sh.getRange(1, 1, all.length, all[0].length).setValues(S.plainRows_(all));
   assert.deepEqual(F.formulas(), []);
