@@ -92,9 +92,10 @@ function ustawPanel() {
 function trPulpit() {
   const tz = Session.getScriptTimeZone(), localDay = t => Utilities.formatDate(new Date(t), tz, 'yyyy-MM-dd');
   const log = pgTable_('Log', ['klient', 'zapisano', 'tydzien', 'jednostka', 'nr_cw', 'cwiczenie', 'seria', 'kg', 'powt', 'rpe', 'film_link',
-    'uwagi', 'typ', 'ocena', 'komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at']);
-  const ses = pgTable_('Sesje', ['klient', 'tydzien', 'jednostka', 'komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at']);
-  return trPulpit_({ prz: tableOf_('Przegląd'), sum: tableOf_('Podsumowanie'), bloki: tableOf_('Bloki'), klienci: tableOf_('Klienci'), log: log, ses: ses },
+    'uwagi', 'typ', 'ocena', 'komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at', 'wykonane']);
+  const ses = pgTable_('Sesje', ['klient', 'tydzien', 'jednostka', 'start', 'czas_min', 'rpe_sesji', 'komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at']);
+  const plan = pgTable_('Plan', ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'cwiczenie', 'serie', 'zrodlo']);
+  return trPulpit_({ prz: tableOf_('Przegląd'), sum: tableOf_('Podsumowanie'), bloki: tableOf_('Bloki'), klienci: tableOf_('Klienci'), log: log, ses: ses, plan: plan },
     { today: today_(), localDay: localDay, at: PropertiesService.getScriptProperties().getProperty('PODSUM_AT') || '' });
 }
 
@@ -106,7 +107,8 @@ function trPrzelicz() {
 
 /**
  * Czysta funkcja pulpitu. t: {prz, sum, bloki, klienci, log, ses} jako wiersze-obiekty z zakładek (tableOf_ / pgTable_),
- * o: {today 'RRRR-MM-DD', localDay, at}. → {today, at, clients, blocks, videos, replies}
+ * o: {today 'RRRR-MM-DD', localDay, at}. → {today, at, clients, blocks, videos, replies, dzis}
+ * dzis: „Dziś trenują” (trDzis_): jednostki aktywnych klientów z datą na dziś albo zaczęte / zapisane dziś, ze stanem
  * replies: odpowiedzi klientów na komentarze trenera z TR_ODP_DNI dni (Log i Sesje odpowiedz_klienta), najnowsze pierwsze
  */
 function trPulpit_(t, o) {
@@ -158,7 +160,41 @@ function trPulpit_(t, o) {
     .map(r => Object.assign(r, { name: names[r.id] }))
     .sort((a, b) => b.at.localeCompare(a.at) || a.name.localeCompare(b.name));
 
-  return { today: o.today, at: o.at || '', weeks: weeks, clients: clients, blocks: blocks, videos: videos, replies: replies };
+  return { today: o.today, at: o.at || '', weeks: weeks, clients: clients, blocks: blocks, videos: videos, replies: replies,
+    dzis: trDzis_(t.klienci, t.plan, t.log, t.ses, o.today, d10) };
+}
+
+/**
+ * Czysta: „Dziś trenują” na ekranie Dziś panelu. Jednostka trafia na listę, gdy (aktywny klient z zakładki Klienci):
+ * plan ma ją z datą na dziś (bez własnych, dodanych i usuniętych wierszy), klient zapisał dziś serię (Log.zapisano)
+ * albo zaczął ją dziś (Sesje.start). Stan: „done” = jest w Sesjach, „live” = są serie, brak Sesji, „wait” = nic.
+ * Serie: zaplanowane z Planu (własny trening: z jego wierszy), zrobione = robocze i dodatkowe (numer), jak trLogged_.
+ * d10: komórka → „RRRR-MM-DD”. → [{id, name, week, day, title, own, ex, sets, done, st, rpe, min}]: w trakcie, czeka, zrobione; potem imię.
+ */
+function trDzis_(klienci, plan, log, ses, today, d10) {
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  const names = {};
+  (klienci || []).forEach(k => { if (!blank_(k.klient_id) && String(k.aktywny || '').trim().toUpperCase() !== 'NIE') names[lc(k.klient_id)] = String(k.imie || k.klient_id).trim(); });
+  const U = {}, key = r => lc(r.klient) + '|' + Number(r.tydzien) + '|' + String(r.jednostka === undefined || r.jednostka === null ? '' : r.jednostka).trim();
+  const unit = r => { const k = key(r); return U[k] = U[k] || { id: lc(r.klient), week: Number(r.tydzien), day: String(r.jednostka).trim(), title: '', own: false, names: {}, sets: 0, done: 0, today: false, ses: null }; };
+  const P = {};
+  (plan || []).forEach(r => { if (names[lc(r.klient)] === undefined || blank_(r.jednostka) || removed_(r) || added_(r)) return; (P[key(r)] = P[key(r)] || []).push(r); });
+  Object.keys(P).forEach(k => { if (P[k].some(r => !own_(r) && !blank_(r.data) && d10(r.data) === today)) unit(P[k][0]).today = true; });
+  (log || []).forEach(l => { if (names[lc(l.klient)] !== undefined && !blank_(l.zapisano) && d10(l.zapisano) === today) unit(l).today = true; });
+  (ses || []).forEach(x => { if (names[lc(x.klient)] === undefined) return; const k = key(x);
+    if (!blank_(x.start) && d10(x.start) === today) unit(x).today = true;
+    if (U[k] || P[k]) unit(x).ses = x; });
+  const out = Object.keys(U).filter(k => U[k].today).map(k => {
+    const u = U[k], rows = P[k] || [];
+    rows.forEach(r => { u.title = u.title || String(r.tytul || '').trim(); u.own = u.own || own_(r); if (!blank_(r.cwiczenie)) u.names[String(r.cwiczenie).trim()] = 1; u.sets += Number(r.serie) || 0; });
+    (log || []).forEach(l => { if (key(l) === k && trLogged_(l) && /^\d+$/.test(String(l.seria).trim())) u.done++; });
+    const s = u.ses, num = v => { const x = blank_(v) ? NaN : n_(v); return isFinite(x) ? x : null; };
+    return { id: u.id, name: names[u.id], week: u.week, day: u.day, title: u.title || (u.own ? 'Własny trening' : 'Trening ' + u.day), own: u.own,
+      ex: Object.keys(u.names).length, sets: u.sets, done: u.done, st: s ? 'done' : u.done ? 'live' : 'wait',
+      rpe: s ? num(s.rpe_sesji) : null, min: s ? num(s.czas_min) : null };
+  });
+  const rank = { live: 0, wait: 1, done: 2 };
+  return out.sort((a, b) => rank[a.st] - rank[b.st] || a.name.localeCompare(b.name, 'pl') || a.week - b.week || a.day.localeCompare(b.day));
 }
 
 /** Karta klienta: to samo co getData klienta (bez klucza), plus jego Bloki z wnioskami i tygodnie z Podsumowania. */

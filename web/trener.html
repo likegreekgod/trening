@@ -54,17 +54,40 @@
   .eb{font:600 12px/1.3 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
   .mono{font:500 13px var(--f-mono)}
   .muted{color:var(--muted)}
-  .app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
-  aside{background:var(--bar);color:var(--bar-ink);padding:18px 14px;display:flex;flex-direction:column;gap:4px;border-right:3px solid var(--accent);position:sticky;top:0;height:100vh}
-  aside .brand{font:800 22px/1 var(--f-display);text-transform:uppercase;margin:0 8px 18px}
-  aside nav{display:flex;flex-direction:column;gap:4px}
-  aside nav a{display:flex;justify-content:space-between;align-items:center;min-height:44px;padding:0 12px;border-radius:var(--r);color:var(--bar-muted);font-weight:600;font-size:14px;text-decoration:none}
-  aside nav a[aria-current="page"]{background:var(--bar-ink);color:var(--bar)}
-  aside nav em{font-style:normal;font:500 12px var(--f-mono);background:var(--accent);color:var(--on-accent);border-radius:6px;padding:1px 6px}
-  aside nav em:empty{display:none}
-  aside .foot{margin-top:auto;font-size:12px;color:var(--bar-muted);padding:0 12px;line-height:1.5}
-  aside .foot button{background:none;border:0;color:var(--bar-ink);text-decoration:underline;padding:0;font-size:12px}
-  aside .foot #set{color:var(--bar-ink);text-decoration:underline}
+  /* układ (v81): komputer = menu po lewej z listą klientów; telefon (≤ 760 px) = pasek u góry i menu na dole */
+  .app{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}
+  .ico{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  aside{background:var(--bar);color:var(--bar-ink);padding:18px 12px 14px;display:flex;flex-direction:column;gap:3px;border-right:3px solid var(--accent);position:sticky;top:0;height:100vh;overflow-y:auto}
+  aside .brand{font:800 22px/1 var(--f-display);text-transform:uppercase;margin:0 10px 16px}
+  aside nav{display:flex;flex-direction:column;gap:3px}
+  aside a,aside .lnk{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 10px;border-radius:var(--r);color:var(--bar-muted);font:600 14px var(--f-body);text-decoration:none;background:none;border:0;text-align:left;width:100%}
+  aside a:hover,aside .lnk:hover{color:var(--bar-ink)}
+  aside a[aria-current="page"]{background:var(--bar-ink);color:var(--bar)}
+  aside em,.bnav em,.mo em{font:500 12px var(--f-mono);font-style:normal;background:var(--accent);color:var(--on-accent);border-radius:8px;padding:0 6px;min-width:18px;text-align:center}
+  aside em{margin-left:auto}
+  aside em:empty,.bnav em:empty,.mo em:empty{display:none}
+  aside .rl{font:600 12px var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--bar-muted);margin:16px 10px 4px}
+  aside #rail-kl a{min-height:38px;font-weight:500;gap:10px}
+  aside .ft{margin-top:auto;padding-top:14px;display:grid;gap:3px}
+  aside .sy{font:500 12px/1.4 var(--f-mono);color:var(--bar-muted);padding:6px 10px 0;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}
+  aside .sy button{background:none;border:0;color:var(--bar-ink);text-decoration:underline;padding:0;font:inherit;min-height:28px}
+  .ab,.bnav{display:none}
+  .ab{position:sticky;top:0;z-index:20;align-items:center;gap:8px;height:56px;padding:0 12px 0 16px;background:var(--bar);color:var(--bar-ink);border-bottom:3px solid var(--accent)}
+  .ab .brand{font:800 19px/1 var(--f-display);text-transform:uppercase;letter-spacing:.02em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ab .sync{display:inline-flex;align-items:center;gap:5px;min-height:44px;padding:0 6px;background:none;border:0;color:var(--bar-muted);font:500 13px var(--f-mono)}
+  .ab .sync .ico{width:16px;height:16px}
+  .av{width:36px;height:36px;border-radius:50%;background:var(--bar-ink);color:var(--bar);display:grid;place-items:center;font:700 13px var(--f-body);text-decoration:none;flex:none;margin:4px 0}
+  .bnav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--bar);border-top:3px solid var(--accent);padding:4px 4px max(6px,env(safe-area-inset-bottom))}
+  .bnav a{flex:1;display:grid;justify-items:center;gap:2px;padding:6px 2px 2px;min-height:52px;color:var(--bar-muted);font:600 12px var(--f-body);letter-spacing:.06em;text-transform:uppercase;text-decoration:none;position:relative}
+  .bnav a span{display:grid;place-items:center;width:56px;height:30px;border-radius:15px}
+  .bnav a[aria-current="page"]{color:var(--bar-ink)}
+  .bnav a[aria-current="page"] span{background:var(--accent);color:var(--on-accent)}
+  .bnav em{position:absolute;top:1px;left:calc(50% + 10px);border:2px solid var(--bar)}
+  .mo{padding:4px 16px}
+  .mo a,.mo button{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 2px;border:0;border-top:1px solid var(--line);background:none;font:600 15px var(--f-body);color:var(--ink);text-decoration:none;text-align:left}
+  .mo > :first-child{border-top:0}
+  .mo em{margin-left:auto}.mo small{margin-left:auto;font:500 12.5px var(--f-mono);color:var(--muted)}
+  .mo .ico{color:var(--ink-2)}
   .top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding:18px 24px 8px;flex-wrap:wrap}
   .top .tools{display:flex;gap:8px;align-items:center}
   .search{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:0 14px;min-height:44px;width:260px}
@@ -92,10 +115,27 @@
   .pill{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:2px 7px;background:var(--surface-2);white-space:nowrap;margin:0 4px 4px 0}
   .pill.lv-bad{color:var(--bad)}.pill.lv-warn{color:var(--warn)}.pill.lv-ok{color:var(--ok)}
   .sigs{max-width:340px}
-  .todo .it{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:10px 0;border-top:1px solid var(--line);font-size:14px;align-items:center}
-  .todo .it:first-of-type{border-top:0}
-  .todo .d{color:var(--muted);font-size:12.5px;grid-column:1}
-  .sb{min-height:36px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);padding:0 12px;font-weight:600;font-size:13px;grid-row:span 2;white-space:nowrap}
+  .sb{min-height:44px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);padding:0 14px;font-weight:600;font-size:13.5px;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);flex:none}
+  .sb.acc{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  /* ekran Dziś (v81): pasek liczb, „Dziś trenują”, „Wymaga uwagi”, klienci */
+  .stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:var(--surface);border-radius:var(--rc);box-shadow:var(--shadow);overflow:hidden}
+  .st{padding:12px 6px 11px;text-align:center;border-left:1px solid var(--line);min-width:0;color:inherit;text-decoration:none}
+  .st:first-child{border-left:0}a.st:hover{background:var(--surface-2)}
+  .st b{display:block;font:600 24px/1.1 var(--f-mono);color:var(--ink)}
+  .st span{display:block;font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.25}
+  .st.lv-bad b{color:var(--bad)}.st.lv-warn b{color:var(--warn)}
+  .dz{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:var(--gap);align-items:start}
+  .dr,.todo .it{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+  .dr:first-child,.todo h2 + .it{border-top:0}
+  .dr .tx,.todo .tx{flex:1;min-width:0}
+  .dr .tx b,.todo .tx b{display:block;font-weight:650;line-height:1.3}
+  .dr .tx small,.todo .tx small{display:block;color:var(--muted);font-size:13px;line-height:1.35;margin-top:1px}
+  .todo .it > .ico{width:18px;height:18px;color:var(--ink-2);margin:0 -2px}
+  .ini{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font:700 15px var(--f-body);background:var(--surface-2);color:var(--ink-2);flex:none;position:relative}
+  .ini i{position:absolute;right:-1px;bottom:-1px;width:13px;height:13px;border-radius:50%;border:2px solid var(--surface);background:var(--lv,var(--line))}
+  .dbar{display:block;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin-top:6px;max-width:440px}.dbar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+  .heatc summary{list-style:none;cursor:pointer;display:flex;align-items:center;min-height:32px}.heatc summary::-webkit-details-marker{display:none}
+  .heatc summary h2{margin:0}.heatc summary::after{content:"▸";margin-left:8px;color:var(--muted)}.heatc[open] summary::after{content:"▾"}.heatc[open] summary{margin-bottom:10px}
   .b{min-height:44px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);padding:0 16px;font-weight:600}
   .b.p{background:var(--primary);color:var(--on-primary);border:0}
   .heat{display:grid;grid-template-columns:96px repeat(12,minmax(0,1fr));gap:3px;font-size:12px;color:var(--muted);align-items:center}
@@ -268,11 +308,13 @@
   }
   @media (max-width:1100px){.kgrid{grid-template-columns:minmax(0,1fr)}}
   @media (max-width:760px){.kl .hide-m{display:none}.kl .lk{flex-wrap:wrap}.fr{grid-template-columns:minmax(0,1fr)}.fr .seg,.fr .num,.fr .sw{justify-self:start}}
-  @media (max-width:1100px){.cols,.vids{grid-template-columns:minmax(0,1fr)}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:minmax(0,1fr)}}
+  @media (max-width:1100px){.dz{grid-template-columns:minmax(0,1fr) 320px}.cols,.vids{grid-template-columns:minmax(0,1fr)}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:minmax(0,1fr)}}
   .vids.one{grid-template-columns:minmax(0,1fr)}
-  @media (max-width:760px){.app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr;align-content:start}
-    aside{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:10px 12px;border-right:0;border-bottom:3px solid var(--accent)}
-    aside .brand{margin:0 12px 0 4px;font-size:18px}aside nav{flex-direction:row;flex-wrap:nowrap;order:3;width:100%;overflow-x:auto;scrollbar-width:none}aside nav a{flex:none;padding:0 10px}aside .foot{margin:0 0 0 auto;padding:0 4px;display:flex;gap:12px;align-items:center}aside .foot #at{display:none}aside .foot #set{min-height:44px;display:inline-flex;align-items:center;font-size:13px}aside .foot button{min-height:44px;font-size:13px}
+  @media (max-width:760px){.app{display:block;padding-bottom:84px}
+    aside{display:none}.ab,.bnav{display:flex}
+    .stats{grid-template-columns:repeat(4,minmax(0,1fr))}.st5{display:none}.st b{font-size:21px}.st span{font-size:12px}
+    .dz{grid-template-columns:minmax(0,1fr)}.dz .stack{display:contents}.dz-tr{order:1}.todo{order:2}.reps{order:3}.dz-l > .card:nth-child(2){order:4}.heatc{order:5}
+    .hide-m{display:none}.kt .sigs{max-width:none}
     .vsw{display:flex}.vids .vlist{display:none}.pv .stage{height:min(58vh,520px)}
     .top,.pg{padding-left:16px;padding-right:16px}.tabs{padding:0 16px}.search{width:100%}}
   .nb h3{margin:2px 0 6px;font-size:16px}
@@ -313,16 +355,33 @@
 <div class="app" id="app" hidden>
   <aside>
     <div class="brand">Trening · trener</div>
-    <nav id="nav">
-      <a href="#pulpit" data-v="pulpit">Pulpit</a>
-      <a href="#filmy" data-v="filmy">Filmy <em id="n-filmy"></em></a>
-      <a href="#bloki" data-v="bloki">Bloki <em id="n-bloki"></em></a>
-      <a href="#klienci" data-v="klienci">Klienci</a>
-      <a href="./" id="mine">Mój trening ›</a>
+    <nav id="nav" aria-label="Panel">
+      <a href="#dzis" data-v="dzis"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M8 3v4M16 3v4"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></svg> Dziś</a>
+      <a href="#klienci" data-v="klienci"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="17" cy="8" r="2.4"/><path d="M16.5 13.2c2.4.2 4 1.7 4.5 4.3"/></svg> Klienci</a>
+      <a href="#filmy" data-v="filmy"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="M16 10.5l5-3v9l-5-3z"/></svg> Filmy <em id="n-filmy"></em></a>
+      <a href="#bloki" data-v="bloki"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 10h16M10 10v10"/></svg> Bloki <em id="n-bloki"></em></a>
     </nav>
-    <div class="foot"><span id="at"></span><br><a id="set" href="#ustawienia">Ustawienia</a> · <button id="recalc" type="button">Przelicz teraz</button> · <button id="logout" type="button">Wyloguj</button></div>
+    <div class="rl" id="rail-lb">Klienci</div>
+    <nav id="rail-kl" aria-label="Klienci"></nav>
+    <div class="ft">
+      <a href="./" id="mine"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3M17 12h3M7 8v8M17 8v8M7 12h10"/></svg> Mój trening</a>
+      <a id="set" href="#ustawienia" data-v="ustawienia"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg> Ustawienia</a>
+      <div class="sy"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a8 8 0 00-14-2M5 16a8 8 0 0014 2M19 4v4h-4M5 20v-4h4"/></svg><span id="at"></span> · <button id="recalc" type="button">przelicz</button></div>
+      <button class="lnk" id="logout" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 0 00-2 2v10a2 2 0 002 2h4M15 8l4 4-4 4M19 12H9"/></svg> Wyloguj</button>
+    </div>
   </aside>
+  <header class="ab">
+    <div class="brand">Trening · trener</div>
+    <button class="sync" id="recalc-m" type="button" aria-label="Przelicz dane teraz"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a8 8 0 00-14-2M5 16a8 8 0 0014 2M19 4v4h-4M5 20v-4h4"/></svg><span id="at-m"></span></button>
+    <a class="av" id="av" href="#wiecej" aria-label="Więcej: ustawienia, wylogowanie"></a>
+  </header>
   <main id="main"></main>
+  <nav class="bnav" id="bnav" aria-label="Panel">
+    <a href="#dzis" data-v="dzis"><span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M8 3v4M16 3v4"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></svg></span>Dziś</a>
+    <a href="#klienci" data-v="klienci"><span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="17" cy="8" r="2.4"/><path d="M16.5 13.2c2.4.2 4 1.7 4.5 4.3"/></svg></span>Klienci</a>
+    <a href="#filmy" data-v="filmy"><span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="M16 10.5l5-3v9l-5-3z"/></svg></span>Filmy<em id="n-filmy-m"></em></a>
+    <a href="#wiecej" data-v="wiecej"><span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg></span>Więcej</a>
+  </nav>
 </div>
 <script src="config.js"></script>
 <script src="lib.js"></script>
