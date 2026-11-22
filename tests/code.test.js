@@ -1133,6 +1133,61 @@ test('trBlokCtx_, trBlokSets_, aiBlokReq_, aiBlokParse_: szkic zamknięcia bloku
   assert.deepEqual(JSON.parse(JSON.stringify(C.aiBlokParse_('Sam tekst.'))), { wnioski: 'Sam tekst.', dla_klienta: '' });   // bez znaczników: całość do wniosków
   assert.ok(C.TR_FNS.trBlok && C.TR_FNS.trBlokSzkic && !C.API_FNS.trBlok && !C.API_FNS.trBlokSzkic);   // tylko zalogowany trener
 });
+test('trPlanPrev_, trPlanCtx_, aiPlanReq_: szkic następnego bloku (dane bez imienia, światła ostatniego tygodnia, zadanie)', () => {
+  const d = szkicData();
+  d.blocks = [{ blok: 'B2', od: '2026-11-03', do: '2026-11-19', tygodnie: '10–12', jednostki: '3/4', 'wykonanie_%': 80, tonaz_kg: 3700, e1RM_zm: '', najlepsze_boje: '', sRPE_sr: 7.3, samopocz_sr: 4, dyspozycja: '', bol_max: 5, statusy: '', wnioski: 'Przysiad +2,5 kg na tydzień.', dla_klienta: '' }];
+  d.stan = [{ data: '2026-11-12', miejsce: 'Kolano', strona: 'L', ocena: 4, kontekst: 'w ćwiczeniu', cwiczenie: 'Przysiad tylny' }, { data: '2026-08-01', miejsce: 'Bark', strona: '', ocena: 6 }];
+  const pv = C.trPlanPrev_(d, 'B2');
+  assert.equal(pv.prevWeek, 12);
+  assert.deepEqual(plain(pv.days.map(x => [x.day, x.week, x.dow])), [['T1', 12, 1], ['T2', 12, 3]]);
+  assert.deepEqual(plain(pv.prev['T1|Przysiad tylny']), { sets: 3, reps: '5', kg: 84, lights: 'LSS' });   // RPE 7,5 / 8 / 8,5; rozgrzewka pominięta
+  assert.equal(pv.prev['T1|Wiosłowanie hantlą'].lights, '');                                          // pominięte
+  assert.equal(C.trPlanPrev_(d, 'B9'), null);
+  assert.equal(C.trLight_({ typ: 'FAIL', rpe: '' }), 'X'); assert.equal(C.trLight_({ rpe: '' }), '·'); assert.equal(C.trLight_({ rpe: 9 }), 'W');
+  const t = C.trPlanCtx_(d, 'B2', { weeks: 4, w0: 13, start: '2026-11-30', hint: 'ostatni tydzień lżejszy' });
+  assert.doesNotMatch(t, /Ania|drive\.google|tajne/);
+  assert.match(t, /Wnioski trenera po bloku B2 \(ważne.*„Przysiad \+2,5 kg na tydzień\.”/);
+  assert.match(t, /T1 „Nogi” \(wt\):\n- \[A\] Przysiad tylny:\n  tydz\. 10: 3×5 80 kg @8 → 80×5@7,5, 80×5@8, 80×5@8,5; tydz\. 11: 3×5 82 kg @8 → 82×5@7,5, 82×5@8, 82×5 FAIL; tydz\. 12/);
+  assert.match(t, /Wiosłowanie hantlą:\n.*tydz\. 12: 3×8\/str 20 kg → pominięte/);
+  assert.match(t, /Stan ciała .*: 2026-11-12 Kolano L 4\/10 \(w ćwiczeniu: Przysiad tylny\)\./);
+  assert.doesNotMatch(t, /Bark/);                                                                       // spoza bloku
+  assert.match(t, /4 tyg\. \(numery tygodni 13–16\), start w poniedziałek 2026-11-30\. Każda lista "tygodnie" i "notatki" ma dokładnie 4 elementów/);
+  assert.match(t, /Wskazówki trenera .*„ostatni tydzień lżejszy”/);
+  const r = C.aiPlanReq_('KTX', {});
+  assert.equal(r.model, 'claude-opus-5-5'); assert.equal(r.fallbacks, 'default'); assert.equal(r.output_config.effort, 'low');
+  assert.equal(r.output_config.format.type, 'json_schema'); assert.equal(r.output_config.format.schema.additionalProperties, false);
+  assert.match(r.system, /zaokrąglone w dół do 2,5 kg/); assert.match(r.system, /RPE ≤ 7,5\) = \+2,5 kg/); assert.match(r.system, /rpe_max to sufit/);
+  assert.match(r.messages[0].content, /KTX[\s\S]*Ułóż szkic następnego bloku\./);
+  const r2 = C.aiPlanReq_('K', { tweak: 'tekst', text: 'bez rwania', draft: [{ tydzien: 13, jednostka: 'T1', tytul: 'Nogi', nr: 1, cwiczenie: 'Przysiad tylny', serie: 4, powt: '5', kg: 85, procent: '', rpe_max: 8 }] });
+  assert.match(r2.messages[0].content, /Poprzedni szkic:\nT1 „Nogi”:\n- Przysiad tylny: tydz\. 13 "4 x 5 \| 85 \|  \| 8"\n\nPopraw szkic .*: bez rwania$/);
+  assert.match(C.aiPlanReq_('K', { tweak: 'lzej' }).messages[0].content, /Popraw szkic .*: Zrób cały blok lżejszym/);
+  assert.ok(C.TR_FNS.trBlokPlan && C.TR_FNS.trBlokWczytaj && !C.API_FNS.trBlokPlan && !C.API_FNS.trBlokWczytaj);
+});
+test('trPlanCell_, trPlanRows_, trBlokNext_: wiersze planu ze szkicu AI (tygodnie, daty, cechy z poprzedniego bloku, walidacja)', () => {
+  assert.deepEqual(plain(C.trPlanCell_('4 x 5 | 92.5 | | 8')), { serie: 4, powt: '5', kg: 92.5, procent: '', rpe_max: 8 });
+  assert.deepEqual(plain(C.trPlanCell_('5×2|62,5|75|')), { serie: 5, powt: '2', kg: 62.5, procent: 0.75, rpe_max: '' });
+  assert.deepEqual(plain(C.trPlanCell_('2 x 12/str | guma | | ')), { serie: 2, powt: '12/str', kg: 'guma', procent: '', rpe_max: '' });
+  assert.equal(C.trPlanCell_('cztery serie'), null);
+  assert.equal(C.trBlokNext_('B2', ['B1', 'B2']), 'B3'); assert.equal(C.trBlokNext_('B2', ['B2', 'B3']), 'B4'); assert.equal(C.trBlokNext_('Siła', []), 'Siła2');
+  const prevRows = [{ klient: 'ania', tydzien: 12, jednostka: 'T1', cwiczenie: 'Rwanie', grupa: 'R', dod_serie: 0, zamienniki: 'Rwanie z zawieszenia', obwod: '' },
+    { klient: 'ania', tydzien: 12, jednostka: 'T1', cwiczenie: 'Pallof press', obwod: 'A', grupa: '' }, { klient: 'ania', tydzien: 12, jednostka: 'T1', cwiczenie: 'Dead bug', obwod: 'A' }];
+  const ai = { dlaczego: 'Rwanie stoi, przysiad +2,5 kg.', jednostki: [{ jednostka: 'T1', tytul: 'Nogi', dzien: 1, notatki: ['', 'Lżej, bez walki.'],
+    cwiczenia: [{ cwiczenie: 'Rwanie', prio: 'A', uwagi: 'Szybko pod sztangę.', tygodnie: ['5 x 2 | 62.5 | 75 | ', '4 x 2 | 55 | 66 | '] },
+      { cwiczenie: 'Pallof press', prio: 'K', uwagi: '', tygodnie: ['2 x 12/str | guma | | ', '2 x 12/str | guma | | '] },
+      { cwiczenie: 'Przysiad przedni', prio: 'X', uwagi: '', tygodnie: ['4 x 5 | 70 | | 8', 'źle'] }] }] };
+  const out = C.trPlanRows_(ai, { klient: 'ania', blok: 'B3', w0: 13, weeks: 2, start: '2026-11-30', prevRows });
+  assert.equal(out.why, 'Rwanie stoi, przysiad +2,5 kg.');
+  assert.equal(out.rows.length, 5);                                                                     // zła komórka pominięta
+  assert.match(out.errors.join(' '), /T1 Przysiad przedni tydz\. 14: brak serii/);
+  const rw = out.rows.find(r => r.cwiczenie === 'Rwanie' && r.tydzien === 13);
+  assert.deepEqual(plain(rw), { klient: 'ania', tydzien: 13, jednostka: 'T1', tytul: 'Nogi', data: '2026-12-01', nr: 1, cwiczenie: 'Rwanie', prio: 'A', serie: 5, powt: '2', procent: 0.75, kg: 62.5, rpe_max: '',
+    uwagi: 'Szybko pod sztangę.', blok: 'B3', grupa: 'R', zamienniki: 'Rwanie z zawieszenia', dod_serie: 0 });
+  assert.equal(out.rows.find(r => r.cwiczenie === 'Rwanie' && r.tydzien === 14).uwagi_jedn, 'Lżej, bez walki.');   // notatka w wierszu nr 1
+  assert.equal(out.rows.find(r => r.cwiczenie === 'Przysiad przedni').prio, 'B');                    // zły priorytet → B
+  assert.ok(out.rows.every(r => r.obwod === undefined));                                              // obwód z jednym ćwiczeniem → usunięty
+  assert.deepEqual(plain(C.validatePlan_(out.rows)), []);
+  assert.deepEqual(plain(C.trPlanRows_({ jednostki: [] }, { weeks: 1 }).errors), ['AI nie zwróciło żadnej jednostki.']);
+});
 test('aiReq_, aiCost_, aiDay_: zapytanie do Claude API, koszt, dzienny limit', () => {
   const r = C.aiReq_('KONTEKST', {});
   assert.equal(r.model, 'claude-opus-5-5');

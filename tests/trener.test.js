@@ -85,6 +85,15 @@ test.before(async () => {
 });
 test.after(async () => { await browser.close(); server.close(); });
 
+function blokPlan(o) {   // syntetyczny szkic następnego bloku (trBlokPlan): 2 jednostki, n tygodni od tyg. 13
+  const rows = [], W = Array.from({ length: o.weeks }, (_, i) => 13 + i), lz = o.tweak === 'lzej' ? -2.5 : 0;
+  W.forEach((w, i) => [['T1', 1, 'Nogi', [['Przysiad tylny', 'A', 86.5 - 1 + lz + i * 2.5, 8], ['Wiosłowanie hantlą', 'B', 22, 9]]], ['T2', 3, 'Góra', [['Wyciskanie na ławce', 'A', 47 + lz, 8], ['Podciąganie', 'B', 'BW', 9], ['Face pull', 'K', 15, '']]]]
+    .forEach(([day, off, title, ex]) => ex.forEach(([name, prio, kg, rpe], k) => rows.push({ klient: 'ania', tydzien: w, jednostka: day, tytul: title, data: addDays(o.start, 7 * i + off - 1), nr: k + 1, cwiczenie: name, prio, serie: name === 'Wyciskanie na ławce' ? 4 : 3, powt: '5', procent: '', kg, rpe_max: rpe, uwagi: '', blok: 'B3',
+      uwagi_jedn: i === 1 && k === 0 && day === 'T1' ? 'Dwa tygodnie w górę, potem test.' : '' }))));
+  return { blok: 'B3', weeks: W, start: o.start, prevWeek: 12, rows, why: 'Przysiad: same 🟢 w tyg. 12, więc +2,5 kg. Wyciskanie: 🔴 na ostatniej serii, ciężar bez zmian, seria więcej.',
+    prev: { 'T1|Przysiad tylny': { sets: 3, reps: '5', kg: 84, lights: 'LSS' }, 'T1|Wiosłowanie hantlą': { sets: 3, reps: '5', kg: 20, lights: 'LSS' }, 'T2|Wyciskanie na ławce': { sets: 3, reps: '5', kg: 47, lights: 'LSW' }, 'T2|Podciąganie': { sets: 3, reps: '5', kg: 0, lights: 'LS·' } },
+    warnings: [], cost: 0.12, n: 1, limit: 30, model: 'claude-opus-5-5' };
+}
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
 const JWT = (exp) => b64({ alg: 'RS256' }) + '.' + b64({ email: 'trener@example.com', exp }) + '.podpis';
 // atrapa Google Identity Services: przycisk „Zaloguj (atrapa)” oddaje bilet przez callback
@@ -144,6 +153,9 @@ async function page(calls, opt = {}) {
       else out = { ok: true, result: { n: e.ex.reduce((a, o) => a + Object.keys(o).length - 1, 0) + (e.unote !== undefined ? 1 : 0), weeks: [e.week],
         rows: e.ex.map(o => ({ week: e.week, day: e.day, order: o.order, f: Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'order').map(([k, v]) => [k, /^\d+([.,]\d+)?$/.test(v) ? Number(v.replace(',', '.')) : v])) }))
           .concat(e.unote !== undefined ? [{ week: e.week, day: e.day, order: 1, f: { unote: e.unote } }] : []) } }; }
+    else if (b.fn === 'trBlokPlan') { await new Promise(res => setTimeout(res, 150)); const o = b.args[1];
+      out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).' } : { ok: true, result: blokPlan(o) }; }
+    else if (b.fn === 'trBlokWczytaj') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { status: 'OK', text: 'Wczytano blok B3: ' + new Set(b.args[1].map(r => r.tydzien + r.jednostka)).size + ' jednostek. Import: OK. Klient widzi plan w aplikacji.' } }; }
     else out = { ok: false, error: 'Nieznana funkcja: ' + b.fn };
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
   });
@@ -454,6 +466,50 @@ test('panel: zamknięcie bloku (wnioski i notatka dla klienta, szkic AI obu nara
     assert.deepEqual(p.errors, []);
     await ctx.close();
   }
+});
+
+test('panel: szkic następnego bloku z AI (tygodnie, start, wskazówki, poprawki, wczytanie do planu)', async () => {
+  for (const [vp, scheme, nm] of [[null, 'light', 'jasny'], [{ width: 390, height: 844 }, 'dark', 'telefon-ciemny']]) {
+    const calls = [], { ctx, p } = await page(calls, Object.assign({ loggedIn: true, scheme }, vp ? { vp } : {}));
+    await p.goto(base + 'trener.html#k/ania/bloki'); await p.waitForSelector('#nb [data-nb="go"]');
+    assert.match(await p.textContent('#nb'), /AI układa blok B3 na podstawie bloku B2/);
+    assert.equal(await p.inputValue('#nb [data-nbf="weeks"]'), '6');                              // jak ostatni blok
+    assert.equal(await p.inputValue('#nb [data-nbf="start"]'), addDays(MON, 7));                  // poniedziałek po ostatniej jednostce bloku
+    await p.fill('#nb [data-nbf="weeks"]', '3'); await p.fill('#nb [data-nbf="hint"]', 'wyciskanie bez forsowania');
+    await p.click('#nb [data-nb="go"]'); await p.waitForSelector('#nb .nbt');
+    assert.deepEqual(calls.filter(c => c.fn === 'trBlokPlan').map(c => c.args), [['ania', { blok: 'B2', weeks: 3, start: addDays(MON, 7), hint: 'wyciskanie bez forsowania' }]]);
+    const t = await p.textContent('#nb');
+    assert.match(t, /Blok B3 · tyg\. 13–15/); assert.match(t, /same 🟢 w tyg\. 12/); assert.match(t, /koszt szkicu 0,12 \$ · dziś 1 z 30/);
+    assert.match(t, /Od trenera · tydz\. 14Dwa tygodnie w górę/);
+    assert.equal(await p.$$eval('#nb .nbt', x => x.length), 2);                                    // jednostka = tabela
+    assert.match(await p.textContent('#nb .nbt tbody tr:first-child'), /Przysiad tylny\+1,5 kg/);
+    assert.match(await p.textContent('#nb .nbt tbody tr:first-child .nbp'), /3×5 · 84 kg🟢🟡🟡/);
+    assert.match(await p.textContent('#nb'), /Face pullnowe/);
+    if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    await shot(p, 'trener-nowy-blok-' + nm + '.png');
+    await p.click('#nb [data-t="lzej"]'); await p.waitForFunction(() => /83 kg/.test(document.querySelector('#nb .nbt tbody tr:first-child td:nth-child(3)').textContent));
+    const tw = calls.filter(c => c.fn === 'trBlokPlan').pop().args[1];
+    assert.equal(tw.tweak, 'lzej'); assert.equal(tw.draft.length, 15);                             // poprawka dostaje poprzedni szkic
+    assert.equal(await p.isDisabled('#nb [data-nb="fixtxt"]'), true);
+    await p.fill('#nb [data-nbf="fix"]', 'bez wiosłowania'); await p.click('#nb [data-nb="fixtxt"]'); await p.waitForFunction(() => document.querySelector('#nb [data-nbf="fix"]').value === '');
+    assert.deepEqual([calls.filter(c => c.fn === 'trBlokPlan').pop().args[1].tweak, calls.filter(c => c.fn === 'trBlokPlan').pop().args[1].text], ['tekst', 'bez wiosłowania']);
+    await p.click('#nb [data-nb="sure"]');
+    assert.match(await p.textContent('#nb'), /Wczytać blok B3 do planu\? Klient zobaczy go w aplikacji od razu/);
+    assert.equal(calls.filter(c => c.fn === 'trBlokWczytaj').length, 0);                           // pierwsze dotknięcie nic nie wysyła
+    await p.click('#nb [data-nb="load"]'); await p.waitForSelector('#nb .saved');
+    const ld = calls.filter(c => c.fn === 'trBlokWczytaj');
+    assert.equal(ld.length, 1); assert.equal(ld[0].args[0], 'ania'); assert.equal(ld[0].args[1].length, 15); assert.equal(ld[0].args[1][0].blok, 'B3');
+    assert.match(await p.textContent('#nb'), /Wczytano blok B3: 6 jednostek/);
+    assert.equal(await p.getAttribute('#nb a.b', 'href'), '#k/ania/plan');
+    if (!vp) await shot(p, 'trener-nowy-blok-wczytany-jasny.png');
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+  const calls = [], { ctx, p } = await page(calls, { loggedIn: true, ai: false });                 // bez klucza: komunikat z linkiem do Ustawień
+  await p.goto(base + 'trener.html#k/ania/bloki'); await p.waitForSelector('#nb [data-nb="go"]');
+  await p.click('#nb [data-nb="go"]'); await p.waitForSelector('#nb .err');
+  assert.equal(await p.getAttribute('#nb .err a', 'href'), '#ustawienia');
+  await ctx.close();
 });
 
 test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełny ekran) i komentarz z chwilą filmu', async () => {

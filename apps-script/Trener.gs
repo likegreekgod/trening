@@ -13,7 +13,7 @@
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
 const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
-  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan };
+  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -410,9 +410,14 @@ function aiPre_() {
 /** Zapytanie do Messages API, licznik dnia i wiersz w zakładce „AI”. log: [akcja, klient, tydzien, jednostka]. → {text, cost, n, limit, model} */
 function aiCall_(req, log) {
   const pre = aiPre_(), props = PropertiesService.getScriptProperties();
-  const r = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-    headers: { 'x-api-key': pre.key, 'anthropic-version': '2026-10-21', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
-    payload: JSON.stringify(req) });
+  let r;
+  try {
+    r = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { 'x-api-key': pre.key, 'anthropic-version': '2026-10-21', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+      payload: JSON.stringify(req) });
+  } catch (e) {   // Apps Script czeka na odpowiedź ograniczony czas (dłuższy szkic bloku może go przekroczyć)
+    throw new Error(/time|czas/i.test(String(e && e.message)) ? 'AI nie zdążyło odpowiedzieć w limicie czasu Apps Script. Spróbuj ponownie albo z mniejszą liczbą tygodni.' : 'AI: brak połączenia (' + String(e && e.message).slice(0, 120) + ').');
+  }
   const code = r.getResponseCode();
   let j = {}; try { j = JSON.parse(r.getContentText()); } catch (e) { j = {}; }
   if (code !== 200) {
@@ -638,6 +643,257 @@ function trBlokSzkic(id, blok, opt) {
   const r = aiCall_(aiBlokReq_(ctx, opt), ['szkic bloku' + (opt && AI_POPRAW_BLOK[opt.tweak] ? ' · ' + opt.tweak : ''), id, '', blok]);
   const p = aiBlokParse_(r.text);
   return { wnioski: p.wnioski, dla_klienta: p.dla_klienta, cost: r.cost, n: r.n, limit: r.limit, model: r.model };
+}
+
+/* ---------- szkic następnego bloku (AI) i wczytanie go do planu ----------
+ * trBlokPlan: dane ostatniego bloku (trPlanCtx_, bez imienia) → Claude API (structured outputs, zwarte komórki „serie x powt | kg | % | RPE”)
+ * → trPlanRows_ dokłada klienta, nazwę bloku (B+1), ciągłe tygodnie, daty, przenosi grupę, zamienniki, dod_serie itd. z poprzedniego
+ * bloku i sprawdza wiersze validatePlan_ (jak plik z Dysku). Nic nie trafia do arkusza.
+ * trBlokWczytaj: wiersze ze szkicu (po stronie panelu) → plik JSON w „_plany” → importPlanFile_ od razu (Import, mergePlan_).
+ */
+const PLAN_TYG_MAX = 8;                  // najwyżej 8 tygodni w jednym szkicu
+const PLAN_POPRAW = {
+  lzej: 'Zrób cały blok lżejszym: ciężary niżej (ok. 2,5–5 kg w ćwiczeniach ze sztangą, mniej w pozostałych) albo niższe RPE max, bez zmiany liczby serii.',
+  ciezej: 'Zrób cały blok cięższym: ciężary wyżej o jeden krok (2,5 kg w ćwiczeniach ze sztangą), bez przekraczania tego, co uzasadniają wyniki.',
+  mniej: 'Zmniejsz objętość: o jedną serię mniej w ćwiczeniach B i K, ćwiczenia A bez zmian.',
+  inny: 'Napisz inną wersję bloku: inna progresja (np. falowa zamiast liniowej), te same ćwiczenia.'
+};
+const AI_SYSTEM_PLAN = [
+  'Jesteś asystentem trenera personalnego (trening siłowy, sylwetka, podnoszenie ciężarów). Układasz szkic NASTĘPNEGO bloku treningowego podopiecznego na podstawie zakończonego bloku. Trener przejrzy szkic i dopiero wtedy wczyta go do aplikacji klienta.',
+  'Zasady trenera (obowiązują zawsze):',
+  '- Te same jednostki (nazwy, tytuły, dni tygodnia) i te same ćwiczenia w tej samej kolejności co ostatni tydzień bloku, chyba że wskazówki trenera, ból albo wyniki wyraźnie mówią inaczej. Zmianę ćwiczenia uzasadnij.',
+  '- Ciężary w kg zaokrąglone w dół do 2,5 kg (ćwiczenia ze sztangą i maszyny). Hantle i kettle: realne ciężary (co 1–2 kg).',
+  '- Progresja z wyników ostatniego tygodnia ćwiczenia: same lekkie serie (RPE ≤ 7,5) = +2,5 kg; średnie (RPE 8–8,5) = ten sam ciężar albo +2,5 kg, jeśli wszystkie powtórzenia zrobione; ciężkie (RPE ≥ 9) albo nieudane = ten sam ciężar albo mniej, ewentualnie więcej serii przy tym samym ciężarze. Seria bez RPE = brak danych, decyduj po reszcie.',
+  '- rpe_max to sufit wysiłku (np. 8), nie cel. Ćwiczenia korekcyjne mają priorytet K. Priorytety A/B/K zostają jak w bloku, chyba że zmieniasz ćwiczenie.',
+  '- Boje olimpijskie i ich warianty: % z maksa przy każdym ćwiczeniu specjalnym, jeśli był w bloku; kg zgodne z %; bez RPE max (puste). Po spalonych podejściach najpierw stabilizuj ciężar, potem podnoś.',
+  '- Ból powyżej 3/10 albo powtarzający się w tym samym miejscu: oszczędź to miejsce (lżej, zamiennik, mniej serii) i napisz to w uzasadnieniu.',
+  '- Tygodnie zwykle rosną; ostatni tydzień lżejszy (ok. −10% i mniej serii) tylko, gdy trener o to prosi albo blok ma ≥ 5 tygodni i było ciężko (wysokie RPE sesji, nieudane serie, słaba dyspozycja).',
+  'Format odpowiedzi (JSON wg schematu):',
+  '- "dlaczego": najwyżej 4 krótkie zdania dla trenera, konkretne decyzje z liczbami (co rośnie, co stoi i dlaczego). Bez ogólników.',
+  '- "jednostki": każda z polami jednostka (np. T1), tytul, dzien (0 = poniedziałek … 6 = niedziela), notatki (lista długości = liczba tygodni; notatka trenera do całej jednostki w danym tygodniu albo ""; zwykle puste, wpisz tylko coś ważnego dla klienta), cwiczenia.',
+  '- ćwiczenie: cwiczenie (nazwa jak w bloku), prio (A/B/K), uwagi (krótka wskazówka techniczna dla klienta albo ""), tygodnie: lista długości = liczba tygodni, każdy element to tekst "serie x powt | kg | procent | rpe_max", np. "4 x 5 | 92.5 | | 8", "5 x 2 | 62.5 | 75 | ", "3 x 8/str | 24 | | 9", "2 x 12/str | guma | | ". Powtórzenia tak jak w bloku (np. 6-8, 8/str, 1+1, 30 s). kg: liczba z kropką albo tekst (BW, guma) albo puste. procent: liczba 1–130 albo puste. rpe_max: 5–10 albo puste.',
+  'Używaj tylko danych z wiadomości, niczego nie zmyślaj. Bez imion.'
+].join('\n');
+const AI_SCHEMA_PLAN = {
+  type: 'object', additionalProperties: false, required: ['dlaczego', 'jednostki'],
+  properties: {
+    dlaczego: { type: 'string' },
+    jednostki: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['jednostka', 'tytul', 'dzien', 'notatki', 'cwiczenia'],
+      properties: { jednostka: { type: 'string' }, tytul: { type: 'string' }, dzien: { type: 'integer' }, notatki: { type: 'array', items: { type: 'string' } },
+        cwiczenia: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['cwiczenie', 'prio', 'uwagi', 'tygodnie'],
+          properties: { cwiczenie: { type: 'string' }, prio: { type: 'string', enum: ['A', 'B', 'K'] }, uwagi: { type: 'string' }, tygodnie: { type: 'array', items: { type: 'string' } } } } } } } }
+  }
+};
+
+/** Nazwa następnego bloku (czysta): B2 → B3, wolna wśród nazw klienta. */
+function trBlokNext_(blok, names) {
+  const m = /^(.*?)(\d+)$/.exec(String(blok || '').trim()), base = m ? m[1] : (String(blok || '').trim() || 'B');
+  let n = m ? Number(m[2]) + 1 : 2;
+  while ((names || []).indexOf(base + n) >= 0) n++;
+  return base + n;
+}
+
+const trDow_ = d => (new Date(String(d).slice(0, 10) + 'T12:00:00Z').getUTCDay() + 6) % 7;   // 0 = pn
+const planWork_ = l => { const s = String(l.seria === undefined || l.seria === null ? '' : l.seria).trim(); return /^\d+$/.test(s) && s !== '0' && !/SKIP/.test(String(l.typ || '')); };
+/** Światło serii jako znak (czysta): L lekko, S średnio, W ciężko, X nieudana, · bez oceny. */
+function trLight_(l) {
+  if (/FAIL/.test(String(l.typ || ''))) return 'X';
+  const r = Number(String(l.rpe === undefined || l.rpe === null ? '' : l.rpe).replace(',', '.'));
+  if (String(l.rpe === undefined || l.rpe === null ? '' : l.rpe).trim() === '' || !isFinite(r)) return '·';
+  return r <= 7.5 ? 'L' : r < 9 ? 'S' : 'W';
+}
+
+/**
+ * Ostatni tydzień każdej jednostki bloku (czysta): {prevWeek, weeks, days: [{day, title, dow, week}], prev: {„T1|nazwa”: {sets, reps, kg, lights}}}.
+ * Światła z serii roboczych tej jednostki (po numerze ćwiczenia, kolejno po serii); null = brak bloku.
+ */
+function trPlanPrev_(d, blok) {
+  const B = String(blok), plan = (d.plan || []).filter(r => !r.own && !r.added && String(r.block || '') === B);
+  if (!plan.length) return null;
+  const weeks = plan.map(r => Number(r.week)).filter((w, i, a) => a.indexOf(w) === i).sort((a, b) => a - b);
+  const days = {};
+  plan.forEach(r => { const x = days[r.day]; if (!x || Number(r.week) > x.week || (Number(r.week) === x.week && r.date && !x.date)) days[r.day] = { day: r.day, title: r.title, week: Number(r.week), date: r.date || '' }; });
+  const prev = {};
+  Object.keys(days).forEach(k => {
+    const u = days[k];
+    plan.filter(r => r.day === k && Number(r.week) === u.week).sort((a, b) => a.order - b.order).forEach(r => {
+      const ls = (d.logs || []).filter(l => Number(l.tydzien) === u.week && String(l.jednostka) === String(k) && Number(l.nr_cw) === Number(r.order) && planWork_(l))
+        .sort((a, b) => Number(a.seria) - Number(b.seria));
+      prev[k + '|' + r.name] = { sets: r.sets, reps: String(r.reps), kg: r.kg === null || r.kg === undefined ? '' : r.kg, lights: ls.map(trLight_).join('') };
+    });
+  });
+  const list = Object.keys(days).map(k => Object.assign(days[k], { dow: days[k].date ? trDow_(days[k].date) : null }))
+    .sort((a, b) => (a.dow === null ? 9 : a.dow) - (b.dow === null ? 9 : b.dow) || String(a.day).localeCompare(String(b.day)));
+  return { prevWeek: weeks[weeks.length - 1], weeks: weeks, days: list, prev: prev };
+}
+
+/**
+ * Dane do szkicu następnego bloku (czysta). d: clientData_ z blocks; opt: {weeks, w0, start, hint}. → tekst albo null.
+ * trBlokCtx_ (liczby bloku, tydzień po tygodniu, A, nieudane, pominięte, komentarze, ból, poprzedni blok) + wnioski trenera po tym bloku
+ * + plan i wykonanie każdej jednostki tydzień po tygodniu + stan ciała z czasu bloku + to, o co prosi trener. Bez imienia i linków.
+ */
+function trPlanCtx_(d, blok, opt) {
+  const base = trBlokCtx_(d, blok), pv = trPlanPrev_(d, blok);
+  if (!base || !pv) return null;
+  const str = v => v === undefined || v === null ? '' : String(v).trim(), num = v => str(v).replace('.', ','), B = String(blok);
+  const out = [base];
+  const b = (d.blocks || []).find(x => str(x.blok) === B) || {};
+  if (str(b.wnioski)) out.push('', 'Wnioski trenera po bloku ' + B + ' (ważne, trzymaj się decyzji z nich): „' + str(b.wnioski) + '”');
+  const plan = (d.plan || []).filter(r => !r.own && !r.added && str(r.block) === B);
+  const DN = ['pn', 'wt', 'śr', 'czw', 'pt', 'sob', 'nd'];
+  out.push('', 'Plan i wykonanie bloku ' + B + ' (plan: serie×powt kg %, RPE max → serie robocze kg×powt@RPE; FAIL = nieudana):');
+  pv.days.forEach(u => {
+    out.push('', u.day + ' „' + str(u.title) + '”' + (u.dow !== null ? ' (' + DN[u.dow] + ')' : '') + ':');
+    const rows = plan.filter(r => r.day === u.day), names = [];
+    rows.slice().sort((a, b2) => a.week - b2.week || a.order - b2.order).forEach(r => { if (names.indexOf(r.name) < 0) names.push(r.name); });
+    names.forEach(n => {
+      const rs = rows.filter(r => r.name === n).sort((a, b2) => a.week - b2.week), f = rs[0];
+      const head = '- [' + str(f.prio) + '] ' + n + (str(f.group) ? ' (grupa ' + str(f.group) + ')' : '') + (str(f.note) ? ' · uwagi: ' + str(f.note) : '') + ':';
+      const wk = rs.map(r => {
+        const pl = r.sets + '×' + str(r.reps) + (str(r.kg) ? ' ' + num(r.kg) + (typeof r.kg === 'number' ? ' kg' : '') : '') + (r.pct ? ' ' + num(Math.round(r.pct * 1000) / 10) + '%' : '') + (str(r.rpe) ? ' @' + num(r.rpe) : '');
+        const ls = (d.logs || []).filter(l => Number(l.tydzien) === Number(r.week) && String(l.jednostka) === String(r.day) && Number(l.nr_cw) === Number(r.order) && planWork_(l))
+          .sort((a, b2) => Number(a.seria) - Number(b2.seria));
+        const skip = (d.logs || []).some(l => Number(l.tydzien) === Number(r.week) && String(l.jednostka) === String(r.day) && Number(l.nr_cw) === Number(r.order) && (str(l.seria) === '0' || /SKIP/.test(str(l.typ))));
+        const done = (d.sessions || []).some(s => Number(s.tydzien) === Number(r.week) && String(s.jednostka) === String(r.day)) || ls.length;
+        const ex = ls.map(l => /FAIL/.test(str(l.typ)) ? num(l.kg) + '×' + str(l.powt) + ' FAIL' : num(l.kg) + '×' + str(l.powt) + (str(l.rpe) ? '@' + num(l.rpe) : '')).join(', ');
+        return 'tydz. ' + r.week + ': ' + pl + ' → ' + (ex || (skip ? 'pominięte' : done ? 'brak zapisanych serii' : 'jednostka niezrobiona')) + (skip && ex ? ' (skrócone)' : '');
+      });
+      out.push(head, '  ' + wk.join('; '));
+    });
+  });
+  const ds = plan.map(r => str(r.date)).filter(Boolean).sort(), od = ds[0] || '', doo = ds[ds.length - 1] || '';
+  const st = (d.stan || []).filter(s => { const t = str(s.data).slice(0, 10); return od && t >= od && t <= (doo || t) && Number(s.ocena) > 0; });
+  if (st.length) out.push('', 'Stan ciała (ból / napięcie zgłoszone poza treningiem): ' + st.slice(-12).map(s => str(s.data).slice(0, 10) + ' ' + str(s.miejsce) + (str(s.strona) ? ' ' + str(s.strona) : '') + ' ' + num(s.ocena) + '/10' + (str(s.kontekst) ? ' (' + str(s.kontekst) + (str(s.cwiczenie) ? ': ' + str(s.cwiczenie) : '') + ')' : '')).join('; ') + '.');
+  opt = opt || {};
+  out.push('', 'Zadanie: ułóż następny blok: ' + opt.weeks + ' tyg. (numery tygodni ' + opt.w0 + '–' + (opt.w0 + opt.weeks - 1) + '), start w poniedziałek ' + str(opt.start) + '. Każda lista "tygodnie" i "notatki" ma dokładnie ' + opt.weeks + ' elementów.');
+  if (str(opt.hint)) out.push('Wskazówki trenera (mają pierwszeństwo przed zasadami ogólnymi): „' + str(opt.hint) + '”');
+  return out.join('\n');
+}
+
+/** Zwarta postać wierszy szkicu do poprawki (czysta): jednostka → ćwiczenie → komórki tygodni. */
+function trPlanCompact_(rows) {
+  const s = v => v === undefined || v === null ? '' : String(v), u = {}, order = [];
+  (rows || []).slice().sort((a, b) => a.tydzien - b.tydzien || a.nr - b.nr).forEach(r => {
+    if (!u[r.jednostka]) { u[r.jednostka] = { t: r.tytul, ex: {}, names: [] }; order.push(r.jednostka); }
+    const x = u[r.jednostka];
+    if (!x.ex[r.cwiczenie]) { x.ex[r.cwiczenie] = []; x.names.push(r.cwiczenie); }
+    x.ex[r.cwiczenie].push('tydz. ' + r.tydzien + ' "' + s(r.serie) + ' x ' + s(r.powt) + ' | ' + s(r.kg) + ' | ' + (r.procent ? Math.round(r.procent * 1000) / 10 : '') + ' | ' + s(r.rpe_max) + '"');
+  });
+  return order.map(k => k + ' „' + s(u[k].t) + '”:\n' + u[k].names.map(n => '- ' + n + ': ' + u[k].ex[n].join(', ')).join('\n')).join('\n');
+}
+
+/** Zapytanie o szkic bloku (czyste). opt: {tweak, text, draft: wiersze poprzedniego szkicu}. */
+function aiPlanReq_(ctx, opt) {
+  opt = opt || {};
+  let msg = 'Dane:\n\n' + ctx;
+  const tw = opt.tweak === 'tekst' ? String(opt.text || '').trim().slice(0, 300) : PLAN_POPRAW[opt.tweak];
+  if (tw) msg += (opt.draft && opt.draft.length ? '\n\nPoprzedni szkic:\n' + trPlanCompact_(opt.draft) : '') + '\n\nPopraw szkic (zostaw resztę bez zmian, uzasadnienie napisz od nowa): ' + tw;
+  else msg += '\n\nUłóż szkic następnego bloku.';
+  return { model: AI_MODEL, max_tokens: 16000, system: AI_SYSTEM_PLAN, messages: [{ role: 'user', content: msg }],
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: AI_SCHEMA_PLAN } }, fallbacks: 'default' };
+}
+
+/** Komórka „4 x 5 | 92.5 | 75 | 8” (czysta) → {serie, powt, kg, procent, rpe_max} albo null. */
+function trPlanCell_(c) {
+  const p = String(c === undefined || c === null ? '' : c).split('|').map(x => x.trim());
+  const m = /^(\d+)\s*[x×]\s*(.+)$/i.exec(p[0] || '');
+  if (!m || !m[2].trim()) return null;
+  const n = v => { const x = Number(String(v).replace(',', '.')); return String(v).trim() !== '' && isFinite(x) ? x : NaN; };
+  const kg = n(p[1] || ''), pc = n(p[2] || ''), rpe = n(p[3] || '');
+  return { serie: Number(m[1]), powt: m[2].trim(), kg: isFinite(kg) ? Math.round(kg * 100) / 100 : String(p[1] || '').slice(0, 20),
+    procent: isFinite(pc) && pc > 0 ? Math.round((pc > 1.3 ? pc / 100 : pc) * 1000) / 1000 : '', rpe_max: isFinite(rpe) && rpe >= 5 && rpe <= 10 ? rpe : '' };
+}
+
+/**
+ * Wiersze planu ze szkicu AI (czysta). ai: {dlaczego, jednostki}; base: {klient, blok, w0, weeks, start (pn), prevRows: wiersze Planu
+ * poprzedniego bloku (nazwy kolumn arkusza)}. Z poprzedniego bloku (ta sama jednostka i nazwa, inaczej ta sama nazwa) przechodzą: grupa,
+ * zamienniki, dod_serie, drop, tryb, obwod, ciecie, serie_min. Obwód, który się rozsypał, jest usuwany. → {rows, why, errors}
+ */
+function trPlanRows_(ai, base) {
+  const errors = [], rows = [], s = v => v === undefined || v === null ? '' : String(v).trim();
+  const units = (ai && ai.jednostki) || [], N = base.weeks;
+  if (!units.length) return { rows: [], why: '', errors: ['AI nie zwróciło żadnej jednostki.'] };
+  const prevOf = (day, name) => { const ps = (base.prevRows || []).filter(r => s(r.cwiczenie) === name).sort((a, b) => Number(b.tydzien) - Number(a.tydzien));
+    return ps.find(r => s(r.jednostka) === day) || ps[0] || null; };
+  const KEEP = ['grupa', 'zamienniki', 'dod_serie', 'drop', 'tryb', 'obwod', 'ciecie', 'serie_min'];
+  const seen = {};
+  units.forEach(u => {
+    const day = s(u.jednostka).slice(0, 20), dz = Math.min(6, Math.max(0, Math.round(Number(u.dzien)) || 0));
+    if (!day || seen[day]) { errors.push('Jednostka „' + day + '” pusta albo powtórzona.'); return; }
+    seen[day] = 1;
+    (u.cwiczenia || []).forEach((e, i) => {
+      const name = s(e.cwiczenie).slice(0, 120), prev = prevOf(day, name);
+      for (let k = 0; k < N; k++) {
+        const c = trPlanCell_((e.tygodnie || [])[k]);
+        if (!c) { errors.push(day + ' ' + name + ' tydz. ' + (base.w0 + k) + ': brak serii i powtórzeń.'); continue; }
+        const r = { klient: base.klient, tydzien: base.w0 + k, jednostka: day, tytul: s(u.tytul).slice(0, 80), data: trAddDays_(base.start, 7 * k + dz), nr: i + 1, cwiczenie: name,
+          prio: ['A', 'B', 'K'].indexOf(s(e.prio)) >= 0 ? s(e.prio) : 'B', serie: Math.min(SETS_MAX, Math.max(1, c.serie)), powt: c.powt, procent: c.procent, kg: c.kg, rpe_max: c.rpe_max,
+          uwagi: s(e.uwagi).slice(0, 300), blok: base.blok };
+        KEEP.forEach(h => { if (prev && !blank_(prev[h])) r[h] = prev[h]; });
+        if (!blank_(r.serie_min) && Number(r.serie_min) > r.serie) delete r.serie_min;
+        const nt = s((u.notatki || [])[k]);
+        if (nt && i === 0) r.uwagi_jedn = nt.slice(0, 500);
+        rows.push(r);
+      }
+    });
+  });
+  let v = validatePlan_(rows);
+  if (v.some(x => /obwod/.test(x))) { rows.forEach(r => { delete r.obwod; }); v = validatePlan_(rows); }
+  return { rows: rows, why: s(ai.dlaczego).slice(0, 1500), errors: errors.concat(v) };
+}
+const trAddDays_ = (d, n) => new Date(Date.parse(String(d).slice(0, 10) + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+
+/** Szkic następnego bloku. opt: {blok, weeks, start, hint, tweak, text, draft}. → {blok, weeks, start, prevWeek, rows, prev, why, warnings, cost, n, limit} */
+function trBlokPlan(id, opt) {
+  id = String(id || '').trim().toLowerCase(); opt = opt || {};
+  const blok = String(opt.blok || '').trim(), N = Math.round(Number(opt.weeks));
+  if (!(N >= 1 && N <= PLAN_TYG_MAX)) throw new Error('Tygodnie: od 1 do ' + PLAN_TYG_MAX + '.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(opt.start || ''))) throw new Error('Podaj datę startu.');
+  const start = trAddDays_(opt.start, (7 - trDow_(opt.start)) % 7);           // poniedziałek w dniu startu albo po nim
+  aiPre_();
+  const row = trRow_(id), c = clientOf_(row), d = clientData_(c, Date.now());
+  d.cfg.masters = String(row[8] || '').trim().toUpperCase() === 'TAK';
+  const tz = Session.getScriptTimeZone(), day = x => x instanceof Date ? Utilities.formatDate(x, tz, 'yyyy-MM-dd') : String(x || '').slice(0, 10);
+  d.blocks = tableOf_('Bloki').filter(b => String(b.klient).trim().toLowerCase() === c.id).map(b => Object.assign({}, b, { od: day(b.od), do: day(b.do) }));
+  if (!trBlokSets_(d, blok)) throw new Error('W bloku ' + blok + ' nie ma zapisanych serii, więc AI nie ma z czego układać następnego (bez opłaty).');
+  const all = tableOf_('Plan').filter(r => String(r.klient).trim().toLowerCase() === c.id);
+  const w0 = Math.max(0, ...all.map(r => Number(r.tydzien) || 0)) + 1;
+  const nb = trBlokNext_(blok, all.map(r => String(r.blok || '').trim()));
+  const ctx = trPlanCtx_(d, blok, { weeks: N, w0: w0, start: start, hint: String(opt.hint || '').slice(0, 600) });
+  if (!ctx) throw new Error('Nie ma bloku ' + blok + ' tego klienta w zakładce Bloki. Kliknij „Przelicz teraz”.');
+  const r = aiCall_(aiPlanReq_(ctx, opt), ['szkic planu' + (opt.tweak ? ' · ' + opt.tweak : ''), id, w0, nb]);
+  let ai; try { ai = JSON.parse(r.text); } catch (e) { throw new Error('AI zwróciło szkic w złym formacie. Spróbuj ponownie (koszt ' + r.cost + ' $).'); }
+  const pr = trPlanRows_(ai, { klient: c.id, blok: nb, w0: w0, weeks: N, start: start,
+    prevRows: all.filter(x => String(x.blok || '').trim() === blok && !/^(klient|dodane|usuniete)/.test(String(x.zrodlo || ''))) });
+  if (!pr.rows.length) throw new Error('AI nie ułożyło planu: ' + pr.errors.slice(0, 3).join(' ') + ' Spróbuj ponownie.');
+  const pv = trPlanPrev_(d, blok);
+  return { blok: nb, weeks: Array.from({ length: N }, (x, i) => w0 + i), start: start, prevWeek: pv.prevWeek, rows: pr.rows, prev: pv.prev, why: pr.why,
+    warnings: pr.errors.slice(0, 8), cost: r.cost, n: r.n, limit: r.limit, model: r.model };
+}
+
+/** Wczytanie szkicu do planu: plik JSON w „_plany” i import od razu (jak plik z Dysku). → {text, status} */
+function trBlokWczytaj(id, rows) {
+  id = String(id || '').trim().toLowerCase();
+  trRow_(id);
+  if (!Array.isArray(rows) || !rows.length || rows.length > 2000) throw new Error('Szkic jest pusty.');
+  const allowed = PLAN_HEADERS.filter(h => h !== 'zrodlo');
+  rows = rows.map(r => { const o = {}; allowed.forEach(h => { if (r && r[h] !== undefined && r[h] !== null && r[h] !== '') o[h] = r[h]; }); o.klient = id; return o; });
+  const errs = validatePlan_(rows);
+  if (errs.length) throw new Error('Szkic nie przechodzi sprawdzenia: ' + errs.slice(0, 3).join(' | '));
+  const blok = String(rows[0].blok || ''), weeks = rows.map(r => Number(r.tydzien)), w0 = Math.min(...weeks), w1 = Math.max(...weeks);
+  const units = rows.map(r => r.tydzien + '|' + r.jednostka).filter((x, i, a) => a.indexOf(x) === i).length;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  let res;
+  try {
+    const dir = child_(rootFolder_(), '_plany');
+    const f = dir.createFile(id + '_' + blok + '_szkic-ai_' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmm') + '.json', JSON.stringify(rows, null, 1), 'application/json');
+    res = importPlanFile_(f, dir);
+  } finally { lock.releaseLock(); }
+  if (!res.ok) throw new Error('Import się nie udał (plik w _plany/bledy): ' + res.msg);
+  const first = rows.map(r => r.data).filter(Boolean).sort()[0];
+  return { status: res.status, text: 'Wczytano blok ' + blok + ': ' + units + ' jednostek, tydz. ' + (w0 === w1 ? w0 : w0 + '–' + w1) + (first ? ' (od ' + first.slice(8, 10) + '.' + first.slice(5, 7) + ')' : '') +
+    '. Import: ' + res.status + (res.msg ? ' · ' + res.msg : '') + '. Klient widzi plan w aplikacji.' };
 }
 
 /* ---------- klienci: lista, ustawienia (flagi z zakładki Klienci), nowy klient, nowy link ----------

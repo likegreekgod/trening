@@ -774,9 +774,9 @@ function komDraw(s){
   if (focus) { const t = document.querySelector('.kedit[data-u="' + CSS.escape(s.tydzien + '|' + s.jednostka) + '"] textarea'); if (t) t.focus(); }
 }
 const sesOf = el => { const u = el.closest('.kedit').dataset.u.split('|'); return (CUR.sessions || []).find(s => String(s.tydzien) === u[0] && String(s.jednostka) === u[1]); };
-document.addEventListener('input', e => { const t = e.target.closest('.kedit:not(.bedit) textarea'); if (!t || !CUR) return; const s = sesOf(t); (KD[kdKey(s)] = KD[kdKey(s)] || {}).text = t.value; });
+document.addEventListener('input', e => { const t = e.target.closest('.kedit:not(.bedit):not(.nbk) textarea'); if (!t || !CUR) return; const s = sesOf(t); (KD[kdKey(s)] = KD[kdKey(s)] || {}).text = t.value; });
 document.addEventListener('click', async e => {
-  const b = e.target.closest('.kedit:not(.bedit) [data-k]'); if (!b || b.tagName === 'TEXTAREA' || !CUR) return;
+  const b = e.target.closest('.kedit:not(.bedit):not(.nbk) [data-k]'); if (!b || b.tagName === 'TEXTAREA' || !CUR) return;
   const s = sesOf(b), k = kdKey(s), st = KD[k] = KD[k] || {}, saved = String(s.komentarz_trenera || ''), cid = CID;
   const cur = () => st.text !== undefined ? st.text : saved;
   st.err = '';
@@ -803,12 +803,124 @@ function blokList(d){
   const bl = (d.blocks || []).filter(b => String(b.blok) !== '(bez bloku)').sort((a, b) => String(b.od).localeCompare(String(a.od)));
   if (!bl.length) return '<div class="card es"><b>Brak bloków</b>Zakładka Bloki w arkuszu nie ma jeszcze wierszy tego klienta (liczy je „Przelicz teraz”).</div>';
   const f = (k, v) => v === '' || v === null || v === undefined ? '' : '<div><span class="eb">' + k + '</span><br>' + esc(v) + '</div>';
-  return bl.map(b => '<div class="card"><h2>Blok ' + esc(b.blok) + ' · ' + esc(dm(b.od)) + '–' + esc(dm(b.do)) + '</h2><div class="g3" style="font-size:14px">' +
+  return nbCard(d, bl[0]) + bl.map(b => '<div class="card"><h2>Blok ' + esc(b.blok) + ' · ' + esc(dm(b.od)) + '–' + esc(dm(b.do)) + '</h2><div class="g3" style="font-size:14px">' +
     f('Tygodnie / jednostki', [b.tygodnie, b.jednostki].filter(x => x !== '').join(' / ')) + f('Wykonanie', b['wykonanie_%'] !== '' ? b['wykonanie_%'] + '%' : '') + f('Tonaż', nf(b.tonaz_kg) > 0 ? fmt1(nf(b.tonaz_kg) / 1000) + ' t' : '') +
     f('Zmiana e1RM', b.e1RM_zm) + f('Najlepsze boje', b.najlepsze_boje) + f('sRPE śr. / samopoczucie', [b.sRPE_sr, b.samopocz_sr].filter(x => x !== '').join(' / ')) +
     f('Dyspozycja', b.dyspozycja) + f('Ból max', b.bol_max) + f('Statusy', b.statusy) + '</div>' +
     blokBox(b) + '</div>').join('');
 }
+/* ---------- karta klienta → Bloki: szkic następnego bloku z AI (trBlokPlan) i wczytanie do planu (trBlokWczytaj) ----------
+ * AI dostaje ostatni blok (plan i wykonanie tydzień po tygodniu, światła, nieudane, pominięte, ból, wnioski trenera) i zwraca
+ * wiersze planu; serwer dokłada klienta, blok, tygodnie (ciągła numeracja), daty, sprawdza je validatePlan_ jak plik z Dysku.
+ * Szkic (NB) tylko w pamięci strony; do arkusza trafia dopiero po „Wczytaj do planu” (plik w _plany/ i import od razu). */
+const NB = {};                                   // klient → {weeks, start, hint, fix, busy, err, draft, sure, done}
+const NB_FIX = [['lzej', 'Lżej'], ['ciezej', 'Ciężej'], ['mniej', 'Mniej serii'], ['inny', 'Inny szkic']];
+function nbDefaults(d, b){
+  const rows = (d.plan || []).filter(r => !r.own && String(r.block || '') === String(b.blok));
+  const weeks = [...new Set(rows.map(r => r.week))], last = rows.map(r => r.date).filter(Boolean).sort().pop() || PUL.today;
+  const from = last > PUL.today ? last : PUL.today, dow = (new Date(from + 'T12:00:00Z').getUTCDay() + 6) % 7;
+  return { weeks: Math.min(8, Math.max(1, weeks.length || 4)), start: TL.addDays(from, 7 - dow) };
+}
+function nbCell(r, w){
+  const lb = '<i class="lb">Tydz. ' + esc(w) + '</i>';
+  if (!r) return '<td class="nbe">' + lb + '–</td>';
+  const kg = r.kg === '' || r.kg === undefined ? '' : typeof r.kg === 'number' ? pl(r.kg) + ' kg' : esc(r.kg);
+  const pct = r.procent ? ' · ' + pl(Math.round(r.procent * 1000) / 10) + '%' : '';
+  return '<td>' + lb + '<b>' + esc(r.serie) + '×' + esc(r.powt) + '</b>' + (kg || pct ? '<br>' + kg + pct : '') + (r.rpe_max ? '<br><span class="muted">RPE ' + pl(r.rpe_max) + '</span>' : '') + '</td>';
+}
+const LIGHT = { L: '🟢', S: '🟡', W: '🔴', X: '✖' };
+function nbPrev(p){
+  if (!p) return '<td class="nbp muted"><i class="lb">Ostatnio</i>nowe</td>';
+  return '<td class="nbp"><i class="lb">Ostatnio</i>' + esc(p.sets) + '×' + esc(p.reps) + (p.kg !== '' && p.kg !== undefined ? ' · ' + (typeof p.kg === 'number' ? pl(p.kg) + ' kg' : esc(p.kg)) : '') +
+    (p.lights ? '<br><span class="lt" aria-label="wysiłek serii">' + p.lights.split('').map(c => LIGHT[c] || '·').join('') + '</span>' : '') + '</td>';
+}
+function nbDiff(r, p){
+  if (!p) return '<span class="dif new">nowe</span>';
+  const a = typeof r.kg === 'number' ? r.kg : NaN, b = typeof p.kg === 'number' ? p.kg : NaN;
+  if (isFinite(a) && isFinite(b) && a !== b) return '<span class="dif ' + (a > b ? 'up' : 'dn') + '">' + (a > b ? '+' : '−') + pl(Math.abs(Math.round((a - b) * 10) / 10)) + ' kg</span>';
+  if (Number(r.serie) !== Number(p.sets)) return '<span class="dif">' + esc(p.sets) + '→' + esc(r.serie) + ' serii</span>';
+  return '<span class="dif same">bez zmian</span>';
+}
+function nbDraft(st, b){
+  const dr = st.draft, dis = st.busy ? ' disabled' : '';
+  const units = {};
+  dr.rows.forEach(r => { const u = units[r.jednostka] = units[r.jednostka] || { day: r.jednostka, title: r.tytul, first: r.data || '9', ex: {}, order: [], unote: {} };
+    if (r.data && r.data < u.first) u.first = r.data; if (r.uwagi_jedn) u.unote[r.tydzien] = r.uwagi_jedn;
+    if (!u.ex[r.cwiczenie]) { u.ex[r.cwiczenie] = { name: r.cwiczenie, prio: r.prio, nr: r.nr, uwagi: r.uwagi, w: {} }; u.order.push(r.cwiczenie); }
+    u.ex[r.cwiczenie].w[r.tydzien] = r; });
+  const W = dr.weeks;
+  const tables = Object.values(units).sort((a, c) => a.first.localeCompare(c.first)).map(u => {
+    const days = W.map(w => (dr.rows.find(r => r.jednostka === u.day && r.tydzien === w) || {}).data).filter(Boolean);
+    const rows = u.order.map(n => u.ex[n]).sort((a, c) => a.nr - c.nr).map(e => { const p = (dr.prev || {})[u.day + '|' + e.name], f = e.w[W[0]];
+      return '<tr><th scope="row"><span class="pp pp-' + esc(e.prio) + '">' + esc(e.prio) + '</span> ' + esc(e.name) + (f ? '<br>' + nbDiff(f, p) : '') + (e.uwagi ? '<br><span class="muted nbu">' + esc(e.uwagi) + '</span>' : '') + '</th>' +
+        nbPrev(p) + W.map(w => nbCell(e.w[w], w)).join('') + '</tr>'; }).join('');
+    return '<div class="nbu-c"><div class="eb">' + esc(u.day) + (days[0] ? ' · ' + esc(DOW[new Date(days[0] + 'T12:00:00Z').getUTCDay()]) + ' od ' + esc(dm(days[0])) : '') + '</div><h3>' + esc(u.title || u.day) + '</h3>' +
+      Object.keys(u.unote).sort((a, c) => a - c).map(w => '<p class="note"><span class="eb">Od trenera · tydz. ' + esc(w) + '</span><br>' + esc(u.unote[w]) + '</p>').join('') +
+      '<div class="nbt-w"><table class="nbt"><thead><tr><th scope="col">Ćwiczenie</th><th scope="col">Ostatnio · tydz. ' + esc(dr.prevWeek) + '</th>' + W.map((w, i) => '<th scope="col">Tydz. ' + w + (i === W.length - 1 && dr.deload === w ? ' · lżej' : '') + '</th>').join('') + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+  }).join('');
+  const nUnits = new Set(dr.rows.map(r => r.tydzien + '|' + r.jednostka)).size;
+  const flag = '<div class="aiflag">' + SPARK + '<div><b>Szkic AI. Przejrzyj przed wczytaniem.</b>Klient nie zobaczy niczego, dopóki nie klikniesz „Wczytaj do planu”. Pojedyncze liczby poprawisz potem w zakładce Plan.</div></div>';
+  const why = '<div class="nbwhy"><div class="eb">Dlaczego tak</div><p class="kom">' + esc(dr.why) + '</p></div>';
+  const warn = (dr.warnings || []).length ? '<p class="note lv-warn">' + dr.warnings.map(esc).join('<br>') + '</p>' : '';
+  const fix = '<div class="row"><span class="hint">Popraw szkic:</span><div class="chips">' + NB_FIX.map(c => '<button class="chip" type="button" data-nb="fix" data-t="' + c[0] + '"' + dis + '>' + c[1] + '</button>').join('') + '</div></div>' +
+    '<div class="row nbfix"><input data-nbf="fix" value="' + esc(st.fix || '') + '" maxlength="300" placeholder="Własna poprawka, np. „przysiad 3 razy w tygodniu”, „bez rwania z zawieszenia”"' + dis + ' aria-label="Własna poprawka szkicu"><button class="b" type="button" data-nb="fixtxt"' + (st.fix && st.fix.trim() && !st.busy ? '' : ' disabled') + '>Popraw</button></div>';
+  const go = st.sure
+    ? '<span class="err">Wczytać blok ' + esc(dr.blok) + ' do planu? Klient zobaczy go w aplikacji od razu.</span><span class="sp"></span><button class="b" type="button" data-nb="nosure"' + dis + '>Nie</button><button class="b p" type="button" data-nb="load"' + dis + '>' + (st.busy ? 'Wczytuję…' : 'Tak, wczytaj') + '</button>'
+    : '<span class="hint">' + (st.busy ? 'AI układa blok, to trwa do minuty…' : 'koszt szkicu ' + pl(dr.cost.toFixed(2)) + ' $ · dziś ' + dr.n + ' z ' + dr.limit) + '</span><span class="sp"></span>' +
+      '<button class="b" type="button" data-nb="json"' + dis + '>Pobierz JSON</button><button class="b" type="button" data-nb="drop"' + dis + '>Odrzuć</button><button class="b p" type="button" data-nb="sure"' + dis + '>Wczytaj do planu</button>';
+  return flag + '<h2 style="margin:6px 0 2px">Blok ' + esc(dr.blok) + ' · tyg. ' + W[0] + '–' + W[W.length - 1] + ' · od ' + esc(dowDm(dr.start)) + '</h2>' +
+    '<p class="hint" style="margin:0 0 8px">' + nUnits + ' jednostek · ' + Object.keys(units).length + ' w tygodniu · ' + dr.rows.length + ' wierszy planu, sprawdzone jak plik z Dysku</p>' +
+    why + warn + tables + fix + '<div class="row">' + go + '</div>';
+}
+function nbCard(d, b){
+  const st = NB[CID] = NB[CID] || Object.assign({}, nbDefaults(d, b)), dis = st.busy ? ' disabled' : '';
+  const err = st.err ? '<p class="err" role="alert">' + esc(st.err) + (/Ustawienia/.test(st.err) ? ' <a href="#ustawienia">Otwórz Ustawienia</a>' : '') + '</p>' : '';
+  let inner;
+  if (st.done) inner = '<p class="saved">✓ ' + esc(st.done) + '</p><div class="row"><a class="b" href="#k/' + encodeURIComponent(CID) + '/plan" style="display:inline-flex;align-items:center;text-decoration:none">Otwórz Plan ›</a></div>';
+  else if (st.draft) inner = nbDraft(st, b);
+  else inner = '<p class="hint" style="margin:0 0 10px">AI układa blok ' + esc(nextBlok(b.blok)) + ' na podstawie bloku ' + esc(b.blok) + ': co wyszło (światła, nieudane, pominięte), ból, Twoje wnioski. Te same jednostki i ćwiczenia, chyba że wpiszesz inaczej.</p>' +
+    '<div class="nbform"><label><span class="eb">Tygodnie</span><input type="number" min="1" max="8" data-nbf="weeks" value="' + esc(st.weeks) + '"' + dis + '></label>' +
+    '<label><span class="eb">Start (poniedziałek)</span><input type="date" data-nbf="start" value="' + esc(st.start) + '"' + dis + '></label>' +
+    '<label class="nbh"><span class="eb">Wskazówki dla AI (opcjonalnie)</span><textarea data-nbf="hint" rows="2" maxlength="600" placeholder="np. więcej pracy nad rwaniem, ostatni tydzień lżejszy, bez martwego ciągu (plecy)"' + dis + '>' + esc(st.hint || '') + '</textarea></label></div>' +
+    '<div class="row"><button class="b p ai" type="button" data-nb="go"' + dis + '>' + SPARK + (st.busy ? 'Układam blok…' : 'Szkic następnego bloku') + '</button><span class="hint">' + (st.busy ? 'to trwa do minuty…' : 'ok. 0,10–0,20 $ za szkic') + '</span></div>' +
+    '<details class="ctx"><summary>Co dostaje AI (bez imienia klienta)</summary><ul><li>plan bloku ' + esc(b.blok) + ' tydzień po tygodniu i wykonanie: najlepsza seria, światła, nieudane, pominięte</li><li>ból z miejscem, dyspozycja, RPE sesji, komentarze klienta</li>' +
+    '<li>Twoje wnioski po bloku i Twoje zasady: kg w dół do 2,5, po samych 🟢 +2,5 kg, rpe_max to sufit, K = korekcyjne, boje bez serii dodatkowych</li><li>tryb (PRO / PROSTY), skala, masters, sufit w bojach</li></ul></details>';
+  return '<div class="card nb" id="nb"><h2>Następny blok</h2><div class="kedit nbk" style="border:0;margin:0;padding:0">' + inner + err + '</div></div>';
+}
+function nextBlok(b){ const m = /^(.*?)(\d+)$/.exec(String(b || '')); return m ? m[1] + (Number(m[2]) + 1) : String(b || 'B') + '2'; }
+function nbDraw(){ const el = document.getElementById('nb'); if (!el || !CUR) return; const b = blokLast(CUR); if (b) el.outerHTML = nbCard(CUR, b); }
+const blokLast = d => (d.blocks || []).filter(b => String(b.blok) !== '(bez bloku)').sort((a, b) => String(b.od).localeCompare(String(a.od)))[0];
+document.addEventListener('input', e => { const t = e.target.closest('#nb [data-nbf]'); if (!t || !CID) return; const st = NB[CID]; st[t.dataset.nbf] = t.dataset.nbf === 'weeks' ? Number(t.value) : t.value;
+  if (t.dataset.nbf === 'fix') { const b = document.querySelector('#nb [data-nb="fixtxt"]'); if (b) b.disabled = !t.value.trim(); } });
+document.addEventListener('click', async e => {
+  const el = e.target.closest('#nb [data-nb]'); if (!el || !CUR) return;
+  const k = el.dataset.nb, cid = CID, st = NB[cid], b = blokLast(CUR);
+  st.err = '';
+  if (k === 'sure') { st.sure = true; return nbDraw(); }
+  if (k === 'nosure') { st.sure = false; return nbDraw(); }
+  if (k === 'drop') { NB[cid] = Object.assign({}, nbDefaults(CUR, b), { weeks: st.weeks, start: st.start, hint: st.hint }); return nbDraw(); }
+  if (k === 'json') {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(st.draft.rows, null, 1)], { type: 'application/json' }));
+    a.download = cid + '_' + st.draft.blok + '_szkic.json'; document.body.appendChild(a); a.click(); a.remove(); return;
+  }
+  if (k === 'go' || k === 'fix' || k === 'fixtxt') {
+    if (k === 'go' && !(st.weeks >= 1 && st.weeks <= 8)) { st.err = 'Tygodnie: 1–8.'; return nbDraw(); }
+    const opt = { blok: b.blok, weeks: st.weeks, start: st.start, hint: (st.hint || '').trim() };
+    if (k !== 'go') { opt.tweak = k === 'fix' ? el.dataset.t : 'tekst'; opt.text = k === 'fixtxt' ? st.fix.trim() : ''; opt.draft = st.draft.rows; }
+    st.busy = true; nbDraw();
+    try { st.draft = await guard(api('trBlokPlan', cid, opt)); st.fix = ''; }
+    catch (err) { if (!err.auth) st.err = err.message; }
+    st.busy = false; if (CID === cid) nbDraw();
+    return;
+  }
+  if (k === 'load') {
+    st.busy = true; nbDraw();
+    try { const r = await guard(api('trBlokWczytaj', cid, st.draft.rows)); NB[cid] = { done: r.text }; delete CK[cid]; }
+    catch (err) { st.busy = false; st.sure = false; if (!err.auth) st.err = err.message; }
+    if (CID === cid) nbDraw();
+  }
+});
+
 /* ---------- zamknięcie bloku: wnioski (tylko trener) i „dla klienta” (Postęp → Blok w aplikacji), szkic AI obu naraz (trBlokSzkic), zapis trBlok ---------- */
 const BD = {};                                   // klient|blok → {w, k, ai, busy, err, ok, edit, cost, n, limit}; tylko w pamięci strony
 const bdKey = b => CID + '|' + b.blok;

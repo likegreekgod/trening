@@ -21,8 +21,8 @@ Panel w przeglądarce (głównie komputer), dostępny z każdego miejsca, do kon
 | 3c | Wnioski i „dla klienta” bloku w panelu (`trBlok`) ze szkicem AI obu naraz (`trBlokSzkic`, `trBlokCtx_`, `aiBlokParse_`); notatka do jednostki | bloki: zrobione (v64); notatka do jednostki: zrobione w PR 7 (v78) |
 | 4 | Claude API: „✦ Szkic AI” komentarza do sesji (`trSzkic`, `trSzkicCtx_`, `aiReq_`; poprawki Krócej / Cieplej / Bardziej technicznie / Inny szkic), limit dzienny, zakładka „AI” (tokeny, koszt w USD) | zrobione (v56, PR #81); bez zapytania do API, gdy sesja nie ma zapisanych serii (v58, PR #83); klucz wklejany w panelu → Ustawienia (v60, PR #85); krótszy szkic: najwyżej 4 zdania, decyzja z liczbą (v61, na gałęzi) |
 | 6 | Klienci w panelu: lista z linkami (kopiuj / wyślij), ustawienia klienta (flagi z zakładki Klienci), nowy link, nowy klient (`trKlienci`, `trKlientUstaw`, `trKlientNowy`, `trKlientLink`) | zrobione na gałęzi (v71) |
-| 7 | Szybka zmiana planu: karta klienta → Plan, „Edytuj” w niezrobionej jednostce (serie, powt., kg, %, RPE, uwagi, notatka do jednostki), opcjonalnie kolejne tygodnie o tę samą różnicę (`trPlan`, `trPlanEdit_`, `trPlanVal_`) | zrobione na gałęzi (v78) |
-| 5 | Asystent planu: szkic bloku jako JSON → `validatePlan_` → `_plany/` | do zrobienia |
+| 7 | Szybka zmiana planu: karta klienta → Plan, „Edytuj” w niezrobionej jednostce (serie, powt., kg, %, RPE, uwagi, notatka do jednostki), opcjonalnie kolejne tygodnie o tę samą różnicę (`trPlan`, `trPlanEdit_`, `trPlanVal_`) | scalony (PR #104, v78) |
+| 5 | Asystent planu: karta klienta → Bloki → „Następny blok”: szkic AI całego bloku (`trBlokPlan`, `trPlanCtx_`, `trPlanPrev_`, `aiPlanReq_` ze structured outputs, `trPlanRows_` → `validatePlan_`), poprawki, „Wczytaj do planu” (`trBlokWczytaj` → plik w `_plany/` → `importPlanFile_`) | zrobione na gałęzi (v79) |
 
 ## Uruchomienie (raz, po scaleniu PR 1–2)
 
