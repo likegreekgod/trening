@@ -1123,7 +1123,8 @@ function trPlanEdit_(plan, ses, log, clientId, e) {
   if (cur.some(x => own_(x.r))) return { error: 'To własny trening klienta – nie zmienia się go w panelu.' };
   const done = {};
   (ses || []).concat(log || []).forEach(s => { if (lc(s.klient) === clientId) done[Number(s.tydzien) + '|' + String(s.jednostka).trim()] = 1; });
-  if (done[week + '|' + day]) return { error: 'Ta jednostka jest już zrobiona (albo klient zaczął ją zapisywać) – zmiany tylko w niezrobionych.' };
+  // live = zmiana z prowadzonego treningu (aplikacja w trybie trenera): bieżąca jednostka może być zaczęta
+  if (done[week + '|' + day] && !e.live) return { error: 'Ta jednostka jest już zrobiona (albo klient zaczął ją zapisywać) – zmiany tylko w niezrobionych.' };
   const blok = lc(cur[0].r.blok);
   const later = !e.next ? [] : [...new Set(mine.filter(x => Number(x.r.tydzien) > week && String(x.r.jednostka).trim() === day && lc(x.r.blok) === blok && !own_(x.r) && !done[Number(x.r.tydzien) + '|' + day])
     .map(x => Number(x.r.tydzien)))].sort((a, b) => a - b);

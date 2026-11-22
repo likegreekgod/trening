@@ -3045,3 +3045,49 @@ test('Rozgrzewka: „+ rozgrzewka” podsuwa kolejny krok propozycji, potem pust
   assert.deepEqual(b.p.errors, []);
   await b.ctx.close();
 });
+
+test('Prowadź trening (tryb trenera): bilet trenera zamiast klucza, notatka, zmiana planu, + Ćwiczenie; bez biletu logowanie', async () => {
+  const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  const ex = (week, date, order, name, prio, kg) => ({ week, day: 'T1', title: 'Nogi', date, order, name, prio, sets: 3, reps: '5', pct: null, kg, rpe: 8, note: '', extra: 1, drop: 0, block: 'B2' });
+  const LD = { cfg: { name: 'Ania', pain: true, simple: false, extra: 1, swap: 'DOWOLNA', scale: 'RPE', edit: true, own: true, live: true },
+    plan: [ex(12, day(-7), 1, 'Przysiad tylny', 'A', 82.5), ex(12, day(-7), 2, 'Martwy ciąg rumuński', 'B', 70), ex(13, day(0), 1, 'Przysiad tylny', 'A', 85), ex(13, day(0), 2, 'Martwy ciąg rumuński', 'B', 70)],
+    logs: [1, 2, 3].map(s => ({ id: 'ania|12|T1|1|' + s, tydzien: 12, jednostka: 'T1', data: day(-7), nr_cw: 1, cwiczenie: 'Przysiad tylny', seria: s, kg: 82.5, powt: 5, rpe: 8, wykonane: 'TAK', typ: '', zapisano: day(-7) + 'T17:00:00.000Z', notatka_trenera: '', komentarz_trenera: '' })),
+    sessions: [{ id: 'ania|12|T1', tydzien: 12, jednostka: 'T1', data: day(-7), start: day(-7) + 'T16:00:00.000Z', rpe_sesji: 8 }] };
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const JWT = b64({ alg: 'none' }) + '.' + b64({ exp: Math.floor(Date.now() / 1000) + 3600, email: 't@example.com' }) + '.sig';
+  const api = b => b.fn === 'getExNames' ? [['Wykrok w tył', '', 'pośladki']] : b.fn === 'trPlan' ? { n: 1, weeks: [13], rows: [{ week: 13, day: 'T1', order: 1, f: { kg: 87.5 } }] } : null;
+  // bez biletu: karta logowania, nic nie idzie do API
+  {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: LD, api });
+    await p.goto(base + '?prowadz=ania'); await p.waitForSelector('#main a[href*="trener.html#prowadz/ania"]');
+    assert.equal(calls.length, 0);
+    await ctx.close();
+  }
+  for (const scheme of ['light', 'dark']) {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: LD, api, scheme });
+    await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); localStorage.setItem('key', 'kmojklucz01'); } catch (e) {} }, JWT);
+    await p.goto(base + '?prowadz=ania&j=13%7CT1'); await p.waitForSelector('.set[data-o="1"]');
+    assert.match(await p.textContent('#eyebrow'), /Prowadzisz · Ania/);
+    assert.equal(await p.isVisible('#live-back'), true);
+    assert.equal(await p.isHidden('#nav [data-tab="dysp"]'), true);
+    assert.equal(await p.isHidden('#nav [data-tab="trener"]'), true);
+    await p.click('.set[data-o="1"][data-s="1"] .ok');
+    await p.waitForFunction(() => document.querySelector('.tnote textarea'));
+    await p.fill('.tnote textarea', 'Kolana lepiej. Zostajemy na 85.'); await p.click('[data-tnp="1"]'); await p.click('[data-tns]');
+    await p.click('[data-tplan="1"]'); await p.fill('#tp-kg', '87,5'); await p.click('#tp-ok');
+    await p.waitForTimeout(300);
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `prowadz-${scheme}.png`) }); }
+    await p.click('#fx-add'); await p.fill('#ed-q', 'wykr'); await p.waitForSelector('#ed-res [data-n]'); await p.click('#ed-res [data-n]'); await p.click('#ed-ok');
+    await p.waitForFunction(() => document.querySelectorAll('.card[data-card]').length >= 3);
+    for (const c of calls) { assert.equal(c.key, undefined, c.fn); assert.equal(c.as, 'ania', c.fn); assert.equal(c.token, JWT, c.fn); }
+    const note = calls.find(c => c.fn === 'liveNote');
+    assert.deepEqual(note.args[0], { week: 13, day: 'T1', order: 1, text: 'Kolana lepiej. Zostajemy na 85.', pub: true });
+    const tp = calls.find(c => c.fn === 'trPlan');
+    assert.equal(tp.args[0], 'ania'); assert.equal(tp.args[1].live, true); assert.deepEqual(tp.args[1].ex, [{ order: 1, kg: '87,5' }]);
+    const ed = calls.find(c => c.fn === 'editPlan');
+    assert.equal(ed.args[0].trainer, true); assert.equal(ed.args[0].name, 'Wykrok w tył');
+    assert.equal(await p.evaluate(() => localStorage.getItem('key')), 'kmojklucz01');   // klucz trenera-klienta (własny trening) nietknięty
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});

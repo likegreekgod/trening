@@ -62,6 +62,7 @@ function route(){
   if (!PUL) return;
   document.body.classList.remove('pvfs');
   let h = (location.hash || '#dzis').slice(1).split('/'), v = h[0];
+  if (v === 'prowadz' && h[1]) { location.replace(liveHref(decodeURIComponent(h[1]))); return; }   // powrót z aplikacji po ponownym zalogowaniu
   if (v === 'pulpit' || !v) v = 'dzis';                          // stary adres pulpitu = ekran Dziś
   const kid = v === 'k' ? decodeURIComponent(h[1] || '') : '';
   const sec = v === 'k' ? 'klienci' : v;                         // karta klienta należy do „Klienci”
@@ -139,6 +140,8 @@ const agoTxt = c => c.ago === null || c.ago === undefined || c.ago === '' ? 'bra
 const stLv = s => /dużo/.test(s) ? 'lv-bad' : /uwaga|lekko/.test(s) ? 'lv-warn' : /OK/.test(s) ? 'lv-ok' : '';
 function frac(s){ const m = /^(\d+)\/(\d+)$/.exec(String(s || '')); return m ? [+m[1], +m[2]] : [0, 0]; }
 function head(eb, title, tools){ return '<div class="top"><div><div class="eb">' + eb + '</div><h1>' + esc(title) + '</h1></div><div class="tools">' + (tools || '') + '</div></div>'; }
+/** aplikacja klienta w trybie trenera („Prowadź trening”): ?prowadz=<klient_id>, opcjonalnie &j=<tydzień>|<jednostka> */
+const liveHref = (id, week, day) => './?prowadz=' + encodeURIComponent(id) + (week ? '&j=' + encodeURIComponent(week + '|' + day) : '');
 const go = (href, t, cls) => '<a class="sb' + (cls ? ' ' + cls : '') + '" href="' + href + '">' + t + '</a>';
 const kHref = (id, tab) => '#k/' + encodeURIComponent(id) + (tab ? '/' + tab : '');
 const plN = (n, one, few, many) => n === 1 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many;
@@ -163,8 +166,8 @@ function dzisRow(u){
     : u.st === 'live' ? 'w trakcie, ' + u.done + (u.sets ? ' z ' + u.sets : '') + ' ' + plN(u.sets || u.done, 'serii', 'serii', 'serii') : 'czeka';
   const sub = [u.title, u.st === 'wait' ? exN : '', st].filter(Boolean).join(' · ');
   const bar = u.st === 'live' && u.sets ? '<span class="dbar"><i style="width:' + Math.min(100, Math.round(u.done / u.sets * 100)) + '%"></i></span>' : '';
-  // miejsce na „Prowadź” (trening na żywo z telefonu trenera): na razie przycisk prowadzi do planu klienta
-  const act = u.st === 'wait' ? go(kHref(u.id, 'plan'), 'Plan', 'acc') : u.st === 'live' ? go(kHref(u.id), 'Podgląd') : go(kHref(u.id, 'sesje'), 'Sesja');
+  // „▶ Prowadź”: aplikacja klienta w trybie trenera (zapis serii, notatki, ćwiczenia) na tę jednostkę
+  const act = u.st === 'done' ? go(kHref(u.id, 'sesje'), 'Sesja') : go(liveHref(u.id, u.week, u.day), '▶ Prowadź', 'acc');
   return '<div class="dr" data-dz="' + esc(u.id + '|' + u.week + '|' + u.day) + '"><span class="ini ' + lvOf(c) + '">' + esc((u.name || '?')[0].toUpperCase()) + '<i></i></span>' +
     '<div class="tx"><b>' + esc(u.name) + '</b><small>' + esc(sub) + '</small>' + bar + '</div>' + act + '</div>';
 }
@@ -730,7 +733,7 @@ async function renderKlient(id, tab){
   else if (tab === 'bloki') body = blokList(d);
   else if (tab === 'dyspozycja') body = dyspList(d);
   else body = przeglad(d, c, sets, dates, today);
-  $('#main').innerHTML = head(eb, d.cfg.name || c.name, '<a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#filmy/' + encodeURIComponent(id) + '">Filmy klienta</a><a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#klienci/' + encodeURIComponent(id) + '">Ustawienia</a>') + tabs + '<div class="pg">' + body + '</div>';
+  $('#main').innerHTML = head(eb, d.cfg.name || c.name, '<a class="b p" style="display:inline-flex;align-items:center;text-decoration:none" href="' + liveHref(id) + '">▶ Prowadź trening</a><a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#filmy/' + encodeURIComponent(id) + '">Filmy klienta</a><a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#klienci/' + encodeURIComponent(id) + '">Ustawienia</a>') + tabs + '<div class="pg">' + body + '</div>';
 }
 function painOf(s){
   let top = ['', NaN];

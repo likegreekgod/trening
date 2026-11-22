@@ -2,6 +2,16 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-22 · „Prowadź trening”: trener prowadzi trening klienta ze swojego telefonu (v83)
+
+- Damian chce na treningu z podopiecznym zapisywać serie, zmieniać kg, dodawać ćwiczenia i jednostki oraz pisać notatki ze swojego telefonu, w tym samym arkuszu. Klient nie widzi panelu ani trybu trenera.
+- Tryb trenera to aplikacja klienta (`index.html?prowadz=<klient_id>`), nie osobny ekran w panelu: ta sama karta ćwiczenia, kolejka offline i zapis serii. Wejście tylko z biletem Google trenera (`tr_tok` z panelu, ta sama strona); serwer przyjmuje `{token, as}` tylko dla funkcji z `LIVE_FNS` i sam bierze klucz klienta z zakładki Klienci. Klucz klienta nie trafia do telefonu trenera; dane i kolejka leżą pod `L_<klient_id>`, osobno od własnego treningu trenera.
+- Zapis prowadzi trener: serie trafiają do Logu klienta jak zwykle, Sesje dostają `prowadzil` = trener; u klienta jednostka jest zrobiona.
+- Notatka przy ćwiczeniu domyślnie „tylko ja” (`Log.notatka_trenera`, nowa kolumna na końcu, nigdy nie wraca w `getData` klienta); „dla klienta” = `komentarz_trenera` (klient widzi w zakładce Trener). Jedna notatka na ćwiczenie, w jednym wierszu serii (`liveNoteRow_`).
+- „+ Ćwiczenie” i „Nowa jednostka” to plan trenera (`Plan.zrodlo` = trener): liczą się do wykonania planu jak zwykłe wiersze, klient widzi je jak plan. „✎ zmień plan” to `trPlan` z flagą `live` (wolno zmienić jednostkę w trakcie).
+- Bilet Google wygasa po godzinie: zapisy czekają w kolejce, aplikacja pokazuje „Zaloguj się ›” (panel loguje i wraca do treningu).
+- Domyślnie tryb skupienia, bez zakładek Dyspozycja i Trener.
+
 ## 2026-11-22 · Nowy układ panelu trenera: menu i ekran „Dziś” (v81)
 
 - Damianowi nie podobał się wygląd i układ panelu. Wybrał (przegląd v80, punkt 2) wykonanie według szkiców, w 3 PR-ach: menu + „Dziś”, potem karta klienta + Plan, potem reszta ekranów.

@@ -211,6 +211,26 @@
     return e.old ? e : Object.assign({}, e, { sets: a[j].sets });
   });
   /** następna wolna nazwa własnej jednostki w tygodniu: W1, W2… */
+  /** nowa jednostka trenera z prowadzonego treningu: T<n> po najwyższym numerze jednostki w tym tygodniu (dowolny przedrostek) */
+  L.liveNextDay = (plan, week) => {
+    const n = plan.filter(r => r.week === week).map(r => +((/(\d+)$/.exec(String(r.day)) || [])[1] || 0));
+    return 'T' + ((n.length ? Math.max(...n) : 0) + 1);
+  };
+  /**
+   * notatka trenera do ćwiczenia (prowadzony trening): wiersz serii, w którym siedzi (jak liveNoteRow_ w Code.gs).
+   * rows = [{seria, notatka_trenera, komentarz_trenera}] → indeks albo -1: wiersz z notatką lub komentarzem (pierwszy wg serii),
+   * inaczej najniższa seria robocza, inaczej pierwszy; bez pominięć (seria 0).
+   */
+  L.liveNoteRow = rows => {
+    const ord = s => { const n = Number(s); return isFinite(n) && String(s).trim() !== '' ? n : 1e6; };
+    const ix = (rows || []).map((r, i) => i).filter(i => String(rows[i].seria).trim() !== '0')
+      .sort((a, b) => ord(rows[a].seria) - ord(rows[b].seria) || String(rows[a].seria).localeCompare(String(rows[b].seria)));
+    const has = i => String(rows[i].notatka_trenera || '').trim() || String(rows[i].komentarz_trenera || '').trim();
+    const pick = ix.find(has);
+    if (pick !== undefined) return pick;
+    const work = ix.find(i => ord(rows[i].seria) >= 1 && ord(rows[i].seria) < 1e6);
+    return work !== undefined ? work : ix.length ? ix[0] : -1;
+  };
   L.ownNextDay = (plan, week) => {
     const n = plan.filter(r => r.week === week && /^W\d+$/.test(r.day)).map(r => +r.day.slice(1));
     return 'W' + ((n.length ? Math.max(...n) : 0) + 1);
@@ -553,10 +573,11 @@
       weeks.forEach(w => {
         const rows = plan.filter(r => inU(r, w));
         // już jest: w kolejnych tygodniach dowolne ćwiczenie o tej nazwie, w tej jednostce wcześniej dodane (ponowne naniesienie tej samej zmiany nic nie dubluje)
-        if (!rows.length || rows.some(r => lc(r.name) === lc(name) && (w !== week || r.added))) return;
-        const order = Math.max(L.EDIT_NR, ...rows.map(r => Number(r.order) || 0), ...removed.filter(x => inU(x, w)).map(x => Number(x.order) || 0)) + 1, b = rows[0];
-        out.push({ week: w, day, title: b.title, date: b.date, order, name, prio: 'A', sets, reps, pct: null, kg, rpe: '', note: '', extra: null, drop: 0,
-          group: '', block: b.block || '', swaps: [], infos: e.infos || [], parts: e.parts || [], added: true });
+        // trener (prowadzony trening): zwykłe ćwiczenie planu (coach, prio B, nr po ostatnim), ta sama nazwa dodana przez trenera = już jest
+        if (!rows.length || rows.some(r => lc(r.name) === lc(name) && (w !== week || r.added || (e.trainer && r.coach)))) return;
+        const order = Math.max(e.trainer ? 0 : L.EDIT_NR, ...rows.map(r => Number(r.order) || 0), ...removed.filter(x => inU(x, w)).map(x => Number(x.order) || 0)) + 1, b = rows[0];
+        out.push({ week: w, day, title: b.title, date: b.date, order, name, prio: e.trainer ? 'B' : 'A', sets, reps, pct: null, kg, rpe: '', note: '', extra: null, drop: 0,
+          group: '', block: b.block || '', swaps: [], infos: e.infos || [], parts: e.parts || [], ...(e.trainer ? { coach: true } : { added: true }) });
         n++;
       });
       return { plan: out, removed: rem, n };

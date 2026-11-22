@@ -73,6 +73,24 @@
   h1{margin:2px 0 0;font:800 25px/1.02 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink-2);
      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   #sync{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right;flex:none}
+  /* trening prowadzony przez trenera (?prowadz=): pasek w kolorze akcentu, „‹ Panel”, notatka trenera i „zmień plan” w karcie */
+  .hr{display:flex;gap:10px;align-items:baseline;flex:none}
+  #live-back{font:700 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--bar-ink);text-decoration:none;padding:6px 0}
+  #live-back.warn{background:var(--surface);color:var(--bad);border-radius:var(--r);padding:6px 8px}
+  body.live header{--bar:var(--accent);--bar-ink:var(--on-accent);--bar-muted:var(--on-accent);--bar-line:var(--on-accent);border-bottom-color:var(--primary)}
+  .tplan{margin-left:8px;border:1px dashed var(--accent);color:var(--accent);background:transparent;border-radius:var(--r);padding:4px 8px;min-height:32px;font:600 13px var(--f-body);vertical-align:middle}
+  .tnote{margin-top:12px;border:1px dashed var(--line);border-radius:var(--r);padding:10px 12px;background:var(--surface-2)}
+  .tn-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+  .tn-h b{font:600 12px/1.3 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .seg2{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .seg2 button{border:0;background:transparent;padding:6px 12px;min-height:36px;font:600 13px var(--f-body);color:var(--ink);white-space:nowrap}
+  .seg2 button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary)}
+  .tnote textarea{width:100%;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:8px 10px;font-size:15px;resize:vertical}
+  .tn-f{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
+  .tn-s{color:var(--muted);font-size:12px}
+  .fx-nav .fx-add{flex:none;white-space:nowrap}
+  label.chk{display:flex;gap:10px;align-items:center;min-height:44px;font-size:14px;margin:4px 0 8px}
+  label.chk input{width:22px;height:22px;flex:none}
   .stats{display:flex;flex-wrap:wrap;gap:4px 0;margin-top:6px}
   .stats:empty{display:none}
   .stats span{display:flex;align-items:baseline;gap:6px;padding:0 12px;border-left:1px solid var(--line);
@@ -882,7 +900,7 @@ function introShow(el){                                  // true = zasłona stoi
 })();
 </script>
 <header>
-  <div class="hrow"><span class="eyebrow"><img class="logo" src="icons/favicon.svg" alt="" width="20" height="20"><span id="eyebrow"></span></span><span id="sync">ładowanie…</span></div>
+  <div class="hrow"><span class="eyebrow"><img class="logo" src="icons/favicon.svg" alt="" width="20" height="20"><span id="eyebrow"></span></span><span class="hr"><span id="sync">ładowanie…</span><a id="live-back" href="trener.html" hidden>‹ Panel</a></span></div>
   <div class="trow"><h1 id="title">Siła z Ruchu</h1><span id="hx"></span></div>
   <div class="stats" id="stats"></div>
 </header>
@@ -914,8 +932,13 @@ function introShow(el){                                  // true = zasłona stoi
 const API_URL = window.API_URL;                    // z config.js
 // Klucz działa jak hasło: po zapamiętaniu znika z paska adresu (historia przeglądarki, zrzuty ekranu, udostępniony adres).
 // Gdy pamięć telefonu nie działa (np. tryb prywatny), klucz zostaje w adresie, bo inaczej przeładowanie zgubiłoby plan.
-const KEY_LINK = !!new URLSearchParams(location.search).get('k');   // wejście z linku od trenera (ekran powitalny)
+// Trening prowadzony przez trenera (panel → „▶ Prowadź”): ?prowadz=<klient_id>[&j=<tydzień>|<jednostka>]. Zapytania idą z biletem
+// Google trenera (tr_tok, zapisuje go panel) zamiast klucza klienta; klucz trenera-klienta w pamięci („key”) zostaje nietknięty.
+const LIVE = (() => { const v = new URLSearchParams(location.search).get('prowadz') || ''; return /^[\w.-]{1,40}$/.test(v) ? v.toLowerCase() : ''; })();
+let LIVE_J = LIVE ? new URLSearchParams(location.search).get('j') || '' : '';
+const KEY_LINK = !LIVE && !!new URLSearchParams(location.search).get('k');   // wejście z linku od trenera (ekran powitalny)
 const KEY = (() => {
+  if (LIVE) return 'L_' + LIVE;                    // pamięć telefonu trenera osobno dla każdego prowadzonego klienta
   const k = new URLSearchParams(location.search).get('k');
   try {
     if (k) {
@@ -963,9 +986,29 @@ function qGet(){ try { return JSON.parse(localStorage.getItem(QK) || '[]'); } ca
 function qSet(q){ try { localStorage.setItem(QK, JSON.stringify(q)); } catch(e){} }
 // API Apps Script: POST text/plain (bez preflight CORS) → {ok, result} | {ok:false, error}
 function call(fn, ...args){
-  return fetch(API_URL, { method: 'POST', redirect: 'follow', body: JSON.stringify({ fn, key: KEY, args }) })
+  const body = LIVE ? { fn, token: liveTok(), as: LIVE, args } : { fn, key: KEY, args };
+  return fetch(API_URL, { method: 'POST', redirect: 'follow', body: JSON.stringify(body) })
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(j => { if (!j.ok) throw new Error(j.error || 'błąd serwera'); return j.result; });
+    .then(j => { if (!j.ok) { if (LIVE && /^Logowanie: /.test(j.error || '')) liveAuthLost(); throw new Error(j.error || 'błąd serwera'); } return j.result; });
+}
+/* ---------- tryb trenera (prowadzony trening): bilet Google z panelu ---------- */
+/** bilet trenera z panelu (tr_tok), ważny jeszcze co najmniej minutę; inaczej '' */
+function liveTok(){
+  try { const t = localStorage.getItem('tr_tok') || '', p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return p.exp * 1000 > Date.now() + 60e3 ? t : ''; } catch (e) { return ''; }
+}
+const LIVE_LOGIN = 'trener.html#prowadz/' + encodeURIComponent(LIVE);
+/** bilet wygasł w trakcie treningu: zapisy czekają w kolejce, link do ponownego logowania wraca tu po zalogowaniu */
+function liveAuthLost(){
+  const a = $('#live-back'); if (a && !a.classList.contains('warn')) { a.textContent = 'Zaloguj się ›'; a.href = LIVE_LOGIN; a.classList.add('warn'); toast('Logowanie wygasło. Zapisy czekają w telefonie – zaloguj się ponownie w panelu.'); }
+}
+/** start bez ważnego biletu: najpierw logowanie w panelu (po nim panel wraca do tego treningu) */
+function liveLogin(){
+  $('#nav').hidden = true;
+  head('Prowadzisz trening', 'Zaloguj się');
+  $('#main').innerHTML = `<section class="card first"><div class="cn">Zaloguj się w panelu trenera</div><p class="sub">Prowadzenie treningu działa tylko po zalogowaniu Twoim kontem Google. Po zalogowaniu wrócisz tutaj.</p>
+    <a class="btn p" href="${LIVE_LOGIN}">Zaloguj się</a></section>`;
+  setSync('');
 }
 /* ---------- zgłaszanie błędów do zakładki „Błędy” (trener widzi je w Przeglądzie) ----------
  * Najwyżej ERR_DAY zgłoszeń dziennie, ten sam opis raz na dzień; bez kolejki (gdy nie ma sieci, nie ma czego zgłaszać).
@@ -974,7 +1017,7 @@ const ERR_DAY = 5, ERK = 'err_' + KEY;
 const isNet = e => /Failed to fetch|NetworkError|Load failed|HTTP 5|timeout/i.test(String(e && e.message || e));
 function reportErr(kind, msg){
   try {
-    if (!KEY || navigator.onLine === false || !msg) return;
+    if (!KEY || navigator.onLine === false || !msg || /Logowanie: /.test(String(msg))) return;
     const day = localDate(), m = JSON.parse(localStorage.getItem(ERK) || '{}'), s = m.day === day ? m : { day, n: 0, seen: [] }, k = kind + '|' + String(msg).slice(0, 120);
     if (s.n >= ERR_DAY || s.seen.indexOf(k) >= 0) return;
     s.n++; s.seen.push(k); localStorage.setItem(ERK, JSON.stringify(s));
@@ -1294,6 +1337,7 @@ function openPlates(ex){
 const DK = 'd_' + KEY;
 function useData(d){
   applyCfg(d.cfg);
+  LN = {};
   DATA = d; PLAN = d.plan; LOGS = {}; SESS = {};
   if (!FXM) FXI = null;                                           // tryb skupienia: świeże dane (start z pamięci telefonu, potem serwer) wybierają krok od nowa, dopóki klient sam nie przeszedł dalej
   d.logs.forEach(l => LOGS[l.id] = l);
@@ -1311,6 +1355,7 @@ function useData(d){
     if (it.fn === 'saveStan') applyStan(p, false);                             // ból / napięcie czekające w kolejce
     if (it.fn === 'deleteStan') applyStanDel(p, false);
     if (it.fn === 'replyNote') applyReply(p, false);                          // odpowiedź na komentarz trenera czekająca w kolejce
+    if (it.fn === 'liveNote') LN[[p.week, p.day, p.order].join('|')] = { text: p.text, pub: !!p.pub };   // notatka trenera czekająca w kolejce
   });
 }
 /** nowe daty jednostek w planie (lokalnie; serwer dostaje je przez send/kolejkę); save = zapis w pamięci telefonu */
@@ -1320,6 +1365,7 @@ function applyMoves(moves, save){
 }
 function load(){
   if (!KEY) { askKey(); setSync(''); return; }
+  if (LIVE && !liveTok()) { liveLogin(); return; }
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(DK) || 'null'); } catch (e) {}
   if (cached) { useData(cached); pickDefault(); render(); setSync('offline – ostatnie dane'); welMaybe(); }
@@ -1327,9 +1373,11 @@ function load(){
     try { localStorage.setItem(DK, JSON.stringify(d)); } catch (e) {}
     const keep = cached ? { w: cur.week, d: cur.day } : null;
     useData(d);
-    if (keep) { cur.week = keep.w; cur.day = keep.d; } else pickDefault();
+    if (keep && !LIVE_J) { cur.week = keep.w; cur.day = keep.d; } else pickDefault();
+    LIVE_J = '';
     render(); setSync('gotowe'); flush(); vqRun(); welMaybe();
   }).catch(e => {
+    if (LIVE && /^Logowanie: /.test(e.message)) { if (!cached) liveLogin(); return; }
     if (!cached) { $('#main').innerHTML = '<div class="empty">Błąd: ' + esc(e.message) + '</div>'; setSync('błąd'); }
     else setSync('offline – ostatnie dane');
   });
@@ -1359,6 +1407,8 @@ function askKey(){
 function pickDefault(){
   const s = pickUnit(unitList(), localDate());       // dzisiejsza niezrobiona, potem najbliższa następna (strefa telefonu)
   if (s) { cur.week = s.week; cur.day = s.day; }
+  const j = LIVE_J.split('|');                       // „▶ Prowadź” z panelu na konkretną jednostkę
+  if (LIVE_J && PLAN.some(r => r.week === +j[0] && r.day === j.slice(1).join('|'))) { cur.week = +j[0]; cur.day = j.slice(1).join('|'); }
   WK = null;
 }
 const lid = (ex, set) => ['', cur.week, cur.day, ex.order, set].join('|');
@@ -1381,7 +1431,7 @@ addEventListener('beforeinstallprompt', e => { e.preventDefault(); BIP = e; if (
 addEventListener('appinstalled', () => { BIP = null; if (WEL) { WEL.installed = true; if (WEL.step === 1) welDraw(); } });
 // iPhone otwiera aplikację z ekranu początkowego pod start_url z manifestu i z osobną pamięcią: manifest z kluczem w start_url,
 // żeby nie pytała o link (gdyby Safari go nie przyjął, zostaje askKey i przycisk „Kopiuj link” na ekranie powitalnym)
-if (PLAT === 'ios' && KEY && !STANDALONE) fetch('manifest.json').then(r => r.json()).then(m => {
+if (PLAT === 'ios' && KEY && !LIVE && !STANDALONE) fetch('manifest.json').then(r => r.json()).then(m => {
   const l = document.querySelector('link[rel="manifest"]');
   if (l) l.href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(TL.keyManifest(m, new URL('./', location.href).href, KEY)));
 }).catch(() => {});
@@ -1502,7 +1552,7 @@ const tipEl = t => [...document.querySelectorAll(t.sel)].find(e => e.offsetParen
 function tipDraw(go){
   let box = $('#tip');
   if (TIP) { TIP.el.classList.remove('tipring'); TIP = null; }
-  const id = TAB === 'trening' ? nextTip(TIPS.map(t => t.id), tipSeen(), TIPS.filter(tipEl).map(t => t.id)) : '';
+  const id = TAB === 'trening' && !LIVE ? nextTip(TIPS.map(t => t.id), tipSeen(), TIPS.filter(tipEl).map(t => t.id)) : '';
   if (!id) { if (box) box.hidden = true; return; }
   const tip = TIPS.find(t => t.id === id), el = tipEl(tip);
   if (!TIPN) { const seen = tipSeen(); TIPN = TIPS.map(t => t.id).filter(x => !seen.includes(x)); }
@@ -1561,7 +1611,8 @@ function emptyCard(icon, title, text, btn){
 }
 const ES_GO = ['data-go="trening"', 'Przejdź do treningu'];
 function head(eyebrow, title, stats, extra){
-  $('#eyebrow').textContent = eyebrow; $('#title').textContent = title; $('#stats').innerHTML = stats || ''; $('#hx').innerHTML = extra || '';
+  // tryb trenera: czyj trening (data jest w pasku tygodnia)
+  $('#eyebrow').textContent = LIVE && NAME ? 'Prowadzisz · ' + NAME : eyebrow; $('#title').textContent = title; $('#stats').innerHTML = stats || ''; $('#hx').innerHTML = extra || '';
 }
 const weekLabel = w => { const b = blockInfo(PLAN, w); return b ? 'Blok ' + b.block + ' · tydz. ' + b.n : 'Tydz. ' + w; };
 /** czas, serie zrobione/wszystkie, tonaż bieżącej jednostki w nagłówku */
@@ -2155,7 +2206,7 @@ function renderPlan(){
         ${u.done ? '<span class="sub">Zrobiona — dnia nie zmienisz.</span>' : `<button type="button" class="btn" data-mv="${k}">Zmień dzień</button>`}
 </div></section>`;
   });
-  if (ownOn()) h += '<button type="button" class="ghost own-new" id="own-new">+ własny trening</button>';
+  if (ownOn()) h += `<button type="button" class="ghost own-new" id="own-new">${LIVE ? '+ nowa jednostka' : '+ własny trening'}</button>`;
   $('#plan').innerHTML = h;
   const on = $('#own-new'); if (on) on.onclick = () => openOwn(null);
   const unitOf = k => list.find(u => u.week + '|' + u.day === k);
@@ -2347,14 +2398,14 @@ function bindLen(){
 }
 function openAdd(){
   let name = '';
-  openSheet(`<h2 id="sheet-t">Dodaj ćwiczenie</h2><p class="sub">${esc((curExs()[0] || {}).title || cur.day)} · na koniec treningu</p>
+  openSheet(`<h2 id="sheet-t">Dodaj ćwiczenie</h2><p class="sub">${esc((curExs()[0] || {}).title || cur.day)} · ${LIVE ? 'od razu w planie: ' + esc(NAME) : 'na koniec treningu'}</p>
     <label class="fl">Szukaj ćwiczenia<input id="ed-q" autocomplete="off" placeholder="np. wykroki, curl, plank"></label>
     <div id="ed-res" class="ow-res"></div>
     <p class="sub" id="ed-sel" aria-live="polite"></p>
     <div class="ed-3"><label class="fl">Serie<input id="ed-sets" inputmode="numeric" value="3"></label><label class="fl">Powt.<input id="ed-reps" value="10"></label><label class="fl">Kg<input id="ed-kg" inputmode="decimal" placeholder="—"></label></div>
     ${lenSeg('Na stałe = także w kolejnych tygodniach tego treningu (' + esc(cur.day) + '), do końca obecnego planu.')}
     <p class="hint" id="ed-err" role="alert" hidden></p>
-    <button type="button" class="btn p" id="ed-ok" disabled>Dodaj do treningu</button>
+    <button type="button" class="btn p" id="ed-ok" disabled>${LIVE ? 'Dodaj do treningu: ' + esc(NAME) : 'Dodaj do treningu'}</button>
     <button type="button" class="btn" data-close>Anuluj</button>`);
   const q = $('#ed-q'), pick = n => {
     name = n; const last = PLAN.slice().reverse().find(r => r.name === n);
@@ -2372,10 +2423,11 @@ function openAdd(){
   exnLoad(() => { const qq = $('#ed-q'); if (qq) res(qq.value); });
   const len = bindLen();
   $('#ed-ok').onclick = () => {
-    const p = Object.assign({ op: 'add', week: cur.week, day: cur.day, name, sets: $('#ed-sets').value, reps: $('#ed-reps').value, kg: $('#ed-kg').value, forever: len() }, edDx(name));
+    const p = Object.assign({ op: 'add', week: cur.week, day: cur.day, name, sets: $('#ed-sets').value, reps: $('#ed-reps').value, kg: $('#ed-kg').value, forever: len() }, LIVE ? { trainer: true } : {}, edDx(name));
     const r = planEdit(DATA.plan, DATA.removed || [], edDone(), p);
     if (r.error || !r.n) { const er = $('#ed-err'); er.textContent = r.error || 'To ćwiczenie jest już dodane do tego treningu.'; er.hidden = false; return; }
     closeSheet(); const n = edSend(p);
+    if (LIVE && FX) { FXI = focusSteps(curExs(), circuitGroups(curExs())).length - 1; FXM = true; }   // tryb skupienia: od razu nowe ćwiczenie
     toast('Dodano: ' + name + (n > 1 ? ' (ten trening i ' + (n - 1) + ' ' + plural(n - 1, 'kolejny', 'kolejne', 'kolejnych') + ').' : '.'));
     renderTrening();
     const c = [...document.querySelectorAll('.card[data-card]')].pop(); if (c) c.scrollIntoView({ block: 'center' });
@@ -2471,6 +2523,7 @@ function navDot(){
 }
 /** nowe komentarze = karta na górze Treningu; wszystkie są w zakładce Trener */
 function notesCard(){
+  if (LIVE) return '';                                            // trener prowadzi trening: komentarze są dla klienta
   const fresh = cnFresh(); if (!fresh.length) return '';
   return `<section class="cnote" aria-label="Nowe komentarze trenera"><h3>Trener skomentował</h3>${cnList(fresh)}
     <p class="cn-s">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>
@@ -2528,9 +2581,10 @@ function applyOwn(u, save){
     return { infos: p ? p.infos : b && /^https?:\/\//i.test(String(b[1])) ? [{ n: b[0], u: b[1] }] : [],
       parts: p ? p.parts || [] : b && b[2] ? String(b[2]).split(';').map(s => s.trim()).filter(Boolean) : [] };
   };
-  const rows = u.exercises.map((e, i) => ({ week: u.week, day: u.day, title: 'Własny' + (u.title ? ' · ' + u.title : ''), date: u.date, order: i + 1,
+  const coach = LIVE && /^T\d/.test(String(u.day));            // trener: jednostka planu (Plan.zrodlo „trener”), nie własny trening
+  const rows = u.exercises.map((e, i) => ({ week: u.week, day: u.day, title: coach ? u.title || 'Trening' : 'Własny' + (u.title ? ' · ' + u.title : ''), date: u.date, order: i + 1,
     name: e.name, prio: 'A', sets: +e.sets, reps: String(e.reps), pct: null, kg: kgOf(e.kg), rpe: '', note: '', extra: null, drop: 0,
-    group: '', block, swaps: [], infos: dx(e.name).infos, parts: dx(e.name).parts, own: true, circuit: e.circuit || '' }));
+    group: '', block, swaps: [], infos: dx(e.name).infos, parts: dx(e.name).parts, ...(coach ? { coach: true } : { own: true }), circuit: e.circuit || '' }));
   DATA.plan = DATA.plan.filter(r => !(r.week === u.week && r.day === u.day)).concat(rows); PLAN = DATA.plan;
   if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
 }
@@ -2539,8 +2593,9 @@ function openOwn(unit){
       list: unit.rows.slice().sort((a, b) => a.order - b.order).map(r => ({ name: r.name, sets: r.sets, reps: String(r.reps), kg: r.kg === '' ? '' : String(fmtKg(r.kg)), old: true, c: r.circuit || '' })) }
     : { date: localDate(), title: '', list: [], edit: false };
   OWN.part = ''; OWN.pick = -1;
-  openSheet(`<h2 id="sheet-t">${OWN.edit ? 'Dodaj ćwiczenie' : 'Własny trening'}</h2>
-    <p class="sub">${OWN.edit ? 'Dopisz ćwiczenia do tego treningu.' : 'Poza planem trenera. Trener zobaczy go w arkuszu.'}</p>
+  const lv = LIVE && !OWN.edit;                                  // trener: nowa jednostka w planie klienta (bieżący blok)
+  openSheet(`<h2 id="sheet-t">${OWN.edit ? 'Dodaj ćwiczenie' : lv ? 'Nowa jednostka: ' + esc(NAME) : 'Własny trening'}</h2>
+    <p class="sub">${OWN.edit ? 'Dopisz ćwiczenia do tego treningu.' : lv ? 'Trafi do planu jako Twoja jednostka (bieżący blok), od razu do prowadzenia.' : 'Poza planem trenera. Trener zobaczy go w arkuszu.'}</p>
     ${OWN.edit ? '' : `<label class="fl">Dzień<input type="date" id="ow-date" value="${OWN.date}"></label>
     <label class="fl">Tytuł (opcjonalnie)<input id="ow-title" maxlength="40" placeholder="np. Ramiona" value=""></label>`}
     <label class="fl">Szukaj ćwiczenia<input id="ow-q" autocomplete="off" placeholder="np. curl, przysiad, plank"></label>
@@ -2548,7 +2603,7 @@ function openOwn(unit){
     <div id="ow-res" class="ow-res"></div>
     <div class="lbl ow-h">Wybrane ćwiczenia</div><div id="ow-list"></div>
     <p class="hint" id="ow-err" role="alert" hidden></p>
-    <button type="button" class="btn p" id="ow-save">${OWN.edit ? 'Zapisz' : 'Zapisz i zacznij'}</button>
+    <button type="button" class="btn p" id="ow-save">${OWN.edit ? 'Zapisz' : lv ? 'Zapisz i prowadź' : 'Zapisz i zacznij'}</button>
     <button type="button" class="btn" data-close>Anuluj</button>`);
   const q = $('#ow-q');
   q.oninput = () => ownRes(q.value);
@@ -2569,7 +2624,7 @@ function ownParts(){
 function ownRes(q){
   const mine = [...new Set(PLAN.slice().reverse().map(r => r.name))], part = OWN.part || '', res = exSearch(mine, EXN.list, q, part ? 60 : 12, part);
   const exact = res.some(r => r.name.toLowerCase() === String(q).trim().toLowerCase());
-  $('#ow-res').innerHTML = (q.trim() ? '' : part ? `<div class="lbl">${esc(part)} · ${res.length}${res.length === 60 ? '+' : ''}</div>` : '<div class="lbl">Twoje ćwiczenia</div>') +
+  $('#ow-res').innerHTML = (q.trim() ? '' : part ? `<div class="lbl">${esc(part)} · ${res.length}${res.length === 60 ? '+' : ''}</div>` : (LIVE ? '<div class="lbl">Z planu: ' + esc(NAME) + '</div>' : '<div class="lbl">Twoje ćwiczenia</div>')) +
     res.map(r => `<button type="button" class="opt ow-add" data-n="${esc(r.name)}">${esc(r.name)}${r.film ? '<small class="ow-f">film</small>' : ''}</button>`).join('') +
     (q.trim() && !exact ? `<button type="button" class="opt ow-add ow-new" data-n="${esc(q.trim().replace(/\s+/g, ' ').slice(0, 80))}">+ Dodaj „${esc(q.trim().slice(0, 80))}” jako nowe ćwiczenie</button>` : '') +
     (q.trim() && !res.length ? '<p class="sub">Nie ma takiego ćwiczenia w bazie' + (part ? ' w tej partii' : '') + '. Możesz dodać je pod własną nazwą — trener podepnie film.</p>' : '');
@@ -2637,7 +2692,7 @@ function ownSave(){
   if (!OWN.edit) {
     const d = $('#ow-date').value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return err('Wybierz dzień.');
-    OWN.date = d; OWN.title = $('#ow-title').value.trim(); OWN.week = ownWeek(PLAN, d); OWN.day = ownNextDay(PLAN, OWN.week);
+    OWN.date = d; OWN.title = $('#ow-title').value.trim(); OWN.week = ownWeek(PLAN, d); OWN.day = LIVE ? TL.liveNextDay(PLAN, OWN.week) : ownNextDay(PLAN, OWN.week);
   }
   const u = { week: OWN.week, day: OWN.day, date: OWN.date, title: OWN.title,
     exercises: OWN.list.map(e => ({ name: e.name, sets: +e.sets, reps: e.t && !e.old ? parseInt(e.reps) + ' s' : String(e.reps).trim(), kg: String(e.kg || '').trim(), ...(e.c ? { circuit: e.c } : {}) })) };
@@ -2645,7 +2700,7 @@ function ownSave(){
   send('addOwnUnit', u).catch(() => {});
   closeSheet();
   cur.week = u.week; cur.day = u.day; TAB = 'trening'; WK = null; render(); window.scrollTo(0, 0);
-  toast(OWN.edit ? 'Dodano do treningu.' : 'Własny trening gotowy.');
+  toast(OWN.edit ? 'Dodano do treningu.' : LIVE ? 'Nowa jednostka w planie.' : 'Własny trening gotowy.');
 }
 /* Samsung Internet z trybem ciemnym przyciemnia aplikację po swojemu (czarny nagłówek, szare karty): podpowiedź, żeby otworzyć ją w Chrome; „Rozumiem” chowa ją na stałe (sb_<klucz>) */
 const SBK = 'sb_' + KEY;
@@ -2705,7 +2760,7 @@ function renderTrening(){
     s0.title || cur.day,
     `<span>Czas <b class="clock">${clockText()}</b></span><span>Serie <b id="st-sets"></b></span><span>Tonaż <b id="st-ton"></b> kg</span>`,
     (SIMPLE ? '' : `<span class="sc" role="group" aria-label="Skala">${['RPE', 'RIR'].map(s => `<button type="button" data-sc="${s}" aria-pressed="${SCALE === s}">${s}</button>`).join('')}</span>`) +
-    (exs.length > 1 || (!sessDone(cur.week, cur.day) && unitEntries().length) ? `<button type="button" class="hmore" id="umore" aria-label="Więcej akcji: ${esc(s0.title || cur.day)}">${MORE_SVG}</button>` : ''));
+    (exs.length > 1 || LIVE || (!sessDone(cur.week, cur.day) && unitEntries().length) ? `<button type="button" class="hmore" id="umore" aria-label="Więcej akcji: ${esc(s0.title || cur.day)}">${MORE_SVG}</button>` : ''));
   document.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => {
     SCALE = b.dataset.sc; try { localStorage.setItem('sc_' + KEY, SCALE); } catch (e) {}
     renderTrening();
@@ -2747,6 +2802,7 @@ function renderTrening(){
         ${open ? '<button type="button" class="opt" id="cut"><i aria-hidden="true">⏱</i>Skróć trening<small>gdy brakuje czasu</small></button>' : ''}
         ${fx ? '' : '<button type="button" class="opt" id="fold-all"><i aria-hidden="true">▴</i>Zwiń zrobione</button>'}
         ${calOk(unitList().find(x => x.week === cur.week && x.day === cur.day)) ? `<button type="button" class="opt" id="u-cal"><i aria-hidden="true">${CAL_SVG}</i>Dodaj do kalendarza<small>Google, iPhone</small></button>` : ''}
+        ${LIVE ? '<button type="button" class="opt" id="u-new"><i aria-hidden="true">＋</i>Nowa jednostka<small>w planie, od razu do prowadzenia</small></button>' : ''}
         <button type="button" class="opt" id="fx-sw"><i aria-hidden="true">${fx ? '☰' : '▣'}</i>${fx ? 'Cała lista' : 'Tryb skupienia'}<small>${fx ? 'wszystkie ćwiczenia' : 'jedno ćwiczenie na ekranie'}</small></button>
         ${open && unitEntries().length ? '<button type="button" class="opt warnopt" id="u-reset"><i aria-hidden="true">↺</i>Wyczyść trening<small>od zera</small></button>' : ''}
       </div>
@@ -2757,6 +2813,7 @@ function renderTrening(){
     const uc = $('#u-cal'); if (uc) uc.onclick = () => { const l = unitList(), u = l.find(x => x.week === cur.week && x.day === cur.day), m = mondayOf(u.date);
       openCal(u, l.filter(x => calOk(x) && x.date >= m && x.date <= addDays(m, 6))); };
     const ur = $('#u-reset'); if (ur) ur.onclick = () => openReset(s0);
+    const un = $('#u-new'); if (un) un.onclick = () => { closeSheet(); openOwn(null); };
   };
 }
 function rxPro(ex){
@@ -2970,6 +3027,82 @@ function openCut(){
   };
 }
 const plannedDrops = ex => Number(ex.drop) || 0;
+/* ---------- tryb trenera: notatka do ćwiczenia i zmiana planu w trakcie treningu ----------
+ * Notatka (liveNote) siedzi w jednym wierszu serii ćwiczenia (lib liveNoteRow = liveNoteRow_ w Code.gs): „tylko ja” → Log.notatka_trenera
+ * (klient jej nie dostaje), „dla klienta” → Log.komentarz_trenera (zakładka Trener u klienta). LN = zapisane w tej wizycie / w kolejce,
+ * TND = niezapisany tekst i przełącznik (tylko w pamięci strony, przetrwa przerysowanie karty).
+ */
+let LN = {};
+const TND = {};
+const lnKey = ex => [cur.week, cur.day, ex.order].join('|');
+function liveNoteOf(ex){
+  const k = lnKey(ex); if (TND[k]) return TND[k];
+  if (LN[k]) return LN[k];
+  const rows = Object.values(exLogs(ex)).filter(l => l && !l.deleted).map(l => ({ seria: String(l.id).split('|')[4], notatka_trenera: l.notatka_trenera, komentarz_trenera: l.komentarz_trenera }));
+  const i = TL.liveNoteRow(rows), r = i >= 0 ? rows[i] : {}, priv = String(r.notatka_trenera || '').trim(), pub = String(r.komentarz_trenera || '').trim();
+  return { text: priv || pub, pub: !priv && !!pub };
+}
+function liveNoteBox(ex){
+  const n = liveNoteOf(ex);
+  return `<div class="tnote" data-tn="${ex.order}"><div class="tn-h"><b>Notatka trenera</b><span class="seg2" role="group" aria-label="Kto widzi notatkę">` +
+    `<button type="button" data-tnp="0" aria-pressed="${!n.pub}">🔒 tylko ja</button><button type="button" data-tnp="1" aria-pressed="${!!n.pub}">👁 dla klienta</button></span></div>` +
+    `<textarea rows="2" maxlength="600" aria-label="Notatka trenera: ${esc(ex.name)}" placeholder="np. kolana uciekają w 5. powt.">${esc(n.text)}</textarea>` +
+    `<div class="tn-f"><small class="tn-s" aria-live="polite">${n.pub ? 'Klient zobaczy ją w zakładce Trener.' : 'Widzisz ją tylko Ty (arkusz i ten tryb).'}</small><button type="button" class="btn sm" data-tns>Zapisz</button></div></div>`;
+}
+function liveNoteSave(box){
+  const ex = curExs().find(x => x.order === +box.dataset.tn); if (!ex) return;
+  const k = lnKey(ex), text = box.querySelector('textarea').value.trim(), pub = box.querySelector('[data-tnp="1"]').getAttribute('aria-pressed') === 'true';
+  if (!Object.values(exLogs(ex)).some(l => l && !l.deleted && String(l.id).split('|')[4] !== '0')) { toast('Zapisz najpierw jedną serię – notatka trafi do niej.'); return; }
+  LN[k] = { text, pub }; delete TND[k];
+  send('liveNote', { week: cur.week, day: cur.day, order: ex.order, text, pub }).catch(() => {});
+  box.querySelector('.tn-s').textContent = !text ? 'Notatka usunięta.' : pub ? 'Zapisano ✓ · klient zobaczy ją w zakładce Trener.' : 'Zapisano ✓ · tylko dla Ciebie.';
+}
+/** „✎ zmień plan”: serie, powt., kg i RPE max ćwiczenia w planie (trPlan z live: bieżąca jednostka może być zaczęta), opcjonalnie też kolejne tygodnie */
+function openTPlan(order){
+  const ex = curExs().find(x => x.order === order); if (!ex) return;
+  const v = x => x === null || x === undefined ? '' : esc(String(typeof x === 'number' ? fmtKg(x) : x));
+  openSheet(`<h2 id="sheet-t">Zmień plan</h2><p class="sub">${esc(ex.name)} · ${esc(ex.title || cur.day)}</p>
+    <div class="ed-3"><label class="fl">Serie<input id="tp-sets" inputmode="numeric" value="${v(ex.sets)}"></label><label class="fl">Powt.<input id="tp-reps" value="${v(ex.reps)}"></label><label class="fl">Kg<input id="tp-kg" inputmode="decimal" value="${v(ex.kg)}"></label></div>
+    <label class="fl">RPE max (puste = bez)<input id="tp-rpe" inputmode="decimal" value="${v(ex.rpe)}"></label>
+    <label class="chk"><input type="checkbox" id="tp-next"> Także kolejne tygodnie tej jednostki (kg o tę samą różnicę)</label>
+    <p class="hint" id="tp-err" role="alert" hidden></p>
+    <button type="button" class="btn p" id="tp-ok">Zapisz w planie</button>
+    <button type="button" class="btn" data-close>Anuluj</button>`);
+  $('#tp-ok').onclick = () => {
+    const err = t => { const e = $('#tp-err'); e.textContent = t; e.hidden = false; };
+    const ch = { order: ex.order }, val = { sets: $('#tp-sets').value.trim(), reps: $('#tp-reps').value.trim(), kg: $('#tp-kg').value.trim(), rpe: $('#tp-rpe').value.trim() };
+    Object.keys(val).forEach(f => { const o = ex[f] === null || ex[f] === undefined ? '' : String(typeof ex[f] === 'number' ? fmtKg(ex[f]) : ex[f]); if (val[f] !== o) ch[f] = val[f]; });
+    if (Object.keys(ch).length < 2 && !$('#tp-next').checked) { closeSheet(); return; }
+    if (navigator.onLine === false) return err('Bez sieci planu nie zmienisz. Serie zapisują się dalej.');
+    const b = $('#tp-ok'); b.disabled = true; b.textContent = 'Zapisuję…';
+    call('trPlan', LIVE, { week: cur.week, day: cur.day, live: true, next: $('#tp-next').checked, ex: [ch] }).then(r => {
+      const F = { sets: 'sets', reps: 'reps', kg: 'kg', pct: 'pct', rpe: 'rpe', note: 'note', unote: 'unote' };
+      (r.rows || []).forEach(x => { const row = DATA.plan.find(p => p.week === x.week && p.day === x.day && p.order === x.order); if (row) Object.keys(x.f).forEach(f => { if (F[f]) row[F[f]] = x.f[f]; }); });
+      PLAN = DATA.plan; try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
+      closeSheet(); renderTrening();
+      const w = (r.weeks || []).length; toast(!r.n ? 'Bez zmian.' : 'Plan zmieniony' + (w > 1 ? ' (ten tydzień i ' + (w - 1) + ' ' + plural(w - 1, 'kolejny', 'kolejne', 'kolejnych') + ').' : '.'));
+    }).catch(e => { b.disabled = false; b.textContent = 'Zapisz w planie'; err(e.message); });
+  };
+}
+if (LIVE) {
+  document.body.classList.add('live');
+  document.querySelectorAll('#nav [data-tab="dysp"], #nav [data-tab="trener"]').forEach(b => { b.hidden = true; });
+  const lb = $('#live-back'); lb.hidden = false; lb.href = 'trener.html#k/' + encodeURIComponent(LIVE);
+  $('#main').addEventListener('click', e => {
+    const tp = e.target.closest('[data-tplan]'); if (tp) return openTPlan(+tp.dataset.tplan);
+    const box = e.target.closest('.tnote'); if (!box) return;
+    const p = e.target.closest('[data-tnp]');
+    if (p) { box.querySelectorAll('[data-tnp]').forEach(x => x.setAttribute('aria-pressed', String(x === p)));
+      const ex = curExs().find(x => x.order === +box.dataset.tn); if (ex) TND[lnKey(ex)] = { text: box.querySelector('textarea').value, pub: p.dataset.tnp === '1' };
+      box.querySelector('.tn-s').textContent = p.dataset.tnp === '1' ? 'Klient zobaczy ją w zakładce Trener (po zapisaniu).' : 'Tylko dla Ciebie (po zapisaniu).'; return; }
+    if (e.target.closest('[data-tns]')) liveNoteSave(box);
+  });
+  $('#main').addEventListener('input', e => {
+    const box = e.target.closest('.tnote'); if (!box) return;
+    const ex = curExs().find(x => x.order === +box.dataset.tn); if (!ex) return;
+    TND[lnKey(ex)] = { text: e.target.value, pub: box.querySelector('[data-tnp="1"]').getAttribute('aria-pressed') === 'true' };
+  });
+}
 function exLogs(ex){ // wpisy Logu tego ćwiczenia w bieżącej jednostce: {seria: log}, lokalne mają pierwszeństwo
   const out = {};
   for (const k in LOGS) {
@@ -3164,7 +3297,7 @@ function card(ex, tag){
     ${skipLine}`;
   if (gone) return top + noteBox + '</div></div>';
   return top + `
-    <div class="rx"><span class="badge ${ex.prio} bp">${prioTxt}</span>${SIMPLE ? rxSimple(ex) : rxPro(ex)}</div>
+    <div class="rx"><span class="badge ${ex.prio} bp">${prioTxt}</span>${SIMPLE ? rxSimple(ex) : rxPro(ex)}${LIVE && !ex.own ? `<button type="button" class="tplan" data-tplan="${ex.order}" aria-label="Zmień plan: ${esc(ex.name)}">✎ zmień plan</button>` : ''}</div>
     ${lastLine(ex)}
     ${SIMPLE ? hintSimple(ex) : ''}
     ${dropInfo}
@@ -3176,6 +3309,7 @@ function card(ex, tag){
     ${tools}
     ${SIMPLE && !oly ? `<button class="btn all" data-all="${ex.order}" ${allDone ? 'hidden' : ''}>✓ Wszystko jak w planie</button>` : ''}
     ${noteBox}
+    ${LIVE ? liveNoteBox(ex) : ''}
     </div>
   </div>`;
 }
@@ -3393,7 +3527,7 @@ function bindFold(exs){
 /* ---------- tryb skupienia (lib focusSteps, focusStart): wszystkie karty zostają w DOM, widać jeden krok; przełącznik pod „⋯” górnego paska, wybór w fx_<klucz> ---------- */
 const FXK = 'fx_' + KEY;
 let FX = false, FXI = null, FXU = '', FXM = false;                // włączony, numer kroku (liczba kroków = podsumowanie), jednostka, której dotyczy krok, klient sam zmienił krok
-try { FX = localStorage.getItem(FXK) === '1'; } catch (e) {}
+try { const v = localStorage.getItem(FXK); FX = v === null ? !!LIVE : v === '1'; } catch (e) {}   // prowadzony trening: domyślnie jedno ćwiczenie na ekranie
 const fxOn = () => !!$('#fx');
 function fxSet(on){
   const st = focusSteps(curExs(), CIRC)[FXI], o = fxOn() && st ? st.orders[0] : 0;
@@ -3425,10 +3559,12 @@ function fxDraw(){
   $('#fx-list').onclick = () => fxSet(false);
   const nx = steps[FXI + 1], nav = $('#fx-nav');
   const nxName = nx ? (nx.grp ? (nx.orders.length === 2 ? 'Superseria ' : 'Obwód ') + nx.grp : (exs.find(ex => ex.order === nx.orders[0]) || {}).name || '') : 'Podsumowanie';
-  nav.innerHTML = st
+  const add = LIVE && EDIT && exs[0] && !exs[0].own && !sessDone(cur.week, cur.day) ? '<button type="button" class="fx-add" id="fx-add">+ Ćwiczenie</button>' : '';
+  nav.innerHTML = add + (st
     ? `<button type="button" id="fx-prev" aria-label="Poprzednie ćwiczenie" ${FXI ? '' : 'disabled'}>‹</button><button type="button" class="n" id="fx-next"><small>${nx ? 'Następne' : 'Dalej'}</small><span>${esc(nxName)} ›</span></button>`
-    : '<button type="button" class="b" id="fx-prev">‹ Wróć do ćwiczeń</button>';
+    : '<button type="button" class="b" id="fx-prev">‹ Wróć do ćwiczeń</button>');
   $('#fx-prev').onclick = () => fxGo(FXI - 1);
+  const fa = $('#fx-add'); if (fa) fa.onclick = openAdd;
   const nb = $('#fx-next'); if (nb) nb.onclick = () => fxGo(FXI + 1);
 }
 // przesunięcie palcem w bok = poprzednie / następne ćwiczenie (tylko w trybie skupienia)

@@ -860,3 +860,18 @@ test('welPlatform / welInApp / keyManifest: ekran powitalny rozpoznaje telefon, 
   assert.equal(m.icons[0].src, 'https://x.github.io/trening/icons/icon-192.png');   // manifest z data: nie ma własnego adresu, więc adresy pełne
   assert.equal(m.name, 'Siła z Ruchu');
 });
+
+test('Prowadź trening: liveNoteRow, liveNextDay, planEdit trenera', () => {
+  const R = (seria, p, k) => ({ seria: String(seria), notatka_trenera: p || '', komentarz_trenera: k || '' });
+  assert.equal(L.liveNoteRow([R('R1'), R(2), R(1)]), 2);
+  assert.equal(L.liveNoteRow([R(1), R(2, 'x')]), 1);
+  assert.equal(L.liveNoteRow([R(0)]), -1);
+  const plan = [{ week: 3, day: 'T1' }, { week: 3, day: 'T2' }, { week: 3, day: 'W4' }, { week: 4, day: 'T9' }];
+  assert.equal(L.liveNextDay(plan, 3), 'T5');
+  assert.equal(L.liveNextDay(plan, 7), 'T1');
+  const P = [{ week: 1, day: 'T1', title: 'Nogi', date: '2026-11-22', order: 1, name: 'Przysiad', prio: 'A', sets: 3, reps: '5', kg: 85, block: 'B2' }];
+  let r = L.planEdit(P, [], {}, { op: 'add', week: 1, day: 'T1', name: 'Wykrok', sets: 3, reps: 10, trainer: true });
+  const a = r.plan[1];
+  assert.deepEqual([a.order, a.prio, a.coach, a.added], [2, 'B', true, undefined]);
+  assert.equal(L.planEdit(r.plan, [], {}, { op: 'add', week: 1, day: 'T1', name: 'wykrok', sets: 3, reps: 10, trainer: true }).n, 0);
+});
