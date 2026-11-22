@@ -806,3 +806,18 @@ test('videoCodec: format obrazu z kawałków pliku (MP4 z telefonu: HEVC, 4K, 10
   assert.equal(L.videoCodec(head).codec, '');                                   // samo „avc1” w ftyp to nie kodek
   assert.equal(L.videoCodec(u(require('fs').readFileSync(__dirname + '/fixtures/film.webm'))).codec, 'VP8');
 });
+
+test('warmupSets: rozgrzewka przed ciężarem roboczym (gryf, ~40/60/80%, 90% przy ciężkich seriach)', () => {
+  const t = (w, r, o) => L.warmupSets(w, r, o).map(x => x.kg + '×' + x.reps).join(' ');
+  assert.equal(t(100, 5), '20×8 40×5 60×3 80×2');
+  assert.equal(t(140, 3), '20×8 55×5 82.5×3 110×2 125×1');           // ≤ 3 powt. i ≥ 100 kg: jeszcze 90% × 1
+  assert.equal(t(60, 8), '20×8 35×3 47.5×2');                          // 40% = 22,5 za blisko gryfu → odpada
+  assert.equal(t(80, 2, { oly: true }), '20×5 30×5 47.5×3 62.5×2');    // boje: gryf × 5
+  assert.equal(t(100, 5, { bar: 15 }), '15×8 40×5 60×3 80×2');
+  assert.equal(t(30, 10, { noBar: true }), '10×5 17.5×3 22.5×2');      // hantle / maszyna: bez kroku „gryf”
+  assert.equal(t(25, 8), '');                                          // mniej niż gryf + 10 kg
+  assert.equal(t('BW', 8), '');
+  assert.equal(t(NaN, 5), '');
+  assert.equal(L.warmupSets(100, 5)[0].bar, true);
+  assert.ok(L.noBar('Wyciskanie hantli na ławce') && L.noBar('DB row') && !L.noBar('Przysiad ze sztangą'));
+});

@@ -27,6 +27,29 @@
     const base = L.isNum(fromKg) ? fromKg : (L.isNum(planKg) ? planKg : null);
     return { kg: base === null ? '' : L.floor25(base * 0.8), reps: '' };
   };
+  /** ćwiczenie bez gryfu (hantle, kettle, maszyna, wyciąg): rozgrzewka bez kroku „sam gryf” */
+  L.noBar = name => /hantl|\bdb\b|kettl|\bkb\b|maszyn|wyciąg|lin(ka|ki|ce)|cable|machine|dumbbell/i.test(String(name || ''));
+  /**
+   * proponowana rozgrzewka przed ciężarem roboczym: sam gryf × 8 (boje × 5), potem ok. 40 / 60 / 80% × 5 / 3 / 2,
+   * przy ciężkich seriach (≤ 3 powt., ≥ 100 kg) jeszcze 90% × 1; kg w dół do 2,5; krok bliżej niż 5 kg od poprzedniego
+   * albo od ciężaru roboczego odpada. Bez liczby w planie albo poniżej
+   * gryf + 10 kg = brak propozycji. o: { bar (kg gryfu, domyślnie 20), oly, noBar }. Zwraca [{ kg, reps, bar }].
+   */
+  L.warmupSets = (work, reps, o) => {
+    o = o || {};
+    const W = typeof work === 'number' ? work : NaN, bar = o.noBar ? 2.5 : L.isNum(o.bar) ? o.bar : 20;
+    if (!(W > 0) || W < (o.noBar ? 10 : bar + 10)) return [];
+    const r = parseInt(reps) > 0 ? parseInt(reps) : 5, out = [];
+    const add = (kg, n, isBar) => {
+      const prev = out.length ? out[out.length - 1].kg : 0;
+      if (kg < bar || kg < prev + 5 || kg > W - 5) return;
+      out.push({ kg, reps: n, bar: !!isBar });
+    };
+    if (!o.noBar) add(bar, o.oly ? 5 : 8, true);
+    [[0.4, 5], [0.6, 3], [0.8, 2]].forEach(([p, n]) => add(L.floor25(W * p), n));
+    if (r <= 3 && W >= 100) add(L.floor25(W * 0.9), 1);
+    return out;
+  };
   /**
    * Jedna skala wysiłku serii w całej aplikacji (17.11.2026): światło = widok liczby RPE z Logu.
    * Lekko 7 · Średnio 8 · Ciężko 9 · Nieudana = FAIL bez RPE. Brak światła = puste RPE (brak danych, nigdy 7).

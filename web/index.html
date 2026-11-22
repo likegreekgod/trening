@@ -302,6 +302,13 @@
   .ghost.d{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
   /* v4: dodawanie wierszy w jednym rzędzie pod seriami; zużyty limit „+ seria” = wyszarzony */
   .adds{display:flex;gap:6px;margin-top:6px}
+  .wu{display:flex;align-items:center;gap:8px;margin:2px 0 8px;padding:6px 6px 6px 12px;border-radius:var(--r);background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line)}
+  .wu[hidden]{display:none}
+  .wu .wu-t{flex:1 1 auto;min-width:0;font-size:13px;color:var(--ink-2);line-height:1.35}
+  .wu .wu-t b{display:block;font:600 12px var(--f-body);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .wu .wu-s{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:2px}
+  .wu .wu-s span{font:500 14px var(--f-mono);color:var(--ink);white-space:nowrap}
+  .wu .btn.sm{flex:0 0 auto;width:auto;min-height:44px;padding:0 14px}
   .adds .ghost{flex:1 1 auto;width:auto;justify-content:center;padding:0 6px;white-space:nowrap;text-align:center}
   .ghost:disabled{opacity:.45}
   .kgb{display:inline-flex;align-items:center;min-height:44px;border:0;border-radius:0;background:transparent;padding:0 2px;margin:-10px 0;
@@ -2878,6 +2885,10 @@ function rowHtml(ex, set, kind, def){
 const fv = el => !el ? '' : el.value.trim() !== '' ? el.value : (el.dataset.ph || '');
 const setPh = (el, v) => { v = v === undefined || v === null ? '' : String(v); el.dataset.ph = v; el.placeholder = v || (el.classList.contains('kg') ? 'kg' : el.dataset.u || 'powt.'); el.classList.toggle('ph', !!v); };
 const setLabel = (set, kind) => (kind === 'w' || kind === 'd' || SIMPLE) ? set : 'S' + set;
+/** proponowana rozgrzewka (lib warmupSets): tylko ćwiczenie główne (A) z liczbą kg w planie, nie na czas */
+const warmPlan = ex => ex.prio !== 'A' || timeUnit(ex.reps) || (ex.skip && !ex.sets) ? []
+  : window.TL.warmupSets(num(ex.kg), repsDefault(ex.reps), { bar: BAR, oly: isOly(ex), noBar: window.TL.noBar(ex.name) });
+const warmTxt = w => `<span class="wu-s">${w.map(x => `<span>${x.bar ? (SIMPLE ? 'sam gryf' : 'gryf') : fmtKg(x.kg)} × ${x.reps}</span>`).join('<span class="sr"> · </span>')}</span>`;
 const dropDefault = (ex, fromKg) => window.TL.dropDefault(ex.kg, fromKg);   // ~80% ostatniego ciężaru, w dół do 2,5 kg
 const PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 8l6 4-6 4z" fill="currentColor"/></svg>';
 const MORE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>';
@@ -2943,6 +2954,8 @@ function card(ex, tag){
       ${allowX > 0 ? `<button type="button" class="ghost" data-extra="${ex.order}" ${extra >= allowX ? 'disabled' : ''}>+ seria (${Math.max(0, allowX - extra)})</button>` : ''}
       <button type="button" class="ghost d" data-drop="${ex.order}">+ drop set</button>
     </div>`;
+  const wp = warmPlan(ex), anyWork = Object.keys(exLogs(ex)).some(k => /^\d+$/.test(k) && +k > 0);
+  const warmLine = wp.length ? `<div class="wu" data-wu="${ex.order}" ${warm || anyWork ? 'hidden' : ''}><div class="wu-t"><b>Rozgrzewka</b>${warmTxt(wp)}</div><button type="button" class="btn sm" data-wuadd="${ex.order}">Wstaw (${wp.length})</button></div>` : '';
   const dropInfo = plannedDrops(ex) ? `<div class="hint">+ ${plannedDrops(ex)} × drop set po ostatniej serii (ok. −20% ciężaru, do upadku technicznego).</div>` : '';
   const sk = ex.skip, gone = sk && !ex.sets, emom = isEmom(ex) && !gone;
   const note = exNote(ex);
@@ -2967,6 +2980,7 @@ function card(ex, tag){
     ${dropInfo}
     ${ex.note ? `<div class="note">${esc(ex.note)}</div>` : ''}
     ${emom ? emomBox(ex) : ''}
+    ${warmLine}
     ${head}
     <div class="sets">${rows}</div>
     ${tools}
@@ -3121,8 +3135,9 @@ function refreshAll(o, saved){
 /* kolejne serie jak poprzednia: niezrobione serie robocze po tej przejmują jej kg i powt. (tylko pola automatyczne, szare) */
 const workRows = o => [...document.querySelectorAll(`.set[data-o="${o}"]`)].filter(r => r.dataset.k === 'p' || r.dataset.k === 'x');
 function followRow(row){
-  const all = workRows(row.dataset.o);
-  all.slice(all.indexOf(row) + 1).forEach(r => {
+  const all = workRows(row.dataset.o), i = all.indexOf(row);
+  if (i < 0) return;                                                           // rozgrzewka nie zmienia propozycji serii roboczych
+  all.slice(i + 1).forEach(r => {
     if (r.dataset.st) return;
     ['.kg', '.reps'].forEach(c => { const x = r.querySelector(c), s = row.querySelector(c); if (x && s && x.value.trim() === '') setPh(x, fv(s)); });
   });
@@ -3384,10 +3399,22 @@ function bind(exs, s0){
   }));
   exs.forEach(ex => placeStep(ex.order));
   // + rozgrzewka (R1, R2…) przed seriami roboczymi
+  // kolejny krok proponowanej rozgrzewki (ćwiczenie A) jako placeholder; poza propozycją wiersz pusty
+  const addWarm = o => {
+    const ex = exOf(o), ws = rowsOf(o, 'w'), set = 'R' + (ws.length + 1), st = warmPlan(ex)[ws.length];
+    addRow(o, rowHtml(ex, set, 'w', st ? { kg: st.kg, reps: st.reps } : null), ws[ws.length - 1], rowOf(o, 1));
+    const row = rowOf(o, set); bindRow(row, ex, s0);
+    const wu = document.querySelector(`[data-wu="${o}"]`); if (wu) wu.hidden = true;
+    return row;
+  };
   document.querySelectorAll('[data-warm]').forEach(b => b.onclick = () => {
-    const o = b.dataset.warm, ex = exOf(o), ws = rowsOf(o, 'w'), set = 'R' + (ws.length + 1);
-    addRow(o, rowHtml(ex, set, 'w'), ws[ws.length - 1], rowOf(o, 1));
-    const row = rowOf(o, set); bindRow(row, ex, s0); refreshDel(o); row.querySelector('.kg').focus();
+    const o = b.dataset.warm, row = addWarm(o); refreshDel(o); row.querySelector('.kg').focus();
+  });
+  // „Wstaw (n)”: wszystkie kroki propozycji naraz; ✓ przy pustym polu zapisuje propozycję jako R1, R2…
+  document.querySelectorAll('[data-wuadd]').forEach(b => b.onclick = () => {
+    const o = b.dataset.wuadd, n = warmPlan(exOf(o)).length;
+    for (let i = rowsOf(o, 'w').length; i < n; i++) addWarm(o);
+    refreshDel(o);
   });
   // + seria dodatkowa (tylko gdy trener pozwolił: Klienci kol. H lub Plan kol. dod_serie)
   document.querySelectorAll('[data-extra]').forEach(b => b.onclick = () => {
