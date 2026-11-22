@@ -130,6 +130,7 @@ Konwencje Damiana:
 - Pola kg / powt.: propozycja (plan, poprzednia seria, drop) to placeholder (`data-ph`, klasa `ph`), pole puste; wartość czytaj przez `fv(input)`, nową propozycję ustawiaj `setPh`. ✓ przy pustym polu wpisuje propozycję. Pole z wartością zaznacza się przy fokusie.
 - Serie:
   - dodatkowe przyciski „+ rozgrzewka”, „+ seria (N)” i „+ drop set” (~80% ciężaru, w dół do 2,5 kg; „⇣ Jak 1. seria” usunięte w v4);
+  - proponowana rozgrzewka (v74; lib `warmupSets`, `noBar`; `warmPlan`, `warmTxt`, `addWarm`): przy ćwiczeniu A z liczbą kg w planie pasek `.wu` „Rozgrzewka” nad seriami (gryf × 8 / boje × 5, ok. 40 / 60 / 80% × 5 / 3 / 2, przy ≤ 3 powt. i ≥ 100 kg 90% × 1; gryf z `pl_<klucz>`), „Wstaw (n)” (`data-wuadd`) dodaje wiersze R1… z propozycją jako placeholder, „+ rozgrzewka” bierze kolejny krok; pasek schowany po wstawieniu i po zapisanej serii roboczej. `followRow` ignoruje wiersze rozgrzewki (nie zmieniają propozycji serii roboczych);
   - ✕ usuwa ostatni dodany wiersz w dwóch dotknięciach;
   - pole odhaczenia (`data-st`): puste → ✓ zrobiona → ✕ nieudana (typ FAIL, rpe puste) → puste; żółte (`pend`) = czeka w kolejce;
   - dotknięcie numeru serii roboczej/dodatkowej: zwykła → drop (typ DROP) → nieudana;

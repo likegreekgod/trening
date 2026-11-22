@@ -2872,3 +2872,49 @@ test(`Stan ciała (${mode}, ${scheme}): ból / napięcie poza sesją, lista 14 d
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
+
+// --- rozgrzewka przy ćwiczeniu A: propozycja z ciężaru roboczego, „Wstaw (n)”, „+ rozgrzewka” bierze kolejny krok ---
+const WARM = Object.assign({}, PRO, {
+  plan: [
+    { week: 2, day: 'T1', title: 'Siła A', date: '2026-10-13', order: 1, name: 'Przysiad ze sztangą', prio: 'A', sets: 3, reps: '5', pct: 0.75, kg: 100, rpe: 8, note: '', extra: 0, drop: 0, block: '', group: '', swaps: [] },
+    { week: 2, day: 'T1', title: 'Siła A', date: '2026-10-13', order: 2, name: 'Wiosłowanie hantlem', prio: 'B', sets: 3, reps: '10', pct: null, kg: 30, rpe: 8, note: '', extra: 0, drop: 0, block: '', group: '', swaps: [] }
+  ],
+  logs: []
+});
+for (const [mode, scheme] of [['PRO', 'light'], ['PROSTY', 'dark']]) test(`Rozgrzewka ${mode} ${scheme}: propozycja przy A, „Wstaw (4)”, ✓ zapisuje R1 z propozycją`, async () => {
+  const calls = [], data = mode === 'PRO' ? WARM : Object.assign({}, WARM, { cfg: Object.assign({}, WARM.cfg, { simple: true }) });
+  const { ctx, p } = await page(calls, false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const wu = '[data-wu="1"]';
+  assert.match(await p.textContent(wu), mode === 'PRO' ? /gryf × 8 · 40 × 5 · 60 × 3 · 80 × 2/ : /sam gryf × 8 · 40 × 5 · 60 × 3 · 80 × 2/);
+  assert.match(await p.textContent(wu + ' button'), /Wstaw \(4\)/);
+  assert.equal(await p.$('[data-wu="2"]'), null);                          // B: bez propozycji
+  const shot = async n => { if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.$eval('[data-card="1"]', e => e.scrollIntoView()); await p.screenshot({ path: path.join(SCREENS, `rozgrzewka-${n}-${mode}-${scheme}.png`) }); } };
+  await shot('1');
+  await p.click(wu + ' button');
+  assert.equal(await p.isHidden(wu), true);
+  assert.deepEqual(await p.$$eval('.set[data-o="1"][data-k="w"] .kg', a => a.map(i => i.dataset.ph)), ['20', '40', '60', '80']);
+  assert.deepEqual(await p.$$eval('.set[data-o="1"][data-k="w"] .reps', a => a.map(i => i.dataset.ph)), ['8', '5', '3', '2']);
+  await p.click('.set[data-o="1"][data-s="R1"] .ok'); await p.waitForTimeout(100);
+  assert.deepEqual((({ set, kg, reps, done }) => ({ set, kg, reps, done }))(lastSet(calls)), { set: 'R1', kg: 20, reps: 8, done: true });
+  assert.equal(await p.isVisible('#rest'), false);                         // po rozgrzewce bez przerwy
+  assert.deepEqual(await p.$$eval('.set[data-o="1"][data-k="p"] .kg', a => a.map(i => i.value || i.dataset.ph)), ['100', '100', '100']);   // robocze bez zmian
+  await shot('2');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+test('Rozgrzewka: „+ rozgrzewka” podsuwa kolejny krok propozycji, potem pusty wiersz; po zapisanej serii roboczej bez propozycji', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: WARM });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  for (let i = 0; i < 5; i++) await p.click('[data-warm="1"]');
+  assert.deepEqual(await p.$$eval('.set[data-o="1"][data-k="w"] .kg', a => a.map(i => i.dataset.ph)), ['20', '40', '60', '80', '']);
+  assert.equal(await p.isHidden('[data-wu="1"]'), true);
+  await ctx.close();
+  const done = Object.assign({}, WARM, { logs: [{ id: 'robert|2|T1|1|1', zapisano: '2026-10-13T10:00:00.000Z', cwiczenie: 'Przysiad ze sztangą', tydzien: 2, jednostka: 'T1', seria: 1, kg: 100, powt: 5, rpe: 8, wykonane: 'TAK', typ: '' }] });
+  const b = await page([], false, { data: done });
+  await b.p.goto(base + '?k=kabc'); await b.p.waitForSelector('.set[data-o="1"]');
+  assert.equal(await b.p.isHidden('[data-wu="1"]'), true);
+  assert.deepEqual(b.p.errors, []);
+  await b.ctx.close();
+});
