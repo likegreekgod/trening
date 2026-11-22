@@ -743,11 +743,8 @@
   #nt{font:400 16px/1.4 var(--f-body);min-height:120px;width:100%;text-transform:none;letter-spacing:0;resize:vertical}
   /* nazwa ćwiczenia przypięta u góry przy przewijaniu otwartej karty (--stick = dolna krawędź widocznego górnego paska) */
   .card[data-card]:not(.fold) > .ch{position:sticky;top:var(--stick,0px);z-index:3;background:var(--surface);margin:-16px -16px 0;padding:16px 16px 0;border-radius:var(--rc) var(--rc) 0 0}
-  .card[data-card] > .ch.stuck{padding:4px 16px 2px;border-bottom:1px solid var(--line);border-radius:0}
-  .ch.stuck .fold-b{align-items:center}
-  .ch.stuck .ft{display:block}
-  .ch.stuck .cn{display:block;font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ch.stuck .acts{margin-top:0}
+  /* przypięta nazwa wygląda jak w karcie (ta sama czcionka, łamanie, odstępy; zgłoszenie 22.11: zmiana na jedną linię skakała); dochodzi tylko kreska (cień, bez zmiany wysokości) */
+  .card[data-card] > .ch.stuck{border-radius:0;box-shadow:0 1px 0 var(--line)}
   .emom{margin:10px 0 4px;background:var(--panel);color:var(--light-white);border-radius:var(--r);padding:10px 12px;display:grid;gap:8px}
   .em-top{display:flex;align-items:baseline;gap:6px}
   .em-l{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;opacity:.85}
@@ -1202,8 +1199,9 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
   h.addEventListener('transitionend', stickDraw);
 })();
 /**
- * Przypięta nazwa ćwiczenia: otwarta karta, której góra wyszła poza ekran, trzyma nagłówek (nazwa w jednej linii, ikony)
+ * Przypięta nazwa ćwiczenia: otwarta karta, której góra wyszła poza ekran, trzyma nagłówek (nazwa, ikony)
  * pod górnym paskiem aplikacji, a gdy pasek jest schowany, na samej górze. Znika razem z końcem karty (position: sticky).
+ * Przypięty nagłówek ma ten sam wygląd i wysokość co w karcie (klasa `stuck` dokłada tylko kreskę), więc nic nie skacze.
  */
 function stickDraw(){
   const top = Math.max(0, Math.round(document.querySelector('header').getBoundingClientRect().bottom));
@@ -1211,12 +1209,7 @@ function stickDraw(){
   document.querySelectorAll('#main .card[data-card] > .ch').forEach(ch => {
     const c = ch.parentNode, r = c.getBoundingClientRect();
     const on = !c.classList.contains('fold') && r.top < top - 1 && r.bottom > top + 48;
-    if (on === ch.classList.contains('stuck')) return;
-    // przypięty pasek jest niższy niż nagłówek karty: różnicę oddaje margines, żeby treść pod spodem nie skoczyła
-    // (skok przesuwałby stronę i górny pasek aplikacji wracałby sam z siebie)
-    const h0 = ch.offsetHeight;
     ch.classList.toggle('stuck', on);
-    ch.style.marginBottom = on ? (h0 - ch.offsetHeight) + 'px' : '';
   });
 }
 
@@ -3193,7 +3186,7 @@ function setFold(o, on, keep = true){
   const c = document.querySelector(`.card[data-card="${o}"]`); if (!c) return;
   const h0 = keep && c.classList.contains('fold') !== on ? c.offsetHeight : 0;
   c.classList.toggle('fold', on && !fxOn()); foldMove(c, h0); c.querySelectorAll('[data-fold]').forEach(b => b.setAttribute('aria-expanded', String(!on)));
-  if (on) { const ch = c.querySelector('.ch'); if (ch) { ch.classList.remove('stuck'); ch.style.marginBottom = ''; } }   // zwinięta karta nie ma przypiętej nazwy (bez czekania na przewinięcie)
+  if (on) { const ch = c.querySelector('.ch'); if (ch) ch.classList.remove('stuck'); }   // zwinięta karta nie ma przypiętej nazwy (bez czekania na przewinięcie)
   if (keep) { const m = foldGet(); m[foldKey(o)] = on ? 1 : 0; try { localStorage.setItem(FK, JSON.stringify(m)); } catch (e) {} }
 }
 function bindFold(exs){

@@ -3,6 +3,11 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-22 · Przypięta nazwa ćwiczenia bez zmiany wyglądu (v76)
+
+- Zgłoszenie Damiana: na granicy przewijania nazwa przeskakiwała i była inna niż w karcie (mniejsza, w jednej linii, ucięta wielokropkiem), a pod nią zostawała pusta przestrzeń.
+- Ustalenie: przypięty nagłówek ma tę samą czcionkę, łamanie, odstępy i wysokość co w karcie; `.ch.stuck` dokłada tylko kreskę (cień, bez zmiany wysokości). Nie wracaj do skróconej wersji w jednej linii. Koszt: długa nazwa przypięta zajmuje 2–3 linie.
+
 ## 2026-11-22 · Proponowana rozgrzewka przy ćwiczeniu A (v74)
 
 - Punkt 2 z listy usprawnień z 18.11. Szkic zaakceptowany bez zmian 22.11.
