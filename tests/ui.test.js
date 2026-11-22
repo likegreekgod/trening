@@ -37,6 +37,8 @@ async function page(calls, offline, opt = {}) {
   });
   // podpowiedzi przy pierwszym użyciu zasłaniają część karty: domyślnie obejrzane, opt.tips je włącza
   if (!opt.tips) await ctx.addInitScript(() => { try { ['kabc', 'k0123456789a', 'kABCDEF01234'].forEach(k => localStorage.setItem('tip_' + k, '["seria","wiecej","kamera","dzien"]')); } catch (e) {} });
+  // ekran powitalny przy wejściu z linku (?k=) zasłania aplikację: domyślnie obejrzany, opt.wel go włącza
+  if (!opt.wel) await ctx.addInitScript(() => { try { ['kabc', 'k0123456789a', 'kABCDEF01234'].forEach(k => localStorage.setItem('wel_' + k, '1')); } catch (e) {} });
   // animacja otwarcia zasłania ekran przez 3 s: domyślnie aplikacja „była na ekranie przed chwilą” (znacznik z roku 2100 działa też w testach z przestawionym zegarem),
   // opt.intro ją włącza (pokazuje się tylko z opt.motion)
   if (!opt.intro) await ctx.addInitScript(() => { try { localStorage.setItem('intro', '4102444800000'); } catch (e) {} });
