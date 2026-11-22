@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-22 · AI szkic następnego bloku w panelu (v79)
+
+- Punkt 8 z listy usprawnień z 18.11 (panel PR 5, asystent planu). Szkic zaakceptowany 22.11. Miejsce: karta klienta → Bloki, karta „Następny blok” nad ostatnim blokiem (nie osobny ekran): tygodnie, poniedziałek startu, wskazówki dla AI.
+- Ten sam mechanizm co plik z Dysku: AI zwraca wiersze planu, serwer je uzupełnia (klient, blok B+1, ciągłe tygodnie, daty, cechy z poprzedniego bloku: grupa, zamienniki, dod_serie, drop, tryb, obwód, cięcie) i sprawdza `validatePlan_`; „Wczytaj do planu” zapisuje plik w `_plany/` i od razu go importuje (`importPlanFile_`), więc wynik jest w zakładce Import, a plik w `_plany/wczytane`. Bez osobnej ścieżki zapisu do Planu.
+- Nic nie trafia do arkusza przed „Wczytaj do planu” (dwa dotknięcia). Drobne liczby trener poprawia potem w zakładce Plan (v78); całość można pobrać jako JSON i dopracować w projekcie claude.ai.
+- AI: te same jednostki i ćwiczenia co ostatni tydzień bloku, chyba że wskazówki, ból albo wyniki mówią inaczej; progresja z ostatniego tygodnia (same lekkie = +2,5 kg, średnie = bez zmian albo +2,5, ciężkie / nieudane = bez zmian albo mniej); kg w dół do 2,5; rpe_max sufitem; lżejszy ostatni tydzień tylko na prośbę albo po ciężkim długim bloku. „Dlaczego tak” najwyżej 4 zdania z liczbami.
+- Odpowiedź przez structured outputs (schemat JSON), komórki tygodni jako krótki tekst „serie x powt | kg | % | RPE”, effort low: krótsza odpowiedź, bo Apps Script czeka na Claude API ograniczony czas. Przekroczenie = komunikat „spróbuj z mniejszą liczbą tygodni”. Szkic liczy się do dziennego limitu AI, ok. 0,10–0,20 $.
+
 ## 2026-11-22 · Szybka zmiana planu w panelu (v78)
 
 - Punkt 6 z listy usprawnień z 18.11. Karta klienta → nowa zakładka Plan: niezrobione jednostki trenera (najbliższe 2 tygodnie, reszta pod „Pokaż dalsze”), „Edytuj” w miejscu: serie, powt., kg, %, RPE max, uwagi do ćwiczenia, notatka do jednostki (`uwagi_jedn`). Zapis `trPlan` od razu do zakładki Plan.

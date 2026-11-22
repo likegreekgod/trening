@@ -2035,36 +2035,43 @@ function wczytajPlany(e) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return;
   try {
-    const dir = child_(rootFolder_(), '_plany'), ok = child_(dir, 'wczytane'), bad = child_(dir, 'bledy');
-    const it = dir.getFiles();
-    let log = null;
+    const dir = child_(rootFolder_(), '_plany'), it = dir.getFiles();
     while (it.hasNext()) {
       const f = it.next();
-      if (!/\.json$/i.test(f.getName())) continue;
-      let rows, errs;
-      try {
-        rows = JSON.parse(f.getBlob().getDataAsString('UTF-8'));
-        if (!Array.isArray(rows)) rows = rows && rows.rows;
-        errs = validatePlan_(rows);
-      } catch (e) { errs = ['JSON: ' + e.message]; }
-      if (errs.length) {
-        f.moveTo(bad);
-        importLog_(f.getName(), 'BŁĄD', 0, '', errs.slice(0, 10).join(' | '));
-        continue;
-      }
-      if (!log) log = pgTable_('Log', ['klient', 'tydzien', 'jednostka']);   // tylko trzy kolumny: Log jest duży
-      const m = mergePlan_(tableOf_('Plan'), rows, tableOf_('Sesje'), log);
-      if (m.errors.length) {
-        f.moveTo(bad);
-        importLog_(f.getName(), 'BŁĄD', 0, m.clients.join(', '), m.errors.slice(0, 10).join(' | '));
-        continue;
-      }
-      writePlanRows_(m.rows);
-      f.moveTo(ok);
-      importLog_(f.getName(), importStatus_(m), rows.length, m.clients.join(', '),
-        m.removed.map(g => g.text).concat(m.notes, m.warnings.slice(0, 10)).join(' | '));
+      if (/\.json$/i.test(f.getName())) importPlanFile_(f, dir);
     }
   } finally { lock.releaseLock(); }
+}
+
+/**
+ * Import jednego pliku planu z „_plany” (wołać pod blokadą skryptu): walidacja, mergePlan_, zapis Planu, przeniesienie pliku
+ * do „wczytane” albo „bledy”, wiersz w zakładce Import. → {ok, status, msg, n, removed, notes, warnings}
+ */
+function importPlanFile_(f, dir) {
+  const ok = child_(dir, 'wczytane'), bad = child_(dir, 'bledy');
+  let rows, errs;
+  try {
+    rows = JSON.parse(f.getBlob().getDataAsString('UTF-8'));
+    if (!Array.isArray(rows)) rows = rows && rows.rows;
+    errs = validatePlan_(rows);
+  } catch (e) { errs = ['JSON: ' + e.message]; }
+  if (errs.length) {
+    f.moveTo(bad);
+    importLog_(f.getName(), 'BŁĄD', 0, '', errs.slice(0, 10).join(' | '));
+    return { ok: false, status: 'BŁĄD', msg: errs.slice(0, 10).join(' | ') };
+  }
+  const log = pgTable_('Log', ['klient', 'tydzien', 'jednostka']);   // tylko trzy kolumny: Log jest duży
+  const m = mergePlan_(tableOf_('Plan'), rows, tableOf_('Sesje'), log);
+  if (m.errors.length) {
+    f.moveTo(bad);
+    importLog_(f.getName(), 'BŁĄD', 0, m.clients.join(', '), m.errors.slice(0, 10).join(' | '));
+    return { ok: false, status: 'BŁĄD', msg: m.errors.slice(0, 10).join(' | ') };
+  }
+  writePlanRows_(m.rows);
+  f.moveTo(ok);
+  const msg = m.removed.map(g => g.text).concat(m.notes, m.warnings.slice(0, 10)).join(' | ');
+  importLog_(f.getName(), importStatus_(m), rows.length, m.clients.join(', '), msg);
+  return { ok: true, status: importStatus_(m), msg: msg, n: rows.length, removed: m.removed.length, notes: m.notes, warnings: m.warnings };
 }
 
 /** Zwraca listę błędów (pusta = OK). Czysta funkcja – testowana w tests/. */
