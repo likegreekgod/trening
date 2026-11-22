@@ -266,13 +266,13 @@ test('trKlientOf_ i trKlientVals_: klienci w panelu trenera (ustawienia ↔ wier
   const row = ['kabc', 'Ania', 'Ania', '', 'stary-link', 'tak', 'PROSTY', 2, 'TAK', 'TAK', 'RIR', 0.075, '', 'TAK'];
   const k = C.trKlientOf_(row, 'https://x.github.io/trening/');
   assert.deepEqual(JSON.parse(JSON.stringify(k)), { id: 'ania', name: 'Ania', on: true, mode: 'PROSTY', scale: 'RIR', swap: 'TRENER', pain: true, masters: true,
-    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc' });
+    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc', email: '', mail: false });
   // pusty wiersz = wartości domyślne; bez adresu aplikacji link z kolumny E
   const d = C.trKlientOf_(['k1', 'bo', 'Bo', 'NIE', 'link-E'], '');
   assert.equal(d.on, false); assert.equal(d.mode, 'PRO'); assert.equal(d.swap, 'NIE'); assert.equal(d.oly, 5); assert.equal(d.own, true); assert.equal(d.link, 'link-E');
   // panel → kolumny D, F–N
   const v = C.trKlientVals_({ on: false, mode: 'PRO', scale: 'RPE', swap: 'DOWOLNA', pain: true, masters: false, extra: 3, oly: 7.5, own: false, edit: true });
-  assert.deepEqual(JSON.parse(JSON.stringify(v.vals)), { 3: 'NIE', 5: 'TAK', 6: 'PRO', 7: 3, 8: '', 9: 'DOWOLNA', 10: 'RPE', 11: 0.075, 12: 'NIE', 13: 'TAK' });
+  assert.deepEqual(JSON.parse(JSON.stringify(v.vals)), { 3: 'NIE', 5: 'TAK', 6: 'PRO', 7: 3, 8: '', 9: 'DOWOLNA', 10: 'RPE', 11: 0.075, 12: 'NIE', 13: 'TAK', 14: '', 15: '' });
   // zapis i odczyt dają to samo (np. sufit 7,5% → 0,075 → 7,5)
   const r2 = ['k', 'x', 'X']; Object.keys(v.vals).forEach(i => { r2[i] = v.vals[i]; });
   const back = C.trKlientOf_(r2, '');
@@ -286,8 +286,16 @@ test('trKlientOf_ i trKlientVals_: klienci w panelu trenera (ustawienia ↔ wier
   assert.match(C.trKlientVals_(Object.assign({}, base, { swap: 'TAK' })).error, /Zamiana/);
   assert.match(C.trKlientVals_(Object.assign({}, base, { mode: 'X' })).error, /Tryb/);
   assert.match(C.trKlientVals_(Object.assign({}, base, { scale: '' })).error, /Skala/);
+  // poranny mail: kolumny O email, P mail_rano; włączony bez adresu albo zły adres = błąd
+  const m = C.trKlientVals_(Object.assign({}, base, { email: ' bo@example.com ', mail: true }));
+  assert.equal(m.vals[14], 'bo@example.com'); assert.equal(m.vals[15], 'TAK');
+  const r3 = ['k', 'x', 'X']; Object.keys(m.vals).forEach(i => { r3[i] = m.vals[i]; });
+  assert.equal(C.trKlientOf_(r3, '').email, 'bo@example.com'); assert.equal(C.trKlientOf_(r3, '').mail, true);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { mail: true })).error, /wpisz najpierw e-mail/);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { email: 'bo@', mail: false })).error, /adres e-mail/);
+  assert.equal(C.trKlientVals_(Object.assign({}, base, { email: 'bo@example.com', mail: false })).vals[15], '', 'adres zostaje, mail wyłączony');
   // nazwy akcji panelu nie pokrywają się z akcjami klientów
-  ['trKlienci', 'trKlientUstaw', 'trKlientNowy', 'trKlientLink'].forEach(n => { assert.ok(C.TR_FNS[n], n); assert.equal(C.API_FNS[n], undefined); });
+  ['trKlienci', 'trKlientUstaw', 'trKlientNowy', 'trKlientLink', 'trMail', 'trMailUstaw', 'trMailProba'].forEach(n => { assert.ok(C.TR_FNS[n], n); assert.equal(C.API_FNS[n], undefined); });
 });
 
 test('computeOverview_: przegląd klientów – sygnały, zaległe, koniec planu, kolejność wg pilności', () => {
@@ -342,6 +350,56 @@ test('diagnose_: sprawdzenie arkusza z menu Trening', () => {
     assert.ok(txt.includes(frag), 'brak: ' + frag + '\n' + txt);
   assert.ok(!/stary/.test(txt));                                                 // nieaktywny klient bez uwag
   assert.ok(!/Brak wyzwalacza „podsumowanie”/.test(txt));
+  assert.ok(!/porannyMail/.test(txt), 'bez włączonego maila nie ma uwagi o wyzwalaczu');
+  // poranny mail włączony: brak wyzwalacza = błąd, brak adresu = uwaga
+  const m = C.diagnose_(Object.assign({}, ok, { klienci: [K('anna', 'k0123456789a', { mail_rano: 'TAK', email: '' })] })).map(r => r[0] + ': ' + r[1]).join('\n');
+  assert.ok(m.includes('błąd: Brak wyzwalacza „porannyMail”'), m);
+  assert.ok(m.includes('uwaga: anna: poranny mail włączony, ale brak poprawnego adresu'), m);
+  assert.deepEqual(Array.from(C.diagnose_(Object.assign({}, ok, { triggers: ok.triggers.concat('porannyMail'), klienci: [K('anna', 'k0123456789a', { mail_rano: 'TAK', email: 'a@example.com' })] }))), []);
+});
+
+test('poranny mail: komu wysłać (rannyDo_), jednostka (rannyUnit_) i treść (rannyMail_)', () => {
+  const today = '2026-11-24';
+  // A klucz, B id, C imię, D aktywny, … G tryb, … K skala, … O email, P mail_rano
+  const K = (id, x) => { const r = ['k0123456789' + id.charAt(0), id, id.charAt(0).toUpperCase() + id.slice(1), 'TAK', '', '', 'PRO', 0, '', '', 'RPE', '', '', '', id + '@example.com', 'TAK'];
+    Object.keys(x || {}).forEach(i => { r[i] = x[i]; }); return r; };
+  const P = (k, w, j, data, nr, x) => Object.assign({ klient: k, tydzien: w, jednostka: j, tytul: 'Siła ' + j, data, nr, cwiczenie: 'Ćw ' + nr, prio: 'A', serie: 4, powt: '5', kg: '100', procent: 0.75, rpe_max: 8, blok: 'B2' }, x || {});
+  const plan = [P('ania', 7, 'A', '2026-11-23', 1), P('ania', 8, 'A', today, 1), P('ania', 8, 'A', today, 2, { prio: 'B', kg: 'guma', procent: '', rpe_max: '', uwagi_jedn: 'Pauza 2 s' }),
+    P('ania', 8, 'B', '2026-11-26', 1), P('ania', 8, 'W1', today, 1, { zrodlo: 'klient' }), P('ania', 8, 'A', today, 51, { zrodlo: 'dodane' }),
+    P('bartek', 8, 'A', today, 1), P('celina', 8, 'A', '', 1), P('dawid', 8, 'A', today, 1), P('ewa', 8, 'A', today, 1), P('filip', 8, 'A', today, 1)];
+  const kl = [K('ania'), K('bartek'), K('celina'), K('dawid', { 15: '' }), K('ewa', { 3: 'NIE' }), K('filip', { 14: '' })];
+  const ses = [{ klient: 'bartek', tydzien: 8, jednostka: 'A' }];
+  const list = C.rannyDo_(kl, plan, [], ses, today);
+  // Bartek już zaczął, Celina bez daty, Dawid bez przełącznika, Ewa nieaktywna, Filip bez adresu
+  assert.deepEqual(list.map(x => x.c.id), ['ania']);
+  assert.equal(list[0].email, 'ania@example.com');
+  assert.equal(list[0].units.length, 1, 'własny trening nie liczy się jako jednostka do maila');
+  assert.deepEqual(list[0].units[0].map(r => r.nr), [1, 2], 'bez ćwiczeń dodanych przez klienta');
+  // seria w Logu też znaczy „zaczęty”
+  assert.equal(C.rannyDo_(kl, plan, [{ klient: 'Ania', tydzien: '8', jednostka: 'A' }], ses, today).length, 0);
+  // data jako Date z arkusza przez dayOf
+  assert.equal(C.rannyDo_([K('ania')], [P('ania', 8, 'A', new Date(2026, 10, 24), 1)], [], [], today, v => v instanceof Date ? '2026-11-24' : String(v)).length, 1);
+
+  const u = C.rannyUnit_(list[0].units[0], plan);
+  assert.equal(u.title, 'Siła A'); assert.equal(u.note, 'Pauza 2 s');
+  assert.equal(u.meta, 'Blok B2 · tydz. 2 · 2 ćwiczenia · ok. 20 min');       // tydz. 7 i 8 bloku B2; 4×(45+120) + 4×(45+90) s = 20 min
+  assert.equal(C.plDay_(today), 'wtorek 24.11');
+
+  const pro = C.rannyMail_(C.clientOf_(K('ania')), [u], { url: 'https://x.test/?k=k0123456789a', day: today });
+  assert.equal(pro.subject, 'Dziś trening: Siła A');
+  assert.match(pro.body, /\[A\] Ćw 1: 4 × 5 · 100 kg · 75% · RPE ≤ 8/);
+  assert.match(pro.body, /\[B\] Ćw 2: 4 × 5 · guma/);
+  assert.match(pro.body, /Od trenera: Pauza 2 s/);
+  assert.match(pro.html, /href="https:\/\/x\.test\/\?k=k0123456789a"/);
+  assert.match(pro.html, /Cześć Ania!/);
+  const rir = C.rannyMail_(C.clientOf_(K('ania', { 10: 'RIR' })), [u], { day: today });
+  assert.match(rir.body, /RIR ≥ 2/); assert.ok(!/Otwórz trening/.test(rir.html), 'bez adresu bez przycisku');
+  const prosty = C.rannyMail_(C.clientOf_(K('ania', { 6: 'PROSTY' })), [C.rannyUnit_([P('ania', 8, 'A', today, 1, { kg: '62.5', rpe_max: 7.5 })], plan)], { day: today, test: true });
+  assert.match(prosty.body, /4 × 5 · 62,5 kg · zapas 2,5 powt\./); assert.ok(!/%/.test(prosty.body.split('Dziś')[1]), 'PROSTY bez %');
+  assert.equal(prosty.subject, '[Próba] Dziś trening: Siła A');
+  // tekst z arkusza nie wchodzi do HTML jako znaczniki
+  const x = C.rannyMail_(C.clientOf_(K('ania', { 2: '<b>A</b>' })), [C.rannyUnit_([P('ania', 8, 'A', today, 1, { cwiczenie: '<img src=x>' })], plan)], { day: today });
+  assert.ok(!/<img/.test(x.html) && !/<b>A<\/b>/.test(x.html));
 });
 
 // --- zakładka Ćwiczenia: baza, dopasowanie nazw, kompleksy, serie na partię ---

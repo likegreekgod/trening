@@ -62,7 +62,7 @@ function klient() {
   };
 }
 
-const KL1 = { scale: 'RPE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false };
+const KL1 = { scale: 'RPE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false };
 const KLIENCI = [   // panel → Klienci (trKlienci): ustawienia z zakładki Klienci, dane syntetyczne
   Object.assign({}, KL1, { id: 'ania', name: 'Ania', on: true, mode: 'PRO', swap: 'DOWOLNA', pain: true, edit: true, extra: 2, link: 'https://example.com/trening/?k=kaaaaaaaaaa1' }),
   Object.assign({}, KL1, { id: 'bartek', name: 'Bartek', on: true, mode: 'PROSTY', swap: 'TRENER', extra: 1, link: 'https://example.com/trening/?k=kbbbbbbbbbb2' }),
@@ -134,6 +134,11 @@ async function page(calls, opt = {}) {
       if (st.kl.some(k => k.id === f.id)) out = { ok: false, error: 'Klient „' + f.id + '” już istnieje — wybierz inne ID (np. ' + f.id + '-2).' };
       else { const k = { id: f.id, name: f.imie, on: true, mode: f.mode, scale: 'RPE', swap: f.swap, pain: false, masters: f.masters, extra: 0, oly: 5, own: true, edit: false, link: 'https://example.com/trening/?k=knowy0000001' }; out = { ok: true, result: k }; } }
     else if (b.fn === 'trKlientLink') { const i = st.kl.findIndex(k => k.id === b.args[0]); st.kl[i] = Object.assign({}, st.kl[i], { link: 'https://example.com/trening/?k=knowylink001' }); out = { ok: true, result: st.kl[i] }; }
+    else if (b.fn === 'trMail') out = { ok: true, result: { hour: st.hour || 6, hours: [5, 6, 7, 8, 9], trigger: true, quota: 97,
+      day: { day: TODAY, at: TODAY + 'T05:02:00.000Z', names: ['Ania', 'Bartek'] }, log: { ania: { at: TODAY + 'T05:02:00.000Z', day: TODAY, title: 'Siła B' } } } };
+    else if (b.fn === 'trMailUstaw') { await new Promise(res => setTimeout(res, 100)); st.hour = b.args[0];
+      out = { ok: true, result: { hour: st.hour, hours: [5, 6, 7, 8, 9], trigger: true, quota: 97, day: null, log: {} } }; }
+    else if (b.fn === 'trMailProba') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { day: addDays(TODAY, 2), title: 'Trening A' } }; }
     else out = { ok: false, error: 'Nieznana funkcja: ' + b.fn };
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
   });
@@ -666,6 +671,44 @@ test('panel: Klienci (lista, kopiowanie linku, ustawienia klienta, nowy link, no
     await shot(s2.p, 'trener-klienci-telefon-' + nm + '.png');
     assert.deepEqual(s2.p.errors, []);
     await s2.ctx.close();
+  }
+});
+
+test('panel: poranny mail (e-mail i przełącznik klienta, mail próbny, godzina w Ustawieniach)', async () => {
+  for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
+    const calls = [];
+    const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
+    await p.goto(base + 'trener.html#klienci/bartek'); await p.waitForSelector('#kl-email');
+    assert.equal(await p.isDisabled('#kl-mailtest'), true, 'bez adresu nie ma mail próbnego');
+    // włączenie bez adresu: błąd z serwera (atrapa przepuszcza), więc najpierw adres
+    await p.fill('#kl-email', ' bartek@example.com ');
+    assert.equal(await p.isDisabled('#kl-save'), false, 'wpisany adres = jest co zapisać');
+    await p.click('[data-sw="mail"]');
+    assert.equal(await p.inputValue('#kl-email'), 'bartek@example.com', 'adres zostaje po przerysowaniu');
+    assert.equal(await p.isDisabled('#kl-mailtest'), true, 'przed zapisem bez próby');
+    assert.match(await p.textContent('#kl-form'), /Zapisz zmiany, potem wyślij próbę/);
+    await p.click('#kl-save'); await p.waitForSelector('#kl-form .saved');
+    const sent = calls.filter(c => c.fn === 'trKlientUstaw').pop().args[1];
+    assert.equal(sent.email, 'bartek@example.com'); assert.equal(sent.mail, true);
+    await p.click('#kl-mailtest'); await p.waitForSelector('#kl-form .mrow .saved');
+    assert.deepEqual(calls.filter(c => c.fn === 'trMailProba').pop().args, ['bartek']);
+    assert.match(await p.textContent('#kl-form .mrow'), /Wysłano do Ciebie: Trening A/);
+    if (vp) { assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390)); await shot(p, 'trener-mail-klient-telefon-ciemny.png'); }
+    else await shot(p, 'trener-mail-klient-jasny.png');
+    // lista: „mail rano” w skrócie ustawień
+    await p.goto(base + 'trener.html#klienci'); await p.waitForSelector('table.kl');
+    assert.match(await p.textContent('table.kl'), /Bartek.*mail rano/s);
+    // Ustawienia: godzina i wynik dzisiejszej wysyłki
+    await p.goto(base + 'trener.html#ustawienia'); await p.waitForSelector('#mail-card');
+    assert.match(await p.textContent('#mail-card'), /wysłano 2 maile \(Ania, Bartek\)/);
+    assert.equal(await p.getAttribute('[data-hour="6"]', 'aria-pressed'), 'true');
+    await p.click('[data-hour="7"]'); await p.waitForSelector('#mail-card .saved');
+    assert.deepEqual(calls.filter(c => c.fn === 'trMailUstaw').pop().args, [7]);
+    assert.equal(await p.getAttribute('[data-hour="7"]', 'aria-pressed'), 'true');
+    assert.match(await p.textContent('#mail-card'), /ok\. 7:00/);
+    if (!vp) await shot(p, 'trener-mail-ustawienia-jasny.png');
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
   }
 });
 

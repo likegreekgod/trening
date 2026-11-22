@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-22 · Poranny mail do klienta (v77)
+
+- Punkt 7 z listy usprawnień z 18.11. Szkic zaakceptowany 22.11 („Ok”).
+- Mail tylko w dniu, na który plan ma jednostkę z datą, niezaczętą (brak wpisu w Sesjach i Logu). Jednostka bez daty, dzień wolny, własny trening = brak maila, żeby nie przypominać o czymś, czego klient nie planuje.
+- Włączany osobno dla każdego klienta (Klienci P `mail_rano`, adres w O `email`) z panelu, domyślnie wyłączony. Godzina jedna dla wszystkich (5–9, właściwość `MAIL_GODZ`), bez godziny per klient: jeden wyzwalacz dziennie.
+- Link z kluczem tylko w mailu do samego klienta; mail próbny idzie na adres trenera (`TRENER_EMAIL`), klient nic nie dostaje.
+- Odrzucone: poranny mail do trenera z listą „kto dziś trenuje” (Damian wybrał „tylko mail do klientów”; to samo widać na pulpicie panelu, alert przy czerwonych sygnałach zostaje bez zmian).
+
 ## 2026-11-22 · „Dodaj do kalendarza” (v75)
 
 - Tylko w telefonie, bez Apps Script: plik .ics (lib `icsFile`) albo link Kalendarza Google (lib `gcalUrl`). Czas lokalny bez strefy; UID `trening-<tydzień>-<jednostka>@<host>`, żeby ponowne dodanie z pliku podmieniało wpis.

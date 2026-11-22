@@ -12,7 +12,7 @@
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
 const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
-  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink };
+  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -641,9 +641,9 @@ function trBlokSzkic(id, blok, opt) {
 
 /* ---------- klienci: lista, ustawienia (flagi z zakładki Klienci), nowy klient, nowy link ----------
  * Kolumny Klienci po pozycji (jak clientOf_): A klucz, B klient_id, C imie, D aktywny, E link, F bol, G tryb, H dod_serie, I masters,
- * J zamiana, K skala, L sufit_oly, M wlasne, N edycja. Usuwania nie ma: „nieaktywny” zostawia historię.
+ * J zamiana, K skala, L sufit_oly, M wlasne, N edycja, O email, P mail_rano (TAK = poranny mail, Mail.gs). Usuwania nie ma: „nieaktywny” zostawia historię.
  */
-const KL_HEAD = ['klucz', 'klient_id', 'imie', 'aktywny', 'link', 'bol', 'tryb', 'dod_serie', 'masters', 'zamiana', 'skala', 'sufit_oly', 'wlasne', 'edycja'];
+const KL_HEAD = ['klucz', 'klient_id', 'imie', 'aktywny', 'link', 'bol', 'tryb', 'dod_serie', 'masters', 'zamiana', 'skala', 'sufit_oly', 'wlasne', 'edycja', 'email', 'mail_rano'];
 const KL_SUFIT_MAX = 20;               // sufit w bojach: najwyżej 20% maksa ponad plan
 
 /** Czysta: wiersz Klienci → ustawienia dla panelu; base = adres aplikacji (link liczony z klucza, bo kolumna E bywa nieaktualna). */
@@ -651,10 +651,10 @@ function trKlientOf_(r, base) {
   const c = clientOf_(r), up = i => String(r[i] === undefined || r[i] === null ? '' : r[i]).trim().toUpperCase();
   return { id: c.id, name: c.name, on: up(3) !== 'NIE', mode: c.simple ? 'PROSTY' : 'PRO', scale: c.scale, swap: c.swap || 'NIE',
     pain: c.pain, masters: up(8) === 'TAK', extra: c.extra, oly: Math.round(c.olyCeil * 1000) / 10, own: c.own, edit: c.edit,
-    link: base && c.key ? base + '?k=' + c.key : String(r[4] || '').trim() };
+    link: base && c.key ? base + '?k=' + c.key : String(r[4] || '').trim(), email: String(r[14] === undefined || r[14] === null ? '' : r[14]).trim(), mail: up(15) === 'TAK' };
 }
 
-/** Czysta: ustawienia z panelu → {vals: {indeks kolumny: wartość}} (D, F–N) albo {error}. */
+/** Czysta: ustawienia z panelu → {vals: {indeks kolumny: wartość}} (D, F–P) albo {error}. */
 function trKlientVals_(f) {
   f = f || {};
   const extra = Number(f.extra), oly = Number(f.oly), swap = String(f.swap || ''), mode = String(f.mode || ''), scale = String(f.scale || '');
@@ -663,14 +663,18 @@ function trKlientVals_(f) {
   if (['NIE', 'TRENER', 'DOWOLNA'].indexOf(swap) < 0) return { error: 'Zamiana ćwiczenia: Nie, Od trenera albo Dowolna.' };
   if (['PROSTY', 'PRO'].indexOf(mode) < 0) return { error: 'Tryb: Prosty albo PRO.' };
   if (['RPE', 'RIR'].indexOf(scale) < 0) return { error: 'Skala: RPE albo RIR.' };
+  const email = String(f.email || '').trim();
+  if (email && (!mailOk_(email) || email.length > 200)) return { error: 'E-mail klienta: to nie wygląda na adres e-mail.' };
+  if (f.mail && !email) return { error: 'Poranny mail: wpisz najpierw e-mail klienta.' };
   return { vals: { 3: f.on === false ? 'NIE' : 'TAK', 5: f.pain ? 'TAK' : '', 6: mode, 7: extra, 8: f.masters ? 'TAK' : '', 9: swap, 10: scale,
-    11: Math.round(oly * 10) / 1000, 12: f.own === false ? 'NIE' : 'TAK', 13: f.edit ? 'TAK' : '' } };
+    11: Math.round(oly * 10) / 1000, 12: f.own === false ? 'NIE' : 'TAK', 13: f.edit ? 'TAK' : '',
+    14: email, 15: f.mail ? 'TAK' : '' } };
 }
 
 /** Domyślne ustawienia nowego klienta (jak pusty wiersz w arkuszu). */
-const KL_DOMYSLNE = { on: true, mode: 'PRO', scale: 'RPE', swap: 'NIE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false };
+const KL_DOMYSLNE = { on: true, mode: 'PRO', scale: 'RPE', swap: 'NIE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false };
 
-/** Arkusz Klienci; brakujące nagłówki (puste komórki A1–N1) dopisuje, istniejących nie zmienia. */
+/** Arkusz Klienci; brakujące nagłówki (puste komórki A1–P1) dopisuje, istniejących nie zmienia. */
 function klSheet_() {
   const sh = sheet_('Klienci', KL_HEAD.slice(0, 9));
   const h = sh.getRange(1, 1, 1, KL_HEAD.length).getValues()[0];
@@ -689,7 +693,7 @@ function trKlienci() {
   return klRows_(sh).filter(r => String(r[1]).trim()).map(r => trKlientOf_(r, base));
 }
 
-/** Zapisuje ustawienia klienta (D, F–N) i odświeża link w kolumnie E. */
+/** Zapisuje ustawienia klienta (D, F–P) i odświeża link w kolumnie E. */
 function trKlientUstaw(id, f) {
   id = String(id || '').trim().toLowerCase();
   const v = trKlientVals_(f);
@@ -702,6 +706,7 @@ function trKlientUstaw(id, f) {
     const r = rows[i].slice(), base = linkBase_();
     Object.keys(v.vals).forEach(k => { r[k] = v.vals[k]; });
     if (base) r[4] = base + '?k=' + String(r[0]).trim();
+    sh.getRange(i + 2, 15).setNumberFormat('@');                  // e-mail jako tekst
     sh.getRange(i + 2, 4, 1, KL_HEAD.length - 3).setValues([r.slice(3)]);
     return trKlientOf_(r, base);
   } finally { lock.releaseLock(); }
@@ -747,4 +752,43 @@ function trKlientLink(id) {
     sh.getRange(i + 2, 5).setValue(r[4]);
     return trKlientOf_(r, base);
   } finally { lock.releaseLock(); }
+}
+
+/* ---------- poranny mail (Mail.gs): godzina, wynik dnia, mail próbny do trenera ---------- */
+/** Ustawienia porannego maila dla panelu: godzina, wynik ostatniej wysyłki, ostatni mail każdego klienta, dzienny limit. */
+function trMail() {
+  const p = PropertiesService.getScriptProperties();
+  let day = null; try { day = JSON.parse(p.getProperty('MAIL_DZIEN') || 'null'); } catch (e) {}
+  let quota = null; try { quota = MailApp.getRemainingDailyQuota(); } catch (e) {}
+  return { hour: mailGodz_(), hours: MAIL_GODZINY, day: day, log: mailLog_(), quota: quota,
+    trigger: ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'porannyMail') };
+}
+
+/** Nowa godzina wysyłki: zapis we właściwości MAIL_GODZ i nowy wyzwalacz porannyMail. */
+function trMailUstaw(h) {
+  h = Number(h);
+  if (MAIL_GODZINY.indexOf(h) < 0) throw new Error('Godzina: ' + MAIL_GODZINY.join(', ') + '.');
+  PropertiesService.getScriptProperties().setProperty('MAIL_GODZ', String(h));
+  mailWyzwalacz_(h);
+  return trMail();
+}
+
+/** Mail próbny: najbliższy niezaczęty trening klienta z datą (od dziś) idzie na adres trenera (TRENER_EMAIL), nie do klienta. */
+function trMailProba(id) {
+  id = String(id || '').trim().toLowerCase();
+  const to = String(PropertiesService.getScriptProperties().getProperty('TRENER_EMAIL') || '').trim();
+  if (!mailOk_(to)) throw new Error('Brak adresu trenera (menu Trening → Ustaw panel trenera).');
+  const row = klRows_(klSheet_()).find(r => String(r[1]).trim().toLowerCase() === id);
+  if (!row) throw new Error('Nie ma klienta „' + id + '”.');
+  const c = clientOf_(row), plan = tableOf_('Plan'), dayOf = mailDayOf_(), today = today_();
+  const started = {}, lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']).concat(pgTable_('Log', ['klient', 'tydzien', 'jednostka']))
+    .forEach(r => { started[lc(r.klient) + '|' + lc(r.tydzien) + '|' + lc(r.jednostka)] = true; });
+  const days = plan.filter(r => lc(r.klient) === c.id && !offPlan_(r) && r.data && dayOf(r.data) >= today && !started[c.id + '|' + lc(r.tydzien) + '|' + lc(r.jednostka)])
+    .map(r => dayOf(r.data)).sort();
+  if (!days.length) throw new Error('Klient nie ma w planie treningu z datą od dziś, więc nie ma czego wysłać.');
+  const units = rannyUnits_(c.id, plan, days[0], dayOf).filter(u => !started[c.id + '|' + lc(u[0].tydzien) + '|' + lc(u[0].jednostka)]).map(u => rannyUnit_(u, plan));
+  const base = linkBase_();
+  mailSend_(to, rannyMail_(c, units, { url: base ? base + '?k=' + c.key : '', day: days[0], test: true }));
+  return { day: days[0], title: units[0].title };
 }
