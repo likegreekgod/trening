@@ -690,6 +690,35 @@
   body.resting #toast{bottom:calc(170px + env(safe-area-inset-bottom,0px))}
 
   /* okno od dołu (kalkulator talerzy, później zamiana ćwiczenia i kamera) */
+  /* Ekran powitalny (v80): przy pierwszym wejściu z linku od trenera, 3 kroki; ponownie z zakładki Trener (welOpen) */
+  #wel{position:fixed;inset:0;z-index:25;background:var(--bg);overflow:auto;display:flex;flex-direction:column}
+  .wl-top{background:var(--intro-bg);color:var(--intro-ink);padding:calc(8px + env(safe-area-inset-top)) 16px 8px;display:flex;align-items:center;gap:10px;flex:none}
+  .wl-top{min-height:calc(60px + env(safe-area-inset-top))}.wl-top img{width:24px;height:24px}
+  .wl-top b{font:800 17px/1 var(--f-display);letter-spacing:.08em;text-transform:uppercase}
+  .wl-skip{margin-left:auto;background:none;border:0;color:var(--intro-muted);min-height:44px;padding:0 4px;font-weight:600;font-size:15px}
+  .wl-in{flex:1;width:100%;max-width:480px;margin:0 auto;padding:16px 16px calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px}
+  .wl-dots{display:flex;gap:6px}.wl-dots i{height:5px;flex:1;border-radius:3px;background:var(--line)}.wl-dots i.on{background:var(--accent)}
+  #wel h2:focus{outline:none}
+  .wl-in h2{margin:4px 0 0;font:800 34px/1 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink-2)}
+  .wl-in .lead{margin:0;font-size:16px;color:var(--ink)}
+  .wl-hero{width:84px;height:84px;border-radius:20px;display:block}
+  .wl-box{background:var(--surface);border:1px solid var(--line);border-radius:var(--rc);box-shadow:var(--shadow);padding:6px 16px}
+  .wl-list{list-style:none;margin:0;padding:0}
+  .wl-list li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+  .wl-list li:first-child{border-top:0}
+  .wl-list .n{flex:none;width:28px;height:28px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center;font:600 14px/1 var(--f-mono)}
+  .wl-list .ic{flex:none;width:28px;height:28px;color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:20px}
+  .wl-list .ic svg{width:24px;height:24px}
+  .wl-k{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);font-weight:600;white-space:nowrap}
+  .wl-k svg{width:16px;height:16px}
+  .wl-lt{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px;margin:0 4px 0 2px}.wl-list .nw{white-space:nowrap}
+  .wl-lt.g{background:var(--e-g)}.wl-lt.y{background:var(--e-y)}.wl-lt.r{background:var(--e-r)}
+  .wl-note{margin:0;font-size:14px;color:var(--muted)}
+  .wl-warn{background:var(--surface);border-radius:var(--r);box-shadow:inset 5px 0 0 var(--warn),var(--shadow);padding:10px 14px 10px 18px;font-size:15px}
+  .wl-ok{background:var(--surface);border-radius:var(--r);box-shadow:inset 5px 0 0 var(--ok),var(--shadow);padding:10px 14px 10px 18px;font-size:15px}
+  .wl-foot{margin-top:auto;display:grid;gap:8px;padding-top:6px}
+  .wl-foot .btn{width:100%}
+  .wl-again{width:100%;margin-top:var(--gap)}
   #sheet{position:fixed;inset:0;z-index:20;background:color-mix(in srgb,var(--panel) 55%,transparent)}
   .sh-in{position:absolute;left:0;right:0;bottom:0;max-height:88vh;overflow:auto;background:var(--surface);border-top:0;border-radius:22px 22px 0 0;
          padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:grid;gap:12px;max-width:640px;margin:0 auto}
@@ -874,6 +903,7 @@ function introShow(el){                                  // true = zasłona stoi
   <div class="rbtns"><button type="button" data-r="-15">−15</button><button type="button" data-r="15">+15</button><button type="button" data-r="0">Pomiń</button><button type="button" id="r-set" aria-label="Ustawienia sygnału">♪</button></div>
   <div class="rbar"><i id="rfill"></i></div>
 </div>
+<div id="wel" hidden role="dialog" aria-modal="true" aria-labelledby="wel-t"></div>
 <div id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheet-t"><div class="sh-in" id="sheet-in"></div></div>
 <div id="toast"></div>
 
@@ -884,6 +914,7 @@ function introShow(el){                                  // true = zasłona stoi
 const API_URL = window.API_URL;                    // z config.js
 // Klucz działa jak hasło: po zapamiętaniu znika z paska adresu (historia przeglądarki, zrzuty ekranu, udostępniony adres).
 // Gdy pamięć telefonu nie działa (np. tryb prywatny), klucz zostaje w adresie, bo inaczej przeładowanie zgubiłoby plan.
+const KEY_LINK = !!new URLSearchParams(location.search).get('k');   // wejście z linku od trenera (ekran powitalny)
 const KEY = (() => {
   const k = new URLSearchParams(location.search).get('k');
   try {
@@ -1228,7 +1259,7 @@ function openSheet(html){
 let SHEET_ON_CLOSE = null;
 function closeSheet(){ const f = SHEET_ON_CLOSE; SHEET_ON_CLOSE = null; if (f) f(); $("#sheet").hidden = true; $("#sheet-in").innerHTML = ""; }
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet" || e.target.closest("[data-close]")) closeSheet(); });
-document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); else if (e.key === "Escape" && WEL) welClose(); });
 let BAR = 20, COLLARS = true;
 try { const s = JSON.parse(localStorage.getItem("pl_" + KEY) || "null"); if (s) { BAR = s.bar; COLLARS = s.col; } } catch (e) {}
 const plateCls = p => ({ 25: "p25", 20: "p20", 15: "p15", 10: "p10", 5: "p5" })[p] || "ps";
@@ -1291,13 +1322,13 @@ function load(){
   if (!KEY) { askKey(); setSync(''); return; }
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(DK) || 'null'); } catch (e) {}
-  if (cached) { useData(cached); pickDefault(); render(); setSync('offline – ostatnie dane'); }
+  if (cached) { useData(cached); pickDefault(); render(); setSync('offline – ostatnie dane'); welMaybe(); }
   call('getData').then(d => {
     try { localStorage.setItem(DK, JSON.stringify(d)); } catch (e) {}
     const keep = cached ? { w: cur.week, d: cur.day } : null;
     useData(d);
     if (keep) { cur.week = keep.w; cur.day = keep.d; } else pickDefault();
-    render(); setSync('gotowe'); flush(); vqRun();
+    render(); setSync('gotowe'); flush(); vqRun(); welMaybe();
   }).catch(e => {
     if (!cached) { $('#main').innerHTML = '<div class="empty">Błąd: ' + esc(e.message) + '</div>'; setSync('błąd'); }
     else setSync('offline – ostatnie dane');
@@ -1338,6 +1369,102 @@ function getLog(ex, set){
   return null;
 }
 function sessDone(week, day){ return Object.keys(SESS).some(k => k.endsWith('|' + week + '|' + day)); }
+
+/* ---------- ekran powitalny (v80): pierwsze wejście z linku od trenera; raz na telefon (wel_<klucz>), ponownie z zakładki Trener ----------
+   Kroki: powitanie → dodanie do ekranu głównego (iPhone / Android, system wykryty z przeglądarki) → jak wygląda trening.
+   Aplikacja otwarta już z ekranu głównego (display-mode standalone) nie pokazuje go sama. */
+const WELK = 'wel_' + KEY;
+const STANDALONE = (() => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } })();
+const PLAT = TL.welPlatform(navigator.userAgent, navigator.maxTouchPoints);
+let WEL = null, BIP = null, WEL_TRIED = false;          // WEL = { step, os, installed }; BIP = odłożone zdarzenie instalacji Chrome (Android)
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); BIP = e; if (WEL && WEL.step === 1) welDraw(); });
+addEventListener('appinstalled', () => { BIP = null; if (WEL) { WEL.installed = true; if (WEL.step === 1) welDraw(); } });
+// iPhone otwiera aplikację z ekranu początkowego pod start_url z manifestu i z osobną pamięcią: manifest z kluczem w start_url,
+// żeby nie pytała o link (gdyby Safari go nie przyjął, zostaje askKey i przycisk „Kopiuj link” na ekranie powitalnym)
+if (PLAT === 'ios' && KEY && !STANDALONE) fetch('manifest.json').then(r => r.json()).then(m => {
+  const l = document.querySelector('link[rel="manifest"]');
+  if (l) l.href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(TL.keyManifest(m, new URL('./', location.href).href, KEY)));
+}).catch(() => {});
+function welMaybe(){
+  if (WEL_TRIED) return; WEL_TRIED = true;
+  let seen = true; try { seen = !!localStorage.getItem(WELK); } catch (e) {}
+  if (KEY_LINK && !seen && !STANDALONE) welOpen();
+}
+function welOpen(){ WEL = { step: 0, os: PLAT === 'android' ? 'android' : 'ios', installed: STANDALONE }; $('#wel').hidden = false; welDraw(); }
+// na czas kroku „iPhone” klucz wraca do paska adresu: gdyby Safari nie przyjął manifestu z kluczem, zakładka na ekranie weźmie bieżący adres
+function welUrl(on){
+  if (PLAT !== 'ios' || STANDALONE || !KEY) return;
+  let saved = false; try { saved = localStorage.getItem('key') === KEY; } catch (e) {}
+  if (!saved) return;                                  // klucz i tak został w adresie (pamięć telefonu nie działa)
+  const base = TL.urlNoKey(location.pathname, location.search, location.hash), h = location.hash;
+  const url = on ? base.slice(0, base.length - h.length) + (base.slice(0, base.length - h.length).includes('?') ? '&' : '?') + 'k=' + encodeURIComponent(KEY) + h : base;
+  if (url !== location.pathname + location.search + location.hash) history.replaceState(history.state, '', url);
+}
+function welClose(){
+  welUrl(false);
+  try { localStorage.setItem(WELK, '1'); } catch (e) {}
+  WEL = null; $('#wel').hidden = true; $('#wel').innerHTML = '';
+}
+const SHARE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 8l5-5 5 5M5 12v8h14v-8"/></svg>';
+const ADDSQ_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg>';
+const KEBAB_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg>';
+function welDraw(){
+  const w = WEL, n = 3, inApp = TL.welInApp(navigator.userAgent);
+  const ol = items => `<div class="wl-box"><ol class="wl-list">${items.map((t, i) => `<li><span class="n">${i + 1}</span><span>${t}</span></li>`).join('')}</ol></div>`;
+  let body = '', foot = '';
+  if (w.step === 0) {
+    body = `<img class="wl-hero" src="icons/icon-192.png" alt="">
+      <h2 id="wel-t">Cześć${NAME ? ', ' + esc(NAME) : ''}!</h2>
+      <p class="lead">Tu masz plan od trenera i zapisujesz, jak poszło. Dwie minuty na start.</p>
+      <div class="wl-box"><ul class="wl-list">
+        <li><span class="ic" aria-hidden="true">${CAL_SVG}</span><span><b>Plan na każdy dzień</b><br>ćwiczenia, serie, ciężar</span></li>
+        <li><span class="ic" aria-hidden="true">✓</span><span><b>Zapis w kilka sekund</b><br>jedno dotknięcie po serii, działa też bez zasięgu</span></li>
+        <li><span class="ic" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3.5"><path d="${ES_ICON.note}"/></svg></span><span><b>Kontakt z trenerem</b><br>filmy z serii i komentarze do nich</span></li>
+      </ul></div>`;
+    foot = `<button type="button" class="btn p" data-wl="1">Dalej</button>`;
+  } else if (w.step === 1) {
+    const ios = w.os === 'ios';
+    const steps = ios
+      ? [`Dotknij <span class="wl-k">${SHARE_SVG}Udostępnij</span> na pasku Safari (na dole ekranu albo obok adresu).`,
+         `Przewiń listę i wybierz <span class="wl-k">${ADDSQ_SVG}Do ekranu początkowego</span>`,
+         'Dotknij <b>„Dodaj”</b> w prawym górnym rogu. Ikona z talerzem pojawi się na ekranie.']
+      : [`Dotknij <span class="wl-k">${KEBAB_SVG}</span> w prawym górnym rogu Chrome.`,
+         'Wybierz <b>„Dodaj do ekranu głównego”</b> albo <b>„Zainstaluj aplikację”</b>.',
+         'Potwierdź <b>„Zainstaluj”</b>. Ikona z talerzem pojawi się na ekranie.'];
+    body = `<h2 id="wel-t">Dodaj na ekran główny</h2>
+      <p class="lead">Trening otworzysz jednym dotknięciem, jak zwykłą aplikację, także bez zasięgu.</p>
+      ${w.installed ? '<div class="wl-ok">✓ Aplikacja jest już na ekranie głównym.</div>' : `
+      <div class="seg" role="group" aria-label="Telefon"><button type="button" data-os="ios" aria-pressed="${ios}">iPhone</button><button type="button" data-os="android" aria-pressed="${!ios}">Android</button></div>
+      ${inApp ? `<div class="wl-warn">Link otworzył się w komunikatorze. Najpierw dotknij <b>⋯</b> i wybierz <b>„Otwórz w ${ios ? 'Safari' : 'przeglądarce'}”</b>, potem wróć do tych kroków.</div>` : ''}
+      ${!ios && BIP ? '<button type="button" class="btn p" id="wl-inst">Zainstaluj aplikację</button><p class="wl-note">Nie widzisz okna instalacji? Zrób to ręcznie:</p>' : ''}
+      ${ol(steps)}
+      ${ios ? '<p class="wl-note">Gdyby aplikacja z ekranu poprosiła o link od trenera, wklej go. <button type="button" class="btn" id="wl-copy" style="margin-top:6px;width:100%">Kopiuj mój link</button></p>' : ''}`}`;
+    foot = `<button type="button" class="btn p" data-wl="2">Dalej</button>`;
+  } else {
+    body = `<h2 id="wel-t">Jak wygląda trening</h2>
+      ${ol(['Aplikacja sama otwiera <b>dzisiejszy trening</b>. Inny dzień wybierzesz w pasku tygodnia na górze.',
+            'Szare liczby w polach to <b>plan</b>. Zrobione tak samo? Dotknij <b>✓</b>. Inaczej? Wpisz swoją liczbę.',
+            `Oceń, jak było: <span class="nw"><span class="wl-lt g"></span>Lekko</span> <span class="nw"><span class="wl-lt y"></span>Średnio</span> <span class="nw"><span class="wl-lt r"></span>Ciężko</span>.${SIMPLE ? '' : ' Dokładniej: RPE albo RIR.'}`,
+            'Na koniec <b>„Zakończ i zapisz trening”</b>. Trener widzi wszystko u siebie.'])}
+      <p class="wl-note">Przy pierwszym treningu podpowiedzi pokażą resztę. Ten ekran otworzysz ponownie w zakładce <b>Trener</b>.</p>`;
+    foot = `<button type="button" class="btn p" id="wl-end">Zaczynamy</button>`;
+  }
+  $('#wel').innerHTML = `<div class="wl-top"><img src="icons/favicon.svg" alt=""><b>Siła z Ruchu</b>${w.step < n - 1 ? '<button type="button" class="wl-skip" id="wl-skip">Pomiń</button>' : ''}</div>
+    <div class="wl-in"><div class="wl-dots" aria-label="Krok ${w.step + 1} z ${n}">${Array.from({ length: n }, (_, i) => `<i class="${i <= w.step ? 'on' : ''}"></i>`).join('')}</div>
+    ${body}<div class="wl-foot">${foot}</div></div>`;
+  $('#wel').scrollTop = 0;
+  welUrl(w.step === 1 && w.os === 'ios' && !w.installed);
+  $('#wel').querySelectorAll('[data-wl]').forEach(b => b.onclick = () => { w.step = +b.dataset.wl; welDraw(); });
+  $('#wel').querySelectorAll('[data-os]').forEach(b => b.onclick = () => { w.os = b.dataset.os; welDraw(); });
+  const sk = $('#wl-skip'); if (sk) sk.onclick = welClose;
+  const en = $('#wl-end'); if (en) en.onclick = welClose;
+  const ins = $('#wl-inst'); if (ins) ins.onclick = () => { const e = BIP; BIP = null; e.prompt(); e.userChoice.then(c => { if (c && c.outcome === 'accepted') w.installed = true; if (WEL === w) welDraw(); }).catch(() => {}); };
+  const cp = $('#wl-copy'); if (cp) cp.onclick = () => {
+    const url = new URL('./', location.href).href + '?k=' + encodeURIComponent(KEY);
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => { cp.textContent = '✓ Link skopiowany'; }, () => { cp.textContent = 'Nie udało się. Link masz w wiadomości od trenera.'; });
+  };
+  $('#wel-t').setAttribute('tabindex', '-1'); $('#wel-t').focus({ preventScroll: true });   // czytnik ekranu zaczyna od nagłówka kroku
+}
 
 /* ---------- tryb prosty: pełna ściągawka, zwinięta na dole Treningu (na start są podpowiedzi: tipDraw) ---------- */
 function helpCard(){
@@ -2372,7 +2499,9 @@ function renderTrener(){
         return `<details class="card cw ${i ? '' : 'first'}" ${!i || nw ? 'open' : ''}><summary><span><span class="cn">${esc(weekLabel(+w.week || w.week))}</span>
           <span class="sub">${range(w)}${range(w) ? ' · ' : ''}${n} ${n === 1 ? 'komentarz' : n < 5 ? 'komentarze' : 'komentarzy'}${nw ? ' · ' + nw + ' ' + (nw === 1 ? 'nowy' : 'nowe') : ''}</span></span></summary>
           ${w.units.map(u => `<div class="cw-u">${unitHead(w, u)}</div>${cnList(u.notes, isNew, false)}`).join('')}</details>`;
-      }).join('') + '<p class="cn-s" style="margin-top:12px">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>');
+      }).join('') + '<p class="cn-s" style="margin-top:12px">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>') +
+    '<button type="button" class="btn wl-again" id="wel-open">Jak zacząć · ekran główny</button>';
+  $('#wel-open').onclick = welOpen;
   cnMark(all.filter(n => seen.indexOf(n.key) < 0).map(n => n.key));
 }
 /* ---------- własny trening klienta: składanie z ćwiczeń z bazy, zapis do Planu jako W1, W2… ---------- */

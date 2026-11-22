@@ -843,3 +843,20 @@ test('calTimes, icsFile, gcalUrl: „Dodaj do kalendarza” (czas lokalny, konie
   assert.equal(g.searchParams.get('text'), ev.title);
   assert.equal(g.searchParams.get('details'), ev.desc + '\n\n' + ev.url);
 });
+
+test('welPlatform / welInApp / keyManifest: ekran powitalny rozpoznaje telefon, komunikator i daje iPhone\'owi manifest z kluczem', () => {
+  assert.equal(L.welPlatform('Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) Safari/604.1', 5), 'ios');
+  assert.equal(L.welPlatform('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15', 5), 'ios');   // iPad udaje Maca, ale ma dotyk
+  assert.equal(L.welPlatform('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15', 0), 'other');
+  assert.equal(L.welPlatform('Mozilla/5.0 (Linux; Android 15; Pixel 8) Chrome/131.0 Mobile', 5), 'android');
+  assert.equal(L.welPlatform('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0', 0), 'other');
+  assert.equal(L.welInApp('Mozilla/5.0 (iPhone) Mobile/15E148 [FBAN/MessengerForiOS;FBAV/480.0]'), true);
+  assert.equal(L.welInApp('Mozilla/5.0 (Linux; Android 15) Chrome/131.0 Instagram 350.0'), true);
+  assert.equal(L.welInApp('Mozilla/5.0 (iPhone) Version/18.1 Mobile/15E148 Safari/604.1'), false);
+  const m = L.keyManifest({ id: './', name: 'Siła z Ruchu', start_url: './', scope: './', icons: [{ src: 'icons/icon-192.png', sizes: '192x192' }] }, 'https://x.github.io/trening/', 'k0123456789a');
+  assert.equal(m.start_url, 'https://x.github.io/trening/?k=k0123456789a');
+  assert.equal(m.id, 'https://x.github.io/trening/');           // ta sama aplikacja co bez klucza
+  assert.equal(m.scope, 'https://x.github.io/trening/');
+  assert.equal(m.icons[0].src, 'https://x.github.io/trening/icons/icon-192.png');   // manifest z data: nie ma własnego adresu, więc adresy pełne
+  assert.equal(m.name, 'Siła z Ruchu');
+});

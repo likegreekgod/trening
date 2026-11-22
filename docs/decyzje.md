@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-22 · Ekran powitalny dla klienta (v80)
+
+- Przy pierwszym wejściu z linku: powitanie → dodanie do ekranu głównego (iPhone / Android osobno, wykryte z przeglądarki) → jak wygląda trening. Raz na telefon, ponownie z zakładki Trener. Szkic zaakceptowany 22.11.
+- iPhone: manifest z kluczem w `start_url` (aplikacja z ekranu początkowego ma osobną pamięć), klucz w adresie tylko na czas kroku iPhone; zapasowo „Kopiuj mój link”.
+- Odrzucone: wybór PROSTY / PRO na ekranie powitalnym (tryb ustawia trener, klient na starcie nie zna różnicy).
+
 ## 2026-11-22 · AI szkic następnego bloku w panelu (v79)
 
 - Punkt 8 z listy usprawnień z 18.11 (panel PR 5, asystent planu). Szkic zaakceptowany 22.11. Miejsce: karta klienta → Bloki, karta „Następny blok” nad ostatnim blokiem (nie osobny ekran): tygodnie, poniedziałek startu, wskazówki dla AI.

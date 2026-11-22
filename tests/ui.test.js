@@ -37,6 +37,8 @@ async function page(calls, offline, opt = {}) {
   });
   // podpowiedzi przy pierwszym użyciu zasłaniają część karty: domyślnie obejrzane, opt.tips je włącza
   if (!opt.tips) await ctx.addInitScript(() => { try { ['kabc', 'k0123456789a', 'kABCDEF01234'].forEach(k => localStorage.setItem('tip_' + k, '["seria","wiecej","kamera","dzien"]')); } catch (e) {} });
+  // ekran powitalny przy wejściu z linku (?k=) zasłania aplikację: domyślnie obejrzany, opt.wel go włącza
+  if (!opt.wel) await ctx.addInitScript(() => { try { ['kabc', 'k0123456789a', 'kABCDEF01234'].forEach(k => localStorage.setItem('wel_' + k, '1')); } catch (e) {} });
   // animacja otwarcia zasłania ekran przez 3 s: domyślnie aplikacja „była na ekranie przed chwilą” (znacznik z roku 2100 działa też w testach z przestawionym zegarem),
   // opt.intro ją włącza (pokazuje się tylko z opt.motion)
   if (!opt.intro) await ctx.addInitScript(() => { try { localStorage.setItem('intro', '4102444800000'); } catch (e) {} });
@@ -2449,6 +2451,77 @@ test(`Animacja otwarcia (${scheme}): pierwsze uruchomienie pokazuje zasłonę z 
   assert.equal(calls.filter(c => c.fn === 'logSet').length, 1);
   assert.deepEqual(p.errors, []);
   await ctx.close();
+});
+
+const UA_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
+const UA_AND = 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
+
+test('Ekran powitalny (iPhone): pierwsze wejście z linku → 3 kroki, imię, kroki Safari, klucz w adresie i manifeście tylko na czas kroku; drugie wejście bez ekranu; ponownie z zakładki Trener', async () => {
+  const { ctx, p } = await page([], false, { wel: true, ua: UA_IOS, touch: true });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#wel:not([hidden]) #wel-t');
+  assert.equal(await p.textContent('#wel-t'), 'Cześć, Robert!');
+  assert.doesNotMatch(p.url(), /kabc/);                                         // na powitaniu klucz już zniknął z adresu
+  await p.screenshot({ path: path.join(SCREENS, 'powitanie-1.png') });
+  await p.click('[data-wl="1"]');
+  assert.equal(await p.textContent('#wel-t'), 'Dodaj na ekran główny');
+  assert.equal(await p.getAttribute('[data-os="ios"]', 'aria-pressed'), 'true');   // system rozpoznany
+  assert.match(await p.textContent('#wel'), /Do ekranu początkowego/);
+  assert.equal(await p.$('#wl-inst'), null);
+  assert.equal(new URL(p.url()).searchParams.get('k'), 'kabc');                // zakładka na ekranie weźmie adres z kluczem
+  await p.waitForFunction(() => /^data:/.test(document.querySelector('link[rel="manifest"]').href));
+  const man = await p.evaluate(() => JSON.parse(decodeURIComponent(document.querySelector('link[rel="manifest"]').href.replace(/^data:[^,]*,/, ''))));
+  assert.equal(new URL(man.start_url).searchParams.get('k'), 'kabc');
+  assert.equal(man.name, 'Siła z Ruchu');
+  await p.screenshot({ path: path.join(SCREENS, 'powitanie-2-iphone.png') });
+  await p.click('[data-os="android"]');
+  assert.match(await p.textContent('#wel'), /Dodaj do ekranu głównego/);
+  assert.equal(new URL(p.url()).searchParams.get('k'), null);                   // poza krokiem iPhone'a klucza w adresie nie ma
+  await p.click('.wl-foot [data-wl="2"]');
+  assert.equal(await p.textContent('#wel-t'), 'Jak wygląda trening');
+  assert.match(await p.textContent('#wel'), /Lekko.*Średnio.*Ciężko/);
+  assert.doesNotMatch(await p.textContent('#wel'), /RPE/);                      // PROSTY bez RPE
+  await p.click('#wl-end');
+  assert.equal(await p.isHidden('#wel'), true);
+  assert.equal(await p.evaluate(() => localStorage.getItem('wel_kabc')), '1');
+  assert.doesNotMatch(p.url(), /kabc/);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]'); await p.waitForTimeout(200);
+  assert.equal(await p.isHidden('#wel'), true);                                 // raz na telefon
+  await p.click('#nav [data-tab="trener"]'); await p.click('#wel-open');
+  assert.equal(await p.textContent('#wel-t'), 'Cześć, Robert!');
+  await p.click('#wl-skip'); assert.equal(await p.isHidden('#wel'), true);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('Ekran powitalny (Android, PRO, ciemny): przycisk instalacji z okna Chrome; bez linku i z ekranu głównego się nie pokazuje', async () => {
+  const { ctx, p } = await page([], false, { wel: true, ua: UA_AND, touch: true, scheme: 'dark', data: PRO });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#wel:not([hidden]) #wel-t');
+  await p.evaluate(() => { const e = new Event('beforeinstallprompt'); e.prompt = () => { window.__asked = true; }; e.userChoice = Promise.resolve({ outcome: 'accepted' }); dispatchEvent(e); });
+  await p.click('[data-wl="1"]');
+  assert.equal(await p.getAttribute('[data-os="android"]', 'aria-pressed'), 'true');
+  assert.equal(new URL(p.url()).searchParams.get('k'), null);
+  assert.equal(await p.evaluate(() => document.querySelector('link[rel="manifest"]').getAttribute('href')), 'manifest.json');   // Android: pamięć wspólna z Chrome, manifest bez klucza
+  await p.screenshot({ path: path.join(SCREENS, 'powitanie-2-android-ciemny.png') });
+  await p.click('#wl-inst');
+  await p.waitForSelector('.wl-ok');
+  assert.equal(await p.evaluate(() => window.__asked), true);
+  assert.match(await p.textContent('.wl-ok'), /już na ekranie głównym/);
+  await p.click('.wl-foot [data-wl="2"]');
+  assert.match(await p.textContent('#wel'), /RPE albo RIR/);
+  await ctx.close();
+  // klucz z pamięci (bez ?k=) = klient już korzysta z aplikacji: bez ekranu
+  const b = await page([], false, { wel: true });
+  await b.p.addInitScript(() => localStorage.setItem('key', 'kabc'));
+  await b.p.goto(base); await b.p.waitForSelector('.set[data-o="1"]'); await b.p.waitForTimeout(200);
+  assert.equal(await b.p.isHidden('#wel'), true);
+  await b.ctx.close();
+  // aplikacja otwarta z ekranu głównego (iPhone: osobna pamięć, start_url z kluczem): bez ekranu
+  const c = await page([], false, { wel: true, ua: UA_IOS });
+  await c.p.addInitScript(() => Object.defineProperty(navigator, 'standalone', { get: () => true }));
+  await c.p.goto(base + '?k=kabc'); await c.p.waitForSelector('.set[data-o="1"]'); await c.p.waitForTimeout(200);
+  assert.equal(await c.p.isHidden('#wel'), true);
+  assert.doesNotMatch(c.p.url(), /kabc/);
+  await c.ctx.close();
 });
 
 test('Animacja otwarcia: dotknięcie albo klawisz pomija i nie trafia w przycisk pod spodem; ponowne otwarcie zaraz potem bez animacji; zapis z v53 (data) liczy się jak dawno temu', async () => {

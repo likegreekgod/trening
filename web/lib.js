@@ -1187,6 +1187,29 @@
       '&dates=' + t.s + '/' + t.e + '&details=' + encodeURIComponent([ev.desc, ev.url].filter(Boolean).join('\n\n'));
   };
 
+  /* ---------- ekran powitalny (v80): system telefonu, przeglądarka w aplikacji, manifest z kluczem dla iPhone'a ---------- */
+  /** 'ios' | 'android' | 'other'; iPad z iPadOS 13+ podaje się jako Mac, więc rozpoznajemy go po dotyku */
+  L.welPlatform = (ua, touch) => {
+    const u = String(ua || '');
+    if (/iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && +touch > 1)) return 'ios';
+    if (/Android/.test(u)) return 'android';
+    return 'other';
+  };
+  /** przeglądarka wbudowana w komunikator (Messenger, Instagram, Facebook, TikTok, LINE): z niej nie da się dodać aplikacji do ekranu */
+  L.welInApp = ua => /FBAN|FBAV|FB_IAB|Instagram|Messenger|musical_ly|TikTok|BytedanceWebview|\bLine\//.test(String(ua || ''));
+  /**
+   * manifest z kluczem w start_url: iPhone otwiera aplikację z ekranu początkowego pod start_url i z osobną pamięcią,
+   * więc bez klucza w adresie pytałby o link. base = adres katalogu aplikacji (z / na końcu), m = treść manifest.json.
+   */
+  L.keyManifest = (m, base, key) => {
+    const abs = u => new URL(u, base).href;
+    return Object.assign({}, m, {
+      id: abs(m.id || './'), scope: abs(m.scope || './'),
+      start_url: abs((m.start_url || './').split('?')[0]) + '?k=' + encodeURIComponent(key),
+      icons: (m.icons || []).map(i => Object.assign({}, i, { src: abs(i.src) }))
+    });
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);
