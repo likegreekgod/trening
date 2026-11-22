@@ -550,7 +550,7 @@ test('anchorSec_, commentLines_, fileIdOf_: komentarze Dysku z czasem w filmie',
   assert.deepEqual(plain(C.commentLines_([])), { text: '', raw: '' });
   // kolumny komentarzy zostają na swoich miejscach, odpowiedź klienta dopisana na końcu (stare wiersze się nie przesuwają)
   assert.deepEqual([C.LOG_HEADERS.slice(22), C.SES_HEADERS.slice(16), C.LOG_HEADERS.length, C.SES_HEADERS.length].map(x => plain(x)),
-    [['komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at'], ['komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at'], 26, 19]);
+    [['komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at', 'notatka_trenera'], ['komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at', 'prowadzil'], 27, 20]);
 });
 
 test('replyRow_: odpowiedź klienta tylko w jego wierszu, długość, pusty tekst = usunięcie', () => {
@@ -1462,4 +1462,74 @@ test('diagnose_, formulaCells_: formuła w danych od klientów = błąd, w Plani
   assert.deepEqual(Array.from(C.formulaCells_([['', '=1+1'], ['', ''], ['=A1', '']])), ['B2', 'A4']);
   assert.deepEqual([1, 26, 27, 52, 703].map(n => C.colA1_(n)), ['A', 'Z', 'AA', 'AZ', 'AAA']);
   assert.ok(Array.from(C.DANE_TABS).indexOf('Log') >= 0 && Array.from(C.DANE_TABS).indexOf('Sesje') >= 0);
+});
+
+test('Prowadź trening: doPost z biletem trenera i klient_id woła API klienta w trybie trenera; klient sam tego trybu nie włączy', () => {
+  const saved = { trAuth_: C.trAuth_, ContentService: C.ContentService, clientById_: C.clientById_, LIVE_FNS: C.LIVE_FNS, API_FNS: C.API_FNS };
+  C.ContentService = { MimeType: { JSON: 'json' }, createTextOutput: s => ({ setMimeType: () => JSON.parse(s) }) };
+  let authed = 0;
+  C.trAuth_ = tok => { authed++; if (tok !== 'a.b.c') throw new Error(C.TR_AUTH + 'zaloguj się.'); return 't@example.com'; };
+  C.clientById_ = id => id === 'ania' ? { key: 'kaaaaaaaaaa1', id: 'ania' } : null;
+  const seen = [];
+  const fake = name => (key, ...a) => { seen.push([name, key, C.LIVE_].concat(a)); return name; };
+  C.LIVE_FNS = { getData: fake('getData'), liveNote: fake('liveNote') };
+  C.API_FNS = Object.assign({}, saved.API_FNS, { getData: fake('getData') });
+  const post = b => { C.LIVE_ = false; return C.doPost({ postData: { contents: JSON.stringify(b) } }); };
+  try {
+    assert.deepEqual(post({ fn: 'getData', token: 'a.b.c', as: 'ania' }), { ok: true, result: 'getData' });
+    assert.deepEqual(seen.pop(), ['getData', 'kaaaaaaaaaa1', true]);              // klucz z zakładki Klienci, tryb trenera włączony
+    assert.match(post({ fn: 'getData', token: 'x', as: 'ania' }).error, /^Logowanie: /);
+    assert.match(post({ fn: 'getData', token: 'a.b.c', as: 'ewa' }).error, /Nie ma takiego klienta/);
+    assert.match(post({ fn: 'trPulpit', token: 'a.b.c', as: 'ania', args: [] }).ok ? 'x' : 'ok', /ok|x/);
+    assert.match(post({ fn: 'saveStan', token: 'a.b.c', as: 'ania' }).error, /Nieznana funkcja/);   // tylko funkcje z LIVE_FNS
+    assert.deepEqual(post({ fn: 'getData', key: 'kaaaaaaaaaa1' }), { ok: true, result: 'getData' });
+    assert.deepEqual(seen.pop(), ['getData', 'kaaaaaaaaaa1', false]);             // klient z kluczem: zwykły tryb
+    assert.match(post({ fn: 'liveNote', key: 'kaaaaaaaaaa1' }).error, /Nieznana funkcja/);   // notatki trenera nie ma w API klienta
+  } finally { Object.assign(C, saved); C.LIVE_ = false; }
+  assert.equal(saved.API_FNS.liveNote, undefined);
+  for (const k of Object.keys(C.LIVE_FNS)) { assert.equal(C.TR_FNS[k], undefined, k); if (k !== 'liveNote') assert.ok(C.API_FNS[k], k); }
+  assert.equal(C.LOG_HEADERS[C.LOG_HEADERS.length - 1], 'notatka_trenera');       // nowe kolumny na końcu
+  assert.equal(C.SES_HEADERS[C.SES_HEADERS.length - 1], 'prowadzil');
+  try { C.LIVE_ = false; assert.throws(() => C.liveNote('k', {}), /Brak dostępu/); } finally { C.LIVE_ = false; }
+});
+
+test('liveView_, liveNoteRow_: prywatna notatka trenera nie trafia do klienta; wiersz notatki w ćwiczeniu', () => {
+  const d = () => ({ cfg: { name: 'Ania', simple: true, edit: false, own: false, swap: false, scale: 'RIR' }, logs: [{ id: 'a|1|T1|1|1', notatka_trenera: 'tylko ja', komentarz_trenera: 'dla klienta' }] });
+  const cl = C.liveView_(d(), false);
+  assert.equal('notatka_trenera' in cl.logs[0], false);
+  assert.equal(cl.logs[0].komentarz_trenera, 'dla klienta');
+  assert.equal(cl.cfg.live, undefined);
+  const tr = plain(C.liveView_(d(), true));
+  assert.equal(tr.logs[0].notatka_trenera, 'tylko ja');
+  assert.deepEqual([tr.cfg.live, tr.cfg.simple, tr.cfg.edit, tr.cfg.own, tr.cfg.swap, tr.cfg.scale], [true, false, true, true, 'DOWOLNA', 'RIR']);
+  const R = (seria, p, k) => ({ seria, notatka_trenera: p || '', komentarz_trenera: k || '' });
+  assert.equal(C.liveNoteRow_([R('R1'), R(2), R(1), R('D1')]), 2);                  // najniższa seria robocza
+  assert.equal(C.liveNoteRow_([R(1), R(2, '', 'film: kolana'), R(3, 'x')]), 1);     // pierwszy wiersz z notatką albo komentarzem
+  assert.equal(C.liveNoteRow_([R('R1'), R('R2')]), 0);                            // same rozgrzewki: pierwsza
+  assert.equal(C.liveNoteRow_([R(0)]), -1);                                       // samo pominięcie: nie ma gdzie
+  assert.equal(C.liveNoteRow_([]), -1);
+});
+
+test('Prowadź trening: ćwiczenie i jednostka trenera w planie (zrodlo „trener”), zmiana planu w zaczętej jednostce', () => {
+  const R = (w, j, nr, cw, x) => Object.assign({ klient: 'ania', tydzien: w, jednostka: j, tytul: 'Nogi', data: '2026-11-2' + w, nr, cwiczenie: cw, prio: 'A', serie: 3, powt: '5', kg: 85, blok: 'B2', uwagi: '' }, x || {});
+  const plan = [R(1, 'T1', 1, 'Przysiad'), R(1, 'T1', 2, 'RDL'), R(2, 'T1', 1, 'Przysiad'), R(2, 'T1', 2, 'RDL'), R(1, 'W1', 1, 'Bieg', { zrodlo: 'klient' })];
+  let r = plain(C.planEdit_(plan, [], 'ania', { op: 'add', week: 1, day: 'T1', name: 'Wykrok w tył', sets: 3, reps: 10, kg: '', trainer: true }));
+  assert.deepEqual(r.add.map(a => [a.tydzien, a.nr, a.cwiczenie, a.prio, a.zrodlo]), [[1, 3, 'Wykrok w tył', 'B', 'trener']]);
+  const after = plan.concat([R(1, 'T1', 3, 'Wykrok w tył', { zrodlo: 'trener' })]);
+  assert.equal(C.planEdit_(after, [], 'ania', { op: 'add', week: 1, day: 'T1', name: 'wykrok w tył', sets: 3, reps: 10, trainer: true }).n, 0);   // ponowiona wysyłka nic nie dubluje
+  assert.equal(C.planEdit_(after, [], 'ania', { op: 'add', week: 1, day: 'T1', name: 'Wykrok w tył', sets: 3, reps: 10 }).add[0].zrodlo, 'dodane');   // klient dalej „dodane”
+  // nowa jednostka trenera: T<n>, zwykły tytuł, zrodlo „trener”; nie nadpisze jednostki z planu, ponowny zapis własnej tak
+  const u = { week: 1, day: 'T2', date: '2026-11-22', title: ' Pośladki ', exercises: [{ name: 'Hip thrust', sets: 3, reps: 10, kg: 60 }] };
+  r = plain(C.ownRows_('ania', u, plan, true));
+  assert.deepEqual(r.rows.map(x => [x.jednostka, x.tytul, x.zrodlo, x.blok]), [['T2', 'Pośladki', 'trener', 'B2']]);
+  assert.equal(C.ownRows_('ania', Object.assign({}, u, { title: '' }), plan, true).rows[0].tytul, 'Trening');
+  assert.equal(C.ownRows_('ania', Object.assign({}, u, { day: 'T1' }), plan, true).error, 'Taka jednostka już jest w planie.');
+  assert.equal(C.ownRows_('ania', u, plan.concat([R(1, 'T2', 1, 'Hip thrust', { zrodlo: 'trener' })]), true).error, undefined);
+  assert.equal(C.ownRows_('ania', Object.assign({}, u, { day: 'W2' }), plan, true).error, 'Zła jednostka.');
+  assert.equal(C.ownRows_('ania', u, plan).error, 'Zła jednostka.');               // klient nie zrobi jednostki T<n>
+  // zmiana planu: z panelu zaczęta jednostka zablokowana, z prowadzonego treningu (live) nie
+  const log = [{ klient: 'ania', tydzien: 1, jednostka: 'T1' }];
+  assert.match(C.trPlanEdit_(plan, [], log, 'ania', { week: 1, day: 'T1', ex: [{ order: 1, kg: '87,5' }] }).error, /już zrobiona/);
+  r = plain(C.trPlanEdit_(plan, [], log, 'ania', { week: 1, day: 'T1', live: true, next: true, ex: [{ order: 1, kg: '87,5' }] }));
+  assert.deepEqual(r.rows.map(x => [x.week, x.f.kg]), [[1, 87.5], [2, 87.5]]);
 });

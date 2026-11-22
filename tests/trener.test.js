@@ -212,10 +212,10 @@ test('panel: logowanie przyciskiem Google → ekran Dziś (liczby, kto dziś tre
   assert.match(txt, /2\/9\s*treningi w tym tygodniu/);
   assert.match(txt, /1\s*czerwony sygnał/);
   assert.match(txt, /2\s*filmy bez komentarza/);
-  // „Dziś trenują”: w trakcie (pasek serii), czeka (przycisk do planu), zrobiony (sesja)
+  // „Dziś trenują”: w trakcie (pasek serii) i czeka → „▶ Prowadź” (aplikacja w trybie trenera, ta jednostka), zrobiony → sesja
   assert.deepEqual(await p.$$eval('.dr', a => a.map(x => [x.querySelector('b').textContent, x.querySelector('small').textContent, x.querySelector('.sb').textContent, x.querySelector('.sb').getAttribute('href')])), [
-    ['Celina', 'Góra · w trakcie, 3 z 12 serii', 'Podgląd', '#k/celina'],
-    ['Ania', 'Góra · 5 ćwiczeń · czeka', 'Plan', '#k/ania/plan'],
+    ['Celina', 'Góra · w trakcie, 3 z 12 serii', '▶ Prowadź', './?prowadz=celina&j=8%7CT2'],
+    ['Ania', 'Góra · 5 ćwiczeń · czeka', '▶ Prowadź', './?prowadz=ania&j=12%7CT2'],
     ['Bartek', 'FBW · zrobiony, 55 min, RPE 8', 'Sesja', '#k/bartek/sesje']]);
   assert.equal(await p.$$eval('.dr .dbar', a => a.length), 1);
   // „Wymaga uwagi”: czerwony sygnał, filmy, blok, koniec planu (odpowiedzi klientów w osobnej karcie)
@@ -336,6 +336,7 @@ test('panel: zrzuty w ciemnym motywie i na telefonie', async () => {
     await shot(p, 'trener-pulpit-' + sfx + '.png');
     await p.goto(base + 'trener.html#k/ania'); await p.waitForSelector('.tabs');
     await shot(p, 'trener-klient-' + sfx + '.png');
+    assert.equal(await p.getAttribute('a[href^="./?prowadz="]', 'href'), './?prowadz=ania');   // „▶ Prowadź trening” w karcie klienta
     if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'bez przewijania w bok na telefonie');
     assert.deepEqual(p.errors, []);
     await ctx.close();

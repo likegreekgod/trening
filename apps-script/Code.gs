@@ -32,9 +32,9 @@ const CHUNK = 4 * 1024 * 1024; // musi być wielokrotnością 256 KB
 
 const LOG_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data', 'nr_cw', 'cwiczenie',
   'seria', 'kg', 'powt', 'rpe', 'vbt_ms', 'wykonane', 'film_link', 'uwagi', 'typ',
-  'ocena', 'vbt_peak', 'wysokosc_cm', 'sciezka', 'zamiana', 'komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at'];
+  'ocena', 'vbt_peak', 'wysokosc_cm', 'sciezka', 'zamiana', 'komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at', 'notatka_trenera'];
 const SES_HEADERS = ['id', 'zapisano', 'klient', 'tydzien', 'jednostka', 'data',
-  'bol_kolano', 'bol_bark', 'samopoczucie', 'czas_min', 'uwagi', 'start', 'koniec', 'bol', 'bol_max', 'rpe_sesji', 'komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at'];
+  'bol_kolano', 'bol_bark', 'samopoczucie', 'czas_min', 'uwagi', 'start', 'koniec', 'bol', 'bol_max', 'rpe_sesji', 'komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at', 'prowadzil'];
 const DYS_HEADERS = ['id', 'zapisano', 'klient', 'data', 'cmj1', 'cmj2', 'cmj3', 'cmj_sr',
   'sen', 'stres', 'zmeczenie', 'bolesnosc', 'hooper_suma', 'vbt_test', 'werdykt', 'powody', 'cmj_wykluczone', 'film_link'];
 // Stan ciała: ból / napięcie zapisane w dowolny dzień (zakładka „Stan”, Dyspozycja w aplikacji); id = klient|data|miejsce z stroną
@@ -63,6 +63,18 @@ function oldLinkText_(pwa) {
  */
 const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError,
   logNote, logReadyVideo, editPlan, saveStan, deleteStan, replyNote };
+/*
+ * Trening prowadzony przez trenera („▶ Prowadź” w panelu): aplikacja klienta otwarta z ?prowadz=<klient_id> wysyła
+ * {fn, token (bilet Google trenera), as: klient_id, args} zamiast klucza. doPost sprawdza bilet (trAuth_), bierze klucz
+ * klienta z zakładki Klienci i woła zwykłą funkcję API z LIVE_FNS z LIVE_ = true. Klient z samym kluczem tego trybu
+ * nie włączy (LIVE_ ustawia tylko ta ścieżka), a liveNote nie ma w API_FNS.
+ * W trybie trenera: getData zwraca prywatne notatki trenera (Log.notatka_trenera, klient ich nie dostaje) i cfg jak w PRO
+ * ze zmianami w jednostce, logSession zapisuje Sesje.prowadzil = „trener”, editPlan / addOwnUnit dopisują ćwiczenia
+ * i jednostki trenera (Plan.zrodlo = „trener”, liczą się do planu jak zwykłe).
+ */
+const LIVE_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, przesunJednostke, addOwnUnit, getExNames, logError,
+  logNote, editPlan, liveNote };
+var LIVE_ = false;   // var: widoczne w testach (piaskownica vm)
 
 function doPost(e) {
   let out;
@@ -71,6 +83,14 @@ function doPost(e) {
     if (Object.prototype.hasOwnProperty.call(TR_FNS, req.fn)) {          // panel trenera: bilet Google zamiast klucza klienta
       if (req.fn !== 'trConfig') trAuth_(req.token);
       out = { ok: true, result: TR_FNS[req.fn].apply(null, req.args || []) };
+    } else if (req.as !== undefined && req.as !== null) {               // trener prowadzi trening klienta (bilet + klient_id)
+      const f = Object.prototype.hasOwnProperty.call(LIVE_FNS, req.fn) ? LIVE_FNS[req.fn] : null;
+      if (!f) throw new Error('Nieznana funkcja: ' + req.fn);
+      trAuth_(req.token);
+      const c = clientById_(req.as);
+      if (!c) throw new Error('Nie ma takiego klienta (albo jest nieaktywny).');
+      LIVE_ = true;
+      out = { ok: true, result: f.apply(null, [c.key].concat(req.args || [])) };
     } else {
       const f = Object.prototype.hasOwnProperty.call(API_FNS, req.fn) ? API_FNS[req.fn] : null;
       if (!f) throw new Error('Nieznana funkcja: ' + req.fn);
@@ -85,8 +105,18 @@ function doPost(e) {
 /* ---------- API (google.script.run – stara wersja, link /exec?k=) ---------- */
 
 function getData(key) {
-  const t0 = Date.now();
-  return clientData_(mustClient_(key), t0);
+  const t0 = Date.now(), d = clientData_(mustClient_(key), t0);
+  return liveView_(d, LIVE_);
+}
+/**
+ * Czysta funkcja: dane getData dla klienta albo dla trenera, który prowadzi trening. Klient nie dostaje prywatnych
+ * notatek trenera (Log.notatka_trenera); trener dostaje je i cfg trybu prowadzenia: PRO, zmiany w jednostce, nowe jednostki,
+ * zamiana z całej bazy (skala RPE/RIR i ból jak u klienta).
+ */
+function liveView_(d, live) {
+  if (!live) { (d.logs || []).forEach(l => { delete l.notatka_trenera; }); return d; }
+  d.cfg = Object.assign({}, d.cfg, { live: true, simple: false, edit: true, own: true, swap: 'DOWOLNA' });
+  return d;
 }
 
 /** Dane jednego klienta jak w getData (aplikacja klienta i karta klienta w panelu trenera, trKlient). */
@@ -116,7 +146,7 @@ function clientData_(client, t0) {
       extra: ix < 0 || r[ix] === '' || r[ix] === null ? null : (Number(r[ix]) || 0),
       drop: idr < 0 ? 0 : (Number(r[idr]) || 0),
       group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
-      swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts, own: src(r) === 'klient', added: src(r) === 'dodane',
+      swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts, own: src(r) === 'klient', added: src(r) === 'dodane', coach: src(r) === 'trener',
       mode: opt(r, 'tryb').toUpperCase(), cut: Number(opt(r, 'ciecie')) || null, setsMin: opt(r, 'serie_min') === '' ? null : Number(opt(r, 'serie_min')),
       circuit: circuit_(opt(r, 'obwod')), unote: opt(r, 'uwagi_jedn')
     }; });
@@ -304,6 +334,50 @@ function logNote(key, n) {
   } finally { lock.releaseLock(); }
 }
 
+/* ---------- notatka trenera do ćwiczenia w prowadzonym treningu ----------
+ * n = {week, day, order, text, pub}. Notatka siedzi w jednym wierszu serii tego ćwiczenia (liveNoteRow_): pub = false →
+ * Log.notatka_trenera (tylko trener: arkusz, tryb prowadzenia), pub = true → Log.komentarz_trenera (klient widzi ją w zakładce
+ * Trener jak każdy komentarz i może odpowiedzieć). Druga kolumna w tym wierszu jest czyszczona, więc przełącznik przenosi tekst.
+ * Pusty tekst = notatka usunięta. Tylko w trybie trenera (LIVE_FNS); bez zapisanej serii ćwiczenia nie ma gdzie jej zapisać.
+ */
+const LIVE_NOTE_MAX = 600;
+/** Czysta funkcja: wiersz na notatkę. rows = [{seria, notatka_trenera, komentarz_trenera}] jednego ćwiczenia → indeks albo -1.
+ *  Wiersz, który już ma notatkę albo komentarz (pierwszy wg serii), inaczej najniższa seria robocza, inaczej pierwszy (bez pominięć). */
+function liveNoteRow_(rows) {
+  const ord = s => { const n = Number(s); return isFinite(n) && String(s).trim() !== '' ? n : 1e6; };
+  const ix = (rows || []).map((r, i) => i).filter(i => String(rows[i].seria).trim() !== '0')
+    .sort((a, b) => ord(rows[a].seria) - ord(rows[b].seria) || String(rows[a].seria).localeCompare(String(rows[b].seria)));
+  const has = i => String(rows[i].notatka_trenera || '').trim() || String(rows[i].komentarz_trenera || '').trim();
+  const pick = ix.find(has);
+  if (pick !== undefined) return pick;
+  const work = ix.find(i => ord(rows[i].seria) >= 1 && ord(rows[i].seria) < 1e6);
+  return work !== undefined ? work : ix.length ? ix[0] : -1;
+}
+function liveNote(key, n) {
+  if (!LIVE_) throw new Error('Brak dostępu.');
+  const client = mustClient_(key);
+  const pre = [client.id, n.week, n.day, n.order].join('|') + '|';
+  const text = String(n.text === undefined || n.text === null ? '' : n.text).replace(/\r\n?/g, '\n').trim();
+  if (text.length > LIVE_NOTE_MAX) throw new Error('Notatka jest za długa (najwyżej ' + LIVE_NOTE_MAX + ' znaków).');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Log', LOG_HEADERS), last = sh.getLastRow();
+    const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
+    const cS = h.indexOf('seria') + 1, cP = h.indexOf('notatka_trenera') + 1, cK = h.indexOf('komentarz_trenera') + 1;
+    if (last < 2 || cS < 1 || cP < 1 || cK < 1) throw new Error('Zapisz najpierw jedną serię tego ćwiczenia.');
+    const ids = sh.getRange(2, 1, last - 1, 1).getValues(), at = [];
+    ids.forEach((r, i) => { if (String(r[0]).indexOf(pre) === 0) at.push(i + 2); });
+    if (!at.length) throw new Error('Zapisz najpierw jedną serię tego ćwiczenia.');
+    const rows = at.map(r => ({ seria: sh.getRange(r, cS).getValue(), notatka_trenera: sh.getRange(r, cP).getValue(), komentarz_trenera: sh.getRange(r, cK).getValue() }));
+    const i = liveNoteRow_(rows);
+    if (i < 0) throw new Error('Zapisz najpierw jedną serię tego ćwiczenia.');
+    sh.getRange(at[i], n.pub ? cK : cP).setValue(plain_(text));
+    sh.getRange(at[i], n.pub ? cP : cK).setValue(plain_(''));
+    return { ok: true, set: String(rows[i].seria), pub: !!n.pub, text: text };
+  } finally { lock.releaseLock(); }
+}
+
 /* ---------- odpowiedź klienta na komentarz trenera ----------
  * r = {kind: 'L' (seria, Log) | 'S' (trening, Sesje), id, text}. Tekst do REPLY_MAX znaków, pusty = odpowiedź usunięta.
  * Zapis tylko w wierszu tego klienta (id zaczyna się od jego klient_id) i tylko w kolumnach odpowiedz_klienta / odpowiedz_at,
@@ -356,6 +430,7 @@ function logSession(key, s) {
   const id = [client.id, s.week, s.day].join('|');
   upsert_('Sesje', SES_HEADERS, id, [id, new Date(), client.id, s.week, s.day, s.date || today_(),
     s.knee, s.shoulder, s.feel, s.minutes, s.note || '', s.start || '', s.end || '', s.pain || '', s.painMax === undefined ? '' : s.painMax, s.rpeSession === undefined ? '' : s.rpeSession]);
+  if (LIVE_) cellSet_('Sesje', SES_HEADERS, id, 'prowadzil', 'trener');      // trening prowadzony przez trenera
   return { ok: true };
 }
 
@@ -492,6 +567,17 @@ function olyCeil_(v) {
   return n >= 1 ? n / 100 : n;
 }
 
+/** Aktywny klient po klient_id (kolumna B zakładki Klienci) → ustawienia z kluczem albo null. */
+function clientById_(id) {
+  id = String(id || '').trim().toLowerCase();
+  if (!/^[\w.-]{1,40}$/.test(id)) return null;
+  const v = SpreadsheetApp.getActive().getSheetByName('Klienci').getDataRange().getValues();
+  for (let i = 1; i < v.length; i++) {
+    if (String(v[i][1]).trim().toLowerCase() === id && String(v[i][0]).trim() && String(v[i][3]).toUpperCase() !== 'NIE') return clientOf_(v[i]);
+  }
+  return null;
+}
+
 function mustClient_(key) {
   const c = findClient_(key);
   if (!c) throw new Error('Brak dostępu.');
@@ -552,6 +638,18 @@ function upsert_(name, headers, id, row) {
       .createTextFinder(id).matchEntireCell(true).findNext();
     if (hit) sh.getRange(hit.getRow(), 1, 1, row.length).setValues(plainRows_([row]));
     else sh.appendRow(plainRow_(row));
+  } finally { lock.releaseLock(); }
+}
+
+/** Jedna komórka wiersza o danym id (kolumna po nazwie nagłówka); bez wiersza nic nie robi. */
+function cellSet_(name, headers, id, col, value) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_(name, headers);
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(id).matchEntireCell(true).findNext();
+    const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim()), c = h.indexOf(col) + 1;
+    if (hit && hit.getRow() > 1 && c > 0) sh.getRange(hit.getRow(), c).setValue(plain_(value));
   } finally { lock.releaseLock(); }
 }
 
@@ -1683,11 +1781,12 @@ function planEdit_(plan, ses, clientId, e) {
     weeks.forEach(w => {
       const rows = mine.filter(x => inUnit(x, w)), act = rows.filter(x => !removed_(x.r));
       // już jest: w kolejnych tygodniach dowolne ćwiczenie o tej nazwie, w tej jednostce wcześniej dodane (ponowiona wysyłka nic nie dubluje)
-      if (act.some(x => lc(x.r.cwiczenie) === lc(name) && (w !== week || added_(x.r)))) return;
-      if (rows.filter(x => added_(x.r)).length >= EDIT_MAX) { if (w === week) full = true; return; }
-      const nr = Math.max(EDIT_NR, ...rows.map(x => Number(x.r.nr) || 0)) + 1, b = rows[0].r;
+      if (act.some(x => lc(x.r.cwiczenie) === lc(name) && (w !== week || added_(x.r) || (e.trainer && zr_(x.r) === 'trener')))) return;
+      if (!e.trainer && rows.filter(x => added_(x.r)).length >= EDIT_MAX) { if (w === week) full = true; return; }
+      // trener (prowadzony trening): zwykłe ćwiczenie planu na końcu jednostki, prio B; klient: „dodane” od nr 51
+      const nr = Math.max(e.trainer ? 0 : EDIT_NR, ...rows.map(x => Number(x.r.nr) || 0)) + 1, b = rows[0].r;
       add.push({ klient: clientId, tydzien: w, jednostka: day, tytul: b.tytul, data: b.data instanceof Date ? fmtDate_(b.data) : String(b.data === undefined || b.data === null ? '' : b.data),
-        nr: nr, cwiczenie: name, prio: 'A', serie: sets, powt: reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: b.blok, zrodlo: 'dodane' });
+        nr: nr, cwiczenie: name, prio: e.trainer ? 'B' : 'A', serie: sets, powt: reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: b.blok, zrodlo: e.trainer ? 'trener' : 'dodane' });
     });
     if (full) return { error: 'Najwyżej ' + EDIT_MAX + ' dodanych ćwiczeń w jednostce.' };
     return { set, add, n: add.length };
@@ -1716,7 +1815,8 @@ function planEdit_(plan, ses, clientId, e) {
 /** API: zmiana w jednostce trenera (dodaj / usuń / przywróć / zamień na stałe). Tylko dla osób z Klienci N „edycja” = TAK. */
 function editPlan(key, e) {
   const client = mustClient_(key);
-  if (!client.edit) throw new Error('Zmiany w treningu są wyłączone – zapytaj trenera.');
+  if (!client.edit && !LIVE_) throw new Error('Zmiany w treningu są wyłączone – zapytaj trenera.');
+  e = Object.assign({}, e, { trainer: LIVE_ });                     // tylko tryb trenera dodaje ćwiczenia trenera
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -1745,37 +1845,38 @@ const SETS_MAX = 40;   // górny limit serii ćwiczenia (EMOM 20+ rund)
  * Czysta funkcja: wiersze Planu dla własnej jednostki → {rows} albo {error}. u = {week, day, date, title, exercises: [{name, sets, reps, kg}]}.
  * plan = wiersze Planu tego klienta (do sprawdzenia, że jednostka o tej nazwie nie jest jednostką trenera, i do bloku).
  */
-function ownRows_(clientId, u, plan) {
+function ownRows_(clientId, u, plan, trainer) {
   u = u || {};
   const week = Number(u.week), day = String(u.day || '').trim(), date = String(u.date || '');
-  if (!(week >= 1) || !/^W\d{1,3}$/.test(day)) return { error: 'Zła jednostka.' };
+  // trener (prowadzony trening): nowa jednostka planu T<n> (Plan.zrodlo „trener”); klient: własny trening W<n>
+  if (!(week >= 1) || !(trainer ? /^T\d{1,3}$/ : /^W\d{1,3}$/).test(day)) return { error: 'Zła jednostka.' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Zła data.' };
   const mine = (plan || []).filter(r => String(r.klient).toLowerCase() === clientId);
-  if (mine.some(r => Number(r.tydzien) === week && String(r.jednostka) === day && !own_(r))) return { error: 'Ta jednostka jest w planie trenera.' };
+  if (mine.some(r => Number(r.tydzien) === week && String(r.jednostka) === day && (trainer ? zr_(r) !== 'trener' : !own_(r)))) return { error: trainer ? 'Taka jednostka już jest w planie.' : 'Ta jednostka jest w planie trenera.' };
   const ex = [].concat(u.exercises || []).map(e => ({ name: String(e && e.name || '').trim().replace(/\s+/g, ' ').slice(0, 80),
     sets: Math.round(Number(e && e.sets)), reps: String(e && e.reps === undefined ? '' : e.reps).trim().slice(0, 12), kg: e && e.kg, circuit: circuit_(e && e.circuit) })).filter(e => e.name);
   if (!ex.length) return { error: 'Dodaj co najmniej jedno ćwiczenie.' };
   if (ex.length > OWN_MAX) return { error: 'Najwyżej ' + OWN_MAX + ' ćwiczeń.' };
   if (ex.some(e => !(e.sets >= 1 && e.sets <= SETS_MAX) || !e.reps)) return { error: 'Serie 1–' + SETS_MAX + ' i powtórzenia przy każdym ćwiczeniu.' };
   const same = mine.filter(r => Number(r.tydzien) === week && !own_(r)), blok = same.length ? String(same[0].blok || '') : String((mine[mine.length - 1] || {}).blok || '');
-  const title = 'Własny' + (String(u.title || '').trim() ? ' · ' + String(u.title).trim().slice(0, 40) : '');
+  const tt = String(u.title || '').trim().slice(0, 40), title = trainer ? tt || 'Trening' : 'Własny' + (tt ? ' · ' + tt : '');
   // obwód tylko dla sąsiadów pod tą samą literą; pojedyncze ćwiczenie z literą = zwykłe
   const solo = (e, i) => !(ex[i - 1] && ex[i - 1].circuit === e.circuit) && !(ex[i + 1] && ex[i + 1].circuit === e.circuit);
   return { rows: ex.map((e, i) => {
     const kg = e.kg === undefined || e.kg === null || String(e.kg).trim() === '' ? '' : (isFinite(Number(String(e.kg).replace(',', '.'))) ? Number(String(e.kg).replace(',', '.')) : String(e.kg).slice(0, 10));
     return { klient: clientId, tydzien: week, jednostka: day, tytul: title, data: date, nr: i + 1, cwiczenie: e.name, prio: 'A',
-      serie: e.sets, powt: e.reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: blok, zrodlo: 'klient', obwod: e.circuit && !solo(e, i) ? e.circuit : '' };
+      serie: e.sets, powt: e.reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: blok, zrodlo: trainer ? 'trener' : 'klient', obwod: e.circuit && !solo(e, i) ? e.circuit : '' };
   }) };
 }
 
 /** API: zapis (albo poprawka) własnej jednostki. Cała lista ćwiczeń za każdym razem; zrobione serie zostają w Logu. */
 function addOwnUnit(key, u) {
   const client = mustClient_(key);
-  if (!client.own) throw new Error('Własne treningi są wyłączone – zapytaj trenera.');
+  if (!client.own && !LIVE_) throw new Error('Własne treningi są wyłączone – zapytaj trenera.');
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const plan = tableOf_('Plan'), res = ownRows_(client.id, u, plan);
+    const plan = tableOf_('Plan'), res = ownRows_(client.id, u, plan, LIVE_ && /^T\d/.test(String(u && u.day || '')));   // trener: nowa jednostka T<n>; własny trening klienta (W<n>) jak zwykle
     if (res.error) throw new Error(res.error);
     const day = String(u.day).trim(), week = Number(u.week);
     ownWrite_(client.id, week, day, res.rows);
