@@ -168,6 +168,51 @@ test('Plan: dolne menu, pasek tygodnia Pn–Nd, tydzień bloku, lżejszy tydzie�
   await ctx.close();
 });
 
+test('Plan: „Dodaj do kalendarza” (link Google bez klucza, plik .ics z przypomnieniem, cały tydzień), tylko niezrobione od dziś', async () => {
+  const { ctx, p } = await page([], false, { data: PLANNED });
+  await p.clock.install({ time: new Date('2026-10-07T09:00:00') });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('#nav [data-tab="plan"]'); await p.waitForSelector('#u-7-T2');
+  assert.equal(await p.$('#u-7-T1 [data-cal]'), null);                       // zrobiona (i minęła): bez przycisku
+  await p.click('#u-7-T2 [data-cal]'); await p.waitForSelector('#kal-g');
+  assert.match(await p.textContent('#kal-sub'), /T2 · .* · śr 07\.10 · ok\. \d+ min/);
+  assert.equal(await p.$('[data-kall]'), null);                              // jedyny niezrobiony w tym tygodniu: bez „Cały tydzień”
+  await p.fill('#kal-t', '07:30'); await p.dispatchEvent('#kal-t', 'change');
+  await p.click('#sheet [data-kal="30"]');
+  await p.evaluate(() => { window.__open = []; window.open = url => { window.__open.push(url); }; });   // bez sieci do Google: tylko adres
+  await p.click('#kal-g');
+  const url = (await p.evaluate(() => window.__open))[0], u = new URL(url);
+  assert.equal(u.host, 'calendar.google.com');
+  assert.equal(u.searchParams.get('action'), 'TEMPLATE');
+  assert.match(u.searchParams.get('dates'), /^20261007T073000\/20261007T\d{6}$/);
+  assert.match(u.searchParams.get('text'), /^Trening · /);
+  assert.match(u.searchParams.get('details'), /1\. .+ – \d+×/);
+  assert.doesNotMatch(url + u.searchParams.get('details'), /kabc/);   // klucz klienta nie trafia do kalendarza
+  assert.deepEqual(await p.evaluate(() => JSON.parse(localStorage.getItem('kal_kabc'))), { t: '07:30', a: 30 });
+  // plik .ics: godzina i przypomnienie zapamiętane
+  await p.click('#u-7-T2 [data-cal]'); await p.waitForSelector('#kal-i');
+  assert.equal(await p.inputValue('#kal-t'), '07:30');
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#kal-i')]);
+  assert.equal(dl.suggestedFilename(), 'trening-2026-10-07.ics');
+  const ics = fs.readFileSync(await dl.path(), 'utf8');
+  assert.match(ics, /BEGIN:VEVENT\r\nUID:trening-7-T2@[^\r]+\r\n/);
+  assert.match(ics, /DTSTART:20261007T073000\r\n/);
+  assert.match(ics, /TRIGGER:-PT30M/);
+  assert.doesNotMatch(ics, /kabc/);
+  // Trening → „⋯”: cały tydzień (następny tydzień ma dwie niezrobione) = jeden plik z dwoma wydarzeniami, Google wyłączony
+  await p.click('#plan [data-wkd="1"]'); await p.click('#u-8-T1 [data-cal]'); await p.waitForSelector('[data-kall="1"]');
+  await p.click('[data-kall="1"]');
+  assert.equal(await p.isDisabled('#kal-g'), true);
+  const [dl2] = await Promise.all([p.waitForEvent('download'), p.click('#kal-i')]);
+  const ics2 = fs.readFileSync(await dl2.path(), 'utf8');
+  assert.equal((ics2.match(/BEGIN:VEVENT/g) || []).length, 2);
+  assert.match(ics2, /DTSTART:20261012T073000[\s\S]*DTSTART:20261014T073000/);
+  await p.click('#nav [data-tab="trening"]'); await p.click('#umore'); await p.waitForSelector('#u-cal');
+  await p.click('#u-cal'); await p.waitForSelector('#kal-sub');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('Plan: zmiana dnia jednostki (widoczne dni, komunikat), „przesuń też kolejne”, offline przez kolejkę', async () => {
   const calls = [];
   const { ctx, p } = await page(calls, false, { data: PLANNED, api: b => b.fn === 'przesunJednostke' ? { ok: true, moved: b.args[0], skipped: [] } : null });

@@ -821,3 +821,25 @@ test('warmupSets: rozgrzewka przed ciężarem roboczym (gryf, ~40/60/80%, 90% pr
   assert.equal(L.warmupSets(100, 5)[0].bar, true);
   assert.ok(L.noBar('Wyciskanie hantli na ławce') && L.noBar('DB row') && !L.noBar('Przysiad ze sztangą'));
 });
+
+test('calTimes, icsFile, gcalUrl: „Dodaj do kalendarza” (czas lokalny, koniec po północy, znaki specjalne, długie linie, przypomnienie)', () => {
+  assert.deepEqual(L.calTimes('2026-11-25', '18:00', 55), { s: '20261125T180000', e: '20261125T185500' });
+  assert.deepEqual(L.calTimes('2026-11-30', '23:30', 60), { s: '20261130T233000', e: '20261201T003000' });
+  assert.equal(L.calTimes('2026-11-25', '18:00', 10).e, '20261125T183000');            // najkrócej 30 min
+  const ev = { uid: 'trening-12-T2@x', date: '2026-11-25', time: '07:05', min: 60, title: 'Trening · Góra, rwanie; A', desc: 'Blok B2\n1. Przysiad – 3×5 · 80 kg ' + 'ąę'.repeat(60), url: 'https://example.com/trening/', alarm: 60 };
+  const f = L.icsFile([ev], new Date('2026-11-22T15:00:00Z'));
+  assert.match(f, /^BEGIN:VCALENDAR\r\nVERSION:2\.0\r\n/);
+  assert.match(f, /\r\nDTSTAMP:20261122T150000Z\r\n/);
+  assert.match(f, /\r\nDTSTART:20261125T070500\r\nDTEND:20261125T080500\r\n/);
+  assert.match(f, /\r\nSUMMARY:Trening · Góra\\, rwanie\\; A\r\n/);
+  assert.match(f, /DESCRIPTION:Blok B2\\n1\. Przysiad/);
+  assert.match(f, /BEGIN:VALARM\r\nACTION:DISPLAY\r\n[^]*TRIGGER:-PT60M\r\nEND:VALARM/);
+  assert.ok(f.endsWith('END:VCALENDAR\r\n'));
+  f.split('\r\n').forEach(l => assert.ok(Buffer.byteLength(l) <= 75, 'linia > 75 bajtów: ' + l));
+  assert.equal(f.split('\r\n').map(l => l.startsWith(' ') ? l.slice(1) : '\n' + l).join('').includes('ąę'.repeat(60)), true);   // złożenie linii nie gubi znaków
+  assert.doesNotMatch(L.icsFile([Object.assign({}, ev, { alarm: 0 })]), /VALARM/);
+  const g = new URL(L.gcalUrl(ev));
+  assert.equal(g.searchParams.get('dates'), '20261125T070500/20261125T080500');
+  assert.equal(g.searchParams.get('text'), ev.title);
+  assert.equal(g.searchParams.get('details'), ev.desc + '\n\n' + ev.url);
+});
