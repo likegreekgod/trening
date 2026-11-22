@@ -1065,6 +1065,8 @@ test('Zmiany w jednostce bez sieci: kolejka, po ponownym otwarciu zmiana zostaje
   await p.fill('#ed-sets', '2'); await p.fill('#ed-reps', '30 s'); await p.click('#ed-ok'); await p.waitForSelector('.card[data-card="51"]');
   await p.click('.card[data-card="2"] [data-more]'); await p.click('#sheet [data-del]'); await p.click('#sheet [data-len="1"]'); await p.click('#ed-del');
   await p.waitForSelector('.ed-rm');
+  // wpis trafia do kolejki dopiero po odrzuconym zapytaniu (send → catch), czyli chwilę po zmianie na ekranie
+  await p.waitForFunction(() => (JSON.parse(localStorage.getItem('q_kabc') || '[]')).length >= 2);
   assert.deepEqual((await p.evaluate(() => JSON.parse(localStorage.getItem('q_kabc')))).map(x => x.fn + ':' + x.payload.op + ':' + !!x.payload.forever), ['editPlan:add:false', 'editPlan:del:true']);
   await p.goto(base); await p.waitForSelector('.set[data-o="1"]');                  // dane z pamięci telefonu + kolejka
   assert.deepEqual(await p.$$eval('.card[data-card]', c => c.map(x => x.dataset.card)), ['1', '51']);
@@ -1796,23 +1798,56 @@ test('Komentarz do ćwiczenia: zapis z serią (uwagi) i poprawka wszystkich seri
   await ctx.close();
 });
 
-test('EMOM: zegar minut z sygnałem, „+ runda” kopiuje kg/powt., rund więcej niż w planie, bez przerwy', async () => {
+test('EMOM: liczba rund = serie robocze (− / +), pełny ekran po starcie, ocena zapisuje rundę, koniec zegara po ostatniej minucie', async () => {
   const calls = [];
   const { ctx, p } = await page(calls, false, { data: D17 });
   await p.clock.install({ time: new Date('2026-10-06T16:00:00') });
   await p.addInitScript(() => { window.__vib = []; navigator.vibrate = v => { window.__vib.push(v); return true; }; });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.emom[data-emom="3"]');
-  assert.equal(await p.textContent('.emom .em-of'), '/ 3');
-  for (let i = 0; i < 5; i++) { await p.click('.emom[data-emom="3"] .em-add'); await p.clock.runFor(60000); }
-  await p.clock.runFor(300);                                                     // zegar odświeża się co 250 ms: zapas, żeby odczyt nie wypadł ułamek sekundy przed przejściem na 6. minutę
-  assert.equal(await p.textContent('.emom .em-n'), '5');
-  assert.match(await p.textContent('.emom .em-t'), /min 6 · /);
+  const box = '.emom[data-emom="3"]';
+  assert.equal(await p.textContent(box + ' .em-of'), '/ 3');
+  assert.equal(await p.isDisabled(box + ' .em-minus'), true);                    // nie mniej niż w planie
+  await p.click(box + ' .em-plus');                                              // 4 rundy = 4 serie robocze
+  assert.equal(await p.textContent(box + ' .em-cnt'), '4');
+  assert.equal(await p.textContent(box + ' .em-of'), '/ 4');
+  assert.equal((await p.$$('.set[data-o="3"][data-k="x"]')).length, 1);
+  await p.click(box + ' .em-minus');
+  assert.equal((await p.$$('.set[data-o="3"][data-k="x"]')).length, 0);
+  await p.click(box + ' .em-plus');
+  await p.click('[data-warm="3"]');                                              // rozgrzewka nie liczy się do rund
+  assert.equal(await p.textContent(box + ' .em-cnt'), '4');
+  await p.click(box + ' .em-go');                                                // start → pełny ekran
+  await p.waitForSelector('#emfs');
+  assert.match(await p.textContent('#emfs .ef-clk'), /1:00|0:5\d/);
+  assert.equal(await p.textContent('#emfs .em-cnt'), '4');
+  assert.deepEqual(await p.$$eval('#emfs [data-emrate]', b => b.map(x => x.textContent.trim())), ['● Łatwo', '● Średnio', '● Walka', '✖ Spalone']);
+  await p.click('#emfs [data-emrate="L"]'); await p.clock.runFor(60000);
+  await p.click('#emfs [data-emkg="2.5"]');                                      // następna runda 62,5 kg
+  await p.click('#emfs [data-emrate="S"]'); await p.clock.runFor(60000);
+  await p.click('#emfs [data-emrate="X"]'); await p.clock.runFor(60300);
+  assert.equal(await p.textContent('#emfs .ef-m'), '4');
+  assert.deepEqual(await p.$$eval('#emfs .ef-seg i', l => l.map(x => x.className)), ['g', 'y', 'x', 'now']);
+  assert.equal(await p.textContent(box + ' .em-n'), '3');
   assert.equal(await p.isHidden('#rest'), true);                                 // EMOM ma zegar minut zamiast przerwy
-  const sets = calls.filter(c => c.fn === 'logSet' && c.args[0].order === 3).map(c => c.args[0]);
-  assert.deepEqual(sets.map(s => s.set + ':' + s.kg + '×' + s.reps + (s.done ? '✓' : '')), ['1:60×1✓', '2:60×1✓', '3:60×1✓', '4:60×1✓', '5:60×1✓']);
-  assert.ok(await p.evaluate(() => window.__vib.filter(v => Array.isArray(v) && v[0] === 250).length >= 5));   // sygnał co minutę
-  await p.click('.emom .em-go');                                                 // stop
-  assert.equal(await p.textContent('.emom .em-t'), '–');
+  const sets = calls.filter(c => c.fn === 'logSet' && c.args[0].order === 3 && /^\d+$/.test(String(c.args[0].set))).map(c => c.args[0]);
+  assert.deepEqual(sets.map(s => s.set + ':' + s.kg + '×' + s.reps + ':' + (s.done ? '✓' : '') + s.rpe + s.ocena + s.typ), ['1:60×1:✓7L', '2:62.5×1:✓8S', '3:60×1:✓XFAIL']);   // 🟡 nad planem → wracasz do planu (zejście po ocenie)
+  assert.ok(await p.evaluate(() => window.__vib.filter(v => Array.isArray(v) && v[0] === 250).length >= 3));   // sygnał co minutę
+  // czwarta minuta mija → koniec zegara (4 rundy), widok końca z „+ 1 runda”
+  await p.clock.runFor(60000);
+  await p.waitForSelector('#emfs.end');
+  assert.match(await p.textContent('#emfs .ef-r'), /Zrobione rundy3 · 60–62,5 kg/);
+  assert.equal(await p.textContent(box + ' .em-t'), '–');
+  await p.click('#emfs [data-emmore="1"]');                                      // +1 runda: zegar wraca od minuty 5
+  assert.equal(await p.$eval('#emfs', e => e.className), '');
+  assert.equal(await p.textContent('#emfs .ef-m'), '5');
+  assert.equal(await p.textContent(box + ' .em-of'), '/ 5');
+  await p.click('#emfs [data-emrate="L"]');
+  await p.click('#emfs [data-emrate="L"]');
+  assert.equal(await p.textContent(box + ' .em-n'), '5');
+  await p.click('#emfs .ef-x');                                                  // zmniejsz
+  assert.equal(await p.$('#emfs'), null);
+  await p.click(box + ' .em-go');                                                // stop
+  assert.equal(await p.textContent(box + ' .em-t'), '–');
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });

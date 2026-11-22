@@ -937,6 +937,23 @@
   /** EMOM: kolumna planu „tryb” = EMOM albo nazwa zaczynająca się od „EMOM” */
   L.isEmom = ex => String(ex && ex.mode || '').trim().toUpperCase() === 'EMOM' || /^\s*EMOM\b/i.test(String(ex && ex.name || ''));
   L.SETS_MAX = 40;   // najwięcej serii jednego ćwiczenia (jak SETS_MAX w Code.gs)
+  /** EMOM: pasek rund z wierszy serii roboczych [{st, rate, rpe}] → klasy odcinków: g / y / r (ocena albo światło z RPE), x (nieudana), d (zrobiona bez oceny), now (następna), '' (czeka) */
+  L.emomSegs = rows => {
+    const C = { L: 'g', S: 'y', W: 'r', X: 'x' };
+    let now = false;
+    return rows.map(r => {
+      if (!r.st) { if (now) return ''; now = true; return 'now'; }
+      if (r.st === 'x') return 'x';
+      return C[String(r.rate || '').toUpperCase()] || C[L.lightOf(r.rpe)] || 'd';
+    });
+  };
+  /** EMOM: zakres ciężarów zrobionych rund („105–110 kg”, „105 kg”, '' bez liczb) */
+  L.emomKg = kgs => {
+    const n = kgs.map(Number).filter(v => v > 0);
+    if (!n.length) return '';
+    const lo = Math.min(...n), hi = Math.max(...n);
+    return (lo === hi ? L.fmtKg(lo) : L.fmtKg(lo) + '–' + L.fmtKg(hi)) + ' kg';
+  };
 
   /** wzór CMJ: h = g·t²/8 (Balsalobre-Fernández i in. 2015); t w s → cm */
   L.CMJ_G = 9.81;

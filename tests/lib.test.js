@@ -875,3 +875,12 @@ test('Prowadź trening: liveNoteRow, liveNextDay, planEdit trenera', () => {
   assert.deepEqual([a.order, a.prio, a.coach, a.added], [2, 'B', true, undefined]);
   assert.equal(L.planEdit(r.plan, [], {}, { op: 'add', week: 1, day: 'T1', name: 'wykrok', sets: 3, reps: 10, trainer: true }).n, 0);
 });
+
+test('emomSegs / emomKg: pasek rund EMOM i zakres ciężarów', () => {
+  assert.deepEqual(Array.from(L.emomSegs([{ st: 'ok', rate: 'L' }, { st: 'ok', rpe: 8 }, { st: 'ok', rpe: '' }, { st: 'x' }, { st: 'ok', rate: 'W' }, { st: '' }, { st: '' }])),
+    ['g', 'y', 'd', 'x', 'r', 'now', '']);
+  assert.deepEqual(Array.from(L.emomSegs([])), []);
+  assert.equal(L.emomKg([105, 107.5, 110, '']), '105–110 kg');
+  assert.equal(L.emomKg([105, 105]), '105 kg');
+  assert.equal(L.emomKg(['', 'BW']), '');
+});

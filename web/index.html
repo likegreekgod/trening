@@ -451,7 +451,7 @@
   .sess .fl input{font:400 17px/1.3 var(--f-body)}
   .timebox small{color:var(--light-white);opacity:.8;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
   #toast{position:fixed;left:50%;bottom:calc(72px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel);color:var(--light-white);
-         border-left:4px solid var(--light-amber);padding:10px 16px;border-radius:var(--r);font-size:15px;display:none;z-index:9;max-width:calc(100% - 32px)}
+         border-left:4px solid var(--light-amber);padding:10px 16px;border-radius:var(--r);font-size:15px;display:none;z-index:30;max-width:calc(100% - 32px)}
   .scale{display:grid;gap:4px;margin-top:4px}
   .scale.s5{grid-template-columns:repeat(5,1fr)}
   .scale.s11{grid-template-columns:repeat(6,1fr)}
@@ -809,6 +809,48 @@
   .emom .btn{border-color:var(--light-off);color:var(--light-white)}
   .emom .btn.go{background:var(--light-amber);border-color:var(--light-amber);color:var(--panel);font:800 20px/1 var(--f-display);letter-spacing:.04em}
   .emom .sub{color:var(--light-white);opacity:.8;margin:0}
+  .em-tg{display:flex;align-items:center;gap:8px;border-top:1px solid var(--light-off);padding-top:8px}
+  .em-tg span{flex:1;font:600 14px/1.3 var(--f-body)} .em-tg small{display:block;opacity:.8;font-weight:400;font-size:13px}
+  .em-tg button{width:44px;height:44px;border-radius:var(--r);border:1px solid var(--light-off);background:transparent;color:var(--light-white);font:700 20px var(--f-mono)}
+  .em-tg button:disabled{opacity:.35}
+  .em-tg b{font:800 24px/1 var(--f-display);min-width:30px;text-align:center;color:var(--light-amber)}
+  /* EMOM na pełnym ekranie: czytelny z odległości; jasny motyw jasny (czarne cyfry), ciemny na --panel */
+  body.emfs-on{overflow:hidden}
+  #emfs{position:fixed;inset:0;z-index:15;display:flex;flex-direction:column;gap:14px;overflow:auto;
+    padding:calc(14px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));background:var(--bg);color:var(--ink)}
+  @media (prefers-color-scheme: dark){ #emfs{background:var(--panel)} }
+  #emfs > *{max-width:560px;width:100%;margin-left:auto;margin-right:auto}
+  .ef-h{display:flex;align-items:center;gap:10px}
+  .ef-h b{flex:1;min-width:0;font:800 22px/1.1 var(--f-display);letter-spacing:.03em;text-transform:uppercase}
+  .ef-x{min-height:44px;border-radius:var(--r);border:1px solid var(--line);background:transparent;color:inherit;font:600 15px var(--f-body);padding:0 12px}
+  .ef-mn{display:flex;justify-content:space-between;align-items:baseline;font:600 15px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .ef-mn b{font:800 30px/1 var(--f-display);color:var(--ink);letter-spacing:.02em}
+  .ef-clk{flex:1;display:grid;place-items:center;min-height:150px;font:800 min(42vw,40vh,220px)/.9 var(--f-display);font-variant-numeric:tabular-nums;color:var(--accent)}
+  #emfs.end .ef-clk{flex:none;font-size:min(24vw,110px)}
+  .ef-bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden}
+  .ef-bar i{display:block;height:100%;background:var(--accent)}
+  .ef-seg{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:4px}
+  .ef-seg i{height:14px;border-radius:3px;background:var(--line)}
+  .ef-seg i.g{background:var(--e-g)} .ef-seg i.y{background:var(--e-y)} .ef-seg i.r{background:var(--e-r)} .ef-seg i.d{background:var(--ink-2)}
+  .ef-seg i.x{background:repeating-linear-gradient(135deg,var(--e-r) 0 3px,transparent 3px 6px)}
+  .ef-seg i.now{background:transparent;box-shadow:inset 0 0 0 2px var(--accent)}
+  .ef-r{display:flex;align-items:center;gap:8px}
+  .ef-r .t{flex:1;min-width:0;font:600 15px/1.3 var(--f-body);color:var(--muted)}
+  .ef-r .t b{display:block;font:800 34px/1 var(--f-display);color:var(--ink)}
+  .ef-r button{width:56px;height:56px;flex:none;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 16px var(--f-mono)}
+  .ef-ev{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .ef-ev button{min-height:66px;border-radius:var(--r);border:0;font:800 22px/1 var(--f-display);letter-spacing:.03em;text-transform:uppercase}
+  .ef-ev .g{background:var(--e-g);color:var(--on-primary)} .ef-ev .y{background:var(--e-y);color:var(--panel)} .ef-ev .r{background:var(--e-r);color:var(--on-primary)}
+  @media (prefers-color-scheme: dark){ .ef-ev .g,.ef-ev .r{color:var(--panel)} }
+  .ef-ev .x{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line)}
+  .ef-tg{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:12px;margin-top:auto}
+  .ef-tg span{flex:1;font:600 15px/1.3 var(--f-body)} .ef-tg small{display:block;color:var(--muted);font-weight:400;font-size:13px}
+  .ef-tg button{width:48px;height:48px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 22px var(--f-mono)}
+  .ef-tg button:disabled{opacity:.35}
+  .ef-tg b{font:800 30px/1 var(--f-display);min-width:36px;text-align:center}
+  .ef-go{min-height:48px;border-radius:var(--r);border:1px solid var(--line);background:transparent;color:var(--ink);font:600 16px var(--f-body)}
+  .ef-p{margin:0;color:var(--muted);font-size:15px}
+  .ef-ok{min-height:60px;border-radius:var(--r);border:0;background:var(--accent);color:var(--on-accent);font:800 22px var(--f-display);letter-spacing:.04em;text-transform:uppercase}
   /* v39: „⋯” jednostki w górnym pasku (Skróć trening, Zwiń zrobione) */
   #hx{flex:none;display:flex;align-items:center;gap:4px}
   .hmore{flex:none;width:44px;height:44px;border:0;background:transparent;color:inherit;display:grid;place-items:center;padding:0;margin-right:-10px;border-radius:var(--r)}
@@ -978,7 +1020,7 @@ const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, lightOf, floor25, isNum, 
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
   doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
-  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart, blockReport, icsFile, gcalUrl, STAN_PLACES, STAN_CTX, stanKey, stanRecent, stanApply, stanDrop } = window.TL;
+  isEmom, SETS_MAX, emomSegs, emomKg, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart, blockReport, icsFile, gcalUrl, STAN_PLACES, STAN_CTX, stanKey, stanRecent, stanApply, stanDrop } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -1203,50 +1245,134 @@ function openSignal(){
   draw();
 }
 
-/* ---------- EMOM: zegar minut z sygnałem, „+ runda” = kolejna seria z ciężarem i powt. poprzedniej (zapis jak zwykłe serie) ---------- */
+/* ---------- EMOM: zegar minut z sygnałem; liczba rund = liczba serii roboczych (− / + dodaje albo zdejmuje serie), pełny ekran z oceną rundy ---------- */
 const EMK = 'em_' + KEY;
 let EM = (() => { try { return JSON.parse(localStorage.getItem(EMK) || 'null'); } catch (e) { return null; } })();   // {k: tydz|jedn|nr, start, m}
+let EMFS = null;                                   // otwarty pełny ekran: {o, end: liczba minut po końcu zegara albo 0}
 const emKey = ex => cur.week + '|' + cur.day + '|' + ex.order;
 const emSave = () => { try { localStorage.setItem(EMK, JSON.stringify(EM)); } catch (e) {} };
+const emBox = o => document.querySelector(`.emom[data-emom="${o}"]`);
 function emomBox(ex){
   return `<div class="emom" data-emom="${ex.order}" role="group" aria-label="EMOM">
-      <div class="em-top"><span class="em-l">EMOM · rundy</span><b class="em-n">0</b><span class="em-of">/ ${ex.planSets || ex.sets}</span><b class="em-t" aria-label="Minuta EMOM">–</b></div>
-      <div class="em-b"><button type="button" class="btn em-go">▶ Start minut</button><button type="button" class="btn go em-add">+ runda</button></div>
-      <p class="sub">Co minutę sygnał. „+ runda” zapisuje kolejną rundę z ciężarem i powtórzeniami poprzedniej. Rund może być więcej niż w planie (do ${SETS_MAX}).</p></div>`;
+      <div class="em-top"><span class="em-l">EMOM · rundy</span><b class="em-n">0</b><span class="em-of">/ ${ex.sets}</span><b class="em-t" aria-label="Minuta EMOM">–</b></div>
+      <div class="em-b"><button type="button" class="btn em-go">▶ Start minut</button><button type="button" class="btn go em-fs">⛶ Pełny ekran</button></div>
+      ${emTgHtml(ex, 'em-tg')}</div>`;
+}
+/** „Ile rund dziś − n +”: liczba serii roboczych ćwiczenia */
+function emTgHtml(ex, cls){
+  return `<div class="${cls}"><span>Ile rund dziś<small>Plan ${ex.planSets || ex.sets}. − / + zdejmuje albo dodaje serie w tabeli.</small></span>
+      <button type="button" class="em-minus" aria-label="Mniej rund">−</button><b class="em-cnt" aria-live="polite">${ex.sets}</b><button type="button" class="em-plus" aria-label="Więcej rund">+</button></div>`;
 }
 function emTick(){
   if (!EM) return;
-  const el = document.querySelector('.emom[data-emom="' + EM.k.split('|')[2] + '"] .em-t');
+  const o = EM.k.split('|')[2], here = cur.week + '|' + cur.day + '|' + o === EM.k, box = here && emBox(o);
   const t = Math.max(0, Date.now() - EM.start), m = Math.floor(t / 60000) + 1, left = 60 - Math.floor(t / 1000) % 60;
+  if (box && box._end && m > box._end()) {         // ostatnia minuta minęła: zegar staje z długim sygnałem
+    const n = box._end(); EM = null; emSave(); beep(3); vib(END_VIB); flash(); notifyBg('EMOM: koniec', n + ' ' + plural(n, 'minuta', 'minuty', 'minut') + '.');
+    if (EMFS && EMFS.o === +o) EMFS.end = n;
+    box._draw(); return;
+  }
   if (m > (EM.m || 0)) { EM.m = m; emSave(); if (m > 1) { beep(2, 988, 0.2); vib([250, 120, 250]); notifyBg('EMOM: minuta ' + m, 'Kolejna runda.'); } }
-  if (el && cur.week + '|' + cur.day + '|' + EM.k.split('|')[2] === EM.k) el.textContent = 'min ' + m + ' · ' + fmtClock(left);
+  if (!box) return;
+  box.querySelector('.em-t').textContent = 'min ' + m + ' · ' + fmtClock(left);
+  const fs = EMFS && EMFS.o === +o && !EMFS.end && $('#emfs'), fm = fs && fs.querySelector('.ef-m');
+  if (fm) { fs.querySelector('.ef-m').textContent = m; fs.querySelector('.ef-clk').textContent = fmtClock(left); fs.querySelector('.ef-bar i').style.width = Math.round((60 - left) / 60 * 100) + '%'; }
 }
 setInterval(emTick, 250);
+function emClose(){ const fs = $('#emfs'); if (fs) fs.remove(); EMFS = null; document.body.classList.remove('emfs-on'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && EMFS && $('#sheet').hidden) emClose(); });
 function bindEmom(ex, s0, h){
-  const box = document.querySelector(`.emom[data-emom="${ex.order}"]`); if (!box) return;
-  const go = box.querySelector('.em-go'), add = box.querySelector('.em-add');
-  const on = () => EM && EM.k === emKey(ex);
+  const box = emBox(ex.order); if (!box) return;
+  const o = ex.order, go = box.querySelector('.em-go'), oly = !!document.querySelector(`.set[data-o="${o}"] .lt`);
+  const on = () => !!EM && EM.k === emKey(ex);
+  const redraw = () => { const b = emBox(o); if (b && b._draw) b._draw(); };   // karta bywa przerysowana: rysuj tę, która jest na ekranie
+  const rows = () => workRows(o), done = () => rows().filter(r => r.dataset.st);
+  // „−” zdejmuje tylko ostatnią dodaną, niezapisaną serię (nie mniej niż w planie i niż zrobione)
+  const lastFree = () => { const xs = h.rowsOf(o, 'x'), r = xs[xs.length - 1]; return r && !r.dataset.st && !getLog(ex, setKey(r.dataset.s)) ? r : null; };
+  const addOne = () => {
+    const rs = rows(), last = rs[rs.length - 1], set = ex.sets + h.rowsOf(o, 'x').length + 1;
+    if (set > SETS_MAX) { toast('Najwyżej ' + SETS_MAX + ' rund.'); return null; }
+    const kg = fv(last.querySelector('.kg')) || last.querySelector('.kg').dataset.ph || '', reps = fv(last.querySelector('.reps')) || last.querySelector('.reps').dataset.ph || '';
+    h.addRow(o, rowHtml(ex, set, 'x', { kg: num(kg), reps: num(reps) }), last);
+    const row = h.rowOf(o, set); bindRow(row, ex, s0); h.refreshDel(o); placeStep(o); refreshStats();
+    return row;
+  };
+  const plus = n => { let k = 0; for (let i = 0; i < n; i++) if (addOne()) k++; redraw(); return k; };
+  const minus = () => { const r = lastFree(); if (!r) { toast(rows().length > (ex.planSets || ex.sets) ? 'Ostatnia runda jest zapisana: usuń ją ✕ w tabeli.' : 'Mniej rund niż w planie: „⋯” → Pomiń / Skróć.'); return; } r.remove(); h.refreshDel(o); placeStep(o); refreshStats(); redraw(); };
+  const start = (from) => { audioUnlock(); askNotify(); EM = { k: emKey(ex), start: Date.now() - (from || 0) * 60000, m: (from || 0) + 1 }; emSave(); beep(1, 988, 0.25); vib(200); wake(true); markStart(); emTick(); };
+  const stop = () => { EM = null; emSave(); };
+  // pełny ekran: odliczanie minuty, pasek rund, ciężar następnej rundy, ocena = zapis rundy
+  const nextRow = () => rows().find(r => !r.dataset.st);
+  const kgOf = r => { const i = r && r.querySelector('.kg'); return i ? fv(i) || i.dataset.ph || '' : ''; };
+  const repsOf = r => { const i = r && r.querySelector('.reps'); return i ? fv(i) || i.dataset.ph || '' : ''; };
+  const KEYS = ['L', 'S', 'W', 'X'], LBL = k => oly ? RATE[k].label : EFF[k].label, CLS = { L: 'g', S: 'y', W: 'r', X: 'x' };
+  const fsDraw = () => {
+    let fs = $('#emfs'); if (!EMFS || EMFS.o !== o) return;
+    if (!fs) { document.body.insertAdjacentHTML('beforeend', '<div id="emfs" role="dialog" aria-modal="true" aria-label="EMOM na pełnym ekranie"></div>'); fs = $('#emfs'); document.body.classList.add('emfs-on'); }
+    const rs = rows(), segs = emomSegs(rs.map(r => ({ st: r.dataset.st, rate: r.dataset.rate, rpe: r.dataset.rpe }))), nd = done().length, nx = nextRow();
+    const head = `<div class="ef-h"><b>${esc(ex.name)}</b><button type="button" class="ef-x">✕ Zmniejsz</button></div>`;
+    const bar = `<div class="ef-seg" style="--n:${rs.length}" aria-label="Zrobione rundy: ${nd} z ${rs.length}">${segs.map(c => `<i class="${c}"></i>`).join('')}</div>`;
+    if (EMFS.end) {
+      const kg = emomKg(done().filter(r => r.dataset.st === 'ok').map(r => num(kgOf(r))));
+      fs.className = 'end';
+      fs.innerHTML = `${head}<div class="ef-mn"><span>Koniec</span><span><b>${EMFS.end}</b> z ${EMFS.end} min</span></div>
+        <div class="ef-clk">${nd} / ${rs.length}</div>${bar}
+        <div class="ef-r"><div class="t">Zrobione rundy<b>${nd}${kg ? ' · ' + esc(kg) : ''}</b></div></div>
+        <p class="ef-p">Zegar stanął po ostatniej minucie. Chcesz dalej? Dodaj rundy, zegar idzie od minuty ${EMFS.end + 1}.</p>
+        <div class="ef-ev"><button type="button" class="x" data-emmore="1">+ 1 runda</button><button type="button" class="x" data-emmore="5">+ 5 rund</button></div>
+        <button type="button" class="ef-ok">Gotowe</button>`;
+    } else {
+      fs.className = '';
+      const r0 = on() ? Math.max(0, Date.now() - EM.start) : 0, m = on() ? Math.floor(r0 / 60000) + 1 : 1, left = on() ? 60 - Math.floor(r0 / 1000) % 60 : 60;
+      fs.innerHTML = `${head}<div class="ef-mn"><span>Minuta</span><span><b class="ef-m">${m}</b> z ${rs.length}</span></div>
+        <div class="ef-clk" aria-live="off">${fmtClock(left)}</div><div class="ef-bar"><i style="width:${Math.round((60 - left) / 60 * 100)}%"></i></div>${bar}
+        ${nx ? `<div class="ef-r"><button type="button" data-emkg="-2.5" aria-label="Następna runda 2,5 kg mniej">−2,5</button><div class="t">Runda ${rows().indexOf(nx) + 1} · zrobione ${nd}<b>${esc(fmtKg(num(kgOf(nx))) || '–')}${kgOf(nx) !== '' && isNum(num(kgOf(nx))) ? ' kg' : ''} × ${esc(String(repsOf(nx) || '–'))}</b></div><button type="button" data-emkg="2.5" aria-label="Następna runda 2,5 kg więcej">+2,5</button></div>`
+             : `<div class="ef-r"><div class="t">Wszystkie rundy zrobione<b>${nd} z ${rs.length}</b></div></div>`}
+        <div class="ef-ev">${KEYS.map(k => `<button type="button" class="${CLS[k]}" data-emrate="${k}">${k === 'X' ? '✖' : '●'} ${LBL(k)}</button>`).join('')}</div>
+        ${emTgHtml(ex, 'ef-tg')}
+        <button type="button" class="ef-go">${on() ? '■ Zatrzymaj zegar' : '▶ Start minut'}</button>`;
+      fs.querySelector('.ef-tg small').textContent = 'Plan ' + (ex.planSets || ex.sets) + ' · ocena powyżej zapisuje rundę';
+      fs.querySelector('.em-cnt').textContent = rs.length;
+    }
+    fs.querySelector('.ef-x').onclick = emClose;
+    fs.querySelectorAll('[data-emmore]').forEach(b => b.onclick = () => { const from = EMFS.end; if (plus(+b.dataset.emmore)) { EMFS.end = 0; redraw(); start(from); } redraw(); });
+    const ok = fs.querySelector('.ef-ok'); if (ok) ok.onclick = emClose;
+    fs.querySelectorAll('[data-emkg]').forEach(b => b.onclick = () => {
+      const r = nextRow(), i = r && r.querySelector('.kg'); if (!i) return;
+      const v = num(kgOf(r)); if (!isNum(v)) return;
+      i.value = fmtKg(Math.max(0, v + +b.dataset.emkg)); i.classList.remove('ph');
+      i.dispatchEvent(new Event('change', { bubbles: true })); fsDraw();
+    });
+    fs.querySelectorAll('[data-emrate]').forEach(b => b.onclick = () => {
+      if (!on()) start();
+      const k = b.dataset.emrate, r = nextRow() || addOne(); if (!r) return;
+      if (oly) r._save(k === 'X' ? 'x' : 'ok', k, k !== 'X' ? RATE[k].rpe : '');
+      else r._save(k === 'X' ? 'x' : 'ok', '', k !== 'X' ? EFF[k].rpe : '');
+      toast('Runda ' + done().length + ': ' + LBL(k) + '.');
+    });
+    const fm = fs.querySelector('.em-minus'), fp = fs.querySelector('.em-plus');
+    if (fm) { fm.onclick = minus; fp.onclick = () => plus(1); fm.disabled = !lastFree(); }
+    const fg = fs.querySelector('.ef-go'); if (fg) fg.onclick = () => { if (on()) stop(); else start(); redraw(); };
+  };
   const draw = () => {
-    box.querySelector('.em-n').textContent = workRows(ex.order).filter(r => r.dataset.st).length;
+    if (!box.isConnected) return;
+    box.querySelector('.em-n').textContent = done().length;
+    box.querySelector('.em-of').textContent = '/ ' + rows().length;
+    box.querySelector('.em-cnt').textContent = rows().length;
+    box.querySelector('.em-minus').disabled = !lastFree();
+    box.querySelector('.em-plus').disabled = rows().length >= SETS_MAX;
     go.textContent = on() ? '■ Stop' : '▶ Start minut'; go.setAttribute('aria-pressed', String(on()));
     if (!on()) box.querySelector('.em-t').textContent = '–';
+    fsDraw();
   };
-  const start = () => { audioUnlock(); askNotify(); EM = { k: emKey(ex), start: Date.now(), m: 1 }; emSave(); beep(1, 988, 0.25); vib(200); wake(true); markStart(); emTick(); };
-  go.onclick = () => { if (on()) { EM = null; emSave(); } else start(); draw(); };
-  add.onclick = () => {
-    if (!on()) start();
-    const rows = workRows(ex.order), done = rows.filter(r => r.dataset.st), prev = done[done.length - 1];
-    let next = rows.find(r => !r.dataset.st);
-    if (!next) {
-      const last = rows[rows.length - 1], set = ex.sets + h.rowsOf(ex.order, 'x').length + 1;
-      if (set > SETS_MAX) { toast('Najwyżej ' + SETS_MAX + ' rund.'); return; }
-      h.addRow(ex.order, rowHtml(ex, set, 'x', { kg: num(fv(last.querySelector('.kg'))), reps: num(fv(last.querySelector('.reps'))) }), last);
-      next = h.rowOf(ex.order, set); bindRow(next, ex, s0); h.refreshDel(ex.order);
-    }
-    next._save('ok', prev ? prev.dataset.rate || '' : '');
-    draw(); toast('Runda ' + workRows(ex.order).filter(r => r.dataset.st).length + ' zapisana.');
-  };
-  box._draw = draw; draw();
+  const open = () => { EMFS = { o, end: 0 }; fsDraw(); const b = $('#emfs [data-emrate]'); if (b) b.focus({ preventScroll: true }); };
+  go.onclick = () => { if (on()) stop(); else { start(); open(); } draw(); };
+  box.querySelector('.em-fs').onclick = open;
+  box.querySelector('.em-minus').onclick = minus;
+  box.querySelector('.em-plus').onclick = () => plus(1);
+  box._draw = draw; box._end = () => rows().length;
+  if (EMFS && EMFS.o === o && !$('#emfs')) EMFS = null;     // po przerysowaniu treningu pełny ekran nie wraca sam
+  draw();
 }
 
 /* ---------- ekran bez wygaszania: od pierwszego wpisu do „Zakończ” (Wake Lock) ---------- */
@@ -3641,7 +3767,7 @@ function bindRow(row, ex, s0){
     const em = document.querySelector(`.emom[data-emom="${ex.order}"]`); if (em && em._draw) em._draw();
     if (st && navigator.vibrate) navigator.vibrate(st === 'x' ? [30, 60, 30] : 30);
   };
-  row._save = save;                                     // EMOM „+ runda”
+  row._save = save;                                     // EMOM: ocena rundy na pełnym ekranie
   if (cam) cam.onclick = () => openCam(ex, row, s0);
   if (btn) btn.onclick = () => save(row.dataset.st === '' ? 'ok' : row.dataset.st === 'ok' ? 'x' : '');
   // boje: dotknięcie świateł → wybór oceny pod wierszem
