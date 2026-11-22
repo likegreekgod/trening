@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-22 · EMOM: rundy = serie robocze, pełny ekran
+
+- Liczba rund EMOM to liczba serii roboczych w tabeli (rozgrzewka i drop sety się nie liczą). Zmienia ją jeden licznik „Ile rund dziś − / +”; nie ma osobnego „+ runda” (Damian: dwa przyciski z „runda” myliły). Zegar kończy się po tylu minutach, ile jest rund.
+- Rundę zapisuje ✓ w tabeli albo ocena na pełnym ekranie; ocena nie kopiuje się z poprzedniej rundy (dawniej wszystkie rundy dostawały ocenę pierwszej).
+- Pełny ekran włącza się sam po „Start minut” (ustalenie 22.11). Jasny motyw zostaje jasny, bo czarne cyfry na jasnym tle czyta się z daleka najlepiej.
+
 ## 2026-11-22 · Przegląd v80 i zapis do arkusza jako tekst
 
 - Przegląd całej aplikacji (wygląd, układ, bezpieczeństwo, baza ćwiczeń) dał listę 17 punktów (`docs/stan.md`, „Do zrobienia”). Damian wybrał 22.11 kolejność: punkt 1 od razu, potem nowy układ panelu trenera i trening na żywo z telefonu; baza ćwiczeń może iść równolegle.
