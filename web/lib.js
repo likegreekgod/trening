@@ -1140,6 +1140,53 @@
     return out;
   };
 
+  /* ---------- „Dodaj do kalendarza”: wydarzenie w czasie lokalnym telefonu (bez strefy), plik .ics albo link Kalendarza Google ---------- */
+  L.CAL_MIN = 30;   // najkrótsze wydarzenie (min)
+  /** date „RRRR-MM-DD”, time „GG:MM”, min → { s, e } jako „RRRRMMDDTGGMMSS” (koniec może wypaść następnego dnia) */
+  L.calTimes = (date, time, min) => {
+    const [y, mo, d] = String(date).split('-').map(Number), [h, mi] = String(time || '18:00').split(':').map(Number);
+    const f = t => { const x = new Date(Date.UTC(y, mo - 1, d, h, mi + t)), p = n => String(n).padStart(2, '0');
+      return x.getUTCFullYear() + p(x.getUTCMonth() + 1) + p(x.getUTCDate()) + 'T' + p(x.getUTCHours()) + p(x.getUTCMinutes()) + '00'; };
+    return { s: f(0), e: f(Math.max(L.CAL_MIN, Math.round(+min || 0))) };
+  };
+  const icsEsc = v => String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  /** linia .ics najwyżej 75 bajtów UTF-8, dalej kontynuacja od spacji (bez cięcia znaku w środku) */
+  const icsFold = line => {
+    const out = []; let cur = '', n = 0;
+    for (const ch of line) {
+      const b = unescape(encodeURIComponent(ch)).length;
+      if (n + b > (out.length ? 74 : 75)) { out.push(cur); cur = ''; n = 0; }
+      cur += ch; n += b;
+    }
+    out.push(cur);
+    return out.join('\r\n ');
+  };
+  /**
+   * events: [{ uid, date, time, min, title, desc, url, alarm (min przed; 0 = bez) }], stamp = Date (DTSTAMP, UTC).
+   * Ten sam uid przy ponownym dodaniu = ten sam wpis (Apple / Outlook podmieniają go zamiast dublować).
+   */
+  L.icsFile = (events, stamp) => {
+    const at = stamp || new Date(), st = at.toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    const L2 = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Sila z Ruchu//Trening//PL', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+    (events || []).forEach(ev => {
+      const t = L.calTimes(ev.date, ev.time, ev.min);
+      L2.push('BEGIN:VEVENT', 'UID:' + icsEsc(ev.uid), 'DTSTAMP:' + st, 'SEQUENCE:' + Math.max(0, Math.floor(at.getTime() / 1000) - 1.7e9),   // nowsze dodanie = wyższy numer
+        'DTSTART:' + t.s, 'DTEND:' + t.e, 'SUMMARY:' + icsEsc(ev.title));
+      if (ev.desc || ev.url) L2.push('DESCRIPTION:' + icsEsc([ev.desc, ev.url].filter(Boolean).join('\n\n')));
+      if (ev.url) L2.push('URL:' + ev.url);
+      if (+ev.alarm > 0) L2.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEsc(ev.title), 'TRIGGER:-PT' + Math.round(+ev.alarm) + 'M', 'END:VALARM');
+      L2.push('END:VEVENT');
+    });
+    L2.push('END:VCALENDAR');
+    return L2.map(icsFold).join('\r\n') + '\r\n';
+  };
+  /** jedno wydarzenie → link „dodaj wydarzenie” Kalendarza Google (czas bez strefy = strefa kalendarza; przypomnienie wg ustawień kalendarza) */
+  L.gcalUrl = ev => {
+    const t = L.calTimes(ev.date, ev.time, ev.min);
+    return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(ev.title || '') +
+      '&dates=' + t.s + '/' + t.e + '&details=' + encodeURIComponent([ev.desc, ev.url].filter(Boolean).join('\n\n'));
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);

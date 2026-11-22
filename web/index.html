@@ -180,7 +180,7 @@
   .unit{background:var(--surface);border:1px solid var(--line);border-radius:var(--rc);box-shadow:var(--shadow);margin-top:var(--gap);padding:14px 16px}
   .unit.done{box-shadow:inset 4px 0 0 var(--ok),var(--shadow)}
   .unit.today{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent),var(--shadow)}
-  .uh{display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:start}
+  .uh{display:grid;grid-template-columns:58px 1fr auto;gap:10px;align-items:start}
   .dd b{display:block;font:800 34px/1 var(--f-display);color:var(--ink-2)}
   .dd small,.ut small{display:block;font:600 12px/1.3 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:3px}
   .ut{font-size:15px;color:var(--ink-2)}
@@ -192,6 +192,13 @@
   .unit li > b{display:block;font-weight:600}
   .unit li span{font-size:14px;color:var(--ink-2)}
   .uact{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .uh .btn.cal{min-width:48px;min-height:48px;padding:0 10px}
+  .uh .btn.cal .ic{width:22px;height:22px;vertical-align:-5px}
+  .opts.act .opt i .ic{width:20px;height:20px;vertical-align:-4px}
+  .kal-l{font:600 12px/1.2 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+  .fl+.seg,.seg+.fl{margin-top:12px}
+  .kal-b{display:grid;gap:8px;margin-top:16px}
+  .kal-n{margin-top:10px;font-size:13px}
   .btn.go{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
   .mvl{position:relative}
   .mvl input{position:absolute;inset:-1px;opacity:0;width:auto;height:auto;border:0;padding:0;cursor:pointer}
@@ -920,7 +927,7 @@ const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, lightOf, floor25, isNum, 
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
   doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
-  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart, blockReport, STAN_PLACES, STAN_CTX, stanKey, stanRecent, stanApply, stanDrop } = window.TL;
+  isEmom, SETS_MAX, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart, blockReport, icsFile, gcalUrl, STAN_PLACES, STAN_CTX, stanKey, stanRecent, stanApply, stanDrop } = window.TL;
 
 /* ---------- kolejka offline ---------- */
 const QK = 'q_' + KEY;
@@ -2021,10 +2028,12 @@ function renderPlan(){
     const k = u.week + '|' + u.day, exs = byKey[k].rows.slice().sort((a, b) => a.order - b.order);
     h += `<section class="unit ${state(u)}" id="u-${u.week}-${esc(u.day)}">
       <div class="uh"><div class="dd"><b>${u.date.slice(8, 10)}</b><small>${weekday(u.date)} · ${monthShort(u.date)}</small></div>
-        <div class="ut"><strong>${esc(u.day)}</strong> ${esc(u.title)}${u.own ? ' <span class="tag">własny</span>' : ''}<small>${exs.length} ${plural(exs.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} · ${u.done ? 'zrobiona ✓' : u.date === today ? 'dziś' : u.date < today ? 'zaległa' : 'zaplanowana'}</small></div></div>
+        <div class="ut"><strong>${esc(u.day)}</strong> ${esc(u.title)}${u.own ? ' <span class="tag">własny</span>' : ''}<small>${exs.length} ${plural(exs.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} · ${u.done ? 'zrobiona ✓' : u.date === today ? 'dziś' : u.date < today ? 'zaległa' : 'zaplanowana'}</small></div>
+        ${calOk(u) ? `<button type="button" class="btn cal" data-cal="${k}" title="Dodaj do kalendarza" aria-label="Dodaj do kalendarza: ${esc(u.day)}">${CAL_ADD_SVG}</button>` : ''}</div>
       <details><summary>Ćwiczenia</summary><ol>${exs.map(ex => `<li><b>${esc(ex.name)}</b><span>${SIMPLE ? rxSimple(ex) : rxPro(ex)}</span></li>`).join('')}</ol></details>
       <div class="uact"><button class="btn go" data-go="${k}">Przejdź do treningu</button>
-        ${u.done ? '<span class="sub">Zrobiona — dnia nie zmienisz.</span>' : `<button type="button" class="btn" data-mv="${k}">Zmień dzień</button>`}</div></section>`;
+        ${u.done ? '<span class="sub">Zrobiona — dnia nie zmienisz.</span>' : `<button type="button" class="btn" data-mv="${k}">Zmień dzień</button>`}
+</div></section>`;
   });
   if (ownOn()) h += '<button type="button" class="ghost own-new" id="own-new">+ własny trening</button>';
   $('#plan').innerHTML = h;
@@ -2035,6 +2044,62 @@ function renderPlan(){
     const u = unitOf(b.dataset.go); cur.week = u.week; cur.day = u.day; TAB = 'trening'; lastMove = null; render(); window.scrollTo(0, 0);
   });
   document.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => openMove(unitOf(b.dataset.mv)));
+  document.querySelectorAll('[data-cal]').forEach(b => b.onclick = () => openCal(unitOf(b.dataset.cal), us.filter(calOk)));
+}
+/* ---------- „Dodaj do kalendarza” (lib icsFile, gcalUrl): niezrobiona jednostka od dziś; godzina i przypomnienie w kal_<klucz> ---------- */
+const CAL_SVG = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const CAL_ADD_SVG = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 10h17M8 3v4M16 3v4M12 12.5v5M9.5 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const CAL_ALARM = [[0, 'Bez'], [30, '30 min'], [60, '1 h'], [120, '2 h']];
+const calOk = u => !!u && !u.done && u.date >= localDate();
+/** wydarzenie jednostki: tytuł, ćwiczenia z planu, notatka trenera, adres aplikacji bez klucza (wpis w kalendarzu może trafić do innych osób) */
+function calEvent(u, time, alarm){
+  const exs = ((units(PLAN).find(x => x.week === u.week && x.day === u.day) || {}).rows || []).slice().sort((a, b) => a.order - b.order);
+  const t = todayInfo(exs.map(ex => ({ order: ex.order, name: ex.name, prio: ex.prio, sets: ex.sets, done: 0 })), u.date, u.date, true);
+  const rx = ex => ex.sets + '×' + ex.reps + (ex.kg !== '' ? ' · ' + fmtKg(ex.kg) + (typeof ex.kg === 'number' ? ' kg' : '') : '');
+  const note = (exs.find(ex => String(ex.unote || '').trim()) || {}).unote;
+  return { uid: ('trening-' + u.week + '-' + u.day).replace(/[^\w-]+/g, '_') + '@' + (location.host || 'sila-z-ruchu'),
+    date: u.date, time, alarm, min: t.min, title: 'Trening · ' + (u.title || u.day),
+    desc: [weekLabel(u.week) + ' · ' + u.day + ' · ok. ' + Math.max(30, t.min) + ' min', exs.map((ex, i) => (i + 1) + '. ' + ex.name + ' – ' + rx(ex)).join('\n'), note ? 'Od trenera: ' + String(note).trim() : ''].filter(Boolean).join('\n\n'),
+    url: location.origin + location.pathname };
+}
+function openCal(u, week){
+  if (!calOk(u)) { toast('Ten trening jest już zrobiony albo minął.'); return; }
+  let o = { t: '18:00', a: 60 }; try { o = Object.assign(o, JSON.parse(localStorage.getItem('kal_' + KEY) || '{}')); } catch (e) {}
+  const more = (week || []).filter(x => !(x.week === u.week && x.day === u.day)).length ? week : null;
+  let all = false;
+  const min = Math.max(30, calEvent(u, o.t, 0).min);
+  openSheet(`<h2 id="sheet-t">Dodaj do kalendarza</h2><p class="sub" id="kal-sub"></p>
+    ${more ? `<div class="seg" role="group" aria-label="Co dodać"><button type="button" data-kall="0" aria-pressed="true">Ten trening</button><button type="button" data-kall="1" aria-pressed="false">Cały tydzień (${week.length})</button></div>` : ''}
+    <label class="fl">Godzina<input type="time" id="kal-t" value="${esc(o.t)}"></label>
+    <div class="kal-l">Przypomnienie</div>
+    <div class="seg" role="group" aria-label="Przypomnienie">${CAL_ALARM.map(([m, l]) => `<button type="button" data-kal="${m}" aria-pressed="${m === o.a}">${l}</button>`).join('')}</div>
+    <div class="kal-b"><button type="button" class="btn p" id="kal-g">Kalendarz Google</button>
+    <button type="button" class="btn" id="kal-i">iPhone / Outlook · plik .ics</button></div>
+    <p class="sub kal-n" id="kal-n"></p>
+    <button type="button" class="btn" data-close>Zamknij</button>`);
+  const keep = () => { try { localStorage.setItem('kal_' + KEY, JSON.stringify(o)); } catch (e) {} };
+  const draw = () => {
+    $('#kal-sub').textContent = all ? week.length + ' ' + plural(week.length, 'trening', 'treningi', 'treningów') + ': ' + week.map(x => weekday(x.date) + ' ' + ddmm(x.date)).join(', ') + ' · o tej samej godzinie'
+      : u.day + ' · ' + (u.title || '') + ' · ' + weekday(u.date) + ' ' + ddmm(u.date) + ' · ok. ' + min + ' min';
+    document.querySelectorAll('#sheet [data-kall]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.kall === '1') === all)));
+    $('#kal-g').disabled = all;
+    $('#kal-n').textContent = (all ? 'Kalendarz Google dodaje po jednym treningu; cały tydzień naraz doda plik .ics. ' : 'Google: przypomnienie jak w ustawieniach Twojego kalendarza. ') +
+      'Zmienisz dzień w aplikacji? Dodaj trening jeszcze raz: kalendarz z pliku podmieni wpis, w Google usuń stary.';
+  };
+  draw();
+  $('#kal-t').onchange = e => { if (/^\d\d:\d\d$/.test(e.target.value)) { o.t = e.target.value; keep(); } };
+  document.querySelectorAll('#sheet [data-kal]').forEach(b => b.onclick = () => { o.a = +b.dataset.kal; keep(); document.querySelectorAll('#sheet [data-kal]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); });
+  document.querySelectorAll('#sheet [data-kall]').forEach(b => b.onclick = () => { all = b.dataset.kall === '1'; draw(); });
+  $('#kal-g').onclick = () => { window.open(gcalUrl(calEvent(u, o.t, 0)), '_blank', 'noopener'); closeSheet(); };
+  $('#kal-i').onclick = () => {
+    const evs = (all ? week : [u]).map(x => calEvent(x, o.t, o.a)), ics = icsFile(evs, new Date());
+    const a = document.createElement('a'), ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    // iPhone: bez „download” Safari od razu pokazuje „Dodaj do kalendarza”; gdzie indziej plik do pobrania i otwarcia
+    if (ios) a.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+    else { a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' })); a.download = (all ? 'treningi-' + u.date : 'trening-' + u.date) + '.ics'; setTimeout(() => URL.revokeObjectURL(a.href), 60000); }
+    document.body.appendChild(a); a.click(); a.remove();
+    closeSheet(); toast(ios ? 'Dotknij „Dodaj”, żeby zapisać w kalendarzu.' : 'Plik kalendarza pobrany: otwórz go, żeby dodać trening.');
+  };
 }
 /** klient przesuwa niezrobioną jednostkę; potem propozycja przesunięcia kolejnych o tyle samo dni; zawsze komunikat o wyniku */
 function moveUnit(u, date){
@@ -2559,6 +2624,7 @@ function renderTrening(){
       <div class="opts act">
         ${open ? '<button type="button" class="opt" id="cut"><i aria-hidden="true">⏱</i>Skróć trening<small>gdy brakuje czasu</small></button>' : ''}
         ${fx ? '' : '<button type="button" class="opt" id="fold-all"><i aria-hidden="true">▴</i>Zwiń zrobione</button>'}
+        ${calOk(unitList().find(x => x.week === cur.week && x.day === cur.day)) ? `<button type="button" class="opt" id="u-cal"><i aria-hidden="true">${CAL_SVG}</i>Dodaj do kalendarza<small>Google, iPhone</small></button>` : ''}
         <button type="button" class="opt" id="fx-sw"><i aria-hidden="true">${fx ? '☰' : '▣'}</i>${fx ? 'Cała lista' : 'Tryb skupienia'}<small>${fx ? 'wszystkie ćwiczenia' : 'jedno ćwiczenie na ekranie'}</small></button>
         ${open && unitEntries().length ? '<button type="button" class="opt warnopt" id="u-reset"><i aria-hidden="true">↺</i>Wyczyść trening<small>od zera</small></button>' : ''}
       </div>
@@ -2566,6 +2632,8 @@ function renderTrening(){
     const ct = $('#cut'); if (ct) ct.onclick = () => { closeSheet(); openCut(); };
     const fa = $('#fold-all'); if (fa) fa.onclick = () => { closeSheet(); foldAll(); };
     $('#fx-sw').onclick = () => { closeSheet(); fxSet(!fx); };
+    const uc = $('#u-cal'); if (uc) uc.onclick = () => { const l = unitList(), u = l.find(x => x.week === cur.week && x.day === cur.day), m = mondayOf(u.date);
+      openCal(u, l.filter(x => calOk(x) && x.date >= m && x.date <= addDays(m, 6))); };
     const ur = $('#u-reset'); if (ur) ur.onclick = () => openReset(s0);
   };
 }
