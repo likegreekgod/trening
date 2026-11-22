@@ -8,11 +8,12 @@
  * Odczyt: trPulpit, trKlient, trPrzelicz. Zapis: trKomentarz (komentarz do sesji), trKomentarzFilm (komentarz do serii z filmem). Filmy: trFilm (bilet do Drive API). Claude API: trSzkic (szkic komentarza,
  * klucz CLAUDE_API_KEY we właściwościach skryptu, dzienny limit, każde wywołanie w zakładce „AI”). AI tylko szkicuje, zapisuje trener.
  * Zamknięcie bloku: trBlok (Bloki.wnioski i dla_klienta), trBlokSzkic (szkic AI obu naraz).
+ * Plan: trPlan (szybka zmiana serii, powt., kg, %, RPE, uwag i notatki do jednostki w niezrobionej jednostce, opcjonalnie też w kolejnych tygodniach).
  * Klienci: trKlienci (lista z ustawieniami i linkiem), trKlientUstaw (flagi z zakładki Klienci), trKlientNowy (nowy klient), trKlientLink (nowy klucz = nowy link).
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
 const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
-  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba };
+  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -791,4 +792,105 @@ function trMailProba(id) {
   const base = linkBase_();
   mailSend_(to, rannyMail_(c, units, { url: base ? base + '?k=' + c.key : '', day: days[0], test: true }));
   return { day: days[0], title: units[0].title };
+}
+
+/* ---------- karta klienta → Plan: szybka zmiana niezrobionej jednostki (trPlan) ----------
+ * Pola z panelu → kolumny Planu. Zrobiona jednostka (wpis w Sesjach albo seria w Logu, jak w mergePlan_) jest zablokowana.
+ * next = także kolejne tygodnie tej jednostki w tym samym bloku, niezrobione (ćwiczenie po nazwie):
+ * kg i % o tę samą różnicę (gdy obie wartości są liczbami), pozostałe pola tak samo. Notatka do jednostki tylko w tym tygodniu.
+ */
+const TR_PLAN_F = { sets: 'serie', reps: 'powt', kg: 'kg', pct: 'procent', rpe: 'rpe_max', note: 'uwagi' };
+const TR_UNOTE_MAX = 500;
+
+/** Czysta funkcja: wartość z panelu → {v: do arkusza, c: do wiersza planu w panelu} albo {error}. */
+function trPlanVal_(f, raw) {
+  const t = String(raw === undefined || raw === null ? '' : raw).trim(), x = t === '' ? NaN : Number(t.replace(',', '.'));
+  if (f === 'sets') return Number.isInteger(x) && x >= 1 && x <= SETS_MAX ? { v: x, c: x } : { error: 'Serie: liczba 1–' + SETS_MAX + '.' };
+  if (f === 'reps') return t && t.length <= 12 ? { v: t, c: t } : { error: 'Powtórzenia: np. 5, 6-8, 8/str, 30 s.' };
+  if (f === 'kg') { if (!t) return { v: '', c: '' }; if (isFinite(x)) return x >= 0 && x <= 500 ? { v: x, c: x } : { error: 'kg: liczba 0–500.' };
+    return t.length <= 10 ? { v: t, c: t } : { error: 'kg: liczba albo krótki tekst (BW, guma).' }; }
+  if (f === 'pct') { if (!t) return { v: '', c: null }; if (!(x > 0 && x <= 150)) return { error: '%: liczba 1–150 albo puste.' };
+    const fr = Math.round(x * 100) / 10000; return { v: fr, c: fr }; }
+  if (f === 'rpe') { if (!t) return { v: '', c: '' }; return x >= 5 && x <= 10 && Math.round(x * 2) === x * 2 ? { v: x, c: x } : { error: 'RPE: 5–10 co 0,5 albo puste.' }; }
+  if (f === 'note') return t.length <= 300 ? { v: t, c: t } : { error: 'Uwagi: najwyżej 300 znaków.' };
+  return { error: 'Nieznane pole: ' + f };
+}
+
+/**
+ * Czysta funkcja: e = {week, day, ex: [{order, sets?, reps?, kg?, pct?, rpe?, note?}], unote?, next?}
+ * → {error} albo {set: [[indeks wiersza Planu od 0, {kolumna: wartość}]], rows: [{week, day, order, f: {pola panelu}}], n, weeks}.
+ */
+function trPlanEdit_(plan, ses, log, clientId, e) {
+  e = e || {};
+  const week = Number(e.week), day = String(e.day === undefined || e.day === null ? '' : e.day).trim();
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  const mine = []; (plan || []).forEach((r, i) => { if (lc(r.klient) === clientId) mine.push({ r, i }); });
+  const unitOf = w => mine.filter(x => Number(x.r.tydzien) === w && String(x.r.jednostka).trim() === day && !removed_(x.r));
+  const cur = unitOf(week);
+  if (!(week >= 1) || !day || !cur.length) return { error: 'Nie ma takiej jednostki w planie.' };
+  if (cur.some(x => own_(x.r))) return { error: 'To własny trening klienta – nie zmienia się go w panelu.' };
+  const done = {};
+  (ses || []).concat(log || []).forEach(s => { if (lc(s.klient) === clientId) done[Number(s.tydzien) + '|' + String(s.jednostka).trim()] = 1; });
+  if (done[week + '|' + day]) return { error: 'Ta jednostka jest już zrobiona (albo klient zaczął ją zapisywać) – zmiany tylko w niezrobionych.' };
+  const blok = lc(cur[0].r.blok);
+  const later = !e.next ? [] : [...new Set(mine.filter(x => Number(x.r.tydzien) > week && String(x.r.jednostka).trim() === day && lc(x.r.blok) === blok && !own_(x.r) && !done[Number(x.r.tydzien) + '|' + day])
+    .map(x => Number(x.r.tydzien)))].sort((a, b) => a - b);
+  const set = {}, rows = {}, weeks = {};
+  const put = (x, col, v, f, c) => {
+    const norm = y => y === undefined || y === null || y instanceof Date ? '' : String(y).trim(), o = norm(x.r[col]);
+    const same = typeof v === 'number' ? o !== '' && Number(o.replace(',', '.')) === v : o === v;
+    if (same) return false;
+    (set[x.i] = set[x.i] || {})[col] = v;
+    const k = x.i; rows[k] = rows[k] || { week: Number(x.r.tydzien), day: day, order: Number(x.r.nr), f: {} }; rows[k].f[f] = c;
+    weeks[Number(x.r.tydzien)] = 1;
+    return true;
+  };
+  let n = 0;
+  for (const ch of [].concat(e.ex || [])) {
+    const hit = cur.find(x => Number(x.r.nr) === Number(ch.order));
+    if (!hit) return { error: 'Nie ma takiego ćwiczenia w jednostce (nr ' + ch.order + ').' };
+    for (const f of Object.keys(TR_PLAN_F)) {
+      if (!(f in ch)) continue;
+      const val = trPlanVal_(f, ch[f]); if (val.error) return { error: hit.r.cwiczenie + ': ' + val.error };
+      const col = TR_PLAN_F[f], oldN = n_(hit.r[col]);
+      if (put(hit, col, val.v, f, val.c)) n++;
+      const delta = (f === 'kg' || f === 'pct') && typeof val.v === 'number' && isFinite(oldN) && String(hit.r[col]).trim() !== '' ? val.v - oldN : null;
+      later.forEach(w => unitOf(w).filter(x => lc(x.r.cwiczenie) === lc(hit.r.cwiczenie)).forEach(x => {
+        const o = n_(x.r[col]);
+        if (delta !== null && isFinite(o) && String(x.r[col]).trim() !== '') {
+          const v = Math.max(0, Math.round((o + delta) * (f === 'pct' ? 10000 : 100)) / (f === 'pct' ? 10000 : 100));
+          put(x, col, v, f, v);
+        } else if (delta === null) put(x, col, val.v, f, val.c);
+      }));
+    }
+  }
+  if (e.unote !== undefined && e.unote !== null) {
+    const t = String(e.unote).replace(/\r\n?/g, '\n').trim();
+    if (t.length > TR_UNOTE_MAX) return { error: 'Notatka do jednostki: najwyżej ' + TR_UNOTE_MAX + ' znaków.' };
+    const first = cur.slice().sort((a, b) => Number(a.r.nr) - Number(b.r.nr))[0];
+    let any = put(first, 'uwagi_jedn', t, 'unote', t);
+    cur.forEach(x => { if (x !== first && String(x.r.uwagi_jedn === undefined || x.r.uwagi_jedn === null ? '' : x.r.uwagi_jedn).trim()) any = put(x, 'uwagi_jedn', '', 'unote', '') || any; });
+    if (any) n++;
+  }
+  return { set: Object.keys(set).map(i => [Number(i), set[i]]), rows: Object.keys(rows).map(k => rows[k]), n: n, weeks: Object.keys(weeks).map(Number).sort((a, b) => a - b) };
+}
+
+/** Zapis zmian jednostki z panelu do zakładki Plan (format tekstowy powt. i kg ustawiony przed zapisem). */
+function trPlan(id, e) {
+  id = String(id || '').trim().toLowerCase();
+  trRow_(id);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const res = trPlanEdit_(tableOf_('Plan'), pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', ['klient', 'tydzien', 'jednostka']), id, e);
+    if (res.error) throw new Error(res.error);
+    if (res.set.length) {
+      const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
+      const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
+      PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(k); h.push(k); } });
+      planTextCols_();
+      res.set.forEach(([i, o]) => Object.keys(o).forEach(k => sh.getRange(i + 2, h.indexOf(k) + 1).setValue(o[k])));
+    }
+    return { n: res.n, weeks: res.weeks, rows: res.rows };
+  } finally { lock.releaseLock(); }
 }

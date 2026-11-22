@@ -139,6 +139,11 @@ async function page(calls, opt = {}) {
     else if (b.fn === 'trMailUstaw') { await new Promise(res => setTimeout(res, 100)); st.hour = b.args[0];
       out = { ok: true, result: { hour: st.hour, hours: [5, 6, 7, 8, 9], trigger: true, quota: 97, day: null, log: {} } }; }
     else if (b.fn === 'trMailProba') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { day: addDays(TODAY, 2), title: 'Trening A' } }; }
+    else if (b.fn === 'trPlan') { await new Promise(res => setTimeout(res, 100)); const e = b.args[1];
+      if (/błąd/.test(e.unote || '')) out = { ok: false, error: 'Ta jednostka jest już zrobiona (albo klient zaczął ją zapisywać) – zmiany tylko w niezrobionych.' };
+      else out = { ok: true, result: { n: e.ex.reduce((a, o) => a + Object.keys(o).length - 1, 0) + (e.unote !== undefined ? 1 : 0), weeks: [e.week],
+        rows: e.ex.map(o => ({ week: e.week, day: e.day, order: o.order, f: Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'order').map(([k, v]) => [k, /^\d+([.,]\d+)?$/.test(v) ? Number(v.replace(',', '.')) : v])) }))
+          .concat(e.unote !== undefined ? [{ week: e.week, day: e.day, order: 1, f: { unote: e.unote } }] : []) } }; }
     else out = { ok: false, error: 'Nieznana funkcja: ' + b.fn };
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
   });
@@ -748,4 +753,48 @@ test('panel: blokada obcych skryptów (CSP) zatrzymuje wstrzyknięty kod', async
   assert.equal(await p.evaluate(() => [window.__xss, window.__xss2].join()), ',');
   assert.ok(p.errors.length >= 2 && p.errors.every(e => /Content Security Policy/i.test(e)), p.errors.join('\n'));   // przeglądarka zgłosiła obie blokady
   await ctx.close();
+});
+
+test('panel: karta klienta → Plan, szybka zmiana kg / serii w niezrobionej jednostce (trPlan)', async () => {
+  for (const [vp, scheme, sfx] of [[{ width: 1440, height: 900 }, 'light', 'jasny'], [{ width: 390, height: 844 }, 'dark', 'telefon-ciemny']]) {
+    const calls = [];
+    const { ctx, p } = await page(calls, { loggedIn: true, vp, scheme });
+    await p.goto(base + 'trener.html#k/ania/plan'); await p.waitForSelector('.pu');
+    // tylko niezrobiona jednostka (tydz. 12 T2, czwartek); dzisiejsza T1 ma serie w Logu → zablokowana, nie ma jej na liście
+    assert.deepEqual(await p.$$eval('.pu', a => a.map(x => x.dataset.u)), ['12|T2']);
+    assert.match(await p.textContent('.pu'), /Tydz\. 12 · blok B2 · cz 19\.11\s*T2 · Góra[\s\S]*Wyciskanie na ławce\s*Serie3\s*Powt\.5\s*kg47/);
+    await p.click('.pu [data-pe="edit"]');
+    const kg = '.pu input[data-pf="kg"][data-o="1"]', sets = '.pu input[data-pf="sets"][data-o="2"]', save = '.pu [data-pe="save"]';
+    assert.equal(await p.evaluate(() => document.activeElement.dataset.pf), 'kg');      // od razu kursor w kg
+    assert.equal(await p.isDisabled(save), true);                                        // bez zmian nie ma czego zapisać
+    await p.fill(kg, '50');
+    assert.equal(await p.$eval(kg, i => i.closest('.pc').className), 'pc pv-kg chg');
+    assert.match(await p.textContent('.pu .pc.chg .was'), /było 47/);
+    assert.match(await p.textContent(save), /Zapisz zmiany \(1\)/);
+    await p.fill(sets, '0');                                                             // zła liczba serii: pole czerwone, zapis zablokowany
+    assert.equal(await p.$eval(sets, i => i.getAttribute('aria-invalid')), 'true');
+    assert.equal(await p.isDisabled(save), true);
+    assert.match(await p.textContent('.pu .pef'), /Popraw zaznaczone pola/);
+    await p.fill(sets, '4');
+    await p.fill('.pu textarea[data-pf="unote"]', 'Ostatnia seria bez walki');
+    assert.match(await p.textContent(save), /Zapisz zmiany \(3\)/);
+    assert.equal(await p.$('.pu [data-pf="next"]'), null);                                // brak kolejnych tygodni tej jednostki
+    if (sfx === 'jasny') await shot(p, 'trener-plan-edycja-jasny.png'); else await shot(p, 'trener-plan-edycja-telefon-ciemny.png');
+    await p.click(save); await p.waitForSelector('.pu .saved');
+    const req = calls.find(c => c.fn === 'trPlan');
+    assert.deepEqual(req.args, ['ania', { week: 12, day: 'T2', ex: [{ order: 1, kg: '50' }, { order: 2, sets: '4' }], next: false, unote: 'Ostatnia seria bez walki' }]);
+    const txt = await p.textContent('.pu');
+    assert.match(txt, /Zapisano 3 zmiany · klient zobaczy je przy następnym otwarciu aplikacji/);
+    assert.match(txt, /Od trenera\s*Ostatnia seria bez walki/);
+    assert.match(txt, /Wyciskanie na ławce\s*Serie3\s*Powt\.5\s*kg50/);
+    assert.match(txt, /Podciąganie\s*Serie4/);
+    // błąd z serwera zostaje w edycji z komunikatem
+    await p.click('.pu [data-pe="edit"]'); await p.fill('.pu textarea[data-pf="unote"]', 'błąd'); await p.click(save);
+    await p.waitForSelector('.pu .pef .err[role="alert"]');
+    assert.match(await p.textContent('.pu .pef'), /już zrobiona/);
+    await p.click('.pu [data-pe="cancel"]');
+    assert.equal(await p.$('.pu textarea'), null);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
 });

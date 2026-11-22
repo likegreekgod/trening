@@ -667,10 +667,11 @@ async function renderKlient(id, tab){
   const blk = cur && cur.r.block, bw = blk ? [...new Set((d.plan || []).filter(r => r.block === blk && !r.own).map(r => r.week))].sort((a, b) => a - b) : [];
   const eb = [blk ? 'Blok ' + esc(blk) + ' · tydz. ' + (bw.indexOf(cur.r.week) + 1) + ' z ' + bw.length : 'Bez bloku', d.cfg.simple ? 'tryb PROSTY' : 'tryb PRO', 'skala ' + esc(d.cfg.scale || 'RPE')]
     .concat(d.cfg.masters ? ['masters'] : []).concat(d.cfg.active === false ? ['nieaktywny'] : []).join(' · ');
-  const T = [['przeglad', 'Przegląd'], ['sesje', 'Sesje'], ['bloki', 'Bloki'], ['dyspozycja', 'Dyspozycja']];
+  const T = [['przeglad', 'Przegląd'], ['plan', 'Plan'], ['sesje', 'Sesje'], ['bloki', 'Bloki'], ['dyspozycja', 'Dyspozycja']];
   const tabs = '<nav class="tabs" aria-label="Karta klienta">' + T.map(t => '<a href="#k/' + encodeURIComponent(id) + '/' + t[0] + '" aria-current="' + (t[0] === tab ? 'page' : 'false') + '">' + t[1] + '</a>').join('') + '</nav>';
   let body = '';
   if (tab === 'sesje') body = sesList(d, dates, 0);
+  else if (tab === 'plan') body = planList(d, dates, today);
   else if (tab === 'bloki') body = blokList(d);
   else if (tab === 'dyspozycja') body = dyspList(d);
   else body = przeglad(d, c, sets, dates, today);
@@ -860,6 +861,140 @@ document.addEventListener('click', async e => {
     finally { st.busy = false; }
     if (CID === cid) blokDraw(blok);
   }
+});
+
+/* ---------- karta klienta → Plan: szybka zmiana serii, powt., kg, %, RPE, uwag i notatki do jednostki (trPlan) ----------
+ * Tylko niezrobione jednostki trenera (bez wpisu w Sesjach i bez serii w Logu); własne treningi klienta pominięte.
+ * Szkic zmian (PD) tylko w pamięci strony; po zapisie wiersze CUR.plan dostają wartości potwierdzone przez serwer. */
+const PD = {};                                  // klient|tydzień|jednostka → {edit, v: {nr: {pole: tekst}}, unote, next, busy, ok, err, all}
+const PE_F = [['sets', 'Serie'], ['reps', 'Powt.'], ['kg', 'kg'], ['pct', '%'], ['rpe', 'RPE max'], ['note', 'Uwagi']];
+const pdKey = u => CID + '|' + u;
+const PE_OLD = 14;                              // zaległe starsze niż 14 dni nie są już pokazywane
+const peTxt = (r, f) => { const v = r[f];
+  if (v === null || v === undefined || v === '' || (typeof v === 'number' && !isFinite(v))) return '';
+  if (f === 'pct') return pl(Math.round(Number(v) * 1000) / 10);
+  return typeof v === 'number' ? pl(v) : String(v); };
+const peNum = v => { const x = Number(String(v).replace(',', '.').trim()); return String(v).trim() !== '' && isFinite(x) ? x : NaN; };
+// ta sama reguła co trPlanVal_ w Trener.gs (komunikat albo '')
+function peBad(f, v){
+  v = String(v === undefined || v === null ? '' : v).trim(); const x = peNum(v);
+  if (f === 'sets') return Number.isInteger(x) && x >= 1 && x <= 40 ? '' : 'Serie: liczba 1–40.';
+  if (f === 'reps') return v && v.length <= 12 ? '' : 'Powtórzenia: np. 5, 6-8, 8/str, 30 s.';
+  if (f === 'kg') return !v || (isFinite(x) ? x >= 0 && x <= 500 : v.length <= 10) ? '' : 'kg: liczba 0–500 albo krótki tekst (BW, guma).';
+  if (f === 'pct') return !v || (x > 0 && x <= 150) ? '' : '%: liczba 1–150 albo puste.';
+  if (f === 'rpe') return !v || (x >= 5 && x <= 10 && Math.round(x * 2) === x * 2) ? '' : 'RPE: 5–10 co 0,5 albo puste.';
+  if (f === 'note') return v.length <= 300 ? '' : 'Uwagi: najwyżej 300 znaków.';
+  return '';
+}
+function planUnits(d, dates){
+  const done = {};
+  (d.sessions || []).forEach(s => { done[uKey(s.tydzien, s.jednostka)] = 1; });
+  (d.logs || []).forEach(l => { done[uKey(l.tydzien, l.jednostka)] = 1; });
+  const by = {};
+  (d.plan || []).filter(r => !r.own).forEach(r => { const u = uKey(r.week, r.day); (by[u] = by[u] || { u, week: r.week, day: r.day, title: r.title, block: r.block, date: dates[u] || r.date, rows: [] }).rows.push(r); });
+  return Object.values(by).map(x => Object.assign(x, { done: !!done[x.u], rows: x.rows.sort((a, b) => a.order - b.order), unote: (x.rows.find(r => r.unote) || {}).unote || '' }))
+    .sort((a, b) => a.week - b.week || String(a.date || '9').localeCompare(String(b.date || '9')) || String(a.day).localeCompare(String(b.day)));
+}
+// kolejne tygodnie tej samej jednostki w tym samym bloku, niezrobione (jak w trPlanEdit_)
+const peLater = (units, x) => units.filter(y => !y.done && y.day === x.day && y.week > x.week && String(y.block || '') === String(x.block || '')).map(y => y.week);
+function peChanges(x, st){
+  const out = [];
+  x.rows.forEach(r => { const v = (st.v || {})[r.order] || {}; Object.keys(v).forEach(f => { if (String(v[f]).trim() !== peTxt(r, f)) out.push([r.order, f]); }); });
+  return out;
+}
+function planList(d, dates, today){
+  // niezrobione; opuszczone dawniej niż 14 dni temu pomijamy (już ich nikt nie zrobi)
+  const units = planUnits(d, dates), open = units.filter(x => !x.done && !(x.date && x.date < TL.addDays(today, -PE_OLD)));
+  if (!open.length) return '<div class="card es"><b>Brak niezrobionych jednostek</b>Wszystko z planu jest zrobione. Nowy blok wczytasz plikiem planu (folder _plany na Dysku).</div>';
+  const st0 = PD[pdKey('*')] || {}, w0 = open[0].week, show = st0.all ? open : open.filter(x => x.week < w0 + 2 || PD[pdKey(x.u)] && PD[pdKey(x.u)].edit);
+  const rest = open.length - show.length;
+  return '<p class="hint" style="margin:0">Zmiana trafia od razu do arkusza (zakładka Plan); klient zobaczy ją przy następnym otwarciu aplikacji. Zrobione jednostki są zablokowane. ' +
+    'Ponowny import pliku z tym samym blokiem nadpisze zmiany w niezrobionych jednostkach.</p>' +
+    show.map(x => '<div class="card pu" data-u="' + esc(x.u) + '">' + puInner(x, units, today) + '</div>').join('') +
+    (rest > 0 ? '<p><button class="b" type="button" data-pall>Pokaż dalsze jednostki (' + rest + ')</button></p>' : '');
+}
+function puInner(x, units, today){
+  const st = PD[pdKey(x.u)] || {}, ed = !!st.edit, dis = st.busy ? ' disabled' : '';
+  const pill = !x.date ? '<span class="pill">bez daty</span>' : x.date < today ? '<span class="pill lv-warn">zaległa</span>' : x.date === today ? '<span class="pill lv-ok">dziś</span>' : '';
+  const eb = ['Tydz. ' + x.week, x.block ? 'blok ' + x.block : '', x.date ? dowDm(x.date) : ''].filter(Boolean).map(esc).join(' · ');
+  const hd = '<div class="puh"><div><div class="eb">' + eb + '</div><h2>' + esc(x.day) + (x.title ? ' · ' + esc(x.title) : '') + '</h2></div><span class="sp"></span>' + pill +
+    (ed ? '' : '<button class="b" type="button" data-pe="edit">Edytuj</button>') + '</div>';
+  const un = ed ? '<label class="pun"><span class="eb">Od trenera · notatka do całej jednostki</span><textarea data-pf="unote" rows="2" maxlength="500" placeholder="np. Przysiad: pauza 2 s na dole, ostatnia seria bez walki."' + dis + '>' + esc(st.unote !== undefined ? st.unote : x.unote) + '</textarea></label>'
+    : x.unote ? '<p class="note pun"><span class="eb">Od trenera</span><br>' + esc(x.unote) + '</p>' : '';
+  const head = '<div class="per peh"><span></span><span>Ćwiczenie</span>' + PE_F.map(f => '<span>' + f[1] + '</span>').join('') + '</div>';
+  const rows = x.rows.map(r => {
+    const v = (st.v || {})[r.order] || {};
+    const cell = f => { const old = peTxt(r, f[0]);
+      if (!ed) return '<span class="pv-' + f[0] + (old ? '' : ' muted') + '"><i class="lb">' + f[1] + '</i>' + (old ? esc(old) : '–') + '</span>';
+      const val = v[f[0]] !== undefined ? v[f[0]] : old, chg = String(val).trim() !== old, bad = peBad(f[0], val);
+      return '<label class="pc pv-' + f[0] + (chg ? ' chg' : '') + (bad ? ' bad' : '') + '"><i class="lb">' + f[1] + '</i><input data-pf="' + f[0] + '" data-o="' + r.order + '" value="' + esc(val) + '"' +
+        (f[0] === 'note' ? ' maxlength="300"' : ' inputmode="' + (f[0] === 'reps' || f[0] === 'kg' ? 'text' : 'decimal') + '"') + ' aria-label="' + esc(r.name + ': ' + f[1]) + '"' + (bad ? ' aria-invalid="true" title="' + esc(bad) + '"' : '') + dis + '>' +
+        '<small class="was">' + (chg ? 'było ' + esc(old || '–') : '') + '</small></label>'; };
+    return '<div class="per"><span class="pp pp-' + esc(String(r.prio || '').toUpperCase()) + '">' + esc(r.prio || '') + '</span><b class="pn">' + esc(r.name) + (r.added ? ' <span class="muted">· dodane przez klienta</span>' : '') + '</b>' + PE_F.map(cell).join('') + '</div>';
+  }).join('');
+  return hd + un + '<div class="pet' + (ed ? ' ed' : '') + '">' + head + rows + '</div>' + puFoot(x, units, st);
+}
+function puFoot(x, units, st){
+  const ed = !!st.edit, dis = st.busy ? ' disabled' : '';
+  let foot = '';
+  if (ed) {
+    const ch = peChanges(x, st), un = st.unote !== undefined && st.unote.trim() !== x.unote.trim(), n = ch.length + (un ? 1 : 0);
+    const bad = x.rows.some(r => PE_F.some(f => { const v = ((st.v || {})[r.order] || {})[f[0]]; return v !== undefined && peBad(f[0], v); }));
+    const later = peLater(units, x);
+    foot = '<div class="pef">' + (later.length ? '<label class="pnx"><input type="checkbox" data-pf="next"' + (st.next ? ' checked' : '') + dis + '><span><b>Także kolejne tygodnie tej jednostki</b> (tydz. ' + esc(later.length > 1 ? later[0] + '–' + later[later.length - 1] : later[0]) + ', ten sam blok, niezrobione): kg i % o tę samą różnicę, serie, powt., RPE i uwagi tak samo.</span></label>' : '') +
+      '<div class="row">' + (st.err ? '<span class="err" role="alert">' + esc(st.err) + '</span>' : bad ? '<span class="err">Popraw zaznaczone pola.</span>' : '') + '<span class="sp"></span>' +
+      '<button class="b" type="button" data-pe="cancel"' + dis + '>Anuluj</button><button class="b p" type="button" data-pe="save"' + (n && !bad && !st.busy ? '' : ' disabled') + '>' + (st.busy ? 'Zapisuję…' : 'Zapisz zmiany' + (n ? ' (' + n + ')' : '')) + '</button></div></div>';
+  } else if (st.ok) foot = '<p class="saved" style="margin:8px 0 0">✓ ' + esc(st.ok) + '</p>';
+  return '<div class="pfw">' + foot + '</div>';
+}
+function puUnit(u){
+  const dates = {}; (CUR.sessions || []).forEach(s => { if (/T/.test(String(s.start || ''))) dates[uKey(s.tydzien, s.jednostka)] = TL.localDate(new Date(s.start)); });
+  const units = planUnits(CUR, dates), unit = units.find(y => y.u === u);
+  return unit ? { unit, units } : null;
+}
+function puDraw(u, focus){
+  const el = document.querySelector('.pu[data-u="' + CSS.escape(u) + '"]'); if (!el || !CUR) return;
+  const x = puUnit(u); if (!x) return;
+  el.innerHTML = puInner(x.unit, x.units, PUL.today);
+  if (focus) { const i = el.querySelector(focus); if (i) { i.focus(); try { const n = i.value.length; i.setSelectionRange(n, n); } catch (e) {} } }
+}
+const puOf = el => { const c = el.closest('.pu'); return c && c.dataset.u; };
+document.addEventListener('input', e => {
+  const t = e.target.closest('.pu [data-pf]'); if (!t || !CUR) return;
+  const u = puOf(t), st = PD[pdKey(u)] = PD[pdKey(u)] || {}, f = t.dataset.pf;
+  st.err = '';
+  if (f === 'next') { st.next = t.checked; return; }
+  if (f === 'unote') st.unote = t.value; else ((st.v = st.v || {})[t.dataset.o] = st.v[t.dataset.o] || {})[f] = t.value;
+  const x = puUnit(u); if (!x) return;
+  if (f !== 'unote') {          // tylko ta komórka i stopka: bez przerysowania karty, żeby nie gubić kursora i klawiatury telefonu
+    const r = x.unit.rows.find(y => String(y.order) === t.dataset.o), old = peTxt(r, f), chg = t.value.trim() !== old, bad = peBad(f, t.value), c = t.closest('.pc');
+    c.classList.toggle('chg', chg); c.classList.toggle('bad', !!bad); c.querySelector('.was').textContent = chg ? 'było ' + (old || '–') : '';
+    if (bad) { t.setAttribute('aria-invalid', 'true'); t.title = bad; } else { t.removeAttribute('aria-invalid'); t.removeAttribute('title'); }
+  }
+  t.closest('.pu').querySelector('.pfw').outerHTML = puFoot(x.unit, x.units, st);
+});
+document.addEventListener('click', async e => {
+  if (e.target.closest('[data-pall]')) { PD[pdKey('*')] = { all: true }; route(); return; }
+  const b = e.target.closest('.pu [data-pe]'); if (!b || !CUR) return;
+  const u = puOf(b), k = pdKey(u), cid = CID, st = PD[k] = PD[k] || {};
+  if (b.dataset.pe === 'edit') { PD[k] = { edit: true, v: {} }; puDraw(u, '[data-pf="kg"]'); return; }
+  if (b.dataset.pe === 'cancel') { PD[k] = {}; puDraw(u); return; }
+  if (b.dataset.pe !== 'save') return;
+  const [week, day] = [Number(u.split('|')[0]), u.split('|').slice(1).join('|')];
+  const rows = (CUR.plan || []).filter(r => uKey(r.week, r.day) === u);
+  const ex = rows.map(r => { const v = (st.v || {})[r.order] || {}, o = { order: r.order };
+    Object.keys(v).forEach(f => { if (String(v[f]).trim() !== peTxt(r, f)) o[f] = String(v[f]).trim(); }); return o; }).filter(o => Object.keys(o).length > 1);
+  const unote0 = (rows.find(r => r.unote) || {}).unote || '';
+  const req = { week, day, ex, next: !!st.next };
+  if (st.unote !== undefined && st.unote.trim() !== unote0.trim()) req.unote = st.unote.trim();
+  st.busy = true; st.err = ''; puDraw(u);
+  try {
+    const r = await guard(api('trPlan', cid, req));
+    (r.rows || []).forEach(c => { const row = (CK[cid].plan || []).find(p => p.week === c.week && p.day === c.day && p.order === c.order); if (row) Object.assign(row, c.f); });
+    PD[k] = { ok: 'Zapisano ' + r.n + (r.n === 1 ? ' zmianę' : r.n % 10 >= 2 && r.n % 10 <= 4 && (r.n % 100 < 12 || r.n % 100 > 14) ? ' zmiany' : ' zmian') + (r.weeks && r.weeks.length > 1 ? ' w tyg. ' + r.weeks.join(', ') : '') + ' · klient zobaczy je przy następnym otwarciu aplikacji' };
+    if (CID === cid && r.weeks && r.weeks.length > 1) { route(); return; }
+  } catch (err) { st.busy = false; if (!err.auth) st.err = err.message; }
+  if (CID === cid) puDraw(u);
 });
 
 function dyspList(d){

@@ -1167,3 +1167,50 @@ test('aiReq_, aiCost_, aiDay_: zapytanie do Claude API, koszt, dzienny limit', (
   assert.equal(C.aiKeyEnd_(key.slice(0, -4) + 'AbCd'), '…AbCd');                 // panel widzi tylko 4 ostatnie znaki
   assert.equal(C.aiKeyEnd_(''), '');
 });
+
+test('trPlanEdit_, trPlanVal_: szybka zmiana planu z panelu (tylko niezrobione, kolejne tygodnie o tę samą różnicę)', () => {
+  const R = (w, d, nr, name, o) => Object.assign({ klient: 'ania', tydzien: w, jednostka: d, nr, cwiczenie: name, serie: 4, powt: '5', kg: '', procent: '', rpe_max: 8, uwagi: '', blok: 'B2', zrodlo: '', uwagi_jedn: '' }, o);
+  const plan = [
+    R(9, 'T1', 1, 'Przysiad', { kg: '90', procent: 0.7 }), R(9, 'T1', 2, 'Pallof', { kg: 'guma', powt: '12/str' }),
+    R(10, 'T1', 1, 'Przysiad', { kg: '92.5', procent: 0.72, uwagi_jedn: 'stara' }), R(10, 'T1', 2, 'Pallof', { kg: 'guma' }), R(10, 'T1', 3, 'Przysiad', { kg: 50, zrodlo: 'usuniete' }),
+    R(11, 'T1', 1, 'Przysiad', { kg: '95', procent: 0.74 }), R(11, 'T1', 2, 'Pallof', { kg: 'guma' }),
+    R(12, 'T1', 1, 'Przysiad', { kg: '97,5', blok: 'B3' }),                      // inny blok: bez zmian
+    R(8, 'T1', 1, 'Przysiad', { kg: '85' }),                                     // zrobiona (Sesje)
+    R(13, 'T1', 1, 'Przysiad', { kg: '100' }),                                   // zaczęta (seria w Logu)
+    R(9, 'W1', 1, 'Bieg', { zrodlo: 'klient' }),                                  // własny trening klienta
+    R(9, 'T1', 1, 'Przysiad', { klient: 'bartek', kg: '60' })];
+  const ses = [{ klient: 'ania', tydzien: 8, jednostka: 'T1' }], log = [{ klient: 'Ania', tydzien: '13', jednostka: 'T1' }];
+  const ed = e => JSON.parse(JSON.stringify(C.trPlanEdit_(plan, ses, log, 'ania', e)));
+  // walidacja pól (ta sama reguła co peBad w panelu)
+  assert.deepEqual(JSON.parse(JSON.stringify(C.trPlanVal_('kg', '92,5'))), { v: 92.5, c: 92.5 });
+  assert.equal(C.trPlanVal_('kg', 'BW').v, 'BW');
+  assert.equal(C.trPlanVal_('pct', '75').v, 0.75);                               // % z panelu → ułamek w arkuszu
+  assert.match(C.trPlanVal_('sets', '0').error, /1–40/);
+  assert.match(C.trPlanVal_('rpe', '8,3').error, /0,5/);
+  assert.equal(C.trPlanVal_('rpe', '').v, '');
+  // zmiana w jednej jednostce: tylko zmienione komórki, wiersze panelu z nowymi wartościami
+  let r = ed({ week: 9, day: 'T1', ex: [{ order: 1, kg: '92,5', sets: '4' }, { order: 2, note: 'wolno' }] });
+  assert.deepEqual(r.set, [[0, { kg: 92.5 }], [1, { uwagi: 'wolno' }]]);          // serie 4 = bez zmiany
+  assert.equal(r.n, 2); assert.deepEqual(r.weeks, [9]);
+  assert.deepEqual(r.rows[0], { week: 9, day: 'T1', order: 1, f: { kg: 92.5 } });
+  // kolejne tygodnie: kg i % o tę samą różnicę, reszta tak samo; inny blok, usunięte i zaczęte bez zmian
+  r = ed({ week: 9, day: 'T1', next: true, ex: [{ order: 1, kg: '92.5', pct: '72', reps: '4' }, { order: 2, kg: 'mini guma' }] });
+  const at = i => (r.set.find(x => x[0] === i) || [])[1];
+  assert.deepEqual(at(0), { kg: 92.5, procent: 0.72, powt: '4' });
+  assert.deepEqual(at(2), { kg: 95, procent: 0.74, powt: '4' });
+  assert.deepEqual(at(5), { kg: 97.5, procent: 0.76, powt: '4' });
+  assert.deepEqual(at(3), { kg: 'mini guma' }); assert.deepEqual(at(6), { kg: 'mini guma' });
+  [4, 7, 8, 9, 11].forEach(i => assert.equal(at(i), undefined, 'wiersz ' + i));
+  assert.deepEqual(r.weeks, [9, 10, 11]);
+  // notatka do jednostki: w pierwszym wierszu, inne wiersze jednostki czyszczone, tylko ten tydzień
+  r = ed({ week: 10, day: 'T1', ex: [], unote: ' Ostatnia seria bez walki ', next: true });
+  assert.deepEqual(r.set, [[2, { uwagi_jedn: 'Ostatnia seria bez walki' }]]); assert.equal(r.n, 1);
+  // blokady
+  assert.match(ed({ week: 8, day: 'T1', ex: [{ order: 1, kg: '80' }] }).error, /zrobiona/);
+  assert.match(ed({ week: 13, day: 'T1', ex: [{ order: 1, kg: '80' }] }).error, /zrobiona/);   // seria w Logu wystarczy
+  assert.match(ed({ week: 9, day: 'W1', ex: [{ order: 1, reps: '5' }] }).error, /własny/);
+  assert.match(ed({ week: 9, day: 'T9', ex: [] }).error, /Nie ma takiej jednostki/);
+  assert.match(ed({ week: 9, day: 'T1', ex: [{ order: 7, kg: '1' }] }).error, /nr 7/);
+  assert.match(ed({ week: 9, day: 'T1', ex: [{ order: 1, sets: '50' }] }).error, /Przysiad: Serie/);
+  assert.ok(C.TR_FNS.trPlan && !C.API_FNS.trPlan);                                 // tylko zalogowany trener
+});
