@@ -48,7 +48,7 @@ async function guard(p){
   finally { $('#busy').hidden = true; }
 }
 
-/* ---------- start i nawigacja (#pulpit, #filmy, #bloki, #klienci[/nowy|/<id>], #k/<id>/<zakładka>) ---------- */
+/* ---------- start i nawigacja (#dzis, #filmy, #bloki, #klienci[/nowy|/<id>], #k/<id>/<zakładka>) ---------- */
 async function start(){
   if (!tokenGet()) return login();
   $('#login').hidden = true; $('#app').hidden = false;
@@ -61,25 +61,49 @@ function errBox(e){ return '<div class="pg"><div class="card es"><b>Nie udało s
 function route(){
   if (!PUL) return;
   document.body.classList.remove('pvfs');
-  const h = (location.hash || '#pulpit').slice(1).split('/'), v = h[0];
-  document.querySelectorAll('#nav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === v || (v === 'k' && a.dataset.v === 'pulpit') ? 'page' : 'false'));
-  $('#n-filmy').textContent = PUL.videos.filter(x => !x.kom).length || '';
+  let h = (location.hash || '#dzis').slice(1).split('/'), v = h[0];
+  if (v === 'pulpit' || !v) v = 'dzis';                          // stary adres pulpitu = ekran Dziś
+  const kid = v === 'k' ? decodeURIComponent(h[1] || '') : '';
+  const sec = v === 'k' ? 'klienci' : v;                         // karta klienta należy do „Klienci”
+  document.querySelectorAll('#nav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === sec ? 'page' : 'false'));
+  $('#set').setAttribute('aria-current', v === 'ustawienia' ? 'page' : 'false');
+  document.querySelectorAll('#bnav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === (['wiecej', 'bloki', 'ustawienia'].includes(v) ? 'wiecej' : sec) ? 'page' : 'false'));
+  const nv = PUL.videos.filter(x => !x.kom).length || '';
+  $('#n-filmy').textContent = nv; $('#n-filmy-m').textContent = nv;
   $('#n-bloki').textContent = PUL.blocks.length || '';
-  $('#at').textContent = PUL.at ? 'Przeliczone ' + dowDm(PUL.at.slice(0, 10)) + ', ' + new Date(PUL.at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : 'Jeszcze nie przeliczone';
-  if (v === 'k') return renderKlient(decodeURIComponent(h[1] || ''), h[2] || 'przeglad');
+  railDraw(kid);
+  const t = PUL.at ? new Date(PUL.at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '';
+  $('#at').textContent = PUL.at ? 'dane z ' + (PUL.at.slice(0, 10) === PUL.today ? '' : dowDm(PUL.at.slice(0, 10)) + ', ') + t : 'jeszcze nie przeliczone';
+  $('#at-m').textContent = PUL.at ? (PUL.at.slice(0, 10) === PUL.today ? t : dm(PUL.at.slice(0, 10))) : '–';
+  $('#av').textContent = meInit();
+  if (v === 'k') return renderKlient(kid, h[2] || 'przeglad');
   if (v === 'filmy') return renderFilmy(h[1] || '');
   if (v === 'bloki') return renderBloki();
   if (v === 'ustawienia') return renderUstawienia();
   if (v === 'klienci') return renderKlienci(decodeURIComponent(h[1] || ''));
-  renderPulpit();
+  if (v === 'wiecej') return renderWiecej();
+  renderDzis();
+}
+/** lista klientów w menu po lewej (komputer): kropka = najpilniejszy sygnał, alfabetycznie */
+function railDraw(kid){
+  const cl = PUL.clients.slice().sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+  $('#rail-lb').hidden = !cl.length;
+  $('#rail-kl').innerHTML = cl.map(c => '<a href="#k/' + encodeURIComponent(c.id) + '" aria-current="' + (c.id === kid ? 'page' : 'false') + '"><span class="dot ' + lvOf(c) + '"></span>' + esc(c.name) + '</a>').join('');
+}
+/** inicjały zalogowanego trenera z biletu Google (imię i nazwisko, inaczej pierwsza litera adresu) */
+function meInit(){
+  try { const q = JSON.parse(decodeURIComponent(escape(atob(tokenGet().split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))));
+    const n = String(q.name || '').trim().split(/\s+/).filter(Boolean);
+    return (n.length ? n.slice(0, 2).map(x => x[0]).join('') : String(q.email || '?')[0]).toUpperCase(); } catch (e) { return '?'; }
 }
 window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
 document.addEventListener('click', e => {
   const r = e.target.closest('tr.row[data-k]'); if (r && !e.target.closest('a,button')) location.hash = '#k/' + encodeURIComponent(r.dataset.k);
   if (e.target.closest('[data-retry]')) start();
 });
-$('#recalc').onclick = async () => { try { PUL = await guard(api('trPrzelicz')); Object.keys(CK).forEach(k => delete CK[k]); route(); } catch (e) { if (!e.auth) alertBox(e); } };
-$('#logout').onclick = () => { tokenSet(''); try { google.accounts.id.disableAutoSelect(); } catch (e) {} PUL = null; login('Wylogowano.'); };
+async function recalc(){ try { PUL = await guard(api('trPrzelicz')); Object.keys(CK).forEach(k => delete CK[k]); route(); } catch (e) { if (!e.auth) alertBox(e); } }
+function logout(){ tokenSet(''); try { google.accounts.id.disableAutoSelect(); } catch (e) {} PUL = null; login('Wylogowano.'); }
+$('#recalc').onclick = recalc; $('#recalc-m').onclick = recalc; $('#logout').onclick = logout;
 function alertBox(e){ const d = document.createElement('div'); d.className = 'card err'; d.textContent = e.message; $('#main').prepend(d); setTimeout(() => d.remove(), 6000); }
 
 /* ---------- małe wykresy SVG ---------- */
@@ -115,16 +139,82 @@ const agoTxt = c => c.ago === null || c.ago === undefined || c.ago === '' ? 'bra
 const stLv = s => /dużo/.test(s) ? 'lv-bad' : /uwaga|lekko/.test(s) ? 'lv-warn' : /OK/.test(s) ? 'lv-ok' : '';
 function frac(s){ const m = /^(\d+)\/(\d+)$/.exec(String(s || '')); return m ? [+m[1], +m[2]] : [0, 0]; }
 function head(eb, title, tools){ return '<div class="top"><div><div class="eb">' + eb + '</div><h1>' + esc(title) + '</h1></div><div class="tools">' + (tools || '') + '</div></div>'; }
+const go = (href, t, cls) => '<a class="sb' + (cls ? ' ' + cls : '') + '" href="' + href + '">' + t + '</a>';
+const kHref = (id, tab) => '#k/' + encodeURIComponent(id) + (tab ? '/' + tab : '');
+const plN = (n, one, few, many) => n === 1 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many;
+const DOWL = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'];
+/** „Wymaga uwagi” na ekranie Dziś: czerwone sygnały, filmy bez komentarza, bloki do zamknięcia, koniec planu (odpowiedzi klientów: osobna karta pod spodem) */
 function todoItems(){
   const out = [];
-  PUL.clients.forEach(c => {
-    c.signals.filter(s => s.lv === 'bad').forEach(s => out.push([0, c.name + ': ' + s.t, 'czerwony sygnał', '#k/' + encodeURIComponent(c.id), 'Otwórz']));
-  });
-  const nv = {}; PUL.videos.filter(v => !v.kom).forEach(v => { nv[v.id] = (nv[v.id] || 0) + 1; });
-  PUL.clients.forEach(c => { if (nv[c.id]) out.push([1, c.name + ': ' + nv[c.id] + ' ' + (nv[c.id] === 1 ? 'film' : 'filmy') + ' bez komentarza', 'z 14 dni', '#filmy/' + encodeURIComponent(c.id), 'Filmy']); });
-  PUL.blocks.forEach(b => out.push([2, b.name + ': koniec bloku ' + b.block, (b.to < PUL.today ? 'skończył się ' : 'kończy się ') + dm(b.to) + ' · brak wniosków', '#k/' + encodeURIComponent(b.id) + '/bloki', 'Otwórz']));
-  PUL.clients.forEach(c => { if (c.planLeft !== null && c.planLeft >= 0 && c.planLeft <= 7) out.push([3, c.name + ': plan kończy się za ' + c.planLeft + ' dni', 'czas na kolejny blok', '#k/' + encodeURIComponent(c.id), 'Otwórz']); });
-  return out.sort((a, b) => a[0] - b[0]);
+  PUL.clients.forEach(c => c.signals.filter(s => s.lv === 'bad').forEach(s => out.push({ o: 0, lv: 'lv-bad', t: c.name + ': ' + s.t, d: 'czerwony sygnał', a: go(kHref(c.id), 'Otwórz') })));
+  const nv = {}; PUL.videos.filter(v => !v.kom).forEach(v => { (nv[v.id] = nv[v.id] || []).push(v); });
+  PUL.clients.forEach(c => { const v = nv[c.id]; if (!v) return;
+    const ex = [...new Set(v.map(x => x.ex))], od = v.map(x => x.at).sort()[0];
+    out.push({ o: 1, lv: 'lv-warn', t: c.name + ': ' + v.length + ' ' + plN(v.length, 'film', 'filmy', 'filmów') + ' bez komentarza', d: ex.slice(0, 2).join(', ') + (ex.length > 2 ? ' i inne' : '') + ' · od ' + dowDm(od), a: go('#filmy/' + encodeURIComponent(c.id), 'Filmy') }); });
+  PUL.blocks.forEach(b => out.push({ o: 3, lv: 'lv-warn', t: b.name + ': blok ' + b.block + ' do zamknięcia', d: (b.to < PUL.today ? 'skończył się ' : 'kończy się ') + dowDm(b.to) + ' · brak wniosków', a: go(kHref(b.id, 'bloki'), 'Zamknij') }));
+  PUL.clients.forEach(c => { if (c.planLeft !== null && c.planLeft >= 0 && c.planLeft <= 7) out.push({ o: 4, lv: 'lv-warn', t: c.name + ': plan kończy się ' + (c.planLeft === 0 ? 'dziś' : 'za ' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni')), d: 'czas na kolejny blok', a: go(kHref(c.id, 'bloki'), 'Następny') }); });
+  return out.sort((a, b) => a.o - b.o);
+}
+/** „Dziś trenują”: jednostki z datą na dziś albo zaczęte dziś (trPulpit_ → dzis), w trakcie na górze */
+function dzisRow(u){
+  const c = PUL.clients.find(x => x.id === u.id) || { red: 0, urg: 0 };
+  const exN = u.ex ? u.ex + ' ' + plN(u.ex, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń') : '';
+  const st = u.st === 'done' ? 'zrobiony' + (u.min ? ', ' + pl(u.min) + ' min' : '') + (u.rpe !== null && u.rpe !== undefined ? ', RPE ' + pl(u.rpe) : '')
+    : u.st === 'live' ? 'w trakcie, ' + u.done + (u.sets ? ' z ' + u.sets : '') + ' ' + plN(u.sets || u.done, 'serii', 'serii', 'serii') : 'czeka';
+  const sub = [u.title, u.st === 'wait' ? exN : '', st].filter(Boolean).join(' · ');
+  const bar = u.st === 'live' && u.sets ? '<span class="dbar"><i style="width:' + Math.min(100, Math.round(u.done / u.sets * 100)) + '%"></i></span>' : '';
+  // miejsce na „Prowadź” (trening na żywo z telefonu trenera): na razie przycisk prowadzi do planu klienta
+  const act = u.st === 'wait' ? go(kHref(u.id, 'plan'), 'Plan', 'acc') : u.st === 'live' ? go(kHref(u.id), 'Podgląd') : go(kHref(u.id, 'sesje'), 'Sesja');
+  return '<div class="dr" data-dz="' + esc(u.id + '|' + u.week + '|' + u.day) + '"><span class="ini ' + lvOf(c) + '">' + esc((u.name || '?')[0].toUpperCase()) + '<i></i></span>' +
+    '<div class="tx"><b>' + esc(u.name) + '</b><small>' + esc(sub) + '</small>' + bar + '</div>' + act + '</div>';
+}
+function renderDzis(){
+  const cl = PUL.clients, wk = cl.reduce((a, c) => { const f = frac(c.week); return [a[0] + f[0], a[1] + f[1]]; }, [0, 0]);
+  const red = cl.reduce((a, c) => a + c.red, 0), nov = PUL.videos.filter(v => !v.kom).length, idle = cl.filter(c => c.ago !== null && c.ago >= 7).length;
+  const st = (lv, v, t, href, extra) => { const tag = href ? 'a' : 'div'; return '<' + tag + ' class="st ' + lv + (extra || '') + '"' + (href ? ' href="' + href + '"' : '') + '><b>' + v + '</b><span>' + t + '</span></' + tag + '>'; };
+  const stats = '<div class="stats" aria-label="Ten tydzień w liczbach">' +
+    st('', wk[0] + '/' + wk[1], 'treningi w tym tygodniu') +
+    st(red ? 'lv-bad' : '', red, plN(red, 'czerwony sygnał', 'czerwone sygnały', 'czerwonych sygnałów')) +
+    st(nov ? 'lv-warn' : '', nov, 'filmy bez komentarza', '#filmy') +
+    st(PUL.blocks.length ? 'lv-warn' : '', PUL.blocks.length, 'bloki do zamknięcia', '#bloki') +
+    st(idle ? 'lv-warn' : '', idle, 'bez treningu 7+ dni', '', ' st5') + '</div>';
+  const dz = PUL.dzis || [];
+  const today = '<div class="card dz-tr"><h2>Dziś trenują · ' + dz.length + '</h2>' + (dz.length ? '<div class="drs">' + dz.map(dzisRow).join('') + '</div>'
+    : '<p class="muted">Nikt nie ma dziś treningu w planie i nikt jeszcze nic nie zapisał.</p>') + '</div>';
+  const td = todoItems(), todo = '<div class="card todo"><h2>Wymaga uwagi · ' + td.length + '</h2>' + (td.length ? td.map(t =>
+    '<div class="it"><span class="dot ' + t.lv + '"></span><div class="tx"><b>' + esc(t.t) + '</b><small>' + esc(t.d) + '</small></div>' + t.a + '</div>').join('') : '<p class="muted">Nic pilnego.</p>') + '</div>';
+  const rows = cl.map(c => {
+    const f = frac(c.week), sg = (c.status && stLv(c.status) !== 'lv-ok' ? '<span class="pill ' + stLv(c.status) + '">' + esc(c.status) + '</span>' : '') +
+      c.signals.slice(0, 3).map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('') +
+      (c.signals.length > 3 ? '<span class="pill">+' + (c.signals.length - 3) + '</span>' : '');
+    return '<tr class="row" data-k="' + esc(c.id) + '"><td><a class="who ' + lvOf(c) + '" href="' + kHref(c.id) + '"><span class="dot"></span>' + esc(c.name) + '</a></td>' +
+      '<td class="nw hide-m">' + agoTxt(c) + '</td>' +
+      '<td class="nw"><span class="prog"><i style="width:' + (f[1] ? Math.round(f[0] / f[1] * 100) : 0) + '%"></i></span><span class="mono">' + esc(c.week || '–') + '</span></td>' +
+      '<td class="sigs">' + (sg || '<span class="pill lv-ok">bez sygnałów</span>') + '</td>' +
+      '<td class="nw hide-m">' + (c.planLeft === null ? '–' : c.planLeft < 0 ? 'skończony' : 'za ' + c.planLeft + ' dni') + '</td></tr>';
+  }).join('');
+  const table = '<div class="card"><h2>Klienci · najpilniejsi na górze</h2><div class="tw"><table class="kt"><thead><tr><th>Klient</th><th class="hide-m">Ostatnio</th><th>Ten tydzień</th><th>Sygnały</th><th class="hide-m">Koniec planu</th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="5" class="muted">Brak aktywnych klientów w Przeglądzie. Użyj „przelicz”.</td></tr>') + '</tbody></table></div></div>';
+  const heat = '<details class="card heatc"><summary><h2>Obciążenie · 12 tygodni</h2></summary><div class="heat" role="img" aria-label="sRPE tygodnia każdego klienta w ostatnich 12 tygodniach">' + cl.map(c => {
+    const mx = Math.max(0, ...c.load.map(x => x.srpe || 0));
+    return '<span title="' + esc(c.name) + '">' + esc(c.name) + '</span>' + c.load.map(x => { const v = x.srpe || 0, lv = !mx || !v ? '' : 'h' + Math.min(4, Math.ceil(v / mx * 4));
+      return '<i class="' + lv + '" title="' + esc(c.name + ' · tydz. od ' + dm(x.week) + ': ' + (x.srpe === null ? 'brak' : x.srpe + ' AU') + (x.status ? ' · ' + x.status : '')) + '"></i>'; }).join('');
+  }).join('') + '</div><div class="legend">sRPE tygodnia względem najcięższego tygodnia tej osoby; puste = brak danych. Od ' + esc(dm(PUL.weeks[0])) + ' do ' + esc(dm(PUL.weeks[11])) + '.</div></details>';
+  const d = new Date(PUL.today + 'T12:00:00Z');
+  $('#main').innerHTML = head(DOWL[d.getUTCDay()] + ' ' + dm(PUL.today) + ' · tydzień ' + dm(PUL.weeks[11]) + '–' + dm(TL.addDays(PUL.weeks[11], 6)), 'Dziś') +
+    '<div class="pg">' + stats + '<div class="dz"><div class="stack dz-l">' + today + table + heat + '</div><div class="stack dz-r">' + todo + repliesCard() + '</div></div></div>';
+  document.querySelectorAll('[data-rvk]').forEach(a => a.onclick = () => { VALL = true; VSEL = a.dataset.rvk; });   // skomentowany film: lista „Wszystkie”, od razu ten film
+}
+/** „Więcej” (telefon): bloki, ustawienia, mój trening, przeliczenie, wylogowanie */
+function renderWiecej(){
+  const ic = n => document.querySelector('#nav a[data-v="' + n + '"] svg, #' + n + ' svg') ? document.querySelector('#nav a[data-v="' + n + '"] svg, #' + n + ' svg').outerHTML : '';
+  $('#main').innerHTML = head('Panel trenera', 'Więcej') + '<div class="pg"><div class="card mo">' +
+    '<a href="#bloki">' + ic('bloki') + 'Bloki do zamknięcia<em>' + (PUL.blocks.length || '') + '</em></a>' +
+    '<a href="#ustawienia">' + ic('set') + 'Ustawienia</a>' +
+    '<a href="./">' + ic('mine') + 'Mój trening ›</a>' +
+    '<button type="button" id="recalc-w">' + $('#recalc-m svg').outerHTML + 'Przelicz dane teraz<small>' + esc($('#at').textContent) + '</small></button>' +
+    '<button type="button" id="logout-w"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 0 00-2 2v10a2 2 0 002 2h4M15 8l4 4-4 4M19 12H9"/></svg>Wyloguj</button></div></div>';
+  $('#recalc-w').onclick = recalc; $('#logout-w').onclick = logout;
 }
 /** odpowiedź klienta na komentarz trenera (Log / Sesje odpowiedz_klienta), pokazywana pod komentarzem */
 const repBox = (text, at, name) => text ? '<div class="rep"><div class="eb">↩ ' + esc(name || 'Klient') + ' odpowiada' + (at ? ' · ' + esc(dowDm(String(at).slice(0, 10))) : '') + '</div><p>' + esc(text) + '</p></div>' : '';
@@ -136,41 +226,6 @@ function repliesCard(){
     '<a class="sb" href="' + go(r) + '"' + (r.film ? ' data-rvk="' + esc(r.file + '|' + r.set) + '"' : '') + ' style="display:inline-flex;align-items:center;text-decoration:none">' + (r.film ? 'Film ›' : 'Sesja ›') + '</a></div>').join('')
     : '<p class="muted">Klienci nie odpowiadali na komentarze w ostatnich 14 dniach.</p>') + '</div>';
 }
-function renderPulpit(){
-  const cl = PUL.clients, wk = cl.reduce((a, c) => { const f = frac(c.week); return [a[0] + f[0], a[1] + f[1]]; }, [0, 0]);
-  const red = cl.reduce((a, c) => a + c.red, 0), nov = PUL.videos.filter(v => !v.kom).length, idle = cl.filter(c => c.ago !== null && c.ago >= 7).length;
-  const kp = (lv, t, v, s) => '<div class="kp ' + lv + '"><span>' + t + '</span><b>' + v + '</b><small>' + s + '</small></div>';
-  const kpis = '<div class="kpis">' +
-    kp('', 'Treningi w tym tyg.', wk[0] + '/' + wk[1], wk[1] ? Math.round(wk[0] / wk[1] * 100) + '% jednostek z planu' : 'brak jednostek w planie') +
-    kp(red ? 'lv-bad' : '', 'Czerwone sygnały', red, red ? cl.filter(c => c.red).map(c => c.name).join(', ') : 'ból, FAIL, zmęczenie: brak') +
-    kp(nov ? 'lv-warn' : '', 'Filmy bez komentarza', nov, 'z 14 dni, ' + PUL.videos.length + ' razem') +
-    kp(PUL.blocks.length ? 'lv-warn' : '', 'Bloki do zamknięcia', PUL.blocks.length, PUL.blocks.map(b => b.block + ' · ' + b.name).join(', ') || 'wnioski wpisane') +
-    kp(idle ? 'lv-warn' : '', 'Bez treningu 7+ dni', idle, idle ? cl.filter(c => c.ago !== null && c.ago >= 7).map(c => c.name).join(', ') : 'wszyscy trenują') + '</div>';
-  const rows = cl.map(c => {
-    const f = frac(c.week), sg = c.signals.slice(0, 3).map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('') +
-      (c.signals.length > 3 ? '<span class="pill">+' + (c.signals.length - 3) + '</span>' : '');
-    return '<tr class="row" data-k="' + esc(c.id) + '"><td><a class="who ' + lvOf(c) + '" href="#k/' + encodeURIComponent(c.id) + '"><span class="dot"></span>' + esc(c.name) + '</a></td>' +
-      '<td class="nw">' + agoTxt(c) + '</td>' +
-      '<td class="nw"><span class="prog"><i style="width:' + (f[1] ? Math.round(f[0] / f[1] * 100) : 0) + '%"></i></span><span class="mono">' + esc(c.week || '–') + '</span></td>' +
-      '<td>' + spark(c.load.slice(-6).map(x => x.srpe)) + '</td>' +
-      '<td>' + (c.status ? '<span class="pill ' + stLv(c.status) + '">' + esc(c.status) + '</span>' : '<span class="muted">–</span>') + '</td>' +
-      '<td class="sigs">' + (sg || '<span class="muted">bez sygnałów</span>') + '</td>' +
-      '<td class="nw">' + (c.films ? c.films + (c.filmsNew ? ' <span class="muted">(' + c.filmsNew + ' nowe)</span>' : '') : '–') + '</td>' +
-      '<td class="nw">' + (c.planLeft === null ? "–" : c.planLeft < 0 ? "skończony" : "za " + c.planLeft + " dni") + '</td></tr>';
-  }).join('');
-  const table = '<div class="card"><h2>Klienci · najpilniejsi na górze</h2><div class="tw"><table><thead><tr><th>Klient</th><th>Ostatnio</th><th>Ten tydzień</th><th>sRPE 6 tyg.</th><th>Status</th><th>Sygnały</th><th>Filmy 7 dni</th><th>Koniec planu</th></tr></thead><tbody>' +
-    (rows || '<tr><td colspan="8" class="muted">Brak aktywnych klientów w Przeglądzie. Użyj „Przelicz teraz”.</td></tr>') + '</tbody></table></div></div>';
-  const heat = '<div class="card"><h2>Obciążenie · 12 tygodni</h2><div class="heat" role="img" aria-label="sRPE tygodnia każdego klienta w ostatnich 12 tygodniach">' + cl.map(c => {
-    const mx = Math.max(0, ...c.load.map(x => x.srpe || 0));
-    return '<span title="' + esc(c.name) + '">' + esc(c.name) + '</span>' + c.load.map(x => { const v = x.srpe || 0, lv = !mx || !v ? '' : 'h' + Math.min(4, Math.ceil(v / mx * 4));
-      return '<i class="' + lv + '" title="' + esc(c.name + ' · tydz. od ' + dm(x.week) + ': ' + (x.srpe === null ? 'brak' : x.srpe + ' AU') + (x.status ? ' · ' + x.status : '')) + '"></i>'; }).join('');
-  }).join('') + '</div><div class="legend">sRPE tygodnia względem najcięższego tygodnia tej osoby; puste = brak danych. Od ' + esc(dm(PUL.weeks[0])) + ' do ' + esc(dm(PUL.weeks[11])) + '.</div></div>';
-  const td = todoItems(), todo = '<div class="card todo"><h2>Do zrobienia</h2>' + (td.length ? td.map(t => '<div class="it"><div>' + esc(t[1]) + '</div><a class="sb" href="' + t[3] + '" style="display:inline-flex;align-items:center;text-decoration:none">' + t[4] + '</a><div class="d">' + esc(t[2]) + '</div></div>').join('') : '<p class="muted">Nic pilnego.</p>') + '</div>';
-  $('#main').innerHTML = head(dowDm(PUL.today) + ' · tydzień ' + dm(PUL.weeks[11]) + '–' + dm(TL.addDays(PUL.weeks[11], 6)), 'Pulpit') +
-    '<div class="pg">' + kpis + '<div class="cols"><div class="stack">' + table + heat + '</div><div class="stack">' + todo + repliesCard() + '</div></div></div>';
-  document.querySelectorAll('[data-rvk]').forEach(a => a.onclick = () => { VALL = true; VSEL = a.dataset.rvk; });   // skomentowany film: lista „Wszystkie”, od razu ten film
-}
-
 /* ---------- filmy ---------- */
 /* ---------- filmy: własny odtwarzacz (film z Drive API przez bilet trFilm) i komentarz z sekundą (trKomentarzFilm) ---------- */
 const FPS = 30;                                  // krok „klatka” (filmy z telefonu: zwykle 30 kl./s)
@@ -322,7 +377,7 @@ function playerBind(v, redraw){
     const mx = (Z.s - 1) * st.clientWidth / 2, my = (Z.s - 1) * st.clientHeight / 2; Z.x = Math.min(mx, Math.max(-mx, Z.x)); Z.y = Math.min(my, Math.max(-my, Z.y));
     vid.style.transform = Z.s === 1 ? '' : 'translate(' + Z.x + 'px,' + Z.y + 'px) scale(' + Z.s + ')';
     zl.hidden = Z.s === 1; zl.textContent = pl(Z.s.toFixed(1)) + '× · dotknij dwa razy, żeby wrócić'; };
-  const tick = () => { const d = vid.duration || 0; $('#pvt').textContent = tFmt(vid.currentTime, true); if (d) { rng.max = d; rng.value = vid.currentTime; rng.style.setProperty('--p', (vid.currentTime / d * 100) + '%'); }
+  const tick = () => { if (!vid.isConnected || !$('#pvt')) return; const d = vid.duration || 0; $('#pvt').textContent = tFmt(vid.currentTime, true); if (d) { rng.max = d; rng.value = vid.currentTime; rng.style.setProperty('--p', (vid.currentTime / d * 100) + '%'); }
     pv.querySelector('[data-pv="play"]').textContent = vid.paused ? '▶' : '❚❚'; pv.querySelector('[data-pv="play"]').setAttribute('aria-label', vid.paused ? 'Odtwarzaj' : 'Pauza');
     const w = $('#kf-ins'); if (w) w.textContent = '⏱ Wstaw chwilę ' + tFmt(vid.currentTime); };
   let raf = 0; const loop = () => { tick(); raf = vid.paused ? 0 : requestAnimationFrame(loop); };
@@ -333,7 +388,7 @@ function playerBind(v, redraw){
     vid.style.width = Math.round(w) + 'px'; vid.style.height = Math.round(h) + 'px'; };
   if (window.ResizeObserver) new ResizeObserver(fit).observe(st);
   vid.addEventListener('resize', fit);
-  vid.addEventListener('loadedmetadata', () => { $('#pvd').textContent = tFmt(vid.duration, true); fit(); marks(); tick(); noPic(); });
+  vid.addEventListener('loadedmetadata', () => { if (!vid.isConnected || !$('#pvd')) return; $('#pvd').textContent = tFmt(vid.duration, true); fit(); marks(); tick(); noPic(); });
   vid.addEventListener('loadeddata', noPic);
   vid.addEventListener('play', () => { if (!raf) raf = requestAnimationFrame(loop); tick(); });
   vid.addEventListener('pause', tick); vid.addEventListener('seeked', tick);
@@ -522,14 +577,14 @@ async function renderKlienci(sub){
   const on = KL.filter(k => k.on).length, off = KL.length - on;
   const rows = KL.slice().sort((a, b) => (b.on - a.on) || a.name.localeCompare(b.name, 'pl')).map(k => {
     const c = PUL.clients.find(x => x.id === k.id);
-    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="#klienci/' + encodeURIComponent(k.id) + '"><span class="dot ' + (k.on ? 'lv-ok' : '') + '"></span>' + esc(k.name) + '</a><div class="flags mono">' + esc(k.id) + '</div></td>' +
+    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="' + (k.on ? kHref(k.id) : '#klienci/' + encodeURIComponent(k.id)) + '"><span class="dot ' + (k.on ? 'lv-ok' : '') + '"></span>' + esc(k.name) + '</a><div class="flags mono">' + esc(k.id) + '</div></td>' +
       '<td class="flags">' + (k.on ? '' : '<b>nieaktywny</b> · ') + esc(klFlags(k)) + '</td>' +
       '<td class="nw hide-m">' + (c ? agoTxt(c) : '–') + '</td><td class="nw hide-m">' + (!c || c.planLeft === null ? '–' : c.planLeft < 0 ? 'skończony' : 'za ' + c.planLeft + ' dni') + '</td>' +
       '<td class="nw"><span class="lk">' + (k.on ? cpBtn(k) : '') + '<a class="cp" href="#klienci/' + encodeURIComponent(k.id) + '">Ustawienia ›</a></span></td></tr>';
   }).join('');
   $('#main').innerHTML = head(on + ' ' + (on === 1 ? 'aktywny' : 'aktywnych') + (off ? ' · ' + off + ' ' + (off === 1 ? 'nieaktywny' : 'nieaktywnych') : ''), 'Klienci', '<a class="b p" ' + klLink + ' href="#klienci/nowy">+ Nowy klient</a>') +
     '<div class="pg"><div class="card">' + (rows ? '<div class="tw"><table class="kl"><thead><tr><th>Klient</th><th>Ustawienia</th><th class="hide-m">Ostatni trening</th><th class="hide-m">Koniec planu</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '<p class="legend">„Kopiuj link” kopiuje link do aplikacji tej osoby, gotowy do wklejenia w SMS albo WhatsApp. Nieaktywny klient nie wejdzie do aplikacji, ale jego dane zostają.</p>'
+      '<p class="legend">Imię otwiera kartę klienta (plan, sesje, bloki). „Kopiuj link” kopiuje link do aplikacji tej osoby, gotowy do wklejenia w SMS albo WhatsApp. Nieaktywny klient nie wejdzie do aplikacji, ale jego dane zostają.</p>'
       : '<div class="es"><b>Nie ma jeszcze klientów</b>Dodaj pierwszego przyciskiem „+ Nowy klient”.</div>') + '</div></div>';
   klBind();
 }

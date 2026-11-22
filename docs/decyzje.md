@@ -8,6 +8,14 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Rundę zapisuje ✓ w tabeli albo ocena na pełnym ekranie; ocena nie kopiuje się z poprzedniej rundy (dawniej wszystkie rundy dostawały ocenę pierwszej).
 - Pełny ekran włącza się sam po „Start minut” (ustalenie 22.11). Jasny motyw zostaje jasny, bo czarne cyfry na jasnym tle czyta się z daleka najlepiej.
 
+## 2026-11-22 · Nowy układ panelu trenera: menu i ekran „Dziś” (v81)
+
+- Damianowi nie podobał się wygląd i układ panelu. Wybrał (przegląd v80, punkt 2) wykonanie według szkiców, w 3 PR-ach: menu + „Dziś”, potem karta klienta + Plan, potem reszta ekranów.
+- Komputer: menu po lewej z listą klientów. Telefon: menu na dole (Dziś, Klienci, Filmy, Więcej) zamiast przewijanego paska zakładek u góry.
+- „Dziś” zamiast pulpitu: najpierw kto dziś trenuje i co wymaga reakcji, wąski pasek liczb zamiast pięciu dużych kafli; obciążenie 12 tygodni zwinięte.
+- „Prowadź” (trening na żywo z telefonu trenera) to osobny punkt 3; w tym PR przycisk w tym miejscu otwiera plan klienta.
+- Odpowiedzi klientów nie są dublowane w „Wymaga uwagi”: mają własną kartę tuż pod spodem.
+
 ## 2026-11-22 · Przegląd v80 i zapis do arkusza jako tekst
 
 - Przegląd całej aplikacji (wygląd, układ, bezpieczeństwo, baza ćwiczeń) dał listę 17 punktów (`docs/stan.md`, „Do zrobienia”). Damian wybrał 22.11 kolejność: punkt 1 od razu, potem nowy układ panelu trenera i trening na żywo z telefonu; baza ćwiczeń może iść równolegle.

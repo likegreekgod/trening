@@ -1030,6 +1030,36 @@ test('trPulpit_: klienci z Przeglądu, sygnały czerwone i pomarańczowe, 12 tyg
   assert.equal(r.replies[1].file + '|' + r.replies[1].set, '1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765|1');
 });
 
+test('trDzis_: kto dziś trenuje (plan z datą, serie zapisane dziś, sesja zaczęta dziś) i w jakim stanie', () => {
+  const today = '2026-11-22', d10 = v => String(v).slice(0, 10);
+  const kl = [{ klient_id: 'ania', imie: 'Ania' }, { klient_id: 'bartek', imie: 'Bartek' }, { klient_id: 'celina', imie: 'Celina' },
+    { klient_id: 'darek', imie: 'Darek' }, { klient_id: 'ewa', imie: 'Ewa', aktywny: 'NIE' }];
+  const P = (klient, tydzien, jednostka, data, cw, serie, extra) => Object.assign({ klient, tydzien, jednostka, tytul: jednostka === 'T1' ? 'Nogi' : 'Góra', data, cwiczenie: cw, serie, zrodlo: '' }, extra || {});
+  const plan = [
+    P('ania', 12, 'T1', today, 'Przysiad', 4), P('ania', 12, 'T1', today, 'Wiosłowanie', 3), P('ania', 12, 'T1', today, 'Dodane', 3, { zrodlo: 'dodane' }),
+    P('ania', 12, 'T2', '2026-11-24', 'Wyciskanie', 3),                                   // inny dzień: nie dziś
+    P('bartek', 4, 'T1', today, 'Rwanie', 5), P('bartek', 4, 'T1', today, 'Usunięte', 3, { zrodlo: 'usuniete' }),
+    P('celina', 7, 'T2', '2026-11-20', 'Wyciskanie', 3), P('celina', 7, 'T2', '2026-11-20', 'Podciąganie', 3),   // przesunięta: zaczęta dziś
+    P('darek', 3, 'W1', today, 'Pompki', 3, { zrodlo: 'klient', tytul: '' }),             // własny z datą dziś, ale bez serii: nie
+    P('ewa', 2, 'T1', today, 'Przysiad', 3)                                               // nieaktywna
+  ];
+  const L = (klient, tydzien, jednostka, seria, extra) => Object.assign({ klient, tydzien, jednostka, seria, zapisano: today + 'T09:00:00Z', wykonane: 'TAK', kg: 60, powt: 5, typ: '' }, extra || {});
+  const log = [
+    L('celina', 7, 'T2', 1), L('celina', 7, 'T2', 2), L('celina', 7, 'T2', 'R1'), L('celina', 7, 'T2', 'D1'), L('celina', 7, 'T2', 3, { wykonane: '', kg: '', powt: '' }),
+    L('bartek', 4, 'T1', 1), L('bartek', 4, 'T1', 0, { typ: 'SKIP' }),
+    L('darek', 1, 'W1', 1, { zapisano: '2026-11-15T09:00:00Z' })
+  ];
+  const ses = [{ klient: 'bartek', tydzien: 4, jednostka: 'T1', start: today + 'T07:00:00Z', czas_min: 55, rpe_sesji: 8 },
+    { klient: 'ania', tydzien: 11, jednostka: 'T1', start: '2026-11-18T07:00:00Z', czas_min: 50, rpe_sesji: 7 }];
+  const r = C.trDzis_(kl, plan, log, ses, today, d10);
+  assert.deepEqual(plain(r.map(u => [u.name, u.week + u.day, u.title, u.st, u.ex, u.sets, u.done, u.rpe, u.min])), [
+    ['Celina', '7T2', 'Góra', 'live', 2, 6, 2, null, null],      // w trakcie na górze; rozgrzewka, drop i nieodhaczona pusta nie liczą się
+    ['Ania', '12T1', 'Nogi', 'wait', 2, 7, 0, null, null],       // dodane przez klienta nie liczy się do planu
+    ['Bartek', '4T1', 'Nogi', 'done', 1, 5, 1, 8, 55]
+  ]);
+  assert.deepEqual(C.trDzis_(kl, [], [], [], today, d10), []);
+});
+
 test('doGet: stary link dostaje zwykły tekst (bez strony HtmlService, więc bez google.script.run)', () => {
   // Atrapy usług Google: doGet nie może sięgnąć po HtmlService, bo z takiej strony da się wywołać każdą funkcję skryptu.
   const out = [];
