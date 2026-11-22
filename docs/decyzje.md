@@ -3,6 +3,13 @@
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
 
+## 2026-11-22 · Proponowana rozgrzewka przy ćwiczeniu A (v74)
+
+- Punkt 2 z listy usprawnień z 18.11. Szkic zaakceptowany bez zmian 22.11.
+- Tylko propozycja: pasek „Rozgrzewka” z krokami i „Wstaw (n)”, a nie wiersze wstawione same, żeby karta nie rosła u klientów, którzy rozgrzewają się po swojemu. Zapis bez zmian (R1…, bez świateł, bez przerwy, poza tonażem i rekordami).
+- Schemat (lib `warmupSets`): sam gryf × 8 (boje × 5), ok. 40% × 5, 60% × 3, 80% × 2 ciężaru z planu, przy ≤ 3 powt. i ≥ 100 kg jeszcze 90% × 1; kg w dół do 2,5; krok bliżej niż 5 kg od poprzedniego albo od ciężaru roboczego odpada; poniżej gryf + 10 kg brak propozycji. Gryf z ustawień „Talerze” (20/15 kg). Hantle, kettle, maszyna, wyciąg (`noBar`, po nazwie) bez kroku „gryf”, od 10 kg.
+- Tylko prio A z liczbą kg w planie (bez BW, „max”, ćwiczeń na czas). B i K bez propozycji.
+
 ## 2026-11-20 · Odpowiedź klienta na komentarz trenera (v73)
 
 - Punkt 1 z listy usprawnień z 18.11. Szkic zaakceptowany bez zmian 20.11.
