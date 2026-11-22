@@ -808,7 +808,7 @@ function menuLinki() {
 
 function menuWyzwalacze() {
   instalujWyzwalacze();
-  alert_('Wyzwalacze', 'Zainstalowano: podsumowanie i przegląd codziennie ok. 5:00, plany z Drive co 15 min.');
+  alert_('Wyzwalacze', 'Zainstalowano: podsumowanie i przegląd codziennie ok. 5:00, plany z Drive co 15 min, poranny mail do klientów ok. ' + mailGodz_() + ':00 (tylko klienci z włączonym mailem w panelu → Klienci).');
 }
 
 /**
@@ -824,6 +824,9 @@ function diagnose_(d) {
   const ids = {};
   (d.klienci || []).forEach(k => { if (!blank_(k.klient_id)) ids[lc(k.klient_id)] = (ids[lc(k.klient_id)] || 0) + 1; });
   Object.keys(ids).forEach(id => { if (ids[id] > 1) add('błąd', 'Powtórzone klient_id „' + id + '” w zakładce Klienci (' + ids[id] + ' wiersze).'); });
+  const mailOn = active.filter(k => String(k.mail_rano || '').trim().toUpperCase() === 'TAK');
+  if (mailOn.length && d.triggers && (d.triggers || []).indexOf('porannyMail') < 0) add('błąd', 'Brak wyzwalacza „porannyMail”: poranny mail nie wyjdzie (menu Trening → Zainstaluj wyzwalacze).');
+  mailOn.forEach(k => { if (!mailOk_(k.email)) add('uwaga', lc(k.klient_id) + ': poranny mail włączony, ale brak poprawnego adresu w kolumnie email.'); });
   active.forEach(k => {
     const id = lc(k.klient_id);
     if (!/^k[0-9a-f]{11}$/.test(String(k.klucz))) add('błąd', id + ': brak poprawnego klucza (uruchom setup w edytorze albo dodaj klienta z menu).');
@@ -869,13 +872,14 @@ function sprawdzArkusz() {
 
 function instalujPodsumowanie() { instalujWyzwalacze(); }
 
-/** Uruchom raz: podsumowanie codziennie ok. 5:00, wczytywanie planów z Drive co 15 min. */
+/** Uruchom raz: podsumowanie codziennie ok. 5:00, wczytywanie planów z Drive co 15 min, poranny mail do klientów (Mail.gs). */
 function instalujWyzwalacze() {
   ScriptApp.getProjectTriggers().filter(t => ['podsumowanie', 'wczytajPlany'].indexOf(t.getHandlerFunction()) >= 0)
     .forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('podsumowanie').timeBased().everyDays(1).atHour(5).create();
   ScriptApp.newTrigger('wczytajPlany').timeBased().everyMinutes(15).create();
-  Logger.log('OK: podsumowanie codziennie ~5:00, plany z „' + ROOT_FOLDER_NAME + '/_plany” co 15 min.');
+  mailWyzwalacz_(mailGodz_());
+  Logger.log('OK: podsumowanie codziennie ~5:00, plany z „' + ROOT_FOLDER_NAME + '/_plany” co 15 min, poranny mail ~' + mailGodz_() + ':00.');
 }
 
 /** e: zdarzenie wyzwalacza czasowego (wtedy idzie też alert mailowy); z menu bez argumentu. */

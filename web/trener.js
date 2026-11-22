@@ -437,7 +437,7 @@ function renderBloki(){
 let AIS = null, AIM = { ok: '', err: '', busy: false, del: false };
 async function renderUstawienia(){
   if (!AIS) { $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
-    try { AIS = await guard(api('trAI')); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + errBox(e); return; }
+    try { [AIS, MS] = await Promise.all([guard(api('trAI')), guard(api('trMail'))]); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + errBox(e); return; }
     if (!location.hash.startsWith('#ustawienia')) return; }
   const a = AIS, m = AIM, dis = m.busy ? ' disabled' : '';
   $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="card" id="aikey-card" style="max-width:640px"><h2>Szkic AI · klucz Claude API</h2>' +
@@ -447,7 +447,7 @@ async function renderUstawienia(){
     (a.set ? '<button class="b" type="button" id="aikey-del"' + dis + '>' + (m.del ? 'Na pewno usunąć?' : 'Usuń klucz') + '</button>' : '') + '</div>' +
     (m.ok ? '<p class="saved" role="status">' + esc(m.ok) + '</p>' : '') + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '') +
     '<p class="legend">Klucz założysz na <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> → API Keys → Create Key. Przed zapisem sprawdzam go w Anthropic (bez opłaty). ' +
-    'Klucz trafia do ustawień skryptu arkusza, nie do arkusza ani do tej strony: tutaj widać tylko 4 ostatnie znaki.</p></div></div>';
+    'Klucz trafia do ustawień skryptu arkusza, nie do arkusza ani do tej strony: tutaj widać tylko 4 ostatnie znaki.</p></div>' + mailCard() + '</div>';
   const save = async key => {
     Object.assign(AIM, { busy: true, ok: '', err: '', del: false }); renderUstawienia();
     try { const r = await guard(api('trUstawAI', key)); AIS = r;
@@ -457,18 +457,42 @@ async function renderUstawienia(){
   };
   $('#aikey-save').onclick = () => { const k = $('#aikey').value.trim(); if (!k) { Object.assign(AIM, { err: 'Wklej klucz.', ok: '' }); renderUstawienia(); return; } save(k); };
   const del = $('#aikey-del'); if (del) del.onclick = () => { if (!AIM.del) { Object.assign(AIM, { del: true, ok: '', err: '' }); renderUstawienia(); return; } save(''); };
+  document.querySelectorAll('[data-hour]').forEach(b => b.onclick = async () => {
+    const h = Number(b.dataset.hour); if (!MS || h === MS.hour || MH.busy) return;
+    MH = { busy: true, ok: '', err: '' }; renderUstawienia();
+    try { MS = await guard(api('trMailUstaw', h)); MH = { busy: false, ok: '✓ Zapisano. Mail wychodzi teraz ok. ' + h + ':00.', err: '' }; }
+    catch (e) { MH = { busy: false, ok: '', err: e.auth ? '' : e.message }; }
+    if (location.hash.startsWith('#ustawienia')) renderUstawienia();
+  });
+}
+let MH = { busy: false, ok: '', err: '' };
+function mailCard(){   // panel → Ustawienia: godzina porannego maila (trMailUstaw) i wynik ostatniej wysyłki
+  const m = MS || { hour: 6, hours: [5, 6, 7, 8, 9] }, d = m.day;
+  const names = d && d.names && d.names.length ? d.names.join(', ') : '';
+  const stat = !d ? 'Jeszcze nic nie wysłano.' : (d.day === (PUL && PUL.today) ? 'Dziś' : dm(d.day)) + ' o ' + esc(mailAt(d.at).split(', ')[1] || '') + ': ' +
+    (names ? 'wysłano ' + d.names.length + ' ' + (d.names.length === 1 ? 'mail' : d.names.length < 5 ? 'maile' : 'maili') + ' (' + esc(names) + ').' : 'nikt nie miał treningu z datą, nic nie wysłano.');
+  return '<div class="card" id="mail-card" style="max-width:640px"><h2>Poranny mail do klientów</h2>' +
+    '<p class="legend" style="margin-top:0;font-size:13px;line-height:1.5">Klient dostaje rano plan dnia i przycisk do aplikacji. Włączasz go osobno dla każdego klienta w <a href="#klienci">Klienci</a> → Ustawienia.</p>' +
+    '<div class="fr"><div><b>Godzina</b><small>Google uruchamia wysyłkę w ciągu kwadransa od tej godziny.</small></div><div class="seg" role="group">' +
+    m.hours.map(h => '<button type="button" data-hour="' + h + '" aria-pressed="' + (h === m.hour) + '"' + (MH.busy ? ' disabled' : '') + '>' + h + ':00</button>').join('') + '</div></div>' +
+    (MH.ok ? '<p class="saved" role="status">' + esc(MH.ok) + '</p>' : '') + (MH.err ? '<p class="err" role="alert">' + esc(MH.err) + '</p>' : '') +
+    (m.trigger === false ? '<p class="err">Wysyłka nie jest włączona: wybierz godzinę albo w arkuszu uruchom menu Trening → Zainstaluj wyzwalacze.</p>' : '') +
+    '<div class="mstat">' + stat + (m.quota !== null && m.quota !== undefined ? ' Zostało dziś w limicie Google: ' + m.quota + ' adresów.' : '') + '</div></div>';
 }
 
 /* ---------- klienci: lista, ustawienia (trKlientUstaw), nowy klient (trKlientNowy), nowy link (trKlientLink) ----------
  * Flagi z zakładki Klienci w jednym miejscu (menu „Dodaj klienta” w arkuszu nie działa na telefonie). Usuwania nie ma: „Aktywny” wyłączony
  * zostawia historię. Lista i szkice ustawień żyją tylko w pamięci strony. */
 let KL = null, KLD = {}, KLM = { ok: '', err: '', busy: false, rekey: '' }, KLC = '', NK = null;
+let MS = null, MT = { id: '', busy: false, ok: '', err: '' };   // poranny mail: ustawienia (trMail) i mail próbny (trMailProba)
+const mailAt = iso => { const d = new Date(iso); return isNaN(d) ? '' : DOW[d.getDay()] + ' ' + d.getDate() + '.' + String(d.getMonth() + 1).padStart(2, '0') + ', ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const mailHour = () => MS ? MS.hour : 6;
 const slug = s => String(s || '').replace(/[łŁ]/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-const KL_F = ['on', 'mode', 'scale', 'swap', 'pain', 'masters', 'extra', 'oly', 'own', 'edit'];
+const KL_F = ['on', 'mode', 'scale', 'swap', 'pain', 'masters', 'extra', 'oly', 'own', 'edit', 'email', 'mail'];
 const klLink = 'style="display:inline-flex;align-items:center;text-decoration:none"';
 const klFlags = k => [k.mode === 'PROSTY' ? 'Prosty' : 'PRO', k.mode === 'PRO' && k.scale === 'RIR' ? 'RIR' : '', k.swap === 'DOWOLNA' ? 'zamiana dowolna' : k.swap === 'TRENER' ? 'zamiana od trenera' : '',
   k.edit ? 'zmiany w treningu' : '', k.masters ? 'masters' : '', k.pain ? 'ból zawsze' : '', k.extra ? '+' + k.extra + (k.extra === 1 ? ' seria' : ' serie') : '', k.own ? '' : 'bez własnych',
-  k.oly !== 5 ? 'sufit ' + pl(k.oly) + '%' : ''].filter(Boolean).join(' · ');
+  k.oly !== 5 ? 'sufit ' + pl(k.oly) + '%' : '', k.mail ? 'mail rano' : ''].filter(Boolean).join(' · ');
 async function copyTxt(t){
   try { await navigator.clipboard.writeText(t); return true; } catch (e) {}
   const a = document.createElement('textarea'); a.value = t; a.setAttribute('readonly', ''); a.style.position = 'fixed'; a.style.opacity = '0'; document.body.appendChild(a); a.select();
@@ -519,6 +543,14 @@ function klCtl(st, re){   // przełączniki formularza zmieniają stan st i rysu
   document.querySelectorAll('[data-sw]').forEach(b => b.onclick = () => { st[b.dataset.sw] = !st[b.dataset.sw]; re(); });
   document.querySelectorAll('[data-num]').forEach(b => b.onclick = () => { const f = b.dataset.num, l = KL_LIM[f]; st[f] = Math.min(l[1], Math.max(l[0], Math.round((st[f] + Number(b.dataset.d)) * 10) / 10)); re(); });
 }
+function mailTestH(k, ch){   // „Wyślij próbny do mnie” (zapisany adres, bez niezapisanych zmian) + ostatnia wysyłka
+  const t = MT.id === k.id ? MT : { busy: false, ok: '', err: '' }, last = MS && MS.log && MS.log[k.id];
+  const why = ch ? 'Zapisz zmiany, potem wyślij próbę.' : !k.email ? 'Najpierw wpisz e-mail klienta i zapisz.' : 'Najbliższy trening ' + esc(k.name) + ' przyjdzie na Twój adres, klient nic nie dostanie.';
+  return '<div class="fr fr1"><div class="mrow"><button class="cp" type="button" id="kl-mailtest"' + (!k.email || ch || t.busy ? ' disabled' : '') + '>' + (t.busy ? 'Wysyłam…' : '✉ Wyślij próbny do mnie') + '</button>' +
+    (t.ok ? '<span class="saved" role="status">' + esc(t.ok) + '</span>' : '<span class="hint">' + why + '</span>') + '</div>' +
+    (t.err ? '<p class="err" role="alert">' + esc(t.err) + '</p>' : '') +
+    (last ? '<div class="mstat">Ostatnio wysłany: <b>' + esc(mailAt(last.at)) + (last.title ? ' (' + esc(last.title) + ')' : '') + '</b></div>' : '') + '</div>';
+}
 function renderKlientUst(id){
   const k = KL.find(x => x.id === id);
   if (!k) { $('#main').innerHTML = head('Klienci', 'Nie ma klienta') + '<div class="pg"><div class="card es"><b>Nie ma klienta „' + esc(id) + '”</b><a href="#klienci">Wróć do listy</a></div></div>'; return; }
@@ -536,7 +568,12 @@ function renderKlientUst(id){
     frH('Dodatkowe serie', 'Ile serii ponad plan klient może dodać w ćwiczeniu (gdy plan nie mówi inaczej).', numH('extra', d.extra, 0, 5, 1)) +
     '<div class="sec">Obciążenie</div>' +
     frH('Masters', 'Ostrzejsze progi „za dużo / uwaga” w podsumowaniu.', swH('masters', d.masters, 'Masters')) +
-    frH('Sufit w bojach', 'O ile ponad plan (w % maksa) klient może pójść w rwaniu i podrzucie.', numH('oly', d.oly, 0, 20, 2.5, '%')) + '</div>' +
+    frH('Sufit w bojach', 'O ile ponad plan (w % maksa) klient może pójść w rwaniu i podrzucie.', numH('oly', d.oly, 0, 20, 2.5, '%')) +
+    '<div class="sec">Poranny mail</div>' +
+    '<div class="fr fr1"><div><b>E-mail klienta</b><small>Tylko do porannego maila. Zostaje w arkuszu (zakładka Klienci), nie w aplikacji.</small></div>' +
+    '<input class="inp" id="kl-email" type="email" autocomplete="off" spellcheck="false" placeholder="adres@przyklad.pl" value="' + esc(d.email || '') + '"' + dis + '></div>' +
+    frH('Mail w dniu treningu', 'Ok. ' + mailHour() + ':00, gdy plan ma na dziś trening z datą, a klient go jeszcze nie zaczął. Bez daty w planie, w dni wolne i przy własnych treningach mail nie idzie.', swH('mail', d.mail, 'Mail w dniu treningu')) +
+    mailTestH(k, ch) + '</div>' +
     '<div class="row2" style="margin-top:14px"><button class="b p" type="button" id="kl-save"' + (ch && !m.busy ? '' : ' disabled') + '>' + (m.busy === 'save' ? 'Zapisuję…' : 'Zapisz zmiany') + '</button>' +
     (ch ? '<button class="b" type="button" id="kl-undo"' + dis + '>Cofnij</button><span class="hint">Zmienione: ' + ch + '</span>' : m.ok ? '<span class="saved" role="status">' + esc(m.ok) + '</span>' : '') + '</div>' +
     (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '');
@@ -550,6 +587,16 @@ function renderKlientUst(id){
     '<div class="pg"><div class="kgrid"><div class="card" id="kl-form">' + f + '</div><div class="stack">' + side + '</div></div></div>';
   const re = () => { KLM = { ok: '', err: '', busy: false, rekey: '' }; renderKlientUst(id); };
   klCtl(d, re); klBind();
+  const em = $('#kl-email');
+  if (em) em.oninput = () => { d.email = em.value.trim(); const n = KL_F.filter(f => d[f] !== k[f]).length, sv = $('#kl-save'); if (sv && !KLM.busy) sv.disabled = !n; };
+  const mt = $('#kl-mailtest');
+  if (mt) mt.onclick = async () => {
+    MT = { id, busy: true, ok: '', err: '' }; renderKlientUst(id);
+    try { const r = await guard(api('trMailProba', id)); MT = { id, busy: false, ok: '✓ Wysłano do Ciebie: ' + r.title + ' (' + dm(r.day) + ').', err: '' }; }
+    catch (e) { MT = { id, busy: false, ok: '', err: e.auth ? '' : e.message }; }
+    if (location.hash.startsWith('#klienci/')) renderKlientUst(id);
+  };
+  if (!MS) guard(api('trMail')).then(r => { MS = r; if (location.hash === '#klienci/' + encodeURIComponent(id)) renderKlientUst(id); }).catch(() => {});
   const u = $('#kl-undo'); if (u) u.onclick = () => { KLD[id] = Object.assign({}, k); re(); };
   $('#kl-save').onclick = async () => {
     KLM = { ok: '', err: '', busy: 'save', rekey: '' }; renderKlientUst(id);
