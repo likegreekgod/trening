@@ -715,12 +715,6 @@ function renderNowyKlient(){
 /* ---------- karta klienta (v87: nagłówek z sygnałami i „Prowadź trening”, przegląd jak na telefonie) ---------- */
 /** faktyczny dzień jednostki z Sesje.start (klucz tydzień|jednostka) */
 function sesDates(d){ const o = {}; (d.sessions || []).forEach(s => { if (/T/.test(String(s.start || ''))) o[uKey(s.tydzien, s.jednostka)] = TL.localDate(new Date(s.start)); }); return o; }
-/** najbliższa niezrobiona jednostka trenera (zaległa do 14 dni albo z datą od dziś, inaczej pierwsza bez daty) */
-function nextUnit(d, dates, today){
-  const open = planUnits(d, dates).filter(x => !x.done && !(x.date && x.date < TL.addDays(today, -PE_OLD)));
-  return open.filter(x => x.date).sort((a, b) => a.date.localeCompare(b.date))[0] || open[0] || null;
-}
-const whenTxt = (x, today) => !x.date ? 'bez daty' : x.date === today ? 'dziś' : x.date === TL.addDays(today, 1) ? 'jutro' : x.date < today ? 'zaległa, ' + dowDm(x.date) : dowDm(x.date);
 async function renderKlient(id, tab){
   const c = PUL.clients.find(x => x.id === id) || { id, name: id, signals: [], load: [], week: '' };
   if (CID !== id || !CK[id]) {
@@ -741,9 +735,9 @@ async function renderKlient(id, tab){
   const rdOn = rd && String(rd.data).slice(0, 10) >= TL.addDays(today, -2) && /uwaga|zmęcz/i.test(rd.werdykt || '');
   const pills = (c.signals || []).map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('') +
     (rdOn ? '<span class="pill ' + (/zmęcz/i.test(rd.werdykt) ? 'lv-bad' : 'lv-warn') + '">dyspozycja: ' + esc(String(rd.werdykt).toLowerCase()) + '</span>' : '');
-  const nx = nextUnit(d, dates, today), nv = PUL.videos.filter(v => v.id === id && !v.kom).length;
-  const live = '<a class="kgo" href="' + liveHref(id, nx && nx.week, nx && nx.day) + '"><span>▶ Prowadź trening</span>' +
-    (nx ? '<small>' + esc(nx.day + (nx.title ? ' · ' + nx.title : '') + ', ' + whenTxt(nx, today)) + '</small>' : '<small>trening bez planu</small>') + '</a>';
+  const nv = PUL.videos.filter(v => v.id === id && !v.kom).length;
+  // bez konkretnej jednostki: na treningu personalnym często robimy coś innego niż w planie (jednostkę z planu otwiera „▶ Prowadź” w zakładce Plan)
+  const live = '<a class="kgo" href="' + liveHref(id) + '"><span>▶ Prowadź trening</span></a>';
   const kh = '<div class="kh"><a class="kback" href="#klienci">‹ Klienci</a><div class="kht"><div class="eb">' + eb + '</div><h1>' + esc(d.cfg.name || c.name) + '</h1>' +
     (pills ? '<div class="kpl">' + pills + '</div>' : '') + '</div><div class="kha">' + live + '<div class="khs">' +
     go('#filmy/' + encodeURIComponent(id), 'Filmy' + (nv ? ' · ' + nv : '')) + go('#klienci/' + encodeURIComponent(id), 'Ustawienia') + '</div></div></div>';

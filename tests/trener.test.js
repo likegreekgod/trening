@@ -256,7 +256,7 @@ test('panel: karta klienta (przegląd, sesje, bloki, dyspozycja)', async () => {
   assert.match(txt, /Blok B2 · tydz\. 6 z 6 · PRO/);
   // nagłówek: sygnały z Przeglądu i dyspozycja jako pigułki, „Prowadź trening” z najbliższą niezrobioną jednostką
   assert.deepEqual(await p.$$eval('.kpl .pill', a => a.map(x => x.textContent)), ['ból 5/10 kolano', '2 serie FAIL', 'dyspozycja: uwaga']);
-  assert.match(await p.textContent('.kgo'), /▶ Prowadź trening\s*T2 · Góra, cz 19\.11/);
+  assert.equal((await p.textContent('.kgo')).trim(), '▶ Prowadź trening');
   assert.match(await p.textContent('.khs'), /Filmy · 2\s*Ustawienia/);
   assert.deepEqual(await p.$$eval('.stats .st', a => a.map(x => x.textContent)), ['1/2ten tydzień', '5/10ból, kolano', '1140sRPE, za dużo', '1,6 ttonaż −28%', 'Uwagadyspozycja 17.11']);
   assert.match(await p.getAttribute('.stats .st:nth-child(3)', 'title'), /ACWR 1,3/);
@@ -347,7 +347,7 @@ test('panel: zrzuty w ciemnym motywie i na telefonie', async () => {
     await shot(p, 'trener-plan-' + sfx + '.png');
     if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Plan bez przewijania w bok na telefonie');
     await p.goto(base + 'trener.html#k/ania'); await p.waitForSelector('.kgo');
-    assert.equal(await p.getAttribute('.kgo', 'href'), './?prowadz=ania&j=12%7CT2');   // „▶ Prowadź trening” w karcie klienta: najbliższa niezrobiona jednostka
+    assert.equal(await p.getAttribute('.kgo', 'href'), './?prowadz=ania');   // „▶ Prowadź trening” w karcie klienta: bez narzucania jednostki z planu
     if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'bez przewijania w bok na telefonie');
     assert.deepEqual(p.errors, []);
     await ctx.close();
