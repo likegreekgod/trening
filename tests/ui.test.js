@@ -3113,6 +3113,11 @@ test('Prowadź: ćwiczenie z masą ciała i na czas (+ Ćwiczenie, zmień plan),
     await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); } catch (e) {} }, JWT);
     await p.goto(base + '?prowadz=ania&j=13%7CT1'); await p.waitForSelector('.set[data-o="2"]');
     // serie robocze: przysiad ma zapisane 3 z 3 → „− seria” zablokowane; plank (tryb skupienia zaczyna od niego) „+ seria” zmienia plan
+    // wyraźne wyjście: „✕ Wyjdź” w pasku i w „⋯” jednostki, oba do karty klienta w panelu
+    assert.equal((await p.textContent('#live-back')).trim(), '✕ Wyjdź');
+    assert.match(await p.getAttribute('#live-back', 'href'), /trener\.html#k\/ania$/);
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `prowadz-wyjdz-${scheme}.png`), clip: { x: 0, y: 0, width: 390, height: 200 } }); }
+    await p.click('#umore'); assert.match(await p.getAttribute('#u-exit', 'href'), /trener\.html#k\/ania$/); await p.click('[data-close]');
     assert.equal(await p.isDisabled('[data-tsets="1"][data-d="-1"]'), true);
     assert.equal(await p.isDisabled('[data-tsets="2"][data-d="-1"]'), false);
     await p.click('[data-tsets="2"][data-d="1"]');
@@ -3124,16 +3129,23 @@ test('Prowadź: ćwiczenie z masą ciała i na czas (+ Ćwiczenie, zmień plan),
     assert.equal(await p.getAttribute('[data-ktm="1"]', 'aria-pressed'), 'true');
     assert.equal(await p.inputValue('#tp-reps'), '30'); assert.equal(await p.isDisabled('#tp-kg'), true);
     assert.equal(await p.textContent('#tp-rl'), 'Sekundy');
-    await p.click('[data-close]');
+    // priorytet i połączenie z poprzednim (obwód: oba ćwiczenia dostają tę samą literę)
+    assert.equal(await p.getAttribute('[data-kpr="B"]', 'aria-pressed'), 'true');
+    await p.click('[data-kpr="K"]'); await p.click('[data-klink]'); await p.click('#tp-ok');
+    await p.waitForFunction(() => !document.querySelector('#tp-ok'));
+    assert.deepEqual(calls.filter(c => c.fn === 'trPlan')[1].args[1].ex, [{ order: 2, prio: 'K', circuit: 'A' }, { order: 1, circuit: 'A' }]);
     // + Ćwiczenie: Squat Hold, masa ciała, na czas 3 × 20 s
     await p.click('#fx-add'); await p.fill('#ed-q', 'squat h'); await p.waitForSelector('#ed-res [data-n]'); await p.click('#ed-res [data-n]');
     await p.click('[data-kbw="1"]'); await p.click('[data-ktm="1"]'); await p.fill('#ed-reps', '20');
+    assert.equal(await p.getAttribute('[data-kpr="A"]', 'aria-pressed'), 'true');
+    await p.click('[data-klink]');
     assert.equal(await p.textContent('#ed-rl'), 'Sekundy');
     if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `prowadz-bw-czas-${scheme}.png`) }); }
     await p.click('#ed-ok');
     await p.waitForSelector('.set[data-o="3"]');
     const ed = calls.find(c => c.fn === 'editPlan').args[0];
-    assert.equal(ed.kg, 'BW'); assert.equal(ed.reps, '20 s'); assert.equal(ed.trainer, true);
+    assert.equal(ed.kg, 'BW'); assert.equal(ed.reps, '20 s'); assert.equal(ed.trainer, true); assert.equal(ed.prio, 'A'); assert.equal(ed.link, true);
+    assert.ok(await p.$('.grp .card[data-card="3"], .grp [data-card="3"]'), 'nowe ćwiczenie w ramce serii łączonych');
     assert.equal(await p.getAttribute('.set[data-o="3"][data-s="1"] .kg', 'placeholder'), 'BW');
     assert.equal(await p.getAttribute('.set[data-o="3"][data-s="1"] .reps', 'data-u'), 'sek.');
     if (process.env.SCREENS !== '0') { await p.locator('.card[data-card]').last().scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(SCREENS, `prowadz-bw-karta-${scheme}.png`) }); }

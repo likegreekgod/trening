@@ -1573,6 +1573,18 @@ test('Prowadź trening: ćwiczenie i jednostka trenera w planie (zrodlo „trene
   const after = plan.concat([R(1, 'T1', 3, 'Wykrok w tył', { zrodlo: 'trener' })]);
   assert.equal(C.planEdit_(after, [], 'ania', { op: 'add', week: 1, day: 'T1', name: 'wykrok w tył', sets: 3, reps: 10, trainer: true }).n, 0);   // ponowiona wysyłka nic nie dubluje
   assert.equal(C.planEdit_(after, [], 'ania', { op: 'add', week: 1, day: 'T1', name: 'Wykrok w tył', sets: 3, reps: 10 }).add[0].zrodlo, 'dodane');   // klient dalej „dodane”
+  // trener: priorytet z okna i „połącz z poprzednim” = obwód z ostatnim ćwiczeniem (litera wolna w jednostce, istniejąca zostaje)
+  r = plain(C.planEdit_(plan, [], 'ania', { op: 'add', week: 1, day: 'T1', name: 'Plank', sets: 3, reps: '30 s', kg: 'BW', trainer: true, prio: 'A', link: true }));
+  assert.deepEqual(r.add.map(a => [a.nr, a.prio, a.obwod, a.kg, a.powt]), [[3, 'A', 'A', 'BW', '30 s']]);
+  assert.deepEqual(r.set, [[1, { obwod: 'A' }]]);
+  r = plain(C.planEdit_(after.map(x => x.cwiczenie === 'Wykrok w tył' ? Object.assign({}, x, { obwod: 'C' }) : x), [], 'ania', { op: 'add', week: 1, day: 'T1', name: 'Plank', sets: 3, reps: 10, trainer: true, prio: 'K', link: true }));
+  assert.deepEqual([r.add[0].prio, r.add[0].obwod, r.set.length], ['K', 'C', 0]);
+  assert.equal(C.planEdit_(plan, [], 'ania', { op: 'add', week: 1, day: 'T1', name: 'Plank', sets: 3, reps: 10, link: true, prio: 'K' }).add[0].obwod, '');   // klient: bez obwodu, prio A
+  assert.equal(C.planEdit_(plan, [], 'ania', { op: 'add', week: 1, day: 'T1', name: 'Plank', sets: 3, reps: 10, link: true, prio: 'K' }).add[0].prio, 'A');
+  assert.deepEqual(plain(C.trPlanVal_('prio', 'k')), { v: 'K', c: 'K' });
+  assert.equal(C.trPlanVal_('prio', 'X').error, 'Priorytet: A, B albo K.');
+  assert.deepEqual(plain(C.trPlanVal_('circuit', '')), { v: '', c: '' });
+  assert.ok(C.trPlanVal_('circuit', 'AB').error);
   // nowa jednostka trenera: T<n>, zwykły tytuł, zrodlo „trener”; nie nadpisze jednostki z planu, ponowny zapis własnej tak
   const u = { week: 1, day: 'T2', date: '2026-11-22', title: ' Pośladki ', exercises: [{ name: 'Hip thrust', sets: 3, reps: 10, kg: 60 }] };
   r = plain(C.ownRows_('ania', u, plan, true));

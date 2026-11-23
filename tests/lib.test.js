@@ -702,6 +702,11 @@ test('planEdit: zmiany w jednostce trenera w telefonie (dodaj, usuń, przywróć
   assert.deepEqual([a.week, a.day, a.order, a.name, a.sets, a.reps, a.kg, a.added, a.block, a.title, a.date, a.prio, a.parts], [1, 'T1', 51, 'Wykroki z hantlami', 3, '10', 12.5, true, 'B1', 'Siła', '2026-11-01', 'A', ['pośladki']]);
   assert.equal(plan.length, 8);                                                     // dane wejściowe bez zmian
   assert.equal(L.planEdit(r.plan, [], {}, { op: 'add', week: 1, day: 'T1', name: 'wykroki z hantlami', sets: 3, reps: 10 }).n, 0);   // ta sama zmiana drugi raz (kolejka po ponownym otwarciu) nic nie dubluje
+  // trener: priorytet i „połącz z poprzednim” (obwód z ostatnim ćwiczeniem; ta sama reguła co planEdit_ w Code.gs)
+  r = E({ op: 'add', week: 1, day: 'T1', name: 'Plank', sets: 3, reps: '30 s', kg: 'BW', trainer: true, prio: 'A', link: true });
+  assert.deepEqual(r.plan.filter(x => x.week === 1 && x.day === 'T1').map(x => [x.order, x.prio, x.circuit, !!x.coach]), [[1, 'A', undefined, false], [2, 'A', 'A', false], [3, 'A', 'A', true]]);
+  assert.equal(plan[1].circuit, undefined);                                        // wejście bez zmian
+  assert.deepEqual(['K', 'B'].map(pr => E({ op: 'add', week: 1, day: 'T1', name: 'Plank', sets: 3, reps: 10, trainer: true, prio: pr === 'B' ? 'X' : pr }).plan.pop().prio), ['K', 'B']);
   r = E({ op: 'add', week: 1, day: 'T1', name: 'Wykroki', sets: 3, reps: 10, forever: true }, null, null, { '2|T1': 1 });
   assert.deepEqual(r.plan.filter(x => x.added).map(x => x.week), [1, 3]);
   assert.deepEqual([E({ op: 'add', week: 1, day: 'T1', name: ' ', sets: 3, reps: 10 }).error, E({ op: 'add', week: 1, day: 'T1', name: 'X', sets: 41, reps: 10 }).error, E({ op: 'add', week: 7, day: 'T1', name: 'X', sets: 3, reps: 10 }).error],

@@ -75,7 +75,8 @@
   #sync{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right;flex:none}
   /* trening prowadzony przez trenera (?prowadz=): pasek w kolorze akcentu, „‹ Panel”, notatka trenera i „zmień plan” w karcie */
   .hr{display:flex;gap:10px;align-items:baseline;flex:none}
-  #live-back{font:700 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--bar-ink);text-decoration:none;padding:6px 0}
+  #live-back{font:700 13px/1.2 var(--f-body);letter-spacing:.04em;text-transform:uppercase;color:var(--bar-ink);text-decoration:none;display:inline-flex;align-items:center;gap:6px;
+    min-height:40px;padding:0 12px;border:2px solid var(--bar-ink);border-radius:var(--r);white-space:nowrap}
   #live-back.warn{background:var(--surface);color:var(--bad);border-radius:var(--r);padding:6px 8px}
   body.live header{--bar:var(--accent);--bar-ink:var(--on-accent);--bar-muted:var(--on-accent);--bar-line:var(--on-accent);border-bottom-color:var(--primary)}
   .tplan{margin-left:8px;border:1px dashed var(--accent);color:var(--accent);background:transparent;border-radius:var(--r);padding:4px 8px;min-height:32px;font:600 13px var(--f-body);vertical-align:middle}
@@ -754,6 +755,7 @@
   .ed-3 input:disabled{opacity:.55}
   .ed-k{display:grid;gap:8px;margin-top:10px}
   .ed-k .seg button{font-size:14px}
+  .ed-ln{width:100%;margin-top:12px;text-align:left;justify-content:flex-start;padding:0 12px}
   .ed-rm{margin:10px 0 var(--gap);display:grid;gap:6px}
   .ed-rm .lbl{text-align:left}
   .ed-r{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;color:var(--ink-2)}
@@ -949,7 +951,7 @@ function introShow(el){                                  // true = zasłona stoi
 })();
 </script>
 <header>
-  <div class="hrow"><span class="eyebrow"><img class="logo" src="icons/favicon.svg" alt="" width="20" height="20"><span id="eyebrow"></span></span><span class="hr"><span id="sync">ładowanie…</span><a id="live-back" href="trener.html" hidden>‹ Panel</a></span></div>
+  <div class="hrow"><span class="eyebrow"><img class="logo" src="icons/favicon.svg" alt="" width="20" height="20"><span id="eyebrow"></span></span><span class="hr"><span id="sync">ładowanie…</span><a id="live-back" href="trener.html" hidden aria-label="Wyjdź z prowadzenia do panelu trenera">✕ Wyjdź</a></span></div>
   <div class="trow"><h1 id="title">Siła z Ruchu</h1><span id="hx"></span></div>
   <div class="stats" id="stats"></div>
 </header>
@@ -1049,7 +1051,7 @@ function liveTok(){
 const LIVE_LOGIN = 'trener.html#prowadz/' + encodeURIComponent(LIVE);
 /** bilet wygasł w trakcie treningu: zapisy czekają w kolejce, link do ponownego logowania wraca tu po zalogowaniu */
 function liveAuthLost(){
-  const a = $('#live-back'); if (a && !a.classList.contains('warn')) { a.textContent = 'Zaloguj się ›'; a.href = LIVE_LOGIN; a.classList.add('warn'); toast('Logowanie wygasło. Zapisy czekają w telefonie – zaloguj się ponownie w panelu.'); }
+  const a = $('#live-back'); if (a && !a.classList.contains('warn')) { a.textContent = 'Zaloguj się ›'; a.setAttribute('aria-label', 'Zaloguj się ponownie w panelu'); a.href = LIVE_LOGIN; a.classList.add('warn'); toast('Logowanie wygasło. Zapisy czekają w telefonie – zaloguj się ponownie w panelu.'); }
 }
 /** start bez ważnego biletu: najpierw logowanie w panelu (po nim panel wraca do tego treningu) */
 function liveLogin(){
@@ -2550,6 +2552,33 @@ const isBW = kg => /^\s*bw\s*$/i.test(String(kg === undefined || kg === null ? '
 const secOf = reps => timeUnit(reps) === 's' ? String(reps).replace(/^\s*(\d+(?:[.,]\d+)?).*$/, '$1') : String(reps === undefined || reps === null ? '' : reps);
 const kindSeg = (bw, tm) => `<div class="ed-k"><div class="seg" role="group" aria-label="Ciężar"><button type="button" data-kbw="0" aria-pressed="${!bw}">Z ciężarem</button><button type="button" data-kbw="1" aria-pressed="${!!bw}">Masa ciała (BW)</button></div>
     <div class="seg" role="group" aria-label="Powtórzenia czy czas"><button type="button" data-ktm="0" aria-pressed="${!tm}">Powtórzenia</button><button type="button" data-ktm="1" aria-pressed="${!!tm}">⏱ Na czas</button></div></div>`;
+/** tryb trenera: priorytet ćwiczenia (A główne / B opcjonalne / K korekcja) i „⛓ Połącz z poprzednim” (obwód, serie łączone) */
+const PRIOS = [['A', 'Główne'], ['B', 'Opcjonalne'], ['K', 'Korekcja']];
+const prioSeg = pr => `<div class="lbl ed-q">Priorytet</div><div class="seg" role="group" aria-label="Priorytet">${PRIOS.map(([k, t]) => `<button type="button" data-kpr="${k}" aria-pressed="${k === pr}">${t}</button>`).join('')}</div>`;
+const linkBtn = (prev, on) => prev ? `<button type="button" class="btn tg ed-ln" data-klink aria-pressed="${!!on}">⛓ Połącz z poprzednim: ${esc(prev.name)}</button>
+    <p class="sub ed-s">Serie łączone: ćwiczenia na zmianę, przerwa po całej rundzie.</p>` : '';
+/** przełączniki z prioSeg i linkBtn w otwartym oknie; zwraca {prio(), link()} */
+function bindPrio(pr, on){
+  let p = pr, l = !!on;
+  document.querySelectorAll('#sheet [data-kpr]').forEach(b => b.onclick = () => { p = b.dataset.kpr;
+    document.querySelectorAll('#sheet [data-kpr]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.kpr === p))); });
+  const lb = document.querySelector('#sheet [data-klink]'); if (lb) lb.onclick = () => { l = !l; lb.setAttribute('aria-pressed', String(l)); };
+  return { prio: () => p, link: () => l };
+}
+/** obwody jednostki po połączeniu (on) albo rozłączeniu ćwiczenia z poprzednim → [{order, circuit}] tylko zmienione */
+function linkChanges(exs, order, on){
+  const a = exs.map(x => ({ order: x.order, c: isEmom(x) ? '' : x.circuit || '', old: true })), i = a.findIndex(x => x.order === order);
+  if (i < 1) return [];
+  const was = a.map(x => x.c), fresh = () => circuitLetter(a);
+  if (on) {
+    const L = a[i - 1].c || a[i].c || fresh(), M = a[i].c;
+    a[i - 1].c = L; for (let j = i; j < a.length && (j === i || (M && was[j] === M)); j++) a[j].c = L;
+  } else if (a[i].c && a[i].c === a[i - 1].c) {
+    const M = a[i].c, N = fresh();
+    for (let j = i; j < a.length && was[j] === M; j++) a[j].c = N;
+  }
+  return circuitTidy(a).map((x, j) => ({ order: x.order, circuit: x.c, was: was[j] })).filter(x => x.circuit !== x.was).map(x => ({ order: x.order, circuit: x.circuit }));
+}
 /** przełączniki z kindSeg w otwartym oknie; kg / reps = pola, rl = podpis pola powt.; zwraca {set(bw, tm), kg(), reps()} do zapisu */
 function bindKind(kg, reps, rl){
   let bw = false, tm = false, kgMem = '';
@@ -2569,6 +2598,8 @@ function bindKind(kg, reps, rl){
     // na czas: sama liczba = sekundy („30 s”); wpisane z jednostką („1 min”) zostaje jak jest
     reps: () => { const v = reps.value.trim(); return tm && /^\d+(?:[.,]\d+)?$/.test(v) ? v + ' s' : v; } };
 }
+/** ostatnie ćwiczenie jednostki, z którym „+ Ćwiczenie” może zrobić obwód (nie EMOM) */
+const addPrev = () => { const e = curExs().slice(-1)[0]; return e && !isEmom(e) ? e : null; };
 function openAdd(){
   let name = '';
   openSheet(`<h2 id="sheet-t">Dodaj ćwiczenie</h2><p class="sub">${esc((curExs()[0] || {}).title || cur.day)} · ${LIVE ? 'od razu w planie: ' + esc(NAME) : 'na koniec treningu'}</p>
@@ -2577,11 +2608,12 @@ function openAdd(){
     <p class="sub" id="ed-sel" aria-live="polite"></p>
     <div class="ed-3"><label class="fl">Serie<input id="ed-sets" inputmode="numeric" value="3"></label><label class="fl"><span id="ed-rl">Powt.</span><input id="ed-reps" value="10"></label><label class="fl">Kg<input id="ed-kg" inputmode="decimal" placeholder="—"></label></div>
     ${kindSeg(false, false)}
+    ${LIVE ? prioSeg('A') + linkBtn(addPrev(), false) : ''}
     ${lenSeg('Na stałe = także w kolejnych tygodniach tego treningu (' + esc(cur.day) + '), do końca obecnego planu.')}
     <p class="hint" id="ed-err" role="alert" hidden></p>
     <button type="button" class="btn p" id="ed-ok" disabled>${LIVE ? 'Dodaj do treningu: ' + esc(NAME) : 'Dodaj do treningu'}</button>
     <button type="button" class="btn" data-close>Anuluj</button>`);
-  const kind = bindKind($('#ed-kg'), $('#ed-reps'), $('#ed-rl'));
+  const kind = bindKind($('#ed-kg'), $('#ed-reps'), $('#ed-rl')), pri = bindPrio('A', false);
   const q = $('#ed-q'), pick = n => {
     name = n; const last = PLAN.slice().reverse().find(r => r.name === n);
     if (last) { $('#ed-sets').value = last.sets; $('#ed-reps').value = secOf(last.reps); $('#ed-kg').value = last.kg === '' || isBW(last.kg) ? '' : String(fmtKg(last.kg)); kind.set(isBW(last.kg), timeUnit(last.reps) === 's'); }
@@ -2598,7 +2630,7 @@ function openAdd(){
   exnLoad(() => { const qq = $('#ed-q'); if (qq) res(qq.value); });
   const len = bindLen();
   $('#ed-ok').onclick = () => {
-    const p = Object.assign({ op: 'add', week: cur.week, day: cur.day, name, sets: $('#ed-sets').value, reps: kind.reps(), kg: kind.kg(), forever: len() }, LIVE ? { trainer: true } : {}, edDx(name));
+    const p = Object.assign({ op: 'add', week: cur.week, day: cur.day, name, sets: $('#ed-sets').value, reps: kind.reps(), kg: kind.kg(), forever: len() }, LIVE ? { trainer: true, prio: pri.prio(), link: pri.link() } : {}, edDx(name));
     const r = planEdit(DATA.plan, DATA.removed || [], edDone(), p);
     if (r.error || !r.n) { const er = $('#ed-err'); er.textContent = r.error || 'To ćwiczenie jest już dodane do tego treningu.'; er.hidden = false; return; }
     closeSheet(); const n = edSend(p);
@@ -2981,6 +3013,7 @@ function renderTrening(){
         ${fx ? '' : '<button type="button" class="opt" id="fold-all"><i aria-hidden="true">▴</i>Zwiń zrobione</button>'}
         ${calOk(unitList().find(x => x.week === cur.week && x.day === cur.day)) ? `<button type="button" class="opt" id="u-cal"><i aria-hidden="true">${CAL_SVG}</i>Dodaj do kalendarza<small>Google, iPhone</small></button>` : ''}
         ${LIVE ? '<button type="button" class="opt" id="u-new"><i aria-hidden="true">＋</i>Nowa jednostka<small>w planie, od razu do prowadzenia</small></button>' : ''}
+        ${LIVE ? `<a class="opt" id="u-exit" href="${esc($('#live-back').href)}"><i aria-hidden="true">✕</i>Wyjdź z prowadzenia<small>wracasz do panelu, zapisy zostają</small></a>` : ''}
         <button type="button" class="opt" id="fx-sw"><i aria-hidden="true">${fx ? '☰' : '▣'}</i>${fx ? 'Cała lista' : 'Tryb skupienia'}<small>${fx ? 'wszystkie ćwiczenia' : 'jedno ćwiczenie na ekranie'}</small></button>
         ${open && unitEntries().length ? '<button type="button" class="opt warnopt" id="u-reset"><i aria-hidden="true">↺</i>Wyczyść trening<small>od zera</small></button>' : ''}
       </div>
@@ -3237,7 +3270,7 @@ function liveNoteSave(box){
 }
 /** odpowiedź trPlan → wiersze planu w danych aplikacji i pamięci telefonu */
 function tpApply(r){
-  const F = { sets: 'sets', reps: 'reps', kg: 'kg', pct: 'pct', rpe: 'rpe', note: 'note', unote: 'unote' };
+  const F = { sets: 'sets', reps: 'reps', kg: 'kg', pct: 'pct', rpe: 'rpe', note: 'note', unote: 'unote', prio: 'prio', circuit: 'circuit' };
   (r.rows || []).forEach(x => { const row = DATA.plan.find(p => p.week === x.week && p.day === x.day && p.order === x.order); if (row) Object.keys(x.f).forEach(f => { if (F[f]) row[F[f]] = x.f[f]; }); });
   PLAN = DATA.plan; try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
 }
@@ -3257,12 +3290,16 @@ function liveSets(b){
   }).catch(e => { toast(e.message); renderTrening(); });
 }
 /** „✎ zmień plan”: serie, powt., kg i RPE max ćwiczenia w planie (trPlan z live: bieżąca jednostka może być zaczęta), opcjonalnie też kolejne tygodnie */
+const tpPrev = ex => { const a = curExs(), i = a.findIndex(x => x.order === ex.order); return i > 0 && !isEmom(a[i - 1]) && !isEmom(ex) ? a[i - 1] : null; };
+const tpLinked = ex => { const p = tpPrev(ex); return !!(p && ex.circuit && p.circuit === ex.circuit); };
 function openTPlan(order){
   const ex = curExs().find(x => x.order === order); if (!ex) return;
   const v = x => x === null || x === undefined ? '' : esc(String(typeof x === 'number' ? fmtKg(x) : x));
   openSheet(`<h2 id="sheet-t">Zmień plan</h2><p class="sub">${esc(ex.name)} · ${esc(ex.title || cur.day)}</p>
     <div class="ed-3"><label class="fl">Serie<input id="tp-sets" inputmode="numeric" value="${v(ex.sets)}"></label><label class="fl"><span id="tp-rl">Powt.</span><input id="tp-reps" value="${v(secOf(ex.reps))}"></label><label class="fl">Kg<input id="tp-kg" inputmode="decimal" value="${isBW(ex.kg) ? '' : v(ex.kg)}"></label></div>
     ${kindSeg(isBW(ex.kg), timeUnit(ex.reps) === 's')}
+    ${prioSeg(ex.prio)}
+    ${tpPrev(ex) ? linkBtn(tpPrev(ex), tpLinked(ex)) : ''}
     <label class="fl">RPE max (puste = bez)<input id="tp-rpe" inputmode="decimal" value="${v(ex.rpe)}"></label>
     <label class="chk"><input type="checkbox" id="tp-next"> Także kolejne tygodnie tej jednostki (kg o tę samą różnicę)</label>
     <p class="hint" id="tp-err" role="alert" hidden></p>
@@ -3270,14 +3307,19 @@ function openTPlan(order){
     <button type="button" class="btn" data-close>Anuluj</button>`);
   const kind = bindKind($('#tp-kg'), $('#tp-reps'), $('#tp-rl'));
   kind.set(isBW(ex.kg), timeUnit(ex.reps) === 's');
+  const pri = bindPrio(ex.prio, tpLinked(ex));
   $('#tp-ok').onclick = () => {
     const err = t => { const e = $('#tp-err'); e.textContent = t; e.hidden = false; };
-    const ch = { order: ex.order }, val = { sets: $('#tp-sets').value.trim(), reps: kind.reps(), kg: kind.kg(), rpe: $('#tp-rpe').value.trim() };
+    const ch = { order: ex.order }, val = { sets: $('#tp-sets').value.trim(), reps: kind.reps(), kg: kind.kg(), rpe: $('#tp-rpe').value.trim(), prio: pri.prio() };
     Object.keys(val).forEach(f => { const o = ex[f] === null || ex[f] === undefined ? '' : String(typeof ex[f] === 'number' ? fmtKg(ex[f]) : ex[f]); if (val[f] !== o) ch[f] = val[f]; });
-    if (Object.keys(ch).length < 2 && !$('#tp-next').checked) { closeSheet(); return; }
+    // obwód: zmiana połączenia z poprzednim przestawia litery tego ćwiczenia i sąsiadów (tylko ta jednostka)
+    const lk = tpPrev(ex) && pri.link() !== tpLinked(ex) ? linkChanges(curExs(), ex.order, pri.link()) : [];
+    const exs = [ch];
+    lk.forEach(x => { const o = exs.find(y => y.order === x.order); if (o) o.circuit = x.circuit; else exs.push(x); });
+    if (Object.keys(ch).length < 2 && exs.length < 2 && !$('#tp-next').checked) { closeSheet(); return; }
     if (navigator.onLine === false) return err('Bez sieci planu nie zmienisz. Serie zapisują się dalej.');
     const b = $('#tp-ok'); b.disabled = true; b.textContent = 'Zapisuję…';
-    call('trPlan', LIVE, { week: cur.week, day: cur.day, live: true, next: $('#tp-next').checked, ex: [ch] }).then(r => {
+    call('trPlan', LIVE, { week: cur.week, day: cur.day, live: true, next: $('#tp-next').checked, ex: exs.filter(x => Object.keys(x).length > 1) }).then(r => {
       tpApply(r); closeSheet(); renderTrening();
       const w = (r.weeks || []).length; toast(!r.n ? 'Bez zmian.' : 'Plan zmieniony' + (w > 1 ? ' (ten tydzień i ' + (w - 1) + ' ' + plural(w - 1, 'kolejny', 'kolejne', 'kolejnych') + ').' : '.'));
     }).catch(e => { b.disabled = false; b.textContent = 'Zapisz w planie'; err(e.message); });

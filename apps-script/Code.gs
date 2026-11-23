@@ -1796,8 +1796,17 @@ function planEdit_(plan, ses, clientId, e) {
       if (!e.trainer && rows.filter(x => added_(x.r)).length >= EDIT_MAX) { if (w === week) full = true; return; }
       // trener (prowadzony trening): zwykłe ćwiczenie planu na końcu jednostki, prio B; klient: „dodane” od nr 51
       const nr = Math.max(e.trainer ? 0 : EDIT_NR, ...rows.map(x => Number(x.r.nr) || 0)) + 1, b = rows[0].r;
+      // trener: priorytet z okna (A / B / K; starsza aplikacja bez pola = B) i „połącz z poprzednim” = obwód z ostatnim ćwiczeniem jednostki (nie EMOM)
+      let ob = '';
+      if (e.trainer && e.link) {
+        const last = act.slice().sort((a, c) => (Number(c.r.nr) || 0) - (Number(a.r.nr) || 0))[0];
+        if (last && !/EMOM/i.test(String(last.r.tryb || ''))) {
+          ob = circuit_(last.r.obwod) || 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').find(c => !act.some(x => circuit_(x.r.obwod) === c)) || 'Z';
+          if (!circuit_(last.r.obwod)) set.push([last.i, { obwod: ob }]);
+        }
+      }
       add.push({ klient: clientId, tydzien: w, jednostka: day, tytul: b.tytul, data: b.data instanceof Date ? fmtDate_(b.data) : String(b.data === undefined || b.data === null ? '' : b.data),
-        nr: nr, cwiczenie: name, prio: e.trainer ? 'B' : 'A', serie: sets, powt: reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: b.blok, zrodlo: e.trainer ? 'trener' : 'dodane' });
+        nr: nr, cwiczenie: name, prio: e.trainer ? (/^[ABK]$/.test(String(e.prio || '')) ? String(e.prio) : 'B') : 'A', serie: sets, powt: reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: b.blok, zrodlo: e.trainer ? 'trener' : 'dodane', obwod: ob });
     });
     if (full) return { error: 'Najwyżej ' + EDIT_MAX + ' dodanych ćwiczeń w jednostce.' };
     return { set, add, n: add.length };
