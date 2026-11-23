@@ -492,7 +492,7 @@ test('CW_BAZA, CW_ALIASY, CW_DODATKI: baza ćwiczeń do wczytania', () => {
   D.forEach(d => { assert.equal(d.length, 3); assert.ok(!names.includes(d[0]), d[0]); assert.ok(d[1] || d[2], d[0]); });   // wiersz bez danych byłby zaślepką
   const F = Array.from(C.CW_FEDB), all = C.cwBaza_(B, C.CW_ALIASY, D, F, C.CW_SCALONE), s = C.cwSync_(all, []);
   assert.equal(s.add.length, 624 + D.length + F.length);
-  assert.equal(F.length, 700); F.forEach(x => { assert.equal(x.length, 2); assert.ok(x[0] && x[1], x[0]); });
+  assert.equal(F.length, 697); F.forEach(x => { assert.equal(x.length, 2); assert.ok(x[0] && x[1], x[0]); });
   const rows = plain(s.add).map(r => Object.fromEntries(C.CW_HEADERS.map((h, i) => [h, r[i]]))), ix = C.exIndex_(rows), f = n => (C.exFind_(ix, n) || {}).name || null;
   const keys = {}; rows.forEach(r => [r.cwiczenie].concat(r.aliasy.split(';')).map(C.exKey_).filter(Boolean).forEach(k => { assert.ok(!keys[k], 'powtórzona nazwa lub alias: ' + k); keys[k] = 1; }));
   assert.deepEqual(plain(C.cwSync_(all, rows, {}, C.CW_SCALONE)), { add: [], aliases: [], drop: [], merged: 0, kept: [] });   // drugie wczytanie nic nie zmienia
@@ -506,8 +506,8 @@ test('CW_BAZA, CW_ALIASY, CW_DODATKI: baza ćwiczeń do wczytania', () => {
   assert.deepEqual(plain(C.cwSync_(all, old, C.CW_WYCOFANE)), { add: [], aliases: [{ i: old.findIndex(r => r.cwiczenie === 'Dip'), value: 'Dipy; Parallel Bar Dip' }], drop: [], merged: 0, kept: [] });
   const own = names.concat(D.map(x => x[0]), F.map(x => x[0])).map(C.exKey_);                       // scalone duplikaty: zostaje nazwa z bazy, dawna jest tylko aliasem
   Object.keys(C.CW_SCALONE).forEach(k => { assert.ok(own.includes(C.exKey_(k)), 'scalone do nieistniejącego ćwiczenia: ' + k); C.CW_SCALONE[k].split('; ').forEach(a => { assert.ok(!own.includes(C.exKey_(a)), 'dawna nazwa nadal jest wierszem: ' + a); assert.equal(f(a), k); }); });
-  assert.equal([].concat(...Object.values(C.CW_SCALONE).map(v => v.split('; '))).length, 62);
-  assert.deepEqual(['Lying Leg Curls', 'Barbell Full Squat', 'Crunches', 'Farmer\'s Walk', 'Rope Crunch', 'Butt Lift (Bridge)'].map(f), ['Hamstring Curl', 'Back Squat', 'Crunch', 'Farmer Carry', 'Cable Crunch', 'Glute Bridge']);
+  assert.equal([].concat(...Object.values(C.CW_SCALONE).map(v => v.split('; '))).length, 65);
+  assert.deepEqual(['Lying Leg Curls', 'Barbell Full Squat', 'Crunches', 'Farmer\'s Walk', 'Rope Crunch', 'Butt Lift (Bridge)', 'Rack Delivery'].map(f), ['Hamstring Curl', 'Back Squat', 'Crunch', 'Farmer Carry', 'Cable Crunch', 'Glute Bridge', 'Clean Rack Delivery']);
   assert.ok(C.exInfo_(ix, 'Lying Leg Curls').infos.length === 1);                                   // dawna nazwa dostaje film ćwiczenia, które zostaje
   assert.deepEqual(['Slow Snatch', 'Single Arm Cable Pull (fixed on bench)', 'Barbell Squat', 'Jerk from blocks (cluster)', 'Dumbbell Bench Press'].map(f), ['Slow-Motion Snatch', 'Single-Arm Pulldown', 'Back Squat', 'Jerk From Blocks', 'Dumbbell Bench Press']);
   assert.deepEqual(['Snatch Pull z haka', 'Rot. wewn. biodra z gumą (siad na skrzyni)'].map(f), Array(2).fill(null));   // bez zgadywania: alias albo własny wiersz

@@ -708,12 +708,15 @@ const CW_WYCOFANE = {
 };
 
 /**
- * Duplikaty scalone (przegląd bazy 22.11.2026): nazwa, która zostaje → dawne nazwy tego samego ćwiczenia („;”).
+ * Duplikaty scalone (przegląd bazy 22.11.2026; trzy pierwsze z wątpliwych wybrał Damian 23.11): nazwa, która zostaje → dawne nazwy tego samego ćwiczenia („;”).
  * Dawne nazwy są aliasami, więc plany i historia klientów dalej je rozpoznają. „Wczytaj bazę ćwiczeń” dopisuje je do aliasów
  * i usuwa ich dawne wiersze z arkusza, o ile trener nic w nich nie wpisał (aliasy, link, zamienniki, grupa); wiersze z ręcznymi wpisami zostają.
  * Tylko to samo ćwiczenie na tym samym sprzęcie; warianty (inny sprzęt, chwyt, pozycja) zostają osobnymi wierszami.
  */
 const CW_SCALONE = {
+  'Clean Rack Delivery': 'Rack Delivery',
+  'Concentration Curl': 'Standing Concentration Curl',
+  'Cable Rope Overhead Triceps Extension': 'Triceps Overhead Extension with Rope',
   'Dumbbell Front Raise': 'Front Two-Dumbbell Raise',
   'Press Behind The Neck': 'Standing Barbell Press Behind Neck',
   'Dumbbell Press': 'Standing Dumbbell Press; Seated Dumbbell Press; Dumbbell Shoulder Press',
@@ -1273,7 +1276,6 @@ const CW_FEDB = [
   ["Quad Stretch","czworogłowe"],
   ["Quadriceps-SMR","czworogłowe"],
   ["Quick Leap","czworogłowe"],
-  ["Rack Delivery","barki"],
   ["Rack Pull with Bands","prostowniki grzbietu"],
   ["Rack Pulls","prostowniki grzbietu"],
   ["Rear Leg Raises","czworogłowe"],
@@ -1411,7 +1413,6 @@ const CW_FEDB = [
   ["Standing Cable Chest Press","klatka"],
   ["Standing Cable Lift","brzuch"],
   ["Standing Cable Wood Chop","brzuch"],
-  ["Standing Concentration Curl","biceps"],
   ["Standing Dumbbell Calf Raise","łydki"],
   ["Standing Dumbbell Straight-Arm Front Delt Raise Above Head","barki"],
   ["Standing Dumbbell Upright Row","kapturowe"],
@@ -1467,7 +1468,6 @@ const CW_FEDB = [
   ["Trail Running/Walking","czworogłowe"],
   ["Trap Bar Deadlift","czworogłowe"],
   ["Tricep Side Stretch","triceps"],
-  ["Triceps Overhead Extension with Rope","triceps"],
   ["Triceps Pushdown - V-Bar Attachment","triceps"],
   ["Triceps Stretch","triceps"],
   ["Tuck Crunch","brzuch"],

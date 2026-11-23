@@ -7,7 +7,7 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Przegląd 22.11 znalazł 95 par: 62 to samo ćwiczenie pod dwiema nazwami (54 nazwy z free-exercise-db przy ćwiczeniach Catalyst z filmem i 8 dubletów w samej free-exercise-db), 33 różnią się sprzętem, chwytem albo pozycją (do decyzji Damiana), 17 tylko wygląda podobnie (nie ruszamy).
 - Scalenie = dawna nazwa staje się aliasem tej, która zostaje (`CW_SCALONE`), i znika z `CW_FEDB`. Nazwa w Planie i Logu się nie zmienia; dopasowanie idzie przez alias, więc dawna nazwa dostaje film i partie ćwiczenia głównego. Statystyki w aplikacji liczą się dalej po nazwie z Logu (bez łączenia historii dwóch nazw).
 - Arkusz: „Wczytaj bazę ćwiczeń” usuwa dawny wiersz tylko, gdy trener nic w nim nie wpisał (aliasy, link, zamienniki, grupa; partia z bazy się nie liczy). Wiersz z wpisami zostaje i działa jak dotąd; komunikat go wymienia, scalenie ręczne przez kolumnę `glowna`.
-- Wątpliwe pary scalamy tylko po odpowiedzi Damiana, tym samym mechanizmem (dopisanie do `CW_SCALONE`).
+- Z wątpliwych Damian 23.11 wybrał 3: Rack Delivery → Clean Rack Delivery, Standing Concentration Curl → Concentration Curl, Triceps Overhead Extension with Rope → Cable Rope Overhead Triceps Extension. Pozostałe zostają osobnymi ćwiczeniami; O9 (Seated Barbell Military Press / Barbell Shoulder Press) to według Damiana wersja siedząca i stojąca, więc nie scalamy.
 
 ## 2026-11-23 · „Zrobiona” jednostka: Sesje albo seria A/B, nie sama korekcja i nie wyzerowana seria
 
