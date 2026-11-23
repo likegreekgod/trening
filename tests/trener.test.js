@@ -188,6 +188,12 @@ async function page(calls, opt = {}) {
         { name: 'Wymyślone „ćwiczenie” <b>', inBase: false, as: [], n: 1, clients: 1, last: '' }].filter(x => !st.cw.films[x.name]);
       const dead = [{ name: 'Hang Clean', url: 'https://youtu.be/bbbbbbbbbbb', why: 'brak', n: 2 }].filter(x => !st.cw.films[x.name]);
       out = { ok: true, result: { missing: miss, dead, links: 640, at: st.cw.at, checked: st.cw.at ? 641 : 0, trigger: true } }; }
+    else if (b.fn === 'trKlientEksport') { await new Promise(res => setTimeout(res, 100));   // RODO (apps-script/Rodo.gs)
+      out = { ok: true, result: { name: 'dane-' + b.args[0] + '-' + TODAY + '.zip', b64: Buffer.from('PK\u0003\u0004 syntetyczny zip').toString('base64'), tabs: { Plan: 40, Log: 120, Sesje: 20, Klienci: 1 }, films: 3 } }; }
+    else if (b.fn === 'trKlientUsun') { await new Promise(res => setTimeout(res, 100)); st.kl = st.kl || KLIENCI.map(k => Object.assign({}, k));
+      const k = st.kl.find(x => x.id === b.args[0]);
+      if (!k || String(b.args[1]).trim().toLowerCase() !== k.name.toLowerCase()) out = { ok: false, error: 'Wpisz dokładnie imię klienta: ' + (k ? k.name : '?') + '.' };
+      else { st.kl = st.kl.filter(x => x !== k); out = { ok: true, result: { name: k.name, tabs: { Plan: 40, Log: 120, Klienci: 1 }, rows: 161, folder: 'kosz' } }; } }
     else if (b.fn === 'trMailProba') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { day: addDays(TODAY, 2), title: 'Trening A' } }; }
     else if (b.fn === 'trPlan') { await new Promise(res => setTimeout(res, 100)); const e = b.args[1];
       if (/błąd/.test(e.unote || '')) out = { ok: false, error: 'Ta jednostka jest już zrobiona (albo klient zaczął ją zapisywać) – zmiany tylko w niezrobionych.' };
@@ -562,6 +568,35 @@ test('panel: Ćwiczenia bez filmu (link trenera do bazy, martwe linki, szukanie,
     assert.match(await p.textContent('#cw-chk'), /Sprawdź teraz/); assert.match(await p.textContent('#main'), /Linki nie były jeszcze sprawdzane/);
     await p.click('#cw-chk'); await p.waitForFunction(() => /Sprawdzone/.test(document.querySelector('#main').textContent));
     assert.match(await p.textContent('#main'), /Sprawdzone .*, 641 linków\. Samo sprawdza co poniedziałek ok\. 4:00\./);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});
+
+test('panel: RODO – pobranie danych klienta (ZIP) i usunięcie po wpisaniu imienia', async () => {
+  for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
+    const calls = [];
+    const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
+    await p.goto(base + 'trener.html#klienci/bartek'); await p.waitForSelector('#rodo-card');
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#rodo-dl')]);
+    assert.match(dl.suggestedFilename(), /^dane-bartek-\d{4}-\d{2}-\d{2}\.zip$/);
+    assert.equal(fs.readFileSync(await dl.path()).slice(0, 2).toString(), 'PK');
+    await p.waitForSelector('#rodo-card .saved');
+    assert.match(await p.textContent('#rodo-card .saved'), /181 wierszy z 4 zakładek, 3 filmy na liście/);
+    await p.click('#rodo-del'); await p.waitForSelector('#rodo-name');
+    assert.equal(await p.evaluate(() => document.activeElement.id), 'rodo-name');
+    assert.ok(await p.isDisabled('#rodo-go'));
+    await p.fill('#rodo-name', 'Bart'); assert.ok(await p.isDisabled('#rodo-go'));
+    await p.fill('#rodo-name', ' bartek '); assert.ok(!(await p.isDisabled('#rodo-go')));             // wielkość liter i odstępy bez znaczenia
+    if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    await p.$eval('#rodo-card', e => e.scrollIntoView()); await shot(p, 'trener-rodo-' + (vp ? 'telefon-ciemny' : 'jasny') + '.png');
+    await p.click('#rodo-no'); assert.equal(await p.$('#rodo-name'), null);                          // anuluj
+    assert.equal(calls.filter(c => c.fn === 'trKlientUsun').length, 0);
+    await p.click('#rodo-del'); await p.fill('#rodo-name', 'Bartek'); await p.click('#rodo-go');
+    await p.waitForSelector('#kl-gone');
+    assert.deepEqual(calls.filter(c => c.fn === 'trKlientUsun').pop().args, ['bartek', 'Bartek']);
+    assert.match(await p.textContent('#kl-gone'), /Usunięto dane: Bartek \(161 wierszy; filmy: folder w koszu Dysku\)/);
+    assert.equal(await p.$('a.who[href*="bartek"]'), null);
     assert.deepEqual(p.errors, []);
     await ctx.close();
   }
