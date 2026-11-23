@@ -2226,7 +2226,7 @@ function importPlanFile_(f, dir) {
     importLog_(f.getName(), 'BŁĄD', 0, '', errs.slice(0, 10).join(' | '));
     return { ok: false, status: 'BŁĄD', msg: errs.slice(0, 10).join(' | ') };
   }
-  const log = pgTable_('Log', ['klient', 'tydzien', 'jednostka']);   // tylko trzy kolumny: Log jest duży
+  const log = pgTable_('Log', DONE_LOG_COLS);   // tylko kolumny do „zrobionej” jednostki: Log jest duży
   const m = mergePlan_(tableOf_('Plan'), rows, tableOf_('Sesje'), log);
   if (m.errors.length) {
     f.moveTo(bad);
@@ -2290,11 +2290,46 @@ function validatePlan_(rows) {
 }
 
 /**
+ * Kiedy jednostka jest zrobiona (23.11.2026): wpis w Sesjach albo w Logu seria robocza / dodatkowa / drop (nie rozgrzewka R…,
+ * nie pominięcie 0) z ✓ (wykonane = TAK) albo nieudana (typ FAIL), w ćwiczeniu innym niż korekcja K. Jednostka z samymi K
+ * (albo seria spoza planu) liczy się po takiej serii K. Seria wyzerowana (✓ → ✕ → puste), sam film i sama prędkość się nie liczą.
+ * Ta sama reguła: import (mergePlan_), poranny mail, Plan w panelu (trPlanEdit_), aplikacja-panel (lib doneUnits).
+ * plan, ses, log: wiersze arkusza (log co najmniej DONE_LOG_COLS) → {klucz doneKey_: 'S' (Sesje) | 'L' (Log)}.
+ */
+const DONE_LOG_COLS = ['klient', 'tydzien', 'jednostka', 'nr_cw', 'seria', 'wykonane', 'typ'];
+function doneKey_(klient, tydzien, jednostka) {
+  const t = v => String(v === undefined || v === null ? '' : v).trim();
+  return t(klient).toLowerCase() + '|' + (Number(t(tydzien)) || t(tydzien)) + '|' + t(jednostka);
+}
+function doneWork_(l) {
+  const se = String(l.seria === undefined || l.seria === null ? '' : l.seria).trim();
+  if (!se || se === '0' || /^R/i.test(se)) return false;
+  return String(l.wykonane || '').trim().toUpperCase() === 'TAK' || /FAIL/i.test(String(l.typ || ''));
+}
+function unitsDone_(plan, ses, log) {
+  const prio = {}, notK = {}, out = {};
+  (plan || []).forEach(r => {
+    if (removed_(r)) return;
+    const u = doneKey_(r.klient, r.tydzien, r.jednostka), p = String(r.prio || '').trim().toUpperCase();
+    prio[u + '|' + Number(r.nr)] = p;
+    if (p !== 'K') notK[u] = 1;
+  });
+  (ses || []).forEach(x => { if (String(x.klient || '').trim()) out[doneKey_(x.klient, x.tydzien, x.jednostka)] = 'S'; });
+  (log || []).forEach(l => {
+    if (!String(l.klient || '').trim() || !doneWork_(l)) return;
+    const u = doneKey_(l.klient, l.tydzien, l.jednostka);
+    if (out[u]) return;
+    if (prio[u + '|' + Number(l.nr_cw)] !== 'K' || !notK[u]) out[u] = 'L';
+  });
+  return out;
+}
+
+/**
  * Czysta funkcja: nowy plan klientów z pliku + reszta zakładki Plan.
  * Zakres: plik podmienia u swoich klientów tylko bloki, które sam zawiera (pole `blok`; pusty blok to też blok),
  * i jednostki, które sam zawiera (ten sam tydzień i jednostka, nawet z innym blokiem: uwaga). Niezrobione jednostki
  * tych bloków, których nie ma w pliku, znikają i każda trafia do `removed` (raport w Import). Inne bloki klienta zostają.
- * Zrobiona jednostka = wpis w Sesjach albo jakakolwiek seria w Logu (`log`); takiej nigdy nie usuwamy ani nie zmieniamy:
+ * Zrobiona jednostka = wpis w Sesjach albo seria A/B w Logu (`unitsDone_`, log z DONE_LOG_COLS); takiej nigdy nie usuwamy ani nie zmieniamy:
  * wiersze pliku dla niej są pomijane (uwaga), a gdy blok w pliku i w planie się różni — błąd (tygodnie numeruj ciągle).
  * Własne treningi klienta (`zrodlo` = klient) są nietykalne.
  * Pole wiersza `zastepuje` (nazwa bloku, np. „B1”; nie trafia do Planu): usuwa niezrobione wiersze tego bloku
@@ -2306,9 +2341,8 @@ function mergePlan_(existing, incoming, ses, log) {
   const blk = r => String(r.blok === undefined || r.blok === null ? '' : r.blok).trim();
   const unit = r => [lc(r.klient), r.tydzien, r.jednostka].join('|');
   const clients = [...new Set(incoming.map(r => lc(r.klient)))];
-  const done = {}, inSes = {};
-  (ses || []).forEach(s => { done[unit(s)] = 1; inSes[unit(s)] = 1; });
-  (log || []).forEach(l => { if (!blank_(l.klient)) done[unit(l)] = 1; });
+  const dk = unitsDone_(existing, ses, log), done = {}, inSes = {};                     // zrobiona: Sesje albo seria A/B (unitsDone_)
+  existing.concat(incoming).forEach(r => { const k = dk[doneKey_(r.klient, r.tydzien, r.jednostka)]; if (k) { done[unit(r)] = 1; if (k === 'S') inSes[unit(r)] = 1; } });
   const day = v => v instanceof Date ? fmtDate_(v) : String(v === undefined || v === null ? '' : v).slice(0, 10);
   const zast = {}, from = {}, fileBlocks = {}, fileUnits = {};               // klient → blok do zamknięcia, od daty, bloki z pliku
   incoming.forEach(r => {
@@ -2363,6 +2397,18 @@ function mergePlan_(existing, incoming, ses, log) {
         ', plik ma blok ' + blk(r) + ' — numeruj tygodnie dalej (np. od ' + (Math.max(...existing.filter(e => lc(e.klient) === lc(r.klient)).map(e => Number(e.tydzien) || 0)) + 1) + ')');
     } else if (!skipped[u]) warnings.push(lc(r.klient) + ' tyg. ' + r.tydzien + ' ' + r.jednostka + ': zrobiona, zostaje bez zmian');
     skipped[u] = 1;
+  });
+  // niezrobiona jednostka z zapisaną serią (np. sama korekcja K): id serii ma numer ćwiczenia, więc inne ćwiczenie pod tym numerem
+  // w pliku przejmie tę serię — uwaga w Import
+  const exAt = {}; existing.forEach(r => { exAt[unit(r) + '|' + Number(r.nr)] = String(r.cwiczenie || '').trim(); });
+  const inAt = {}; fresh.forEach(r => { inAt[unit(r) + '|' + Number(r.nr)] = String(r.cwiczenie || '').trim(); });
+  const nrWarn = {};
+  (log || []).forEach(l => {
+    if (blank_(l.klient) || !doneWork_(l)) return;
+    const k = unit(l) + '|' + Number(l.nr_cw), was = exAt[k], now = inAt[k];
+    if (nrWarn[k] || !was || now === undefined || lc(was) === lc(now)) return;
+    nrWarn[k] = 1;
+    warnings.push(lc(l.klient) + ' tyg. ' + l.tydzien + ' ' + l.jednostka + ': seria w Logu pod nr ' + Number(l.nr_cw) + ' (' + was + '), w pliku pod tym numerem ' + now + ' — seria przypisze się do nowego ćwiczenia');
   });
   const freshU = {}, edN = {};
   const fresh2 = fresh.map(r => { const u = unit(r); freshU[u] = 1;

@@ -1064,9 +1064,7 @@ function peBad(f, v){
   return '';
 }
 function planUnits(d, dates){
-  const done = {};
-  (d.sessions || []).forEach(s => { done[uKey(s.tydzien, s.jednostka)] = 1; });
-  (d.logs || []).forEach(l => { done[uKey(l.tydzien, l.jednostka)] = 1; });
+  const done = TL.doneUnits(d.plan, d.sessions, d.logs);                     // Sesje albo seria A/B (jak unitsDone_ w Code.gs)
   const by = {};
   (d.plan || []).filter(r => !r.own).forEach(r => { const u = uKey(r.week, r.day); (by[u] = by[u] || { u, week: r.week, day: r.day, title: r.title, block: r.block, date: dates[u] || r.date, rows: [] }).rows.push(r); });
   return Object.values(by).map(x => Object.assign(x, { done: !!done[x.u], rows: x.rows.sort((a, b) => a.order - b.order), unote: (x.rows.find(r => r.unote) || {}).unote || '' }))

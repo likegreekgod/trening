@@ -375,8 +375,9 @@ test('poranny mail: komu wysłać (rannyDo_), jednostka (rannyUnit_) i treść (
   assert.equal(list[0].email, 'ania@example.com');
   assert.equal(list[0].units.length, 1, 'własny trening nie liczy się jako jednostka do maila');
   assert.deepEqual(list[0].units[0].map(r => r.nr), [1, 2], 'bez ćwiczeń dodanych przez klienta');
-  // seria w Logu też znaczy „zaczęty”
-  assert.equal(C.rannyDo_(kl, plan, [{ klient: 'Ania', tydzien: '8', jednostka: 'A' }], ses, today).length, 0);
+  // seria w Logu (z ✓, w ćwiczeniu A/B) też znaczy „zaczęty”; wyzerowana seria nie (23.11)
+  assert.equal(C.rannyDo_(kl, plan, [{ klient: 'Ania', tydzien: '8', jednostka: 'A', nr_cw: 1, seria: 1, wykonane: 'TAK' }], ses, today).length, 0);
+  assert.equal(C.rannyDo_(kl, plan, [{ klient: 'Ania', tydzien: '8', jednostka: 'A', nr_cw: 1, seria: 1, wykonane: '' }], ses, today).length, 1);
   // data jako Date z arkusza przez dayOf
   assert.equal(C.rannyDo_([K('ania')], [P('ania', 8, 'A', new Date(2026, 10, 24), 1)], [], [], today, v => v instanceof Date ? '2026-11-24' : String(v)).length, 1);
 
@@ -594,6 +595,33 @@ test('ownRows_: walidacja i wiersze Planu własnej jednostki', () => {
   assert.deepEqual(Array.from(C.PLAN_HEADERS.slice(-6)), ['zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod', 'uwagi_jedn']);   // nowe kolumny na końcu
 });
 
+test('unitsDone_: zrobiona = Sesje albo seria A/B z ✓ lub FAIL; korekcja K, rozgrzewka, pominięcie i wyzerowana seria się nie liczą', () => {
+  const P = (j, nr, prio, x) => Object.assign({ klient: 'damian', tydzien: 12, jednostka: j, nr, cwiczenie: 'C' + nr, prio }, x || {});
+  const plan = [P('S1', 1, 'K'), P('S1', 2, 'A'), P('S1', 3, 'B'), P('S2', 1, 'K'), P('S3', 1, 'A'), P('S4', 1, 'A'), P('S5', 1, 'A')];
+  const L = (j, nr, seria, x) => Object.assign({ klient: 'Damian', tydzien: '12', jednostka: j, nr_cw: nr, seria }, x || {});
+  const log = [
+    L('S1', 1, 1, { wykonane: 'TAK' }),                 // 22.11: sama korekcja K → S1 dalej niezrobiona
+    L('S2', 1, 1, { wykonane: 'TAK' }),                 // jednostka z samymi K → zrobiona
+    L('S3', 1, 1, { wykonane: '' }), L('S3', 1, 'R1', { wykonane: 'TAK' }), L('S3', 1, 0, { typ: 'SKIP' }),   // wyzerowana, rozgrzewka, pominięcie
+    L('S4', 1, 2, { wykonane: '', typ: 'FAIL' }),       // nieudana seria A = zaczęta
+    L('S5', 1, 1, { wykonane: '', film_link: 'https://drive.google.com/x' }),   // sam film bez ✓
+    L('S6', 4, 'D1', { wykonane: 'TAK' })               // spoza planu (np. dodane) = liczy się
+  ];
+  const ses = [{ klient: 'damian', tydzien: 12, jednostka: 'S5' }];
+  const d = C.unitsDone_(plan, ses, log);
+  assert.deepEqual(plain(d), { 'damian|12|S2': 'L', 'damian|12|S4': 'L', 'damian|12|S5': 'S', 'damian|12|S6': 'L' });
+  // seria A w S1 → zrobiona
+  assert.equal(C.unitsDone_(plan, [], log.concat([L('S1', 2, 1, { wykonane: 'TAK' })]))['damian|12|S1'], 'L');
+  // import: poprawka planu na jednostkę z samą serią K wchodzi (uwaga zamiast „zrobiona, zostaje bez zmian”)
+  const m = C.mergePlan_(plan, [P('S1', 1, 'K'), P('S1', 2, 'A', { kg: 100 }), P('S1', 3, 'B')], [], log);
+  assert.equal(m.rows.find(r => r.jednostka === 'S1' && r.nr === 2).kg, 100);
+  assert.ok(!m.warnings.some(w => /12 S1: zrobiona/.test(w)));
+  // inne ćwiczenie pod numerem z zapisaną serią K = uwaga w Import
+  const m2 = C.mergePlan_(plan, [P('S1', 1, 'K', { cwiczenie: 'Inne' }), P('S1', 2, 'A')], [], log);
+  assert.ok(m2.warnings.some(w => /tyg\. 12 S1: seria w Logu pod nr 1 \(C1\), w pliku pod tym numerem Inne/.test(w)));
+  assert.equal(C.doneKey_(' Damian ', '12', ' S1 '), 'damian|12|S1');
+});
+
 test('mergePlan_: plik usuwa niezrobione jednostki tylko z bloków, które sam zawiera; zrobiona = Sesje albo Log', () => {
   const R = (w, j, blok, x) => Object.assign({ klient: 'damian', tydzien: w, jednostka: j, nr: 1, cwiczenie: 'Rwanie', serie: 3, powt: '2', blok }, x || {});
   const H1 = [R(9, 'S1', 'H1'), R(9, 'S2', 'H1'), R(10, 'S1', 'H1'), R(10, 'S2', 'H1')];
@@ -601,7 +629,7 @@ test('mergePlan_: plik usuwa niezrobione jednostki tylko z bloków, które sam z
   const own = R(10, 'W1', '', { zrodlo: 'klient' }), ewa = Object.assign(R(1, 'T1', 'B1'), { klient: 'ewa' });
   const plan = H1.concat(H2, [own, ewa]);
   const ses = [{ klient: 'damian', tydzien: 9, jednostka: 'S1' }, { klient: 'damian', tydzien: 10, jednostka: 'S1' }];
-  const log = [{ klient: 'damian', tydzien: 9, jednostka: 'S2', seria: 1 }];          // serie w Logu, sesja niezakończona
+  const log = [{ klient: 'damian', tydzien: 9, jednostka: 'S2', nr_cw: 1, seria: 1, wykonane: 'TAK' }];   // serie w Logu, sesja niezakończona
   const key = r => r.tydzien + r.jednostka + ':' + r.nr;
   // 17.11: plik H1 z samą zrobioną tyg. 10 S1 → H2 zostaje w całości, usunięta tylko niezrobiona tyg. 10 S2 bloku H1
   let m = C.mergePlan_(plan, [R(10, 'S1', 'H1')], ses, log);
@@ -1264,7 +1292,7 @@ test('trPlanEdit_, trPlanVal_: szybka zmiana planu z panelu (tylko niezrobione, 
     R(13, 'T1', 1, 'Przysiad', { kg: '100' }),                                   // zaczęta (seria w Logu)
     R(9, 'W1', 1, 'Bieg', { zrodlo: 'klient' }),                                  // własny trening klienta
     R(9, 'T1', 1, 'Przysiad', { klient: 'bartek', kg: '60' })];
-  const ses = [{ klient: 'ania', tydzien: 8, jednostka: 'T1' }], log = [{ klient: 'Ania', tydzien: '13', jednostka: 'T1' }];
+  const ses = [{ klient: 'ania', tydzien: 8, jednostka: 'T1' }], log = [{ klient: 'Ania', tydzien: '13', jednostka: 'T1', nr_cw: 1, seria: 1, wykonane: 'TAK' }];
   const ed = e => JSON.parse(JSON.stringify(C.trPlanEdit_(plan, ses, log, 'ania', e)));
   // walidacja pól (ta sama reguła co peBad w panelu)
   assert.deepEqual(JSON.parse(JSON.stringify(C.trPlanVal_('kg', '92,5'))), { v: 92.5, c: 92.5 });
@@ -1528,7 +1556,7 @@ test('Prowadź trening: ćwiczenie i jednostka trenera w planie (zrodlo „trene
   assert.equal(C.ownRows_('ania', Object.assign({}, u, { day: 'W2' }), plan, true).error, 'Zła jednostka.');
   assert.equal(C.ownRows_('ania', u, plan).error, 'Zła jednostka.');               // klient nie zrobi jednostki T<n>
   // zmiana planu: z panelu zaczęta jednostka zablokowana, z prowadzonego treningu (live) nie
-  const log = [{ klient: 'ania', tydzien: 1, jednostka: 'T1' }];
+  const log = [{ klient: 'ania', tydzien: 1, jednostka: 'T1', nr_cw: 1, seria: 1, wykonane: 'TAK' }];
   assert.match(C.trPlanEdit_(plan, [], log, 'ania', { week: 1, day: 'T1', ex: [{ order: 1, kg: '87,5' }] }).error, /już zrobiona/);
   r = plain(C.trPlanEdit_(plan, [], log, 'ania', { week: 1, day: 'T1', live: true, next: true, ex: [{ order: 1, kg: '87,5' }] }));
   assert.deepEqual(r.rows.map(x => [x.week, x.f.kg]), [[1, 87.5], [2, 87.5]]);
