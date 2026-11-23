@@ -948,3 +948,13 @@ test('effHint: przy skali RIR podpis zaczyna się od RIR, przy RPE jak dotąd (2
   assert.equal(L.effHint('X', true), L.EFF.X.hint);
   assert.equal(L.effHint('', true), '');
 });
+
+test('filmOk: telefon odrzuca film > 1 GB i plik, który nie jest filmem, tak samo jak serwer (filmOk_ w Kopia.gs)', () => {
+  const C = require('./load-code.js')();
+  const cases = [
+    { size: 50e6, mimeType: 'video/mp4', fileName: 'a.mp4' }, { size: 1024 ** 3, mimeType: 'video/mp4' }, { size: 1.5 * 1024 ** 3, mimeType: 'video/mp4' },
+    { size: 2e6, mimeType: 'image/jpeg', fileName: 'x.jpg' }, { size: 2e6, mimeType: 'application/octet-stream', fileName: 'x.mov' },
+    { size: 2e6, mimeType: '', fileName: 'notatka.txt' }, { size: 0, mimeType: 'video/mp4' }, {}];
+  for (const m of cases) assert.equal(L.filmOk(m), C.filmOk_(m), JSON.stringify(m));
+  assert.equal(L.FILM_MAX, 1024 ** 3);
+});

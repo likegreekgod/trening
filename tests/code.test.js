@@ -338,7 +338,7 @@ test('computeOverview_: przegląd klientów – sygnały, zaległe, koniec planu
 test('diagnose_: sprawdzenie arkusza z menu Trening', () => {
   const K = (id, klucz, x) => Object.assign({ klient_id: id, imie: id, aktywny: 'TAK', klucz, link: klucz ? 'https://example.test/?k=' + klucz : '' }, x || {});
   const R = (k, data, x) => Object.assign({ klient: k, tydzien: 1, jednostka: 'T1', data, nr: 1, powt: '5', blok: 'B1' }, x || {});
-  const ok = { klienci: [K('anna', 'k0123456789a')], plan: [R('anna', '2026-11-30')], pwaUrl: 'https://example.test/', triggers: ['podsumowanie', 'wczytajPlany'], bledy: 0, czeka: 0, today: '2026-10-12' };
+  const ok = { klienci: [K('anna', 'k0123456789a')], plan: [R('anna', '2026-11-30')], pwaUrl: 'https://example.test/', triggers: ['podsumowanie', 'wczytajPlany', 'kopiaArkusza'], bledy: 0, czeka: 0, today: '2026-10-12' };
   assert.deepEqual(Array.from(C.diagnose_(ok)), []);
   const bad = C.diagnose_({ today: '2026-10-12', pwaUrl: '', triggers: ['podsumowanie'], bledy: 2, czeka: 1,
     klienci: [K('anna', 'k0123456789a', { link: '' }), K('bob', 12345), K('bob', 'k0123456789b'), K('cel', 'k0123456789c'), K('stary', '', { aktywny: 'NIE' })],
@@ -346,7 +346,7 @@ test('diagnose_: sprawdzenie arkusza z menu Trening', () => {
   const txt = bad.map(r => r[0] + ': ' + r[1]).join('\n');
   for (const frag of ['błąd: Brak właściwości skryptu PWA_URL', 'błąd: Brak wyzwalacza „wczytajPlany”', 'błąd: Powtórzone klient_id „bob”', 'błąd: bob: brak poprawnego klucza',
     'uwaga: anna: brak aktualnego linku', 'uwaga: cel: aktywny klient bez planu', 'uwaga: Plan dla „duch”', 'błąd: anna: kolumna powt zamieniona na datę w wierszach Planu 3',
-    'uwaga: anna: plan kończy się za 3 dni', 'uwaga: bob: plan skończył się 2026-09-01', 'info: anna: plan bez kolumny blok', 'uwaga: Pliki w _plany/bledy: 2', 'info: Pliki czekające w _plany: 1'])
+    'uwaga: anna: plan kończy się za 3 dni', 'uwaga: Brak cotygodniowej kopii arkusza', 'uwaga: bob: plan skończył się 2026-09-01', 'info: anna: plan bez kolumny blok', 'uwaga: Pliki w _plany/bledy: 2', 'info: Pliki czekające w _plany: 1'])
     assert.ok(txt.includes(frag), 'brak: ' + frag + '\n' + txt);
   assert.ok(!/stary/.test(txt));                                                 // nieaktywny klient bez uwag
   assert.ok(!/Brak wyzwalacza „podsumowanie”/.test(txt));
@@ -356,6 +356,26 @@ test('diagnose_: sprawdzenie arkusza z menu Trening', () => {
   assert.ok(m.includes('błąd: Brak wyzwalacza „porannyMail”'), m);
   assert.ok(m.includes('uwaga: anna: poranny mail włączony, ale brak poprawnego adresu'), m);
   assert.deepEqual(Array.from(C.diagnose_(Object.assign({}, ok, { triggers: ok.triggers.concat('porannyMail'), klienci: [K('anna', 'k0123456789a', { mail_rano: 'TAK', email: 'a@example.com' })] }))), []);
+});
+
+test('kopia arkusza i limit filmu (Kopia.gs): filmOk_, kopieDoUsuniecia_, dyskStan_', () => {
+  const GB = 1024 * 1024 * 1024;
+  assert.equal(C.filmOk_({ size: 50e6, mimeType: 'video/mp4', fileName: 'a.mp4' }), '');
+  assert.equal(C.filmOk_({ size: 50e6, mimeType: 'video/quicktime', fileName: 'IMG_1.MOV' }), '');
+  assert.equal(C.filmOk_({ size: GB, mimeType: 'video/mp4' }), '');                                      // dokładnie 1 GB przechodzi
+  assert.match(C.filmOk_({ size: 1.5 * GB, mimeType: 'video/mp4' }), /1,5 GB, a limit to 1 GB/);
+  assert.match(C.filmOk_({ size: 2e6, mimeType: 'image/jpeg', fileName: 'x.jpg' }), /^To nie jest film/);
+  assert.equal(C.filmOk_({ size: 2e6, mimeType: 'application/octet-stream', fileName: 'x.mov' }), '');   // typ nieznany, rozszerzenie filmu
+  assert.equal(C.filmOk_({ size: 2e6, mimeType: '', fileName: '' }), '');                                // stara aplikacja bez nazwy
+  assert.match(C.filmOk_({ size: 0, mimeType: 'video/mp4' }), /Pusty/);
+  const F = (id, d) => ({ id, name: C.KOPIA_PREFIX + d, at: Date.parse(d) });
+  const files = ['2026-09-06', '2026-11-22', '2026-10-04', '2026-11-15', '2026-09-27', '2026-10-25', '2026-11-08', '2026-10-11', '2026-10-18', '2026-11-01']
+    .map((d, i) => F('f' + i, d)).concat([{ id: 'obcy', name: 'Notatki', at: 0 }]);
+  assert.deepEqual(Array.from(C.kopieDoUsuniecia_(files, 8)), ['f4', 'f0']);                         // dwie najstarsze, obcy plik zostaje
+  assert.deepEqual(Array.from(C.kopieDoUsuniecia_(files.slice(0, 3), 8)), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(C.dyskStan_(14 * GB, 15 * GB))), { used: 14 * GB, limit: 15 * GB, free: GB, low: true });
+  assert.equal(C.dyskStan_(5 * GB, 15 * GB).low, false);
+  assert.equal(C.dyskStan_(5 * GB, -1).free, null);                                                     // bez limitu
 });
 
 test('poranny mail: komu wysłać (rannyDo_), jednostka (rannyUnit_) i treść (rannyMail_)', () => {
@@ -548,6 +568,14 @@ test('alertMail_: mail tylko przy nowym czerwonym sygnale, bez powtórek', () =>
   assert.match(m2.body, /^Nowe sygnały do reakcji:\n• Anna: [^\n]+\n[^\n]+\n\nBez zmian od poprzedniego alertu:\n• ewa: [^\n]+\n\nSzczegóły w zakładce Przegląd\.\n/);
   assert.deepEqual(plain(C.alertMail_([ov[2]], 'stary|sygnał')), { send: false, subject: '', body: '', sig: '' });
   assert.equal(C.alertMail_([], '').send, false);
+  // mało miejsca na Dysku (Kopia.gs, dyskStan_): osobny sygnał, raz do zmiany
+  const low = C.dyskStan_(13.5 * 1024 ** 3, 15 * 1024 ** 3), d1 = C.alertMail_([], '', '', low);
+  assert.deepEqual([d1.send, d1.subject, d1.sig], [true, 'Trening: mało miejsca na Dysku', '_dysk|low']);
+  assert.match(d1.body, /Dysk Google: zostało 1,5 GB wolnego/);
+  assert.equal(C.alertMail_([], d1.sig, '', low).send, false);                                    // następnego dnia to samo → bez maila
+  assert.equal(C.alertMail_(ov, '', '', low).subject, 'Trening: 2 klientów do reakcji, mało miejsca na Dysku');
+  assert.equal(C.alertMail_([], '', '', C.dyskStan_(1e9, 15 * 1024 ** 3)).send, false);         // dość miejsca
+  assert.equal(C.alertMail_(ov, m.sig, '', null).send, false);                                     // Google nie podał miejsca
 });
 
 test('orphanPlans_: wiersze Planu bez klienta w zakładce Klienci', () => {
@@ -1508,7 +1536,7 @@ test('zapis do arkusza: zapisy klienta z tekstem jak formuła zostają tekstem (
 });
 
 test('diagnose_, formulaCells_: formuła w danych od klientów = błąd, w Planie = uwaga', () => {
-  const base = { today: '2026-11-22', pwaUrl: 'https://example.github.io/trening/', triggers: ['podsumowanie', 'wczytajPlany'], klienci: [], plan: [] };
+  const base = { today: '2026-11-22', pwaUrl: 'https://example.github.io/trening/', triggers: ['podsumowanie', 'wczytajPlany', 'kopiaArkusza'], klienci: [], plan: [] };
   assert.deepEqual(Array.from(C.diagnose_(base)), []);
   assert.deepEqual(Array.from(C.diagnose_(Object.assign({ formuly: [] }, base))), []);
   const out = C.diagnose_(Object.assign({ formuly: [{ tab: 'Log', cells: ['P12', 'P13', 'Q2', 'R2', 'S2', 'T2'] }, { tab: 'Plan', cells: ['L7'] }, { tab: 'Sesje', cells: [] }] }, base)).map(r => Array.from(r));

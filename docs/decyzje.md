@@ -2,6 +2,13 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-23 · Kopia arkusza co tydzień, limit filmu 1 GB, miejsce na Dysku (v92, punkty 10 i 8 przeglądu v80)
+
+- Kopia = cały plik arkusza (`makeCopy`) co niedzielę ok. 3:00 do `Trening – Klienci/_kopie`, 8 ostatnich (`KOPIE_ILE`), starsze do kosza Dysku (tam znikają same po 30 dniach). Usuwane są tylko pliki z nazwą zaczynającą się od „Trening – kopia ” (`kopieDoUsuniecia_`), więc ręcznie wrzucone pliki w `_kopie` zostają. Filmów nie kopiujemy (już są na Dysku, a kopia zjadałaby miejsce).
+- Google kopiuje arkusz razem ze skryptem, ale bez wyzwalaczy i bez wdrożenia, więc kopia nie wysyła maili ani nie przyjmuje zapisów. W kopii nie uruchamiać „Zainstaluj wyzwalacze”. Powrót do danych = przeniesienie wierszy z kopii, bez automatu (rzadkie, a automat mógłby nadpisać nowsze dane).
+- Limit filmu 1 GB (`FILM_MAX`) i tylko wideo (typ `video/*` albo rozszerzenie filmu; brak typu i nazwy = przepuszczamy, stara aplikacja): telefon (`TL.filmOk`) przed kolejką, serwer (`filmOk_`) w `startUpload`. Odrzucony plik nie jest ponawiany (`vqRun`). Odrzucone: kompresja w telefonie (wolna, psuje jakość do analizy techniki).
+- Miejsce na Dysku: `DriveApp.getStorageUsed/Limit` w `trPulpit` (`dysk`) i `trDysk`; poniżej 2 GB wolnego (`DYSK_MALO`) czerwony wpis w „Wymaga uwagi” i w porannym alercie mailowym (raz, do zmiany stanu). Dysk bez limitu = bez sygnału.
+
 ## 2026-11-23 · Reszta przeglądu v80: plan 12 PR-ów; RIR w podpisach świateł, jedna linia w trakcie treningu (v89)
 
 - Damian 23.11 zaakceptował wszystkie szkice pozostałych punktów (3c, 5–17 bez 4) z ustaleniami domyślnymi: punkt 9 zwija kartę „dziś”, pasek tygodnia i baner; zdjęcia free-exercise-db w repozytorium (ok. 15 MB, ładowane na żądanie, bez precache); „Zaplanuj następną” +2,5 kg po samych 🟢 dla A i B, K bez zmian; pomiary ciała: masa, talia, biodra, klatka, ramię, udo; limit filmu 1 GB. Kolejność: RIR + 9 → kopia arkusza + limit filmu → Zaplanuj następną → Trening bez planu i szablony → lista prowadzonych → mail o komentarzu + „ostatnio otwarta” → polskie nazwy → zdjęcia → zakładka Ćwiczenia → masa ciała → RODO → CSP w aplikacji (na końcu, bo przenosi cały kod).
