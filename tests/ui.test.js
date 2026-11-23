@@ -3098,6 +3098,49 @@ for (const [mode, scheme] of [['PRO', 'light'], ['PROSTY', 'dark']]) test(`Rozgr
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
+test('Prowadź: ćwiczenie z masą ciała i na czas (+ Ćwiczenie, zmień plan), − / + seria robocza', async () => {
+  const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  const ex = (order, name, prio, kg, reps) => ({ week: 13, day: 'T1', title: 'Nogi', date: day(0), order, name, prio, sets: 3, reps, pct: null, kg, rpe: '', note: '', extra: 1, drop: 0, block: 'B2' });
+  const LD = { cfg: { name: 'Ania', pain: true, simple: false, extra: 1, swap: 'DOWOLNA', scale: 'RPE', edit: true, own: true, live: true },
+    plan: [ex(1, 'Przysiad tylny', 'A', 85, '5'), ex(2, 'Plank', 'B', 'BW', '30 s')],
+    logs: [1, 2, 3].map(s => ({ id: 'ania|13|T1|1|' + s, tydzien: 13, jednostka: 'T1', data: day(0), nr_cw: 1, cwiczenie: 'Przysiad tylny', seria: s, kg: 85, powt: 5, rpe: 8, wykonane: 'TAK', typ: '', zapisano: day(0) + 'T07:00:00.000Z' })),
+    sessions: [] };
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const JWT = b64({ alg: 'none' }) + '.' + b64({ exp: Math.floor(Date.now() / 1000) + 3600, email: 't@example.com' }) + '.sig';
+  const api = b => b.fn === 'getExNames' ? [['Squat Hold', '', 'uda']] : b.fn === 'trPlan' ? { n: 1, weeks: [13], rows: [{ week: 13, day: 'T1', order: 2, f: { sets: 4 } }] } : null;
+  for (const scheme of ['light', 'dark']) {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: LD, api, scheme });
+    await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); } catch (e) {} }, JWT);
+    await p.goto(base + '?prowadz=ania&j=13%7CT1'); await p.waitForSelector('.set[data-o="2"]');
+    // serie robocze: przysiad ma zapisane 3 z 3 → „− seria” zablokowane; plank (tryb skupienia zaczyna od niego) „+ seria” zmienia plan
+    assert.equal(await p.isDisabled('[data-tsets="1"][data-d="-1"]'), true);
+    assert.equal(await p.isDisabled('[data-tsets="2"][data-d="-1"]'), false);
+    await p.click('[data-tsets="2"][data-d="1"]');
+    await p.waitForSelector('.set[data-o="2"][data-s="4"][data-k="p"]');
+    assert.deepEqual(calls.find(c => c.fn === 'trPlan').args[1].ex, [{ order: 2, sets: '4' }]);
+    // zmień plan: Plank ma już BW i czas
+    await p.click('[data-tplan="2"]');
+    assert.equal(await p.getAttribute('[data-kbw="1"]', 'aria-pressed'), 'true');
+    assert.equal(await p.getAttribute('[data-ktm="1"]', 'aria-pressed'), 'true');
+    assert.equal(await p.inputValue('#tp-reps'), '30'); assert.equal(await p.isDisabled('#tp-kg'), true);
+    assert.equal(await p.textContent('#tp-rl'), 'Sekundy');
+    await p.click('[data-close]');
+    // + Ćwiczenie: Squat Hold, masa ciała, na czas 3 × 20 s
+    await p.click('#fx-add'); await p.fill('#ed-q', 'squat h'); await p.waitForSelector('#ed-res [data-n]'); await p.click('#ed-res [data-n]');
+    await p.click('[data-kbw="1"]'); await p.click('[data-ktm="1"]'); await p.fill('#ed-reps', '20');
+    assert.equal(await p.textContent('#ed-rl'), 'Sekundy');
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `prowadz-bw-czas-${scheme}.png`) }); }
+    await p.click('#ed-ok');
+    await p.waitForSelector('.set[data-o="3"]');
+    const ed = calls.find(c => c.fn === 'editPlan').args[0];
+    assert.equal(ed.kg, 'BW'); assert.equal(ed.reps, '20 s'); assert.equal(ed.trainer, true);
+    assert.equal(await p.getAttribute('.set[data-o="3"][data-s="1"] .kg', 'placeholder'), 'BW');
+    assert.equal(await p.getAttribute('.set[data-o="3"][data-s="1"] .reps', 'data-u'), 'sek.');
+    if (process.env.SCREENS !== '0') { await p.locator('.card[data-card]').last().scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(SCREENS, `prowadz-bw-karta-${scheme}.png`) }); }
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});
 test('Rozgrzewka: „+ rozgrzewka” podsuwa kolejny krok propozycji, potem pusty wiersz; po zapisanej serii roboczej bez propozycji', async () => {
   const calls = [];
   const { ctx, p } = await page(calls, false, { data: WARM });
