@@ -1539,11 +1539,11 @@ function missingExercises_(plan, dictRows) {
   return out.sort((a, b) => a.localeCompare(b, 'pl'));
 }
 
-/** Czysta funkcja: baza do wczytania = CW_BAZA z aliasami z CW_ALIASY + CW_DODATKI + CW_FEDB → [nazwa, id filmu, partie, aliasy]. */
-function cwBaza_(baza, aliasy, dodatki, fedb) {
-  const al = aliasy || {};
-  return (baza || []).map(b => [b[0], b[1], b[2], [b[3], al[b[0]]].filter(Boolean).join('; ')])
-    .concat((dodatki || []).map(d => [d[0], '', d[2], d[1]])).concat((fedb || []).map(f => [f[0], '', f[1], '']));
+/** Czysta funkcja: baza do wczytania = CW_BAZA z aliasami z CW_ALIASY + CW_DODATKI + CW_FEDB → [nazwa, id filmu, partie, aliasy]; dawne nazwy z CW_SCALONE dochodzą do aliasów. */
+function cwBaza_(baza, aliasy, dodatki, fedb, scalone) {
+  const al = aliasy || {}, sc = scalone || {}, join = a => a.filter(Boolean).join('; ');
+  return (baza || []).map(b => [b[0], b[1], b[2], join([b[3], al[b[0]], sc[b[0]]])])
+    .concat((dodatki || []).map(d => [d[0], '', d[2], join([d[1], sc[d[0]]])])).concat((fedb || []).map(f => [f[0], '', f[1], sc[f[0]] || '']));
 }
 
 /** wiersz-zaślepka: sama nazwa dopisana przez „Uzupełnij listę ćwiczeń”, bez żadnych danych */
@@ -1554,9 +1554,11 @@ const cwList_ = v => exStr_(v).split(';').map(s => s.trim()).filter(Boolean);
  * Czysta funkcja: co zrobić w zakładce Ćwiczenia, żeby miała całą bazę → {add, aliases, drop}.
  * add: nowe wiersze; aliases: [{i, value}] – nowa wartość kolumny aliasy (dopisane brakujące, usunięte wycofane;
  * pozostałych ręcznych nie rusza);
- * drop: indeksy wierszy-zaślepek, których nazwa ma już dopasowanie gdzie indziej. Indeksy liczone od pierwszego wiersza danych.
+ * drop: indeksy wierszy-zaślepek, których nazwa ma już dopasowanie gdzie indziej, i wierszy dawnych nazw z `scalone` bez ręcznych wpisów
+ * (merged: ile z nich); kept: „dawna → zostaje” dla dawnych wierszy z ręcznymi wpisami (zostają, do scalenia przez kolumnę glowna).
+ * Indeksy liczone od pierwszego wiersza danych.
  */
-function cwSync_(baza, dictRows, wycofane) {
+function cwSync_(baza, dictRows, wycofane, scalone) {
   const rows = dictRows || [], byKey = {}, add = [], aliases = [], drop = [];
   rows.forEach((r, i) => { const k = exKey_(r.cwiczenie); if (k && !cwEmpty_(r)) byKey[k] = i; });
   (baza || []).forEach(b => {
@@ -1571,7 +1573,14 @@ function cwSync_(baza, dictRows, wycofane) {
     .concat(add.map(a => ({ cwiczenie: a[0], aliasy: a[1], instruktaz: a[2], partia: a[3] })));
   const ix = exIndex_(after);
   rows.forEach((r, i) => { if (exKey_(r.cwiczenie) && cwEmpty_(r) && exInfo_(ix, r.cwiczenie).found) drop.push(i); });
-  return { add: add, aliases: aliases, drop: drop };
+  const gone = {}, kept = []; let merged = 0;
+  Object.keys(scalone || {}).forEach(k => cwList_(scalone[k]).forEach(n => { gone[exKey_(n)] = k; }));
+  rows.forEach((r, i) => {                                                   // dawne nazwy scalonych duplikatów
+    const g = gone[exKey_(r.cwiczenie)]; if (!g || cwEmpty_(r) || exStr_(r.glowna).trim()) return;
+    if (['aliasy', 'instruktaz', 'zamienniki', 'grupa'].some(h => exStr_(r[h]).trim())) kept.push(exStr_(r.cwiczenie).trim() + ' → ' + g);
+    else { drop.push(i); merged++; }
+  });
+  return { add: add, aliases: aliases, drop: drop, merged: merged, kept: kept };
 }
 
 function appendCw_(rows) {
@@ -1586,13 +1595,15 @@ function appendCw_(rows) {
  * które mają już dopasowanie. Linków, partii, zamienników ani ręcznie wpisanych aliasów nie zmienia.
  */
 function wczytajBazeCwiczen() {
-  const sh = sheet_('Ćwiczenia', CW_HEADERS), s = cwSync_(cwBaza_(CW_BAZA, CW_ALIASY, CW_DODATKI, CW_FEDB), tableOf_('Ćwiczenia'), CW_WYCOFANE);
+  const sh = sheet_('Ćwiczenia', CW_HEADERS), s = cwSync_(cwBaza_(CW_BAZA, CW_ALIASY, CW_DODATKI, CW_FEDB, CW_SCALONE), tableOf_('Ćwiczenia'), CW_WYCOFANE, CW_SCALONE);
   const col = CW_HEADERS.indexOf('aliasy') + 1;
   s.aliases.forEach(a => sh.getRange(a.i + 2, col).setValue(plain_(a.value)));
   s.drop.slice().sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
   appendCw_(s.add); cwCacheClear_();
   const left = missingExercises_(tableOf_('Plan'), tableOf_('Ćwiczenia')).length;
-  alert_('Ćwiczenia', 'Nowe ćwiczenia: ' + s.add.length + ', wiersze ze zmienionymi aliasami: ' + s.aliases.length + ', usunięte puste wiersze: ' + s.drop.length +
+  alert_('Ćwiczenia', 'Nowe ćwiczenia: ' + s.add.length + ', wiersze ze zmienionymi aliasami: ' + s.aliases.length + ', usunięte puste wiersze: ' + (s.drop.length - s.merged) +
+    (s.merged ? ', scalone duplikaty (dawna nazwa jest teraz aliasem): ' + s.merged : '') +
+    (s.kept.length ? '.\nDuplikaty z Twoimi wpisami, zostawione bez zmian (scal je ręcznie: wpisz w kolumnie „glowna” nazwę, która zostaje, potem „Uzupełnij listę ćwiczeń”): ' + s.kept.join('; ') : '') +
     '.\nĆwiczenia z planów nadal bez dopasowania: ' + left + (left ? ' (menu „Uzupełnij listę ćwiczeń” pokaże je na dole zakładki).' : '.'));
 }
 
