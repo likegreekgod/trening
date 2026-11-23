@@ -13,7 +13,7 @@
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
 const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
-  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj };
+  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj, trDysk, trKopia };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -95,8 +95,10 @@ function trPulpit() {
     'uwagi', 'typ', 'ocena', 'komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at', 'wykonane', 'zamiana']);
   const ses = pgTable_('Sesje', ['klient', 'tydzien', 'jednostka', 'start', 'czas_min', 'rpe_sesji', 'komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at']);
   const plan = pgTable_('Plan', ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'cwiczenie', 'serie', 'zrodlo']);
-  return trPulpit_({ prz: tableOf_('Przegląd'), sum: tableOf_('Podsumowanie'), bloki: tableOf_('Bloki'), klienci: tableOf_('Klienci'), log: log, ses: ses, plan: plan },
+  const out = trPulpit_({ prz: tableOf_('Przegląd'), sum: tableOf_('Podsumowanie'), bloki: tableOf_('Bloki'), klienci: tableOf_('Klienci'), log: log, ses: ses, plan: plan },
     { today: today_(), localDay: localDay, at: PropertiesService.getScriptProperties().getProperty('PODSUM_AT') || '' });
+  out.dysk = dysk_();                    // miejsce na Dysku: mało = czerwony wpis w „Wymaga uwagi” (Kopia.gs)
+  return out;
 }
 
 /** Przelicza podsumowanie (jak menu „Odśwież podsumowanie”) i zwraca świeży pulpit. */

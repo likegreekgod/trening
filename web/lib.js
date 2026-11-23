@@ -68,6 +68,16 @@
    * od zwykłego „lekko” (w bojach RPE ≤ L.EASY_RPE otwiera „max dziś”; 22.11.2026, wariant b). Pozostałe: EFF_FINE.
    */
   L.EASY_RPE = 6.5;
+  /** film przed kolejką: '' = można wysłać, inaczej powód (ta sama reguła co filmOk_ w apps-script/Kopia.gs: do 1 GB, tylko wideo) */
+  L.FILM_MAX = 1024 * 1024 * 1024;
+  L.filmOk = m => {
+    const size = Number(m && m.size), type = String(m && m.mimeType || ''), name = String(m && m.fileName || ''), ext = /\.(mp4|m4v|mov|qt|webm|3gp|3g2|mkv|avi|hevc)$/i;
+    if (!(size > 0)) return 'Pusty plik filmu.';
+    if (size > L.FILM_MAX) return 'Film ma ' + (Math.round(size / 1024 / 1024 / 102.4) / 10).toString().replace('.', ',') + ' GB, a limit to 1 GB. Nagraj krótszy albo w niższej jakości (np. 1080p zamiast 4K).';
+    if (type && !/^video\//i.test(type) && !ext.test(name)) return 'To nie jest film (' + type + '). Wybierz nagranie wideo.';
+    if (!type && name && !ext.test(name)) return 'To nie jest film (' + name + '). Wybierz nagranie wideo.';
+    return '';
+  };
   /** podpis światła: przy skali RIR (PRO) liczba RIR na początku zamiast „zapas …” (23.11.2026); zapis bez zmian */
   L.EFF_RIR = { L: 'RIR ≥ 3 · szybko, czysto', S: 'RIR 2 · wolniej albo z poprawką', W: 'RIR 0–1 · walka', X: 'Seria nie wyszła' };
   L.effHint = (q, rir) => (rir && L.EFF_RIR[q]) || (L.EFF[q] ? L.EFF[q].hint : '');

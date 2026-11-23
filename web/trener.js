@@ -149,6 +149,7 @@ const DOWL = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'pi�
 /** „Wymaga uwagi” na ekranie Dziś: czerwone sygnały, filmy bez komentarza, bloki do zamknięcia, koniec planu (odpowiedzi klientów: osobna karta pod spodem) */
 function todoItems(){
   const out = [];
+  const dy = PUL.dysk; if (dy && dy.low) out.push({ o: 0, lv: 'lv-bad', t: 'Na Dysku zostało ' + gb(dy.free) + ' GB', d: 'pełny Dysk = filmy i kopie przestają się zapisywać', a: go('#ustawienia', 'Sprawdź') });
   PUL.clients.forEach(c => c.signals.filter(s => s.lv === 'bad').forEach(s => out.push({ o: 0, lv: 'lv-bad', t: c.name + ': ' + s.t, d: 'czerwony sygnał', a: go(kHref(c.id), 'Otwórz') })));
   const nv = {}; PUL.videos.filter(v => !v.kom).forEach(v => { (nv[v.id] = nv[v.id] || []).push(v); });
   PUL.clients.forEach(c => { const v = nv[c.id]; if (!v) return;
@@ -496,7 +497,7 @@ function renderBloki(){
 let AIS = null, AIM = { ok: '', err: '', busy: false, del: false };
 async function renderUstawienia(){
   if (!AIS) { $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
-    try { [AIS, MS] = await Promise.all([guard(api('trAI')), guard(api('trMail'))]); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + errBox(e); return; }
+    try { [AIS, MS, DY] = await Promise.all([guard(api('trAI')), guard(api('trMail')), guard(api('trDysk'))]); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + errBox(e); return; }
     if (!location.hash.startsWith('#ustawienia')) return; }
   const a = AIS, m = AIM, dis = m.busy ? ' disabled' : '';
   $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="card" id="aikey-card" style="max-width:640px"><h2>Szkic AI · klucz Claude API</h2>' +
@@ -506,7 +507,7 @@ async function renderUstawienia(){
     (a.set ? '<button class="b" type="button" id="aikey-del"' + dis + '>' + (m.del ? 'Na pewno usunąć?' : 'Usuń klucz') + '</button>' : '') + '</div>' +
     (m.ok ? '<p class="saved" role="status">' + esc(m.ok) + '</p>' : '') + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '') +
     '<p class="legend">Klucz założysz na <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> → API Keys → Create Key. Przed zapisem sprawdzam go w Anthropic (bez opłaty). ' +
-    'Klucz trafia do ustawień skryptu arkusza, nie do arkusza ani do tej strony: tutaj widać tylko 4 ostatnie znaki.</p></div>' + mailCard() + '</div>';
+    'Klucz trafia do ustawień skryptu arkusza, nie do arkusza ani do tej strony: tutaj widać tylko 4 ostatnie znaki.</p></div>' + mailCard() + dyskCard() + '</div>';
   const save = async key => {
     Object.assign(AIM, { busy: true, ok: '', err: '', del: false }); renderUstawienia();
     try { const r = await guard(api('trUstawAI', key)); AIS = r;
@@ -516,6 +517,12 @@ async function renderUstawienia(){
   };
   $('#aikey-save').onclick = () => { const k = $('#aikey').value.trim(); if (!k) { Object.assign(AIM, { err: 'Wklej klucz.', ok: '' }); renderUstawienia(); return; } save(k); };
   const del = $('#aikey-del'); if (del) del.onclick = () => { if (!AIM.del) { Object.assign(AIM, { del: true, ok: '', err: '' }); renderUstawienia(); return; } save(''); };
+  const kb = $('#kopia-go'); if (kb) kb.onclick = async () => {
+    if (DYM.busy) return; DYM = { busy: true, ok: '', err: '' }; renderUstawienia();
+    try { DY = await guard(api('trKopia')); DYM = { busy: false, ok: '✓ Kopia zapisana.', err: '' }; }
+    catch (e) { DYM = { busy: false, ok: '', err: e.auth ? '' : e.message }; }
+    if (location.hash.startsWith('#ustawienia')) renderUstawienia();
+  };
   document.querySelectorAll('[data-hour]').forEach(b => b.onclick = async () => {
     const h = Number(b.dataset.hour); if (!MS || h === MS.hour || MH.busy) return;
     MH = { busy: true, ok: '', err: '' }; renderUstawienia();
@@ -525,6 +532,23 @@ async function renderUstawienia(){
   });
 }
 let MH = { busy: false, ok: '', err: '' };
+let DY = null, DYM = { busy: false, ok: '', err: '' };   // miejsce na Dysku i kopie arkusza (trDysk, trKopia; apps-script/Kopia.gs)
+const gb = b => pl(Math.round(b / 1024 / 1024 / 102.4) / 10);
+function dyskCard(){
+  const d = DY || {}, s = d.dysk, k = d.kopie || [];
+  const pct = s && s.limit ? Math.min(100, Math.round(s.used / s.limit * 100)) : 0;
+  const space = !s ? '<p class="mstat">Google nie podał miejsca na Dysku.</p>' : !s.limit ? '<p class="mstat">Zajęte ' + gb(s.used) + ' GB, Dysk bez limitu.</p>'
+    : '<div class="fr"><div><b>Miejsce na Dysku</b><small>Zajęte ' + gb(s.used) + ' z ' + gb(s.limit) + ' GB · wolne ' + gb(s.free) + ' GB</small></div></div>' +
+      '<div class="dbar' + (s.low ? ' low' : '') + '" role="progressbar" aria-label="Zajęte miejsce na Dysku" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><i style="width:' + pct + '%"></i></div>' +
+      (s.low ? '<p class="err">Zostało mniej niż 2 GB. Gdy Dysk się zapełni, filmy klientów i kopie przestaną się zapisywać: usuń stare filmy albo dokup miejsce.</p>' : '');
+  const last = k[0] ? dm(k[0].at.slice(0, 10)) : '';
+  return '<div class="card" id="dysk-card" style="max-width:640px"><h2>Dysk i kopie arkusza</h2>' + space +
+    '<div class="fr"><div><b>Kopia arkusza</b><small>' + (k.length ? 'Ostatnia ' + esc(last) + ' · ' + k.length + ' z ' + (d.ile || 8) + ' kopii w „Trening – Klienci/_kopie”' : 'Jeszcze nie ma kopii.') +
+    (d.trigger === false ? ' · cotygodniowa kopia wyłączona' : ' · co niedzielę ok. 3:00') + '</small></div>' +
+    '<button class="b" type="button" id="kopia-go"' + (DYM.busy ? ' disabled' : '') + '>' + (DYM.busy ? 'Kopiuję…' : 'Zrób kopię teraz') + '</button></div>' +
+    (DYM.ok ? '<p class="saved" role="status">' + esc(DYM.ok) + '</p>' : '') + (DYM.err ? '<p class="err" role="alert">' + esc(DYM.err) + '</p>' : '') +
+    '<p class="legend">Kopia to cały arkusz z jednego dnia. Starsze niż ' + (d.ile || 8) + ' ostatnich idą do kosza Dysku. Filmy nie są kopiowane, bo już leżą na Dysku. Klient nie wyśle filmu większego niż 1 GB ani pliku, który nie jest filmem.</p></div>';
+}
 function mailCard(){   // panel → Ustawienia: godzina porannego maila (trMailUstaw) i wynik ostatniej wysyłki
   const m = MS || { hour: 6, hours: [5, 6, 7, 8, 9] }, d = m.day;
   const names = d && d.names && d.names.length ? d.names.join(', ') : '';
