@@ -1094,7 +1094,7 @@ function trMailProba(id) {
  * next = także kolejne tygodnie tej jednostki w tym samym bloku, niezrobione (ćwiczenie po nazwie):
  * kg i % o tę samą różnicę (gdy obie wartości są liczbami), pozostałe pola tak samo. Notatka do jednostki tylko w tym tygodniu.
  */
-const TR_PLAN_F = { sets: 'serie', reps: 'powt', kg: 'kg', pct: 'procent', rpe: 'rpe_max', note: 'uwagi' };
+const TR_PLAN_F = { sets: 'serie', reps: 'powt', kg: 'kg', pct: 'procent', rpe: 'rpe_max', note: 'uwagi', prio: 'prio', circuit: 'obwod' };
 const TR_UNOTE_MAX = 500;
 
 /** Czysta funkcja: wartość z panelu → {v: do arkusza, c: do wiersza planu w panelu} albo {error}. */
@@ -1108,6 +1108,8 @@ function trPlanVal_(f, raw) {
     const fr = Math.round(x * 100) / 10000; return { v: fr, c: fr }; }
   if (f === 'rpe') { if (!t) return { v: '', c: '' }; return x >= 5 && x <= 10 && Math.round(x * 2) === x * 2 ? { v: x, c: x } : { error: 'RPE: 5–10 co 0,5 albo puste.' }; }
   if (f === 'note') return t.length <= 300 ? { v: t, c: t } : { error: 'Uwagi: najwyżej 300 znaków.' };
+  if (f === 'prio') return /^[ABK]$/i.test(t) ? { v: t.toUpperCase(), c: t.toUpperCase() } : { error: 'Priorytet: A, B albo K.' };
+  if (f === 'circuit') return !t || /^[A-Z]$/i.test(t) ? { v: t.toUpperCase(), c: t.toUpperCase() } : { error: 'Obwód: jedna litera A–Z albo puste.' };
   return { error: 'Nieznane pole: ' + f };
 }
 
@@ -1150,6 +1152,7 @@ function trPlanEdit_(plan, ses, log, clientId, e) {
       const val = trPlanVal_(f, ch[f]); if (val.error) return { error: hit.r.cwiczenie + ': ' + val.error };
       const col = TR_PLAN_F[f], oldN = n_(hit.r[col]);
       if (put(hit, col, val.v, f, val.c)) n++;
+      if (f === 'circuit') continue;                                              // obwód tylko w tej jednostce (sąsiedzi w kolejnych tygodniach bywają inni)
       const delta = (f === 'kg' || f === 'pct') && typeof val.v === 'number' && isFinite(oldN) && String(hit.r[col]).trim() !== '' ? val.v - oldN : null;
       later.forEach(w => unitOf(w).filter(x => lc(x.r.cwiczenie) === lc(hit.r.cwiczenie)).forEach(x => {
         const o = n_(x.r[col]);
