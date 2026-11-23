@@ -108,12 +108,12 @@ $('#recalc').onclick = recalc; $('#recalc-m').onclick = recalc; $('#logout').onc
 function alertBox(e){ const d = document.createElement('div'); d.className = 'card err'; d.textContent = e.message; $('#main').prepend(d); setTimeout(() => d.remove(), 6000); }
 
 /* ---------- małe wykresy SVG ---------- */
-function spark(vals){
+function spark(vals, w = 72, h = 26){
   const v = vals.map(x => x === null || x === undefined ? NaN : x), ok = v.filter(isFinite);
   if (ok.length < 2) return '<span class="muted">–</span>';
-  const w = 72, h = 26, mx = Math.max(...ok), mn = Math.min(...ok), pts = [];
+  const mx = Math.max(...ok), mn = Math.min(...ok), pts = [];
   v.forEach((x, i) => { if (isFinite(x)) pts.push((i * w / (v.length - 1)).toFixed(1) + ',' + (h - 3 - (x - mn) / (mx - mn || 1) * (h - 6)).toFixed(1)); });
-  return '<svg width="' + w + '" height="' + h + '" aria-hidden="true"><polyline fill="none" stroke="var(--primary)" stroke-width="2" points="' + pts.join(' ') + '"/></svg>';
+  return '<svg class="spk" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--primary)" stroke-width="2" points="' + pts.join(' ') + '"/></svg>';
 }
 function line(pts, label){
   if (pts.length < 2) return '<p class="muted">Za mało wyników na wykres.</p>';
@@ -383,7 +383,7 @@ function playerBind(v, redraw){
     zl.hidden = Z.s === 1; zl.textContent = pl(Z.s.toFixed(1)) + '× · dotknij dwa razy, żeby wrócić'; };
   const tick = () => { if (!vid.isConnected || !$('#pvt')) return; const d = vid.duration || 0; $('#pvt').textContent = tFmt(vid.currentTime, true); if (d) { rng.max = d; rng.value = vid.currentTime; rng.style.setProperty('--p', (vid.currentTime / d * 100) + '%'); }
     pv.querySelector('[data-pv="play"]').textContent = vid.paused ? '▶' : '❚❚'; pv.querySelector('[data-pv="play"]').setAttribute('aria-label', vid.paused ? 'Odtwarzaj' : 'Pauza');
-    const w = $('#kf-ins'); if (w) w.textContent = '⏱ Wstaw chwilę ' + tFmt(vid.currentTime); };
+    const w = $('#kf-ins'); if (w) w.textContent = '⏱ Wstaw chwilę ' + tFmt(vid.currentTime, true); };
   let raf = 0; const loop = () => { tick(); raf = vid.paused ? 0 : requestAnimationFrame(loop); };
   // rozmiar filmu liczony z jego wymiarów i wpisany w piksele: Edge potrafi zignorować object-fit i rozciągnąć obraz na całą scenę
   const fit = () => { const vw = vid.videoWidth, vh = vid.videoHeight, sw = st.clientWidth, sh = st.clientHeight;
@@ -457,21 +457,21 @@ document.addEventListener('keydown', e => {
 });
 function marks(){
   const vid = $('#pvv'), m = $('#pvm'), t = $('#kf-txt'); if (!vid || !m || !vid.duration) { if (m) m.innerHTML = ''; return; }
-  m.innerHTML = komTimes(t ? t.value : '').filter(s => s <= vid.duration).map(s => '<button type="button" style="left:' + (s / vid.duration * 100) + '%" data-seek="' + s + '" aria-label="Przejdź do ' + tFmt(s) + '" title="' + tFmt(s) + '"></button>').join('');
+  m.innerHTML = komTimes(t ? t.value : '').filter(s => s <= vid.duration).map(s => '<button type="button" style="left:' + (s / vid.duration * 100) + '%" data-seek="' + s + '" aria-label="Przejdź do ' + tFmt(s, true) + '" title="' + tFmt(s, true) + '"></button>').join('');
   m.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => { vid.pause(); vid.currentTime = Number(b.dataset.seek); });
 }
 function komFilmDraw(v, who){
   const k = vKey(v), st = KF[k] || {}, w = $('#kfw'); if (!w) return;
   const text = st.text !== undefined ? st.text : v.komT, dis = st.busy ? ' disabled' : '';
-  w.innerHTML = '<div class="eb" style="margin:14px 0 6px">Twój komentarz</div><textarea id="kf-txt" aria-label="Twój komentarz do filmu" placeholder="Np. 0:03 Łokcie wyżej przy wejściu pod sztangę."' + dis + '>' + esc(text) + '</textarea>' +
-    '<div class="row2"><button class="b" type="button" id="kf-ins"' + (FB[v.file] && FB[v.file].st === 'ok' ? '' : ' disabled') + '>⏱ Wstaw chwilę 0:00</button><span class="sp"></span>' +
+  w.innerHTML = '<div class="eb" style="margin:14px 0 6px">Twój komentarz</div><textarea id="kf-txt" aria-label="Twój komentarz do filmu" placeholder="Np. 0:03,5 Łokcie wyżej przy wejściu pod sztangę."' + dis + '>' + esc(text) + '</textarea>' +
+    '<div class="row2"><button class="b" type="button" id="kf-ins"' + (FB[v.file] && FB[v.file].st === 'ok' ? '' : ' disabled') + '>⏱ Wstaw chwilę 0:00,0</button><span class="sp"></span>' +
     (st.ok ? '<span class="saved">✓ Zapisano</span>' : '') + '<button class="b p" type="button" id="kf-save"' + dis + '>' + (st.busy ? 'Zapisuję…' : 'Zapisz') + '</button></div>' +
     (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') + repBox(v.rep, v.repAt, v.name) +
-    '<p class="hint" style="margin-top:8px">Klient zobaczy komentarz przy tej serii w zakładce Trener. Linia zaczynająca się od „0:03” to chwila filmu: w panelu pokazuje się jako kreska na pasku, którą możesz kliknąć.</p>';
+    '<p class="hint" style="margin-top:8px">Klient zobaczy komentarz przy tej serii w zakładce Trener. Linia zaczynająca się od „0:03,5” (albo „0:03”) to chwila filmu z dokładnością do 1/10 s: w panelu pokazuje się jako kreska na pasku, którą możesz kliknąć.</p>';
   const ta = $('#kf-txt');
   ta.oninput = () => { (KF[k] = KF[k] || {}).text = ta.value; KF[k].ok = false; marks(); };
   $('#kf-ins').onclick = () => { const vid = $('#pvv'); if (!vid) return; vid.pause();
-    const tag = tFmt(vid.currentTime) + ' ', a = ta.selectionStart, pre = ta.value.slice(0, a), lineStart = pre.lastIndexOf('\n') + 1;
+    const tag = tFmt(vid.currentTime, true) + ' ', a = ta.selectionStart, pre = ta.value.slice(0, a), lineStart = pre.lastIndexOf('\n') + 1;
     const nl = pre.slice(lineStart).trim() ? '\n' : '';
     ta.value = pre + nl + tag + ta.value.slice(a); const pos = (pre + nl + tag).length; ta.focus(); ta.setSelectionRange(pos, pos); ta.oninput(); };
   $('#kf-save').onclick = async () => {
@@ -712,7 +712,9 @@ function renderNowyKlient(){
   };
 }
 
-/* ---------- karta klienta ---------- */
+/* ---------- karta klienta (v87: nagłówek z sygnałami i „Prowadź trening”, przegląd jak na telefonie) ---------- */
+/** faktyczny dzień jednostki z Sesje.start (klucz tydzień|jednostka) */
+function sesDates(d){ const o = {}; (d.sessions || []).forEach(s => { if (/T/.test(String(s.start || ''))) o[uKey(s.tydzien, s.jednostka)] = TL.localDate(new Date(s.start)); }); return o; }
 async function renderKlient(id, tab){
   const c = PUL.clients.find(x => x.id === id) || { id, name: id, signals: [], load: [], week: '' };
   if (CID !== id || !CK[id]) {
@@ -722,13 +724,23 @@ async function renderKlient(id, tab){
     if (!location.hash.startsWith('#k/' + encodeURIComponent(id))) return;
   }
   CUR = CK[id];
-  const d = CUR, today = PUL.today, dates = {};
-  (d.sessions || []).forEach(s => { if (/T/.test(String(s.start || ''))) dates[uKey(s.tydzien, s.jednostka)] = TL.localDate(new Date(s.start)); });
+  const d = CUR, today = PUL.today, dates = sesDates(d);
   const sets = TL.doneSets(d.logs || [], d.plan || [], dates);
   const cur = (d.plan || []).filter(r => !r.own).map(r => ({ r, dt: dates[uKey(r.week, r.day)] || r.date })).filter(x => x.dt && x.dt <= today).sort((a, b) => a.dt.localeCompare(b.dt)).pop();
   const blk = cur && cur.r.block, bw = blk ? [...new Set((d.plan || []).filter(r => r.block === blk && !r.own).map(r => r.week))].sort((a, b) => a - b) : [];
-  const eb = [blk ? 'Blok ' + esc(blk) + ' · tydz. ' + (bw.indexOf(cur.r.week) + 1) + ' z ' + bw.length : 'Bez bloku', d.cfg.simple ? 'tryb PROSTY' : 'tryb PRO', 'skala ' + esc(d.cfg.scale || 'RPE')]
-    .concat(d.cfg.masters ? ['masters'] : []).concat(d.cfg.active === false ? ['nieaktywny'] : []).join(' · ');
+  const eb = [blk ? 'Blok ' + esc(blk) + ' · tydz. ' + (bw.indexOf(cur.r.week) + 1) + ' z ' + bw.length : 'Bez bloku', d.cfg.simple ? 'Prosty' : 'PRO']
+    .concat(!d.cfg.simple && d.cfg.scale === 'RIR' ? ['RIR'] : []).concat(d.cfg.masters ? ['masters'] : []).concat(d.cfg.active === false ? ['nieaktywny'] : []).join(' · ');
+  // sygnały z Przeglądu + dyspozycja z ostatnich 3 dni, gdy nie „OK”
+  const rd = (d.readiness || []).slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).pop();
+  const rdOn = rd && String(rd.data).slice(0, 10) >= TL.addDays(today, -2) && /uwaga|zmęcz/i.test(rd.werdykt || '');
+  const pills = (c.signals || []).map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('') +
+    (rdOn ? '<span class="pill ' + (/zmęcz/i.test(rd.werdykt) ? 'lv-bad' : 'lv-warn') + '">dyspozycja: ' + esc(String(rd.werdykt).toLowerCase()) + '</span>' : '');
+  const nv = PUL.videos.filter(v => v.id === id && !v.kom).length;
+  // bez konkretnej jednostki: na treningu personalnym często robimy coś innego niż w planie (jednostkę z planu otwiera „▶ Prowadź” w zakładce Plan)
+  const live = '<a class="kgo" href="' + liveHref(id) + '"><span>▶ Prowadź trening</span></a>';
+  const kh = '<div class="kh"><a class="kback" href="#klienci">‹ Klienci</a><div class="kht"><div class="eb">' + eb + '</div><h1>' + esc(d.cfg.name || c.name) + '</h1>' +
+    (pills ? '<div class="kpl">' + pills + '</div>' : '') + '</div><div class="kha">' + live + '<div class="khs">' +
+    go('#filmy/' + encodeURIComponent(id), 'Filmy' + (nv ? ' · ' + nv : '')) + go('#klienci/' + encodeURIComponent(id), 'Ustawienia') + '</div></div></div>';
   const T = [['przeglad', 'Przegląd'], ['plan', 'Plan'], ['sesje', 'Sesje'], ['bloki', 'Bloki'], ['dyspozycja', 'Dyspozycja']];
   const tabs = '<nav class="tabs" aria-label="Karta klienta">' + T.map(t => '<a href="#k/' + encodeURIComponent(id) + '/' + t[0] + '" aria-current="' + (t[0] === tab ? 'page' : 'false') + '">' + t[1] + '</a>').join('') + '</nav>';
   let body = '';
@@ -736,8 +748,8 @@ async function renderKlient(id, tab){
   else if (tab === 'plan') body = planList(d, dates, today);
   else if (tab === 'bloki') body = blokList(d);
   else if (tab === 'dyspozycja') body = dyspList(d);
-  else body = przeglad(d, c, sets, dates, today);
-  $('#main').innerHTML = head(eb, d.cfg.name || c.name, '<a class="b p" style="display:inline-flex;align-items:center;text-decoration:none" href="' + liveHref(id) + '">▶ Prowadź trening</a><a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#filmy/' + encodeURIComponent(id) + '">Filmy klienta</a><a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#klienci/' + encodeURIComponent(id) + '">Ustawienia</a>') + tabs + '<div class="pg">' + body + '</div>';
+  else body = przeglad(d, c, sets, dates, today, rd);
+  $('#main').innerHTML = kh + tabs + '<div class="pg">' + body + '</div>';
 }
 function painOf(s){
   let top = ['', NaN];
@@ -765,37 +777,41 @@ function setsOf(d, u){
 }
 const setTxt = l => { const t = (nf(l.kg) > 0 ? pl(l.kg) + '×' : '') + esc(l.powt) + (l.ocena ? ' ' + esc(l.ocena) : nf(l.rpe) >= 0 ? ' @' + pl(l.rpe) : '') + (/FAIL/.test(l.typ || '') ? ' ✕' : '');
   return ticked(l) ? t + (l.film_link ? ' ▶' : '') : '<span class="nd" title="Seria nie odhaczona w aplikacji">' + (t || 's. ' + esc(sv(l.seria))) + (l.film_link ? ' ▶' : '') + '</span>'; };
+/** serie w skrócie: ten sam ciężar i powtórzenia co poprzednia = sama ocena („84×5 @7,5 · @8 · @8,5”) */
+const setsShort = ss => ss.map((l, i) => { const p = ss[i - 1];
+  if (!p || sv(p.kg) !== sv(l.kg) || sv(p.powt) !== sv(l.powt) || !(l.ocena || nf(l.rpe) >= 0)) return setTxt(l);
+  const t = (l.ocena ? esc(l.ocena) : '@' + pl(l.rpe)) + (/FAIL/.test(l.typ || '') ? ' ✕' : '') + (l.film_link ? ' ▶' : '');
+  return ticked(l) ? t : '<span class="nd" title="Seria nie odhaczona w aplikacji">' + t + '</span>'; }).join(' · ');
 /** zamiana ćwiczenia przez klienta (Log „zamiana” = „oryginał → zamiennik | powód”) */
 const swapTxt = sw => sw ? '<span class="swp">⇄ zamiast ' + esc(sw.from) + (sw.why ? ' · ' + esc(sw.why) : '') + '</span>' : '';
 const ndNote = ex => ex.some(e => e.sets.some(l => !ticked(l))) ? '<p class="hint" style="margin:6px 0 0"><span class="nd">szare</span> = klient nagrał albo wpisał serię, ale jej nie odhaczył w aplikacji.</p>' : '';
-function przeglad(d, c, sets, dates, today){
+function przeglad(d, c, sets, dates, today, rd){
   const ss = sessRows(d, dates), wk = ss.filter(x => x.day >= TL.addDays(today, -6) && x.day <= today);
   let pain = ['', NaN, '']; wk.forEach(x => { const p = painOf(x.s); if (p[1] > (isFinite(pain[1]) ? pain[1] : -1)) pain = [p[0], p[1], x.s.jednostka]; });
   const sm = (d.summary || []).slice().sort((a, b) => String(a.week).localeCompare(String(b.week))).pop();
   const ton = TL.weeklyTonnage(sets, today, 12), tw = ton[11].ton, prev = ton.slice(7, 11).filter(x => x.ton > 0), avg = prev.length ? prev.reduce((a, x) => a + x.ton, 0) / prev.length : 0;
-  const rd = (d.readiness || []).slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).pop();
-  const kp = (lv, t, v, s) => '<div class="kp ' + lv + '"><span>' + t + '</span><b>' + v + '</b><small>' + s + '</small></div>';
-  const kpis = '<div class="kpis">' + kp('', 'Ten tydzień', esc(c.week || '–'), 'jednostki z planu') +
-    kp(pain[1] > 3 ? 'lv-bad' : pain[1] > 0 ? 'lv-warn' : '', 'Ból max 7 dni', isFinite(pain[1]) ? pl(pain[1]) + '/10' : '–', isFinite(pain[1]) && pain[1] > 0 ? esc((pain[0] || 'bez miejsca') + ' · ' + pain[2]) : 'bez bólu') +
-    kp(/dużo/.test(sm && sm.status || '') ? 'lv-bad' : /uwaga|lekko/.test(sm && sm.status || '') ? 'lv-warn' : '', 'sRPE tygodnia', sm && nf(sm.srpe) >= 0 ? Math.round(nf(sm.srpe)) : '–', sm ? esc((nf(sm.acwr) > 0 ? 'ACWR ' + fmt1(nf(sm.acwr)) + ' · ' : '') + String(sm.status || '').replace(/^[^\wąćęłńóśźż–]+/i, '') + ' · od ' + dm(String(sm.week))) : 'brak podsumowania') +
-    kp('', 'Tonaż tygodnia', tw ? fmt1(tw / 1000) + ' t' : '–', avg ? (tw >= avg ? '+' : '') + Math.round((tw / avg - 1) * 100) + '% do śr. 4 tyg.' : 'brak porównania') +
-    kp(rd && /zmęcz/i.test(rd.werdykt) ? 'lv-bad' : rd && /uwaga/i.test(rd.werdykt) ? 'lv-warn' : '', 'Dyspozycja', rd ? esc(rd.werdykt || '–') : '–', rd ? esc(dowDm(String(rd.data).slice(0, 10))) : 'brak wpisów') + '</div>';
-  const sig = c.signals && c.signals.length ? '<div class="card"><h2>Sygnały</h2>' + c.signals.map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('') + (c.note ? '<p class="note muted" style="margin:8px 0 0">Ostatnia uwaga klienta: ' + esc(c.note) + '</p>' : '') + '</div>' : '';
-  const recs = TL.records(sets).slice(0, 2);
-  const charts = '<div class="g3">' + recs.map(r => { const ser = TL.strengthSeries(sets, r.name).slice(-12);
-    return '<div class="card"><h2>' + esc(r.name) + ' · ' + (r.oly ? 'najlepsze kg' : 'e1RM') + '</h2>' + line(ser, r.name) + '</div>'; }).join('') +
-    (recs.length < 2 ? '<div class="card"><h2>Siła</h2><p class="muted">' + (recs.length ? 'Jedno ćwiczenie główne z wynikami.' : 'Brak wyników ćwiczeń głównych (prio A).') + '</p></div>' : '') +
-    '<div class="card"><h2>Tonaż tygodniowy</h2>' + bars(ton.map(x => ({ week: x.week, v: x.ton })), 'Tonaż w 12 tygodniach') + '</div></div>';
-  return kpis + sig + charts + '<div class="card"><h2>Ostatnie sesje</h2>' + sesTable(d, ss.slice(0, 6)) + '<p><a href="#k/' + encodeURIComponent(d.cfg.id) + '/sesje">Wszystkie sesje (' + ss.length + ')</a></p></div>';
-}
-function sesTable(d, ss){
-  if (!ss.length) return '<p class="muted">Brak zapisanych sesji.</p>';
-  return '<div class="tw"><table><thead><tr><th>Dzień</th><th>Jednostka</th><th>Min</th><th>RPE</th><th>Ból</th><th>Ćwiczenia główne</th><th>Uwagi klienta</th></tr></thead><tbody>' + ss.map(x => {
+  const smSt = String(sm && sm.status || '').replace(/^[^\wąćęłńóśźż–]+/i, '');
+  const st = (lv, v, t, title, extra) => '<div class="st ' + lv + (extra || '') + '"' + (title ? ' title="' + esc(title) + '"' : '') + '><b>' + v + '</b><span>' + t + '</span></div>';
+  const stats = '<div class="stats" aria-label="Ten tydzień w liczbach">' +
+    st('', esc(c.week || '–'), 'ten tydzień') +
+    st(pain[1] > 3 ? 'lv-bad' : pain[1] > 0 ? 'lv-warn' : '', isFinite(pain[1]) ? pl(pain[1]) + '/10' : '–', isFinite(pain[1]) && pain[1] > 0 ? 'ból, ' + esc(pain[0] || pain[2]) : 'ból 7 dni', isFinite(pain[1]) && pain[1] > 0 ? 'Ból max 7 dni: ' + (pain[0] || 'bez miejsca') + ' · ' + pain[2] : '') +
+    st(/dużo/.test(smSt) ? 'lv-bad' : /uwaga|lekko/.test(smSt) ? 'lv-warn' : '', sm && nf(sm.srpe) >= 0 ? Math.round(nf(sm.srpe)) : '–', 'sRPE' + (smSt ? ', ' + esc(smSt.toLowerCase()) : ''), sm ? (nf(sm.acwr) > 0 ? 'ACWR ' + fmt1(nf(sm.acwr)) + ' · ' : '') + 'tydzień od ' + dm(String(sm.week)) : '') +
+    st('', tw ? fmt1(tw / 1000) + ' t' : '–', 'tonaż' + (avg ? ' ' + (tw >= avg ? '+' : '−') + Math.abs(Math.round((tw / avg - 1) * 100)) + '%' : ''), avg ? 'względem średniej 4 poprzednich tygodni' : '') +
+    st(rd && /zmęcz/i.test(rd.werdykt) ? 'lv-bad' : rd && /uwaga/i.test(rd.werdykt) ? 'lv-warn' : '', rd ? esc(rd.werdykt || '–') : '–', 'dyspozycja' + (rd ? ' ' + esc(dm(String(rd.data).slice(0, 10))) : ''), '', ' st5') + '</div>';
+  const sesH = '<div class="card ksl"><div class="hrow"><h2>Ostatnie sesje</h2><a href="#k/' + encodeURIComponent(d.cfg.id) + '/sesje">Wszystkie ' + ss.length + ' ›</a></div>' + (ss.length ? ss.slice(0, 5).map(x => {
     const p = painOf(x.s), main = setsOf(d, x.u).filter(e => e.prio === 'A').slice(0, 3);
-    return '<tr><td class="nw">' + esc(dowDm(x.day)) + '</td><td><b>' + esc(x.s.jednostka) + (x.title ? ' · ' + esc(x.title) : '') + '</b></td><td class="mono">' + esc(x.s.czas_min || '–') + '</td><td class="mono">' + (nf(x.s.rpe_sesji) >= 0 ? pl(x.s.rpe_sesji) : '–') + '</td>' +
-      '<td class="mono nw"' + (p[1] > 3 ? ' style="color:var(--bad)"' : '') + '>' + (isFinite(p[1]) ? pl(p[1]) + (p[0] ? ' ' + esc(p[0]) : '') : '–') + '</td>' +
-      '<td class="sets">' + (main.map(e => esc(e.name) + (e.swap ? ' ' + swapTxt(e.swap) : '') + ': ' + e.sets.map(setTxt).join(', ')).join('<br>') || '<span class="muted">–</span>') + '</td><td>' + (x.s.uwagi ? esc(x.s.uwagi) : '<span class="muted">–</span>') + '</td></tr>';
-  }).join('') + '</tbody></table></div>';
+    const meta = [x.s.czas_min ? esc(x.s.czas_min) + ' min' : '', nf(x.s.rpe_sesji) >= 0 ? 'RPE ' + pl(x.s.rpe_sesji) : '',
+      isFinite(p[1]) && p[1] > 0 ? '<span class="' + (p[1] > 3 ? 'bad' : 'warn') + '">ból ' + pl(p[1]) + (p[0] ? ' ' + esc(p[0]) : '') + '</span>' : 'bez bólu'].filter(Boolean).join(' · ');
+    return '<a class="sr" href="#k/' + encodeURIComponent(d.cfg.id) + '/sesje"><b>' + esc(dowDm(x.day)) + ' · ' + esc(x.s.jednostka) + (x.title ? ' ' + esc(x.title) : '') + '</b><small>' + meta + '</small>' +
+      main.map(e => '<span class="sx"><i>' + esc(e.name) + '</i> ' + setsShort(e.sets) + (e.swap ? ' ' + swapTxt(e.swap) : '') + '</span>').join('') +
+      (x.s.uwagi ? '<q>' + esc(x.s.uwagi) + '</q>' : '') + '</a>'; }).join('') : '<p class="muted">Brak zapisanych sesji.</p>') + '</div>';
+  const recs = TL.records(sets).slice(0, 4);
+  const sila = '<div class="card"><h2>Siła · ' + (recs.some(r => !r.oly) ? 'szacowane maksimum' : 'najlepsze kg') + '</h2>' + (recs.length ? recs.map(r => {
+    const ser = TL.strengthSeries(sets, r.name).slice(-12), f = ser[0], l = ser[ser.length - 1], dv = l.v - f.v;
+    return '<div class="sg"><div><b>' + esc(r.name) + '</b><small>' + (ser.length > 1 ? 'od ' + esc(dm(f.date)) + ': ' + (dv >= 0 ? '+' : '−') + esc(fmt1(Math.abs(dv))) + ' kg' : 'jeden wynik') + (r.oly ? ' · najlepsze kg' : '') + '</small></div>' +
+      spark(ser.map(p => p.v), 110, 32) + '<span class="mono">' + esc(fmt1(l.v)) + ' kg</span></div>'; }).join('') : '<p class="muted">Brak wyników ćwiczeń głównych (prio A).</p>') + '</div>';
+  const tonC = '<div class="card"><h2>Tonaż tygodniowy</h2>' + bars(ton.map(x => ({ week: x.week, v: x.ton })), 'Tonaż w 12 tygodniach') + '</div>';
+  return stats + '<div class="kov"><div class="stack">' + sesH + '</div><div class="stack">' + sila + tonC + '</div></div>';
 }
 function sesList(d, dates){
   const ss = sessRows(d, dates);
@@ -1078,25 +1094,39 @@ function peChanges(x, st){
   return out;
 }
 function planList(d, dates, today){
-  // niezrobione; opuszczone dawniej niż 14 dni temu pomijamy (już ich nikt nie zrobi)
+  // niezrobione; opuszczone dawniej niż 14 dni temu pomijamy (już ich nikt nie zrobi); zrobione z tych samych tygodni jako jedna linia
   const units = planUnits(d, dates), open = units.filter(x => !x.done && !(x.date && x.date < TL.addDays(today, -PE_OLD)));
-  if (!open.length) return '<div class="card es"><b>Brak niezrobionych jednostek</b>Wszystko z planu jest zrobione. Nowy blok wczytasz plikiem planu (folder _plany na Dysku).</div>';
+  if (!open.length) return '<div class="card es"><b>Brak niezrobionych jednostek</b>Wszystko z planu jest zrobione. Nowy blok przygotujesz w zakładce Bloki („Następny blok”) albo wczytasz plikiem planu (folder _plany na Dysku).</div>';
   const st0 = PD[pdKey('*')] || {}, w0 = open[0].week, show = st0.all ? open : open.filter(x => x.week < w0 + 2 || PD[pdKey(x.u)] && PD[pdKey(x.u)].edit);
-  const rest = open.length - show.length;
-  return '<p class="hint" style="margin:0">Zmiana trafia od razu do arkusza (zakładka Plan); klient zobaczy ją przy następnym otwarciu aplikacji. Zrobione jednostki są zablokowane. ' +
-    'Ponowny import pliku z tym samym blokiem nadpisze zmiany w niezrobionych jednostkach.</p>' +
-    show.map(x => '<div class="card pu" data-u="' + esc(x.u) + '">' + puInner(x, units, today) + '</div>').join('') +
-    (rest > 0 ? '<p><button class="b" type="button" data-pall>Pokaż dalsze jednostki (' + rest + ')</button></p>' : '');
+  const rest = open.length - show.length, weeks = [...new Set(show.map(x => x.week))];
+  const id = encodeURIComponent(d.cfg.id);
+  return weeks.map(w => {
+    const all = units.filter(x => x.week === w), ds = all.map(x => x.date).filter(Boolean).sort(), mon = ds.length ? TL.mondayOf(ds[0]) : '';
+    const blk = (all.find(x => x.block) || {}).block, nDone = all.filter(x => x.done).length;
+    const wh = '<div class="wkh"><h2>Tydzień ' + esc(w) + '</h2><span class="muted">' + [mon ? dm(mon) + '–' + dm(TL.addDays(mon, 6)) : '', blk ? 'blok ' + esc(blk) : '', nDone + ' z ' + all.length + ' zrobione'].filter(Boolean).join(' · ') + '</span></div>';
+    const done = all.filter(x => x.done).map(x => '<a class="pdn" href="#k/' + id + '/sesje"><span class="ok">✓</span><b>' + esc(x.day) + (x.title ? ' · ' + esc(x.title) : '') + '</b><span class="muted">zrobiona' + (x.date ? ' ' + esc(dowDm(x.date)) : '') + '</span><span class="sp"></span><span class="muted">Sesja ›</span></a>').join('');
+    return wh + done + show.filter(x => x.week === w).map(x => '<div class="card pu" data-u="' + esc(x.u) + '">' + puInner(x, units, today) + '</div>').join('');
+  }).join('') +
+    (rest > 0 ? '<p><button class="b" type="button" data-pall>Pokaż dalsze jednostki (' + rest + ')</button></p>' : '') +
+    '<p class="legend">Zmiana trafia od razu do arkusza; klient zobaczy ją przy następnym otwarciu aplikacji. Zrobione jednostki są zablokowane. Ponowny import pliku z tym samym blokiem nadpisze zmiany w niezrobionych jednostkach.</p>';
+}
+/** ćwiczenie w widoku (bez edycji): „3 × 5 · 47 kg · 75% · RPE ≤ 8” w jednej linii, uwagi pod spodem */
+function puLine(r){
+  const t = f => peTxt(r, f), sr = [t('sets'), t('reps')].filter(Boolean).join(' × ');
+  const rx = [sr, t('kg') && t('kg') !== '0' ? t('kg') + (/^[\d,.]+$/.test(t('kg')) ? ' kg' : '') : '', t('pct') ? t('pct') + '%' : '', t('rpe') ? 'RPE ≤ ' + t('rpe') : ''].filter(Boolean).map(esc).join(' · ');
+  return '<div class="pxl"><span class="pp pp-' + esc(String(r.prio || '').toUpperCase()) + '">' + esc(r.prio || '') + '</span><div class="pxt"><b>' + esc(r.name) + (r.added ? ' <span class="muted">· dodane przez klienta</span>' : '') + (r.coach ? ' <span class="muted">· dodane w „Prowadź”</span>' : '') + '</b>' +
+    '<span class="mono">' + (rx || '–') + '</span>' + (t('note') ? '<small>' + esc(t('note')) + '</small>' : '') + '</div></div>';
 }
 function puInner(x, units, today){
   const st = PD[pdKey(x.u)] || {}, ed = !!st.edit, dis = st.busy ? ' disabled' : '';
   const pill = !x.date ? '<span class="pill">bez daty</span>' : x.date < today ? '<span class="pill lv-warn">zaległa</span>' : x.date === today ? '<span class="pill lv-ok">dziś</span>' : '';
-  const eb = ['Tydz. ' + x.week, x.block ? 'blok ' + x.block : '', x.date ? dowDm(x.date) : ''].filter(Boolean).map(esc).join(' · ');
+  const eb = esc(x.date ? dowDm(x.date) : 'bez daty');            // tydzień i blok są w nagłówku tygodnia
   const hd = '<div class="puh"><div><div class="eb">' + eb + '</div><h2>' + esc(x.day) + (x.title ? ' · ' + esc(x.title) : '') + '</h2></div><span class="sp"></span>' + pill +
-    (ed ? '' : '<button class="b" type="button" data-pe="edit">Edytuj</button>') + '</div>';
+    (ed ? '' : go(liveHref(CID, x.week, x.day), '▶ Prowadź', 'acc') + '<button class="b" type="button" data-pe="edit">Edytuj</button>') + '</div>';
   const un = ed ? '<label class="pun"><span class="eb">Od trenera · notatka do całej jednostki</span><textarea data-pf="unote" rows="2" maxlength="500" placeholder="np. Przysiad: pauza 2 s na dole, ostatnia seria bez walki."' + dis + '>' + esc(st.unote !== undefined ? st.unote : x.unote) + '</textarea></label>'
     : x.unote ? '<p class="note pun"><span class="eb">Od trenera</span><br>' + esc(x.unote) + '</p>' : '';
   const head = '<div class="per peh"><span></span><span>Ćwiczenie</span>' + PE_F.map(f => '<span>' + f[1] + '</span>').join('') + '</div>';
+  if (!ed) return hd + un + '<div class="pxs">' + x.rows.map(puLine).join('') + '</div>' + puFoot(x, units, st);
   const rows = x.rows.map(r => {
     const v = (st.v || {})[r.order] || {};
     const cell = f => { const old = peTxt(r, f[0]);
@@ -1123,8 +1153,7 @@ function puFoot(x, units, st){
   return '<div class="pfw">' + foot + '</div>';
 }
 function puUnit(u){
-  const dates = {}; (CUR.sessions || []).forEach(s => { if (/T/.test(String(s.start || ''))) dates[uKey(s.tydzien, s.jednostka)] = TL.localDate(new Date(s.start)); });
-  const units = planUnits(CUR, dates), unit = units.find(y => y.u === u);
+  const units = planUnits(CUR, sesDates(CUR)), unit = units.find(y => y.u === u);
   return unit ? { unit, units } : null;
 }
 function puDraw(u, focus){

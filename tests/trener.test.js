@@ -253,12 +253,19 @@ test('panel: karta klienta (przegląd, sesje, bloki, dyspozycja)', async () => {
   await p.waitForSelector('.tabs');
   assert.equal(calls.find(c => c.fn === 'trKlient').args[0], 'ania');
   let txt = await p.textContent('#main');
-  assert.match(txt, /Blok B2 · tydz\. 6 z 6 · tryb PRO/);
-  assert.match(txt, /Ból max 7 dni\s*5\/10\s*kolano · T1/);
-  assert.match(txt, /sRPE tygodnia\s*1140\s*ACWR 1,3 · za dużo/);
-  assert.match(txt, /Ostatnia uwaga klienta: Kolano/);
-  assert.equal(await p.$$eval('svg.ch', a => a.length), 3);      // 2 ćwiczenia główne + tonaż
-  assert.match(txt, /Przysiad tylny: 84×5 @7,5 ▶, 84×5 @8, 84×5 @8,5 ▶/);
+  assert.match(txt, /Blok B2 · tydz\. 6 z 6 · PRO/);
+  // nagłówek: sygnały z Przeglądu i dyspozycja jako pigułki, „Prowadź trening” z najbliższą niezrobioną jednostką
+  assert.deepEqual(await p.$$eval('.kpl .pill', a => a.map(x => x.textContent)), ['ból 5/10 kolano', '2 serie FAIL', 'dyspozycja: uwaga']);
+  assert.equal((await p.textContent('.kgo')).trim(), '▶ Prowadź trening');
+  assert.match(await p.textContent('.khs'), /Filmy · 2\s*Ustawienia/);
+  assert.deepEqual(await p.$$eval('.stats .st', a => a.map(x => x.textContent)), ['1/2ten tydzień', '5/10ból, kolano', '1140sRPE, za dużo', '1,6 ttonaż −28%', 'Uwagadyspozycja 17.11']);
+  assert.match(await p.getAttribute('.stats .st:nth-child(3)', 'title'), /ACWR 1,3/);
+  // ostatnie sesje w skrócie: ten sam ciężar = sama ocena, uwaga klienta pod spodem
+  assert.equal(await p.$$eval('.sr', a => a.length), 5);
+  assert.match(await p.textContent('.sr'), /wt 17\.11 · T1 Nogi\s*55 min · RPE 8 · ból 5 kolano\s*Przysiad tylny 84×5 @7,5 ▶ · @8 · @8,5 ▶\s*Kolano po przysiadach/);
+  assert.match(txt, /Wszystkie 22 ›/);
+  assert.match(await p.textContent('.sg'), /Przysiad tylny\s*od 01\.09: \+27,5 kg\s*105 kg/);
+  assert.equal(await p.$$eval('svg.ch', a => a.length), 1);      // tonaż; siła jako małe wykresy w wierszach
   await shot(p, 'trener-klient-jasny.png');
   await p.click('.tabs a[href$="/sesje"]'); await p.waitForSelector('details.ses');
   txt = await p.textContent('#main');
@@ -330,13 +337,17 @@ test('panel: wygasły bilet wraca do logowania, brak konfiguracji = instrukcja',
 });
 
 test('panel: zrzuty w ciemnym motywie i na telefonie', async () => {
-  for (const [scheme, vp, sfx] of [['dark', null, 'ciemny'], ['light', { width: 390, height: 844 }, 'telefon-jasny'], ['dark', { width: 390, height: 844 }, 'telefon-ciemny']]) {
+  for (const [scheme, vp, sfx] of [['light', null, 'jasny'], ['dark', null, 'ciemny'], ['light', { width: 390, height: 844 }, 'telefon-jasny'], ['dark', { width: 390, height: 844 }, 'telefon-ciemny']]) {
     const { ctx, p } = await page([], { loggedIn: true, scheme, vp });
     await p.goto(base + 'trener.html'); await p.waitForSelector('tr.row[data-k="ania"]');
     await shot(p, 'trener-pulpit-' + sfx + '.png');
     await p.goto(base + 'trener.html#k/ania'); await p.waitForSelector('.tabs');
     await shot(p, 'trener-klient-' + sfx + '.png');
-    assert.equal(await p.getAttribute('a[href^="./?prowadz="]', 'href'), './?prowadz=ania');   // „▶ Prowadź trening” w karcie klienta
+    await p.goto(base + 'trener.html#k/ania/plan'); await p.waitForSelector('.pu');
+    await shot(p, 'trener-plan-' + sfx + '.png');
+    if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Plan bez przewijania w bok na telefonie');
+    await p.goto(base + 'trener.html#k/ania'); await p.waitForSelector('.kgo');
+    assert.equal(await p.getAttribute('.kgo', 'href'), './?prowadz=ania');   // „▶ Prowadź trening” w karcie klienta: bez narzucania jednostki z planu
     if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'bez przewijania w bok na telefonie');
     assert.deepEqual(p.errors, []);
     await ctx.close();
@@ -431,7 +442,7 @@ test('panel: komentarz do sesji ze szkicem AI (szkic, poprawka „Krócej”, za
   assert.ok(await s3.p.$('details.ses[open] .kedit button.ai'));
   assert.ok((await s3.p.$$('details.ses[open] .sets .nd')).length >= 3);
   assert.match(await s3.p.textContent('details.ses[open]'), /s\. 1 ▶[\s\S]*klient nagrał albo wpisał serię, ale jej nie odhaczył/);
-  await s3.p.goto(base + 'trener.html#k/ania/przeglad'); await s3.p.waitForSelector('.sets');
+  await s3.p.goto(base + 'trener.html#k/ania/przeglad'); await s3.p.waitForSelector('.sr .sx .nd');   // szare też w skrócie sesji w Przeglądzie
   assert.deepEqual(s3.p.errors, []);
   await s3.ctx.close();
 });
@@ -562,16 +573,16 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   // suwak → „Wstaw chwilę” dopisuje sekundę na początku linii
   await p.$eval('#pvr', r => { r.value = '1.2'; r.dispatchEvent(new Event('input')); });
   await p.waitForFunction(() => /0:01,2/.test(document.querySelector('#pvt').textContent));
-  assert.match(await p.textContent('#kf-ins'), /Wstaw chwilę 0:01/);
+  assert.match(await p.textContent('#kf-ins'), /Wstaw chwilę 0:01,2/);
   await p.click('#kf-ins');
   await p.type('#kf-txt', 'Kolana na zewnątrz.');
-  assert.equal(await p.inputValue('#kf-txt'), '0:01 Kolana na zewnątrz.');
+  assert.equal(await p.inputValue('#kf-txt'), '0:01,2 Kolana na zewnątrz.');
   assert.equal(await p.$$eval('#pvm button', a => a.length), 1);                     // kreska na pasku w tej chwili
   await p.$eval('#pvr', r => { r.value = '0'; r.dispatchEvent(new Event('input')); });
   await p.click('#pvm button');
-  assert.ok(Math.abs(await p.$eval('#pvv', v => v.currentTime) - 1) < 0.05);       // kreska przewija film
+  assert.ok(Math.abs(await p.$eval('#pvv', v => v.currentTime) - 1.2) < 0.05);       // kreska przewija film
   await p.click('#kf-ins');                                                           // druga chwila w nowej linii
-  assert.equal(await p.inputValue('#kf-txt'), '0:01 Kolana na zewnątrz.\n0:01 ');
+  assert.equal(await p.inputValue('#kf-txt'), '0:01,2 Kolana na zewnątrz.\n0:01,2 ');
   await p.fill('#kf-txt', '0:01 Kolana na zewnątrz.');
   await shot(p, 'trener-filmy-telefon-ciemny.png');
   await p.click('#kf-save'); await p.waitForSelector('#kfw .saved');
@@ -742,7 +753,7 @@ test('panel: Klienci (lista, kopiowanie linku, ustawienia klienta, nowy link, no
   assert.match(await p.textContent('#main'), /3 aktywnych · 1 nieaktywny/);
   // karta klienta prowadzi do ustawień
   await p.goto(base + 'trener.html#k/ania');
-  await p.waitForSelector('a.b[href="#klienci/ania"]');
+  await p.waitForSelector('.khs a.sb[href="#klienci/ania"]');
   assert.deepEqual(p.errors, []);
   await ctx.close();
   // telefon, ciemny motyw
@@ -847,7 +858,10 @@ test('panel: karta klienta → Plan, szybka zmiana kg / serii w niezrobionej jed
     await p.goto(base + 'trener.html#k/ania/plan'); await p.waitForSelector('.pu');
     // tylko niezrobiona jednostka (tydz. 12 T2, czwartek); dzisiejsza T1 ma serie w Logu → zablokowana, nie ma jej na liście
     assert.deepEqual(await p.$$eval('.pu', a => a.map(x => x.dataset.u)), ['12|T2']);
-    assert.match(await p.textContent('.pu'), /Tydz\. 12 · blok B2 · cz 19\.11\s*T2 · Góra[\s\S]*Wyciskanie na ławce\s*Serie3\s*Powt\.5\s*kg47/);
+    assert.match(await p.textContent('.wkh'), /Tydzień 12\s*16\.11–22\.11 · blok B2 · 1 z 2 zrobione/);
+    assert.match(await p.textContent('.pdn'), /✓T1 · Nogi\s*zrobiona wt 17\.11\s*Sesja ›/);           // zrobiona jednostka tygodnia: jedna linia do sesji
+    assert.match(await p.textContent('.pu'), /cz 19\.11\s*T2 · Góra▶ ProwadźEdytuj[\s\S]*Wyciskanie na ławce3 × 5 · 47 kg · RPE ≤ 8[\s\S]*Podciąganie3 × 5 · RPE ≤ 8/);
+    assert.equal(await p.getAttribute('.pu a.sb.acc', 'href'), './?prowadz=ania&j=12%7CT2');
     await p.click('.pu [data-pe="edit"]');
     const kg = '.pu input[data-pf="kg"][data-o="1"]', sets = '.pu input[data-pf="sets"][data-o="2"]', save = '.pu [data-pe="save"]';
     assert.equal(await p.evaluate(() => document.activeElement.dataset.pf), 'kg');      // od razu kursor w kg
@@ -871,8 +885,8 @@ test('panel: karta klienta → Plan, szybka zmiana kg / serii w niezrobionej jed
     const txt = await p.textContent('.pu');
     assert.match(txt, /Zapisano 3 zmiany · klient zobaczy je przy następnym otwarciu aplikacji/);
     assert.match(txt, /Od trenera\s*Ostatnia seria bez walki/);
-    assert.match(txt, /Wyciskanie na ławce\s*Serie3\s*Powt\.5\s*kg50/);
-    assert.match(txt, /Podciąganie\s*Serie4/);
+    assert.match(txt, /Wyciskanie na ławce3 × 5 · 50 kg/);
+    assert.match(txt, /Podciąganie4 × 5/);
     // błąd z serwera zostaje w edycji z komunikatem
     await p.click('.pu [data-pe="edit"]'); await p.fill('.pu textarea[data-pf="unote"]', 'błąd'); await p.click(save);
     await p.waitForSelector('.pu .pef .err[role="alert"]');

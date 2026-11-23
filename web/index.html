@@ -163,6 +163,15 @@
   .card.fxc .fold-c{visibility:hidden}
   .fx + .card, .fx + .grp{margin-top:var(--gap)}
   /* karta „dziś”: co dziś i ile to potrwa, przycisk do pierwszego niezrobionego ćwiczenia */
+  /* w trakcie treningu (od 1. serii roboczej) karta „dziś”, pasek tygodnia i baner dyspozycji → jedna linia #wkm (punkt 9 v80) */
+  .wkm{display:none}
+  #main.slim #today,#main.slim .wk[data-wk="t"],#main.slim > .ready{display:none}
+  #main.slim .wkm{display:flex;align-items:center;gap:8px;min-height:48px;margin-top:10px;padding:2px 2px 2px 14px;border-radius:var(--rc);background:var(--surface);border:1px solid var(--line);font:600 15px/1.2 var(--f-body);color:var(--ink)}
+  .wkm .wd{font:800 17px/1 var(--f-display);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
+  .wkm .mut{color:var(--ink-2);flex:1;min-width:0;font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wkm .dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--line)}
+  .wkm .dot.lv-ok{background:var(--e-g)}.wkm .dot.lv-warn{background:var(--e-y)}.wkm .dot.lv-bad{background:var(--e-r)}
+  .wkm button{min-width:44px;min-height:44px;border:0;background:transparent;color:var(--ink-2);font:700 18px var(--f-body);border-radius:var(--r)}
   .today{background:var(--surface);border:1px solid var(--line);border-radius:var(--rc);box-shadow:inset 5px 0 0 var(--accent),var(--shadow);margin-top:10px;padding:14px 16px 14px 20px}
   .td-row{display:flex;align-items:center;gap:12px}
   .td-row > div{flex:1;min-width:0}
@@ -1022,7 +1031,7 @@ let PT = 'tyd', PEX = '', PWK = null, PBL = null;   // zakładka, ćwiczenie, ty
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
-const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, effFine, EASY_RPE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
+const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, effFine, effHint, EASY_RPE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
   RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, planEdit, restSec, fmtClock, plates,
   isOly, RATE, rateOf, olyCap, sugOly, olyLocked, SWAP_WHY, swapOptions, swapAuto, swapText, parseSwap,
@@ -1762,6 +1771,7 @@ function refreshStats(){
 }
 /** karta „dziś” (lib todayInfo): przed startem ile ćwiczeń, serii i minut; w trakcie postęp i następne ćwiczenie; po serii rysowana od nowa */
 function todayDraw(){
+  $('#main').classList.remove('slim');
   const box = $('#today'); if (!box) return;
   const exs = curExs(); if (!exs.length) return;
   const t = todayInfo(exs.map(ex => ({ order: ex.order, name: ex.name, prio: ex.prio, sets: ex.skip && !ex.sets ? 0 : ex.sets,
@@ -1776,12 +1786,30 @@ function todayDraw(){
     (t.done && t.next ? `<div class="td-pb" role="progressbar" aria-label="Zrobione serie" aria-valuemin="0" aria-valuemax="${t.all}" aria-valuenow="${t.done}"><i style="width:${Math.round(100 * t.done / t.all)}%"></i></div>
       <div class="td-n">Następne: <b>${esc(t.next.name)}</b></div>` : '');
   box.hidden = false;
+  slimDraw(t);
   $('#td-go').onclick = () => {
     if (t.next) setFold(t.next.order, false);
     const c = t.next ? document.querySelector(`.card[data-card="${t.next.order}"]`) : document.querySelector('.card.sess'); if (!c) return;
     const g = c.closest('.grp') || c;
     window.scrollTo({ top: g.getBoundingClientRect().top + window.scrollY - 8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   };
+}
+
+/** punkt 9 v80: od 1. zapisanej serii roboczej do „wszystko zrobione” zamiast karty „dziś”, paska tygodnia i banera jedna linia;
+ *  ▾ rozwija pełny widok do końca tej jednostki (WKX, tylko w pamięci strony) */
+let WKX = '';
+function slimDraw(t){
+  const m = $('#main'), box = $('#wkm'); if (!box) return;
+  const u = cur.week + '|' + cur.day, on = !!(t.done && t.next) && WKX !== u;
+  m.classList.toggle('slim', on);
+  if (!on) return;
+  const r = todayRow(), lvl = !r ? 'none' : /zmęcz/i.test(r.werdykt || '') ? 'bad' : /uwaga/i.test(r.werdykt || '') ? 'warn' : 'ok';
+  const b = blockInfo(PLAN, cur.week);
+  box.innerHTML = `<span class="wd">${esc(weekday(curDate()) + ' ' + curDate().slice(8, 10))} · ${esc(cur.day)}</span>` +
+    `<span class="mut">${esc([b ? b.block + ' · tydz. ' + b.n : 'tydz. ' + cur.week, 'ok. ' + t.min + ' min'].join(' · '))}</span>` +
+    (r ? `<i class="dot lv-${lvl}" role="img" aria-label="Dyspozycja: ${esc(r.werdykt || '')}"></i>` : '') +
+    `<button type="button" id="wkm-x" aria-label="Pokaż tydzień i dyspozycję" aria-expanded="false">▾</button>`;
+  $('#wkm-x').onclick = () => { WKX = u; m.classList.remove('slim'); };
 }
 
 /* ---------- ekran Dyspozycja: ankieta Hoopera, CMJ, prędkość na rozgrzewce → werdykt ---------- */
@@ -2977,7 +3005,7 @@ function renderTrening(){
   });
   const open = !sessDone(cur.week, cur.day);
   const fx = FX && exs.length > 1;
-  let h = sbNote() + (fx ? '<section class="fx" id="fx" aria-label="Tryb skupienia"></section>' : '') + unoteCard(exs) + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section>' : '') + weekBar('t') + notesCard() + readyBanner();
+  let h = sbNote() + (fx ? '<section class="fx" id="fx" aria-label="Tryb skupienia"></section>' : '') + unoteCard(exs) + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section><div class="wkm" id="wkm"></div>' : '') + weekBar('t') + notesCard() + readyBanner();
   const grps = circuitGroups(exs), gOf = o => grps.find(g => g.orders.includes(o));
   exs.forEach(ex => {
     const g = gOf(ex.order), i = g ? g.orders.indexOf(ex.order) : -1;
@@ -3405,7 +3433,7 @@ function fineHtml(q, rpe, wide, oly){
 }
 /** wybór światła pod wierszem: dotknięcie = seria zapisana z tym RPE */
 const effPick = (q, rpe, wide) => `<div class="efp" role="group" aria-label="Jak ciężko">` +
-  ['L', 'S', 'W', 'X'].map(k => `<button type="button" data-q="${k}" aria-pressed="${q === k}"><i class="d ${EFF[k].c}" aria-hidden="true">${k === 'X' ? '✕' : ''}</i><b>${EFF[k].label}</b><small>${EFF[k].hint}</small></button>`).join('') +
+  ['L', 'S', 'W', 'X'].map(k => `<button type="button" data-q="${k}" aria-pressed="${q === k}"><i class="d ${EFF[k].c}" aria-hidden="true">${k === 'X' ? '✕' : ''}</i><b>${EFF[k].label}</b><small>${effHint(k, !SIMPLE && SCALE === 'RIR')}</small></button>`).join('') +
   (q && q !== 'X' ? fineHtml(q, rpe, wide) + '<button type="button" class="rclr" data-q="">Bez oceny (zostaje ✓)</button>' : '') + '</div>';
 /** seria czeka w kolejce offline → pole żółte także po ponownym otwarciu */
 const queued = (ex, set) => qGet().some(it => it.fn === 'logSet' && it.payload.week === cur.week && it.payload.day === cur.day && it.payload.order === ex.order && String(it.payload.set) === String(set));

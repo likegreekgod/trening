@@ -68,6 +68,9 @@
    * od zwykłego „lekko” (w bojach RPE ≤ L.EASY_RPE otwiera „max dziś”; 22.11.2026, wariant b). Pozostałe: EFF_FINE.
    */
   L.EASY_RPE = 6.5;
+  /** podpis światła: przy skali RIR (PRO) liczba RIR na początku zamiast „zapas …” (23.11.2026); zapis bez zmian */
+  L.EFF_RIR = { L: 'RIR ≥ 3 · szybko, czysto', S: 'RIR 2 · wolniej albo z poprawką', W: 'RIR 0–1 · walka', X: 'Seria nie wyszła' };
+  L.effHint = (q, rir) => (rir && L.EFF_RIR[q]) || (L.EFF[q] ? L.EFF[q].hint : '');
   L.effFine = (q, wide) => wide && q === 'L' ? [5, 5.5, 6, 6.5, 7, 7.5] : L.EFF_FINE[q] || [];
   /** RPE (i typ) → światło: ≤ 7,5 Lekko, 8–8,5 Średnio, ≥ 9 Ciężko, FAIL Nieudana; puste = '' (także stare wpisy) */
   L.lightOf = (r, typ) => {
