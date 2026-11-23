@@ -373,6 +373,9 @@
   .ow-res .opt{display:flex;justify-content:space-between;align-items:center;gap:8px}
   .ow-f{font:500 12px/1 var(--f-mono);color:var(--ok);border:1px solid var(--ok);border-radius:999px;padding:2px 7px}
   .ow-new{border-style:dashed;color:var(--accent)}
+  .ow-n{display:flex;flex-direction:column;gap:3px;text-align:left}
+  .ow-a{font:400 12px/1.3 var(--f-body);color:var(--muted)}
+  .opt[aria-pressed="true"] .ow-a{color:inherit;opacity:.85}
   .ow-h{margin-top:6px}
   .ow-parts{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:8px -2px 2px;padding:0 2px 4px}
   .ow-parts::-webkit-scrollbar{display:none}
@@ -658,6 +661,7 @@
   .efp small{font-size:12px;color:var(--ink-2);line-height:1.25}
   .efp .rclr{grid-column:1/-1;min-height:44px;display:block;text-align:center;background:transparent;color:var(--ink-2)}
   .efp .fine,.rate .fine{grid-column:1/-1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font:600 13px var(--f-body);color:var(--ink-2)}
+  .efp .fine .fe,.rate .fine .fe{flex-basis:100%;font:500 12px var(--f-body);color:var(--muted)}
   .efp .fine button,.rate .fine button{min-width:52px;min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);font:700 17px var(--f-display)}
   .efp .fine button[aria-pressed="true"],.rate .fine button[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
   /* boje: światła sędziowskie, wybór oceny, propozycja ciężaru */
@@ -1013,10 +1017,10 @@ let PT = 'tyd', PEX = '', PWK = null, PBL = null;   // zakładka, ćwiczenie, ty
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
-const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
+const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, effFine, EASY_RPE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
   RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, planEdit, restSec, fmtClock, plates,
-  isOly, RATE, rateOf, olyCap, sugOly, olyLocked, SWAP_WHY, swapOptions, swapText, parseSwap,
+  isOly, RATE, rateOf, olyCap, sugOly, olyLocked, SWAP_WHY, swapOptions, swapAuto, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
   doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
@@ -2439,11 +2443,27 @@ function setSwap(ex, s){
   const m = swGet(); m[swKey(ex)] = s;
   try { localStorage.setItem(SWK, JSON.stringify(m)); } catch (e) {}
 }
+/**
+ * po zamianie (albo jej cofnięciu) zapisane już serie ćwiczenia idą do Logu jeszcze raz: nazwa wykonanego ćwiczenia i pole „zamiana”
+ * (id serii bez zmian, upsert). Bez tego serie sprzed zamiany zostawały pod starą nazwą bez śladu zamiany (22.11.2026).
+ * name = nazwa po zmianie, s = zamiana {from, to, why} albo null (cofnięta).
+ */
+function resaveSwap(ex, name, s){
+  const L0 = exLogs(ex), s0 = curExs()[0] || {}, v = x => x === undefined || x === null ? '' : x;
+  Object.keys(L0).forEach(set => {
+    const l = L0[set]; if (!l || l.deleted) return;
+    const p = { week: cur.week, day: cur.day, date: s0.date, order: ex.order, name, set: /^\d+$/.test(set) ? +set : set,
+      kg: v(l.kg), reps: v(l.powt), rpe: v(l.rpe), vbt: v(l.vbt_ms), vbtPeak: v(l.vbt_peak), height: v(l.wysokosc_cm), path: l.sciezka || '',
+      done: l.wykonane === 'TAK', video: l.film_link || '', typ: l.typ || '', ocena: l.ocena || '', swap: swapText(s), note: l.uwagi || '' };
+    putLocal(ex, p);
+    send('logSet', p).catch(() => {});
+  });
+}
 function openSwap(ex){
   const opts = swapOptions(ex), free = SWAP === 'DOWOLNA';
   let to = '', why = '';
   openSheet(`<h2 id="sheet-t">Zamień ćwiczenie</h2><p class="sub">Zamiast: ${esc(ex.name)}</p>
-    ${opts.length ? `<div class="lbl">Zamienniki od trenera</div><div class="opts" role="group" aria-label="Zamiennik">${opts.map(o => `<button type="button" class="opt" data-to="${esc(o)}">${esc(o)}</button>`).join('')}</div>`
+    ${opts.length ? `<div class="lbl">${swapAuto(ex) ? 'Podobne ćwiczenia' : 'Zamienniki od trenera'}</div><div class="opts" role="group" aria-label="Zamiennik">${opts.map(o => `<button type="button" class="opt" data-to="${esc(o)}">${esc(o)}</button>`).join('')}</div>`
       : free ? '' : '<p class="hint">Trener nie podał zamienników tego ćwiczenia. Napisz do trenera albo zrób je jak w planie.</p>'}
     ${free ? `<label class="fl">${opts.length ? 'Albo szukaj w bazie' : 'Szukaj ćwiczenia'}<input id="sw-q" placeholder="np. wiosłowanie, przysiad" autocomplete="off"></label><div id="sw-res" class="ow-res"></div>` : ''}
     <div class="fl">Powód</div>
@@ -2464,8 +2484,8 @@ function openSwap(ex){
   // DOWOLNA: cała baza Ćwiczenia (lista z getExNames) + własna nazwa
   const res = q => {
     const box = $('#sw-res'); if (!box) return;
-    const r = exSearch([], EXN.list, q, 8), exact = r.some(x => x.name.toLowerCase() === q.trim().toLowerCase());
-    box.innerHTML = r.map(x => `<button type="button" class="opt" data-to="${esc(x.name)}">${esc(x.name)}${x.film ? '<small class="ow-f">film</small>' : ''}</button>`).join('') +
+    const r = exSearch([], EXN.list, q, 8), exact = exExact(r, q);
+    box.innerHTML = r.map(x => `<button type="button" class="opt" data-to="${esc(x.name)}">${exOptIn(x)}</button>`).join('') +
       (q.trim() && !exact ? `<button type="button" class="opt ow-new" data-to="${esc(q.trim().replace(/\s+/g, ' ').slice(0, 80))}">+ Własna nazwa: „${esc(q.trim().slice(0, 80))}”</button>` : '');
     bindTo(); upd();
   };
@@ -2476,7 +2496,7 @@ function openSwap(ex){
   const len = bindLen();
   $('#sw-ok').onclick = () => {
     const forever = len();
-    setSwap(ex, { from: ex.name, to, why }); closeSheet();
+    setSwap(ex, { from: ex.name, to, why }); resaveSwap(ex, to, { from: ex.name, to, why }); closeSheet();
     const n = forever ? edSend(Object.assign({ op: 'swap', week: cur.week, day: cur.day, order: ex.order, to, forever: true }, edDx(to))) : 0;
     toast('Zamieniono na: ' + to + '.' + (forever ? (n ? ' Także w kolejnych tygodniach: ' + n + '.' : ' W kolejnych tygodniach tego ćwiczenia nie ma.') : ' Serie zapiszą się pod nową nazwą.'));
     renderTrening();
@@ -2540,8 +2560,8 @@ function openAdd(){
   };
   const res = v => {
     const mine = [...new Set(PLAN.slice().reverse().map(r => r.name))], r = v.trim() ? exSearch(mine, EXN.list, v, 8) : [];
-    const exact = r.some(x => x.name.toLowerCase() === v.trim().toLowerCase());
-    $('#ed-res').innerHTML = r.map(x => `<button type="button" class="opt" data-n="${esc(x.name)}">${esc(x.name)}${x.film ? '<small class="ow-f">film</small>' : ''}</button>`).join('') +
+    const exact = exExact(r, v);
+    $('#ed-res').innerHTML = r.map(x => `<button type="button" class="opt" data-n="${esc(x.name)}">${exOptIn(x)}</button>`).join('') +
       (v.trim() && !exact ? `<button type="button" class="opt ow-new" data-n="${esc(v.trim().replace(/\s+/g, ' ').slice(0, 80))}">+ Własna nazwa: „${esc(v.trim().slice(0, 80))}”</button>` : '');
     document.querySelectorAll('#ed-res [data-n]').forEach(b => b.onclick = () => pick(b.dataset.n));
   };
@@ -2687,7 +2707,10 @@ function renderTrener(){
 const ownOn = () => !!(DATA && DATA.cfg && DATA.cfg.own !== false);
 let OWN = null;
 /* lista nazw z bazy: pobierana dopiero przy własnym treningu, trzymana w telefonie na dobę */
-const EXK = 'exn2_' + KEY;                         // exn2: lista z linkami do filmów i partiami
+/** wynik wyszukiwarki ćwiczeń: nazwa z bazy, pod nią trafiony alias (np. „wiosłowanie sztangą w opadzie”), znacznik filmu */
+const exOptIn = x => `<span class="ow-n">${esc(x.name)}${x.alias ? `<small class="ow-a">${esc(x.alias)}</small>` : ''}</span>${x.film ? '<small class="ow-f">film</small>' : ''}`;
+const exExact = (r, q) => r.some(x => [x.name, x.alias || ''].some(n => n.toLowerCase() === String(q).trim().toLowerCase()));
+const EXK = 'exn3_' + KEY;                         // exn3: lista z linkami do filmów, partiami i aliasami (v84)
 let EXN = (() => { try { return JSON.parse(localStorage.getItem(EXK) || 'null') || { t: 0, list: [] }; } catch (e) { return { t: 0, list: [] }; } })();
 function exnLoad(done){
   if (EXN.list.length && Date.now() - EXN.t < 864e5) return;
@@ -2749,9 +2772,9 @@ function ownParts(){
 }
 function ownRes(q){
   const mine = [...new Set(PLAN.slice().reverse().map(r => r.name))], part = OWN.part || '', res = exSearch(mine, EXN.list, q, part ? 60 : 12, part);
-  const exact = res.some(r => r.name.toLowerCase() === String(q).trim().toLowerCase());
+  const exact = exExact(res, q);
   $('#ow-res').innerHTML = (q.trim() ? '' : part ? `<div class="lbl">${esc(part)} · ${res.length}${res.length === 60 ? '+' : ''}</div>` : (LIVE ? '<div class="lbl">Z planu: ' + esc(NAME) + '</div>' : '<div class="lbl">Twoje ćwiczenia</div>')) +
-    res.map(r => `<button type="button" class="opt ow-add" data-n="${esc(r.name)}">${esc(r.name)}${r.film ? '<small class="ow-f">film</small>' : ''}</button>`).join('') +
+    res.map(r => `<button type="button" class="opt ow-add" data-n="${esc(r.name)}">${exOptIn(r)}</button>`).join('') +
     (q.trim() && !exact ? `<button type="button" class="opt ow-add ow-new" data-n="${esc(q.trim().replace(/\s+/g, ' ').slice(0, 80))}">+ Dodaj „${esc(q.trim().slice(0, 80))}” jako nowe ćwiczenie</button>` : '') +
     (q.trim() && !res.length ? '<p class="sub">Nie ma takiego ćwiczenia w bazie' + (part ? ' w tej partii' : '') + '. Możesz dodać je pod własną nazwą — trener podepnie film.</p>' : '');
   document.querySelectorAll('.ow-add').forEach(b => b.onclick = () => {
@@ -2965,7 +2988,7 @@ const lightsHtml = q => `<span class="lights" aria-hidden="true">${[...(RATE[q] 
 const RATE_HINT = { L: '3 białe', S: '2 białe, 1 czerwone', W: '1 białe, 2 czerwone', X: '3 czerwone' };
 const rateHtml = (cur, rpe) => `<div class="rate" role="group" aria-label="Ocena podejścia">` +
   ['L', 'S', 'W', 'X'].map(q => `<button type="button" data-q="${q}" aria-pressed="${cur === q}">${lightsHtml(q)}<b>${RATE[q].label}</b><small>${RATE_HINT[q]}</small></button>`).join('') +
-  (cur && cur !== 'X' ? fineHtml(cur, rpe) : '') + (cur ? '<button type="button" class="rclr" data-q="">Wyczyść ocenę</button>' : '') + '</div>';
+  (cur && cur !== 'X' ? fineHtml(cur, rpe, true, true) : '') + (cur ? '<button type="button" class="rclr" data-q="">Wyczyść ocenę</button>' : '') + '</div>';
 /**
  * propozycja ciężaru pod ostatnio ocenionym podejściem (lib sugOly); fresh = właśnie zapisana ocena:
  * po zablokowaniu sufitu (🟡 / 🔴 / ✖) niezrobione serie bez wpisanego ciężaru dostają propozycję (kg z planu) jako domyślne
@@ -2975,11 +2998,11 @@ function updateSug(ex, fresh){
   const o = ex.order;
   document.querySelectorAll(`.sug[data-o="${o}"]`).forEach(x => x.remove());
   const rows = workRows(o), plan = isNum(ex.kg) && ex.kg > 0 ? ex.kg : null;
-  const model = rows.map(r => ({ kg: num(fv(r.querySelector('.kg'))), rate: r.dataset.rate || '', done: !!r.dataset.st }));
+  const model = rows.map(r => ({ kg: num(fv(r.querySelector('.kg'))), rate: r.dataset.rate || '', done: !!r.dataset.st, rpe: num(r.dataset.rpe) }));
   const lock = !!plan && olyLocked(model);
   document.querySelectorAll(`.mxd[data-mx="${o}"]`).forEach(m => { m.classList.toggle('lock', lock); m.setAttribute('aria-label', lock ? 'max dziś zablokowane, sufit = plan' : ''); if (!lock) m.removeAttribute('aria-label'); });
   let i = -1; model.forEach((m, j) => { if (m.done && m.rate) i = j; });
-  const s = i < 0 || !isNum(model[i].kg) ? null : sugOly(model, i, Object.assign(capOf(ex), { plan }));
+  const s = i < 0 || !isNum(model[i].kg) ? null : sugOly(model, i, Object.assign(capOf(ex), { plan, simple: SIMPLE }));
   if (!s || s.drop && document.querySelector(`.set[data-o="${o}"][data-k="d"]`)) return;   // drop set już dodany
   const todo = rows.filter(r => !r.dataset.st);
   if (fresh && s.lock) { todo.forEach(r => { const x = r.querySelector('.kg'); if (x && x.value.trim() === '') setPh(x, fmtKg(s.kg)); }); placeStep(o); }
@@ -3276,16 +3299,21 @@ function effInner(rpe, st){
 }
 const effLabel = (rpe, st) => st === 'x' ? 'nieudana' : st && lightOf(rpe) ? EFF[lightOf(rpe)].label + (SIMPLE ? '' : ', RPE ' + fmtKg(num(rpe))) : 'bez oceny';
 const effBtn = (rpe, st) => `<button type="button" class="ef" aria-label="Jak ciężko: ${effLabel(rpe, st)} – dotknij, aby ocenić">${effInner(rpe, st)}</button>`;
-/** dokładne RPE w zakresie światła (tylko PRO, przy zaznaczonym świetle); RIR = 10 − RPE */
-function fineHtml(q, rpe){
-  if (SIMPLE || !EFF_FINE[q]) return '';
-  const rir = SCALE === 'RIR';
-  return `<div class="fine">Dokładniej, ${rir ? 'RIR' : 'RPE'}: ${EFF_FINE[q].map(v => `<button type="button" data-v="${v}" aria-pressed="${num(rpe) === v}">${fmtKg(rir ? 10 - v : v)}</button>`).join('')}</div>`;
+/**
+ * dokładne RPE w zakresie światła (tylko PRO, przy zaznaczonym świetle); RIR = 10 − RPE.
+ * wide = ćwiczenie A albo bój: przy 🟢 także 5–6,5 (lib effFine); oly = bój: dopisek, że bardzo lekko otwiera „max dziś”
+ */
+function fineHtml(q, rpe, wide, oly){
+  const vs = effFine(q, wide);
+  if (SIMPLE || !vs.length) return '';
+  const rir = SCALE === 'RIR', e = EASY_RPE;
+  return `<div class="fine">Dokładniej, ${rir ? 'RIR' : 'RPE'}: ${vs.map(v => `<button type="button" data-v="${v}" aria-pressed="${num(rpe) === v}">${fmtKg(rir ? 10 - v : v)}</button>`).join('')}` +
+    (oly && q === 'L' ? `<small class="fe">${rir ? 'RIR ≥ ' + fmtKg(10 - e) : 'RPE ≤ ' + fmtKg(e)} = bardzo łatwo: otwiera „max dziś”</small>` : '') + '</div>';
 }
 /** wybór światła pod wierszem: dotknięcie = seria zapisana z tym RPE */
-const effPick = (q, rpe) => `<div class="efp" role="group" aria-label="Jak ciężko">` +
+const effPick = (q, rpe, wide) => `<div class="efp" role="group" aria-label="Jak ciężko">` +
   ['L', 'S', 'W', 'X'].map(k => `<button type="button" data-q="${k}" aria-pressed="${q === k}"><i class="d ${EFF[k].c}" aria-hidden="true">${k === 'X' ? '✕' : ''}</i><b>${EFF[k].label}</b><small>${EFF[k].hint}</small></button>`).join('') +
-  (q && q !== 'X' ? fineHtml(q, rpe) + '<button type="button" class="rclr" data-q="">Bez oceny (zostaje ✓)</button>' : '') + '</div>';
+  (q && q !== 'X' ? fineHtml(q, rpe, wide) + '<button type="button" class="rclr" data-q="">Bez oceny (zostaje ✓)</button>' : '') + '</div>';
 /** seria czeka w kolejce offline → pole żółte także po ponownym otwarciu */
 const queued = (ex, set) => qGet().some(it => it.fn === 'logSet' && it.payload.week === cur.week && it.payload.day === cur.day && it.payload.order === ex.order && String(it.payload.set) === String(set));
 const STATE_TXT = { '': 'niezapisana – dotknij: zrobiona', ok: 'zrobiona – dotknij: nieudana', x: 'nieudana – dotknij: wyczyść' };
@@ -3778,7 +3806,7 @@ function bindRow(row, ex, s0){
     row.insertAdjacentHTML('afterend', rateHtml(row.dataset.st ? row.dataset.rate : '', row.dataset.rpe));
     const box = row.nextElementSibling;
     box.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { const r = b.dataset.q; box.remove(); save(r ? (r === 'X' ? 'x' : 'ok') : '', r, r && r !== 'X' ? RATE[r].rpe : ''); });
-    box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { box.remove(); save('ok', row.dataset.rate, +b.dataset.v); });
+    box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { box.remove(); save('ok', lightOf(+b.dataset.v) || row.dataset.rate, +b.dataset.v); });   // Łatwo poprawione na RPE 8 = Średnio
     box.querySelector('button').focus();
   };
   // zwykłe ćwiczenia: dotknięcie „oceń” → cztery światła pod wierszem; wybór zapisuje serię z RPE (lib EFF)
@@ -3789,7 +3817,7 @@ function bindRow(row, ex, s0){
     document.querySelectorAll('.ef.open').forEach(x => x.classList.remove('open'));
     if (open) return;
     const st = row.dataset.st, q = st === 'x' ? 'X' : st ? lightOf(row.dataset.rpe) : '';
-    row.insertAdjacentHTML('afterend', effPick(q, row.dataset.rpe)); ef.classList.add('open');
+    row.insertAdjacentHTML('afterend', effPick(q, row.dataset.rpe, ex.prio === 'A')); ef.classList.add('open');
     const box = row.nextElementSibling, done = () => { box.remove(); ef.classList.remove('open'); };
     box.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { const k = b.dataset.q; done(); save(k === 'X' ? 'x' : 'ok', '', k && k !== 'X' ? EFF[k].rpe : ''); });
     box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { done(); save('ok', '', +b.dataset.v); });
@@ -3833,7 +3861,7 @@ function bind(exs, s0){
   document.querySelectorAll('[data-more]').forEach(b => b.onclick = () => openMore(exOf(b.dataset.more)));
   document.querySelectorAll('[data-hist]').forEach(b => b.onclick = () => openHist(exOf(b.dataset.hist)));
   document.querySelectorAll('[data-inf]').forEach(b => b.onclick = () => openInf(exOf(b.dataset.inf)));
-  document.querySelectorAll('[data-unswap]').forEach(b => b.onclick = () => { setSwap(exOf(b.dataset.unswap), null); toast('Wrócono do ćwiczenia z planu.'); renderTrening(); });
+  document.querySelectorAll('[data-unswap]').forEach(b => b.onclick = () => { const e = exOf(b.dataset.unswap); setSwap(e, null); if (e.swap) resaveSwap(e, e.swap.from, null); toast('Wrócono do ćwiczenia z planu.'); renderTrening(); });
   document.querySelectorAll('[data-unskip]').forEach(b => b.onclick = () => { unSkip(exOf(b.dataset.unskip)); toast('Przywrócono ćwiczenie.'); renderTrening(); });
   // komentarz do ćwiczenia: dotknięcie tekstu w karcie otwiera okno z tym komentarzem
   document.querySelectorAll('[data-note]').forEach(b => b.onclick = () => openNote(exOf(b.dataset.note)));

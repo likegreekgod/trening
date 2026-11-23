@@ -516,10 +516,17 @@ test('Boje: światła zamiast RPE, ocena → zapis, propozycja i „Ustaw X kg�
   await p.click('.rate [data-q="L"]'); await p.waitForTimeout(80);
   assert.deepEqual((({ ocena, rpe, typ, done }) => ({ ocena, rpe, typ, done }))(lastSet(calls)), { ocena: 'L', rpe: 7, typ: '', done: true });
   assert.equal(await p.getAttribute('.set[data-s="1"]', 'data-rate'), 'L');
+  // wariant b (22.11): w PRO zwykłe Łatwo (RPE 7) nie otwiera „max dziś”; dopiero Dokładniej ≤ 6,5
+  assert.match(await p.textContent('.sug'), /Łatwo: zostań przy 70 kg\. Do 75 kg dokładasz tylko po bardzo łatwym/);
+  await p.click('.set[data-s="1"] .lt');
+  assert.match(await p.textContent('.rate .fine'), /Dokładniej, RPE: 5\s*5,5\s*6\s*6,5\s*7\s*7,5/);
+  assert.match(await p.textContent('.rate .fine .fe'), /RPE ≤ 6,5 = bardzo łatwo: otwiera „max dziś”/);
+  await p.click('.rate [data-v="6"]'); await p.waitForTimeout(80);
+  assert.deepEqual((({ ocena, rpe }) => ({ ocena, rpe }))(lastSet(calls)), { ocena: 'L', rpe: 6 });
   assert.match(await p.textContent('.sug'), /Łatwo: możesz dołożyć 2,5 kg\. Sufit dziś 75 kg/);
   await p.click('[data-setkg="72.5"]');
   assert.deepEqual(await p.$$eval('.set.oly .kg', i => i.map(x => x.value)), ['70', '72,5', '72,5', '72,5']);
-  await rate(p, 2, 'L');
+  await rate(p, 2, 'L'); await p.click('.set[data-s="2"] .lt'); await p.click('.rate [data-v="6.5"]'); await p.waitForTimeout(80);
   assert.equal(await p.$eval('.sug [data-setkg]', b => b.dataset.setkg), '75');
   assert.equal((await p.$$('.sug')).length, 1);                                  // tylko pod ostatnio ocenionym
   await p.click('[data-setkg="75"]');
@@ -610,6 +617,32 @@ test('Zamiana DOWOLNA: cała baza i własna nazwa; TRENER bez własnej nazwy; na
   assert.equal(await t.p.$('#sw-q'), null);
   assert.deepEqual(await t.p.$$eval('#sheet [data-to]', b => b.map(x => x.dataset.to)), ['Leg press', 'Hack']);
   await t.ctx.close();
+});
+
+test('Zamiana po zapisanej serii: seria zapisuje się ponownie pod nową nazwą; szukanie po aliasie; „Podobne ćwiczenia” (22.11)', async () => {
+  const calls = [], data = Object.assign({}, SWAPD, { cfg: Object.assign({}, SWAPD.cfg, { swap: 'DOWOLNA' }),
+    plan: [Object.assign({}, SWAPD.plan[0], { name: 'Dumbbell Incline Bench Row', swaps: [], kg: 20, reps: '10' })] });
+  const api = b => b.fn === 'getExNames' ? [['Bent Row', 'https://example.test/br', 'plecy', 'Wiosłowanie sztangą w opadzie; Bent Over Barbell Row'], ['Box Squat', '', 'nogi', '']] : null;
+  const { ctx, p } = await page(calls, false, { data, api });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('.set[data-s="1"] .ok'); await p.waitForTimeout(100);
+  assert.equal(lastSet(calls).name, 'Dumbbell Incline Bench Row');
+  await p.click('[data-more="1"]'); await p.click('#sheet [data-swap="1"]');
+  assert.match(await p.textContent('#sheet'), /Podobne ćwiczenia/);
+  assert.deepEqual(await p.$$eval('#sheet [aria-label="Zamiennik"] [data-to]', b => b.map(x => x.dataset.to)), ['Wiosłowanie hantlem', 'Wiosłowanie na wyciągu', 'Ściąganie drążka wyciągu']);
+  await p.fill('#sw-q', 'wiosłowanie sztangą'); await p.waitForSelector('#sw-res [data-to="Bent Row"]');
+  assert.match(await p.textContent('#sw-res [data-to="Bent Row"] .ow-a'), /Wiosłowanie sztangą w opadzie/);
+  await p.click('#sw-res [data-to="Bent Row"]'); await p.click('#sheet [data-why="Brak sprzętu"]');
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'zamiana-alias.png') }); }
+  const n0 = calls.length; await p.click('#sw-ok'); await p.waitForTimeout(100);
+  const re = calls.slice(n0).filter(c => c.fn === 'logSet').map(c => c.args[0]);
+  assert.equal(re.length, 1);                                                       // seria 1 zapisana przed zamianą idzie jeszcze raz
+  assert.deepEqual((({ set, name, swap, done }) => ({ set, name, swap, done }))(re[0]), { set: 1, name: 'Bent Row', swap: 'Dumbbell Incline Bench Row → Bent Row | Brak sprzętu', done: true });
+  const n1 = calls.length; await p.click('[data-unswap="1"]'); await p.waitForTimeout(100);
+  const back = calls.slice(n1).filter(c => c.fn === 'logSet').map(c => c.args[0]);
+  assert.deepEqual(back.map(x => [x.set, x.name, x.swap]), [[1, 'Dumbbell Incline Bench Row', '']]);   // cofnięcie też trafia do Logu
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
 });
 
 // --- PR 8: kamera przy serii, prędkość z urządzenia, komunikat bez sieci ---
@@ -2949,9 +2982,9 @@ test(`Boje (${mode}, ${scheme}): po 🟡 „max dziś” zablokowane i kolejne s
   assert.equal(await p.$('.mxd.lock'), null);
   assert.equal(await p.isVisible('.mxd small'), false);
   await rate(p, 1, 'L');
-  assert.match(await p.textContent('.sug'), /Łatwo: możesz dołożyć 2,5 kg/);
+  assert.match(await p.textContent('.sug'), simple ? /Łatwo: możesz dołożyć 2,5 kg/ : /Łatwo: zostań przy 112,5 kg\. Do 120 kg dokładasz tylko po bardzo łatwym/);   // PRO: wariant b
   // S2 na 120 (sufit dnia) = Średnio → wracasz do planu
-  await p.fill(S(2) + ' .kg', '120'); await rate(p, 2, 'S');
+  await p.fill(S(2) + ' .kg', '120'); await p.$eval(S(2) + ' .kg', e => e.blur()); await rate(p, 2, 'S');
   assert.deepEqual((({ kg, ocena, rpe }) => ({ kg, ocena, rpe }))(lastSet(calls)), { kg: 120, ocena: 'S', rpe: 8 });   // zapis bez zmian
   assert.equal((await p.textContent('.sug')).trim(), '🟡 → wracasz do planu (112,5 kg).');
   assert.deepEqual(await Promise.all([3, 4, 5].map(n => fval(p, S(n) + ' .kg'))), ['112,5', '112,5', '112,5']);

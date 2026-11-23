@@ -185,8 +185,8 @@ test('sugOly: zejście po 🟡 / 🔴 (sufit = plan) i drop set po ostatniej ser
   // na planie dalej działają zejścia poniżej planu
   assert.deepEqual(s([R(112.5, 'W'), R(112.5, 'W'), open], 1), ['down', 110, true]);
   assert.deepEqual(s([R(112.5, 'X'), R(112.5, 'X'), open], 1), ['down', 105, true]);
-  // bez blokady (same 🟢) jak dotąd: +2,5 do max dziś
-  assert.deepEqual(s([R(112.5, 'L'), open], 0), ['up', 115, false]);
+  // bez blokady (same 🟢), PROSTY jak dotąd: zwykłe Łatwo daje +2,5 do max dziś
+  assert.deepEqual(s([R(112.5, 'L'), open], 0, { simple: true }), ['up', 115, false]);
   // 🔴 / ✖ na ostatniej serii → drop set −10% w dół do 2,5 kg; 🟡 na ostatniej = nic
   assert.deepEqual(s([R(112.5, 'L'), R(120, 'W')], 1), ['drop', 107.5, false]);
   assert.deepEqual(s([R(112.5, 'X')], 0), ['drop', 100, false]);
@@ -194,6 +194,48 @@ test('sugOly: zejście po 🟡 / 🔴 (sufit = plan) i drop set po ostatniej ser
   assert.equal(L.sugOly([R(120, 'S')], 0, o), null);
   // bez kg w planie: bez blokady (np. „max”)
   assert.deepEqual(s([R(120, 'S'), open], 0, { plan: null }), ['stay', 120, false]);
+});
+
+test('sugOly, effFine: wariant b (22.11) – w PRO „max dziś” tylko po bardzo łatwym (RPE ≤ 6,5)', () => {
+  const R = (kg, rate, rpe) => ({ kg, rate, done: true, rpe }), open = { kg: 112.5, rate: '', done: false };
+  const o = { cap: 120, one: 150, plan: 112.5 };
+  const s = (rows, i, x) => { const r = L.sugOly(rows, i, Object.assign({}, o, x)); return r && [r.lvl, r.kg]; };
+  // zwykłe Łatwo (RPE 7) na planie: zostań, z podpowiedzią o Dokładniej
+  assert.deepEqual(s([R(112.5, 'L', 7), open], 0), ['stay', 112.5]);
+  assert.match(L.sugOly([R(112.5, 'L', 7), open], 0, o).txt, /Do 120 kg dokładasz tylko po bardzo łatwym: Dokładniej, RPE ≤ 6,5/);
+  // bez RPE (stary wpis) = zwykłe Łatwo
+  assert.deepEqual(s([R(112.5, 'L'), open], 0), ['stay', 112.5]);
+  // bardzo łatwo (6,5 i niżej): +2,5 aż do max dziś
+  assert.deepEqual(s([R(112.5, 'L', 6.5), open], 0), ['up', 115]);
+  assert.deepEqual(s([R(117.5, 'L', 5), open], 0), ['up', 120]);
+  assert.deepEqual(s([R(120, 'L', 6), open], 0), ['stay', 120]);
+  // pod planem zwykłe Łatwo dalej podnosi, ale najwyżej do planu
+  assert.deepEqual(s([R(105, 'L', 7), open], 0), ['up', 107.5]);
+  assert.deepEqual(s([R(111, 'L', 7), open], 0), ['up', 112.5]);
+  // dyspozycja „Uwaga” (sufit = plan) i bez kg w planie: bez zmian
+  assert.deepEqual(s([R(112.5, 'L', 7), open], 0, { cap: 112.5, weak: true }), ['stay', 112.5]);
+  assert.deepEqual(s([R(100, 'L', 7), open], 0, { plan: null, cap: null }), ['up', 102.5]);
+  // Dokładniej: A i boje mają przy 🟢 dół skali co 0,5; reszta bez zmian
+  assert.deepEqual(L.effFine('L', true), [5, 5.5, 6, 6.5, 7, 7.5]);
+  assert.deepEqual(L.effFine('L', false), [6, 6.5, 7, 7.5, 8]);
+  assert.deepEqual(L.effFine('S', true), [7.5, 8, 8.5, 9]);
+  assert.ok(L.effFine('L', true).every(v => L.lightOf(v) === 'L'));
+});
+
+test('swapOptions: wiosłowanie „…Bench Row” to nie wyciskanie; swapAuto; exSearch po aliasach', () => {
+  assert.deepEqual(L.swapOptions({ name: 'Dumbbell Incline Bench Row' }), ['Wiosłowanie hantlem', 'Wiosłowanie na wyciągu', 'Ściąganie drążka wyciągu']);
+  assert.equal(L.swapOptions({ name: 'Bench press' })[0], 'Wyciskanie hantli na ławce');
+  assert.deepEqual(L.swapOptions({ name: 'Medicine ball throw' }), []);
+  assert.equal(L.swapAuto({ name: 'X', swaps: [] }), true);
+  assert.equal(L.swapAuto({ name: 'X', swaps: ['Y'] }), false);
+  const base = [['Bent Row', 'https://example.test/br', 'plecy', 'Wiosłowanie sztangą w opadzie; Bent Over Barbell Row'],
+    ['Bent Over Two-Dumbbell Row', '', 'plecy', ''], ['Pull-up', '', 'plecy', 'podciąganie']];
+  const n = (q, part) => L.exSearch([], base, q, 8, part).map(x => x.name + (x.alias ? ' / ' + x.alias : ''));
+  assert.deepEqual(n('wiosłowanie'), ['Bent Row / Wiosłowanie sztangą w opadzie']);
+  assert.deepEqual(n('wioslowanie sztanga'), ['Bent Row / Wiosłowanie sztangą w opadzie']);
+  assert.deepEqual(n('bent over row'), ['Bent Over Two-Dumbbell Row', 'Bent Row / Bent Over Barbell Row']);
+  assert.deepEqual(n('podciąganie', 'nogi'), []);
+  assert.deepEqual(n('row'), ['Bent Row', 'Bent Over Two-Dumbbell Row']);                     // trafienie po nazwie bez dopisku aliasu
 });
 
 test('stan ciała: klucz, ostatnie 14 dni, nadpisanie tego samego miejsca, usunięcie', () => {

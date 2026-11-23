@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-23 · Zamiany ćwiczeń naprawione; „max dziś” w bojach (PRO) dopiero po bardzo łatwym podejściu (v84)
+
+- Zgłoszenie klienta 19.11 przy „Dumbbell Incline Bench Row”: „coś nie tak z zamianami”. Przyczyny: automatyczne zamienniki (wzorzec ruchu, `SWAP_BY`) brały „bench” przed „row” i podsuwały wyciskania, podpisane „Zamienniki od trenera”; wyszukiwarka DOWOLNA nie szukała w aliasach (podpowiedź w polu „wiosłowanie” nie dawała nic, „bent over row” nie znajdował „Bent Row”); serie zapisane przed zamianą zostawały w Logu pod starą nazwą bez `zamiana`; panel w ogóle nie pokazywał zamiany.
+- Teraz: wiosłowania przed wyciskaniami (`\brows?\b`), automatyczne propozycje jako „Podobne ćwiczenia” (`swapAuto`); `getExNames` zwraca 4. pole „aliasy”, `exSearch` szuka też w aliasach (najpierw po nazwie; pod wynikiem trafiony alias), pamięć telefonu `exn3_`; po zamianie i po jej cofnięciu zapisane serie tego ćwiczenia idą do Logu jeszcze raz (`resaveSwap`, ten sam id); panel: „⇄ zamiast … · powód” w Sesjach i w Filmach.
+- Rozdzielczość świateł, wybrany wariant b: 🟢 Lekko dalej zapisuje RPE 7, ale „Dokładniej” (PRO) przy ćwiczeniach A i bojach ma przy 🟢 5 / 5,5 / 6 / 6,5 / 7 / 7,5 (`effFine`). W bojach w PRO zwykłe Łatwo daje +2,5 kg najwyżej do kg z planu; „max dziś” (sufit_oly) otwiera Łatwo z RPE ≤ 6,5 (`EASY_RPE`), z podpowiedzią w okienku. PROSTY bez zmian (Damian 22.11: Łatwo dalej otwiera sufit, bo PROSTY nie ma „Dokładniej”). To zmienia w PRO ustalenie z 18.11 (+2,5 kg po samych 🟢 aż do max dziś). Korekta Dokładniej zmienia też ocenę boju na światło tej liczby (np. Średnio poprawione na 7,5 = Łatwo), więc ocena i RPE się nie rozjeżdżają.
+- Odrzucone: 5. światło „Bardzo lekko” = RPE 6 (dawne PROSTY „Lekko” = 6 sprzed 17.11 czytałoby się wstecz jako „bardzo lekko”, boje mają tylko 4 stany świateł sędziowskich); sufit od prędkości (`vbt_ms`) na razie nie, mało danych.
+- Stare dane bez zmian: Walka 9,5 dalej 🔴, arkusz i podsumowania liczą RPE jak dotąd (RPE 5–6,5 nie jest serią twardą).
+
 ## 2026-11-22 · „Prowadź trening”: trener prowadzi trening klienta ze swojego telefonu (v83)
 
 - Damian chce na treningu z podopiecznym zapisywać serie, zmieniać kg, dodawać ćwiczenia i jednostki oraz pisać notatki ze swojego telefonu, w tym samym arkuszu. Klient nie widzi panelu ani trybu trenera.

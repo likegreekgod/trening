@@ -63,6 +63,12 @@
   };
   /** dokładne RPE przy świetle (korekta w PRO): zakres światła i krok w stronę sąsiedniego */
   L.EFF_FINE = { L: [6, 6.5, 7, 7.5, 8], S: [7.5, 8, 8.5, 9], W: [8.5, 9, 9.5, 10] };
+  /**
+   * wartości „Dokładniej” (PRO): ćwiczenia A i boje mają przy 🟢 pełny dół skali co 0,5 (5–7,5), żeby odróżnić „bardzo lekko”
+   * od zwykłego „lekko” (w bojach RPE ≤ L.EASY_RPE otwiera „max dziś”; 22.11.2026, wariant b). Pozostałe: EFF_FINE.
+   */
+  L.EASY_RPE = 6.5;
+  L.effFine = (q, wide) => wide && q === 'L' ? [5, 5.5, 6, 6.5, 7, 7.5] : L.EFF_FINE[q] || [];
   /** RPE (i typ) → światło: ≤ 7,5 Lekko, 8–8,5 Średnio, ≥ 9 Ciężko, FAIL Nieudana; puste = '' (także stare wpisy) */
   L.lightOf = (r, typ) => {
     if (/FAIL/.test(typ || '')) return 'X';
@@ -236,16 +242,23 @@
     return 'W' + ((n.length ? Math.max(...n) : 0) + 1);
   };
   /**
-   * wyszukiwarka ćwiczeń: najpierw ćwiczenia z planu klienta, potem baza [[nazwa, film]]; wszystkie słowa zapytania muszą
-   * wystąpić w nazwie (bez wielkości liter i polskich znaków). → [{name, film, mine}]
-   * part = partia mięśniowa (baza [[nazwa, film, „partia; partia”]]): tylko ćwiczenia z tą partią, także bez wpisanego zapytania.
+   * wyszukiwarka ćwiczeń: najpierw ćwiczenia z planu klienta, potem baza [[nazwa, film, „partia; partia”, „alias; alias”]]; wszystkie
+   * słowa zapytania muszą wystąpić w nazwie (bez wielkości liter i polskich znaków), a w bazie także w jednym z aliasów
+   * (np. „wiosłowanie sztangą” → „Bent Row”; najpierw trafienia po nazwie). → [{name, film, mine, alias}] (alias = trafiony alias)
+   * part = partia mięśniowa: tylko ćwiczenia z tą partią, także bez wpisanego zapytania.
    */
   L.exSearch = (planNames, base, q, limit = 12, part = '') => {
     const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
     const film = {}, pt = {}, P = fold(part).trim(); (base || []).forEach(b => { film[fold(b[0])] = !!b[1]; pt[fold(b[0])] = fold(b[2] || '').split(';').map(s => s.trim()); });
-    const words = fold(q).split(/\s+/).filter(Boolean), hit = n => words.every(w => fold(n).includes(w)) && (!P || (pt[fold(n)] || []).includes(P)), seen = {}, out = [];
+    const words = fold(q).split(/\s+/).filter(Boolean), has = n => words.every(w => fold(n).includes(w)), inPart = n => !P || (pt[fold(n)] || []).includes(P);
+    const hit = n => has(n) && inPart(n), seen = {}, out = [];
     (planNames || []).forEach(n => { const k = fold(n); if (!seen[k] && hit(n)) { seen[k] = 1; out.push({ name: n, film: !!film[k], mine: true }); } });
     if (words.length || P) (base || []).forEach(b => { const k = fold(b[0]); if (!seen[k] && hit(b[0])) { seen[k] = 1; out.push({ name: b[0], film: !!b[1], mine: false }); } });
+    if (words.length) (base || []).forEach(b => {
+      const k = fold(b[0]); if (seen[k] || !inPart(b[0])) return;
+      const a = String(b[3] || '').split(';').map(x => x.trim()).filter(Boolean).find(has);
+      if (a) { seen[k] = 1; out.push({ name: b[0], film: !!b[1], mine: false, alias: a }); }
+    });
     return out.slice(0, limit);
   };
   /** partie mięśniowe z bazy [[nazwa, film, „partia; partia”]], alfabetycznie */
@@ -350,8 +363,8 @@
   const olyMark = q => q === 'S' ? '🟡' : q === 'W' || q === 'X' ? '🔴' : '🟢';
   /**
    * Propozycja pod ostatnio ocenionym podejściem.
-   * rows: podejścia robocze (bez rozgrzewki i drop setów) w kolejności [{kg, rate, done}], i: indeks ocenionego;
-   * o: {cap, one, weak, why, plan (kg z planu)} → {lvl: up|stay|down|drop, kg, txt, lock?, drop?} albo null.
+   * rows: podejścia robocze (bez rozgrzewki i drop setów) w kolejności [{kg, rate, done, rpe}], i: indeks ocenionego;
+   * o: {cap, one, weak, why, plan (kg z planu), simple (PROSTY: zwykłe Łatwo otwiera sufit)} → {lvl: up|stay|down|drop, kg, txt, lock?, drop?} albo null.
    * Zejście (18.11.2026): pierwsze 🟡 / 🔴 / ✖ blokuje „max dziś”; kolejne serie wracają do kg z planu
    * (poniżej planu dalej działają zejścia po drugiej walce i dwóch spalonych). 🔴 / ✖ na ostatniej serii → „+ drop set” −10%.
    */
@@ -367,6 +380,11 @@
     const prev = rows.slice(0, i).reverse().find(x => x.done);
     const base = () => {
       if (r.rate === 'L') {
+        // wariant b (22.11.2026): w PRO „max dziś” otwiera tylko Łatwo z RPE ≤ 6,5 (Dokładniej); zwykłe Łatwo (7) dokłada do planu
+        const easy = o.simple || !plan || L.isNum(r.rpe) && r.rpe <= L.EASY_RPE;
+        if (!easy && cap > plan && kg + 2.5 > plan && kg + 2.5 <= cap && !L.olyLocked(rows.slice(0, i + 1)))     // po blokadzie: niżej
+          return kg < plan ? { lvl: 'up', kg: plan, txt: `Łatwo: możesz wrócić do planu (${f(plan)}). Wyżej (do ${f(cap)}) tylko po bardzo łatwym: Dokładniej, RPE ≤ 6,5.` }
+            : { lvl: 'stay', kg, txt: `Łatwo: zostań przy ${f(kg)}. Do ${f(cap)} dokładasz tylko po bardzo łatwym: Dokładniej, RPE ≤ 6,5.` };
         if (cap === null || cap === undefined || kg + 2.5 <= cap)
           return { lvl: 'up', kg: kg + 2.5, txt: 'Łatwo: możesz dołożyć 2,5 kg.' + (cap ? ' Sufit dziś ' + f(cap) + '.' : '') };
         return { lvl: 'stay', kg, txt: o.weak ? `Łatwo, ale dyspozycja dnia: ${o.why || 'uwaga'}. Zostań przy ${f(kg)}.` : `Łatwo, ale to sufit dnia (${f(cap)}). Zostań.` };
@@ -409,10 +427,13 @@
     [/zarzut|podrzut|clean|jerk/, ['Zarzut z zawisu', 'Zarzut siłowy (power clean)', 'Podrzut ze stojaków']],
     [/martwy|rdl|rumuń|good ?morning|hip thrust/, ['Martwy ciąg rumuński z hantlami', 'Hip thrust', 'Przyciąganie linki między nogami']],
     [/przysiad|squat|wykrok|split/, ['Goblet squat', 'Wypychanie nogami (leg press)', 'Bułgarski przysiad', 'Przysiad na suwnicy (hack)']],
+    // wiosłowania przed wyciskaniem: „Dumbbell Incline Bench Row” to wiosłowanie, nie wyciskanie (22.11.2026)
+    [/wiosł|\brows?\b|podciąg|ściąg|pull/, ['Wiosłowanie hantlem', 'Wiosłowanie na wyciągu', 'Ściąganie drążka wyciągu']],
     [/wyciskan.*(leż|ław)|bench|pomp/, ['Wyciskanie hantli na ławce', 'Pompki', 'Wyciskanie na maszynie']],
-    [/wyciskan|press/, ['Wyciskanie hantli siedząc', 'Wyciskanie landmine', 'Wyciskanie na maszynie nad głowę']],
-    [/wiosł|row|podciąg|ściąg|pull/, ['Wiosłowanie hantlem', 'Wiosłowanie na wyciągu', 'Ściąganie drążka wyciągu']]
+    [/wyciskan|press/, ['Wyciskanie hantli siedząc', 'Wyciskanie landmine', 'Wyciskanie na maszynie nad głowę']]
   ];
+  /** czy zamienniki są dobrane automatycznie (wzorzec ruchu), a nie z planu / bazy trenera */
+  L.swapAuto = ex => !(ex.swaps || []).some(s => String(s).trim());
   /** zamienniki: kolumna planu (ex.swaps) albo lista dla wzorca ruchu; bez oryginału i powtórzeń */
   L.swapOptions = ex => {
     const own = (ex.swaps || []).map(s => String(s).trim()).filter(Boolean);
