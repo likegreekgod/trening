@@ -299,6 +299,46 @@
   .pef{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}.pef .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}.pef .row .sp{flex:1}
   .pef button:disabled{opacity:.55;cursor:default}
   .pnx{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.4}.pnx input{width:22px;height:22px;flex:none;margin:0;accent-color:var(--accent)}
+  /* karta klienta (v87): nagłówek z sygnałami i „Prowadź trening”, przegląd (sesje w skrócie, siła, tonaż), Plan tygodniami */
+  .kh{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 24px;align-items:end;padding:18px 24px 12px}
+  .kback{display:none}
+  .kpl{margin-top:8px}.kpl .pill{font-size:13px;padding:3px 9px;margin:0 6px 6px 0}
+  .kha{display:grid;gap:8px;min-width:300px}
+  .kgo{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:56px;padding:0 20px;border-radius:var(--rc);background:var(--accent);color:var(--on-accent);text-decoration:none;font:700 17px var(--f-body);box-shadow:var(--shadow)}
+  .kgo small{font:600 13px var(--f-body);opacity:.9;white-space:nowrap}
+  .khs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .kov{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:var(--gap);align-items:start}
+  .hrow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px}.hrow h2{margin:0}.hrow a{font-weight:650;font-size:14px;color:var(--ink-2);text-decoration:none;white-space:nowrap}
+  .sr{display:block;padding:12px 28px 12px 0;border-top:1px solid var(--line);text-decoration:none;color:inherit;position:relative}
+  .hrow + .sr{border-top:0}
+  .sr::after{content:"›";position:absolute;right:4px;top:10px;font-size:22px;color:var(--muted)}
+  .sr:hover b{text-decoration:underline}
+  .sr b{display:block;font-weight:650;font-size:15.5px}
+  .sr small{display:block;color:var(--muted);font-size:13.5px;margin:2px 0 4px}.sr small .bad{color:var(--bad);font-weight:650}.sr small .warn{color:var(--warn);font-weight:650}
+  .sx{display:block;font:500 13px/1.5 var(--f-mono);color:var(--ink)}.sx i{font:600 13.5px var(--f-body);font-style:normal;margin-right:4px}
+  .sr q{display:block;margin-top:6px;padding-left:10px;border-left:3px solid var(--line);color:var(--ink-2);font-size:14px}.sr q::before,.sr q::after{content:none}
+  .sg{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:14px;padding:10px 0;border-top:1px solid var(--line)}
+  .card h2 + .sg{border-top:0;padding-top:2px}
+  .sg b{display:block;font-weight:650}.sg small{display:block;color:var(--muted);font-size:13px}.sg .mono{font-size:16px;font-weight:600;white-space:nowrap}
+  .wkh{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:8px 0 -4px}.wkh h2{margin:0}.wkh .muted{font-size:13.5px}
+  .pdn{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 16px;border-radius:var(--rc);background:var(--surface-2);color:inherit;text-decoration:none;font-size:14px}
+  .pdn .ok{color:var(--ok);font-weight:800}.pdn .sp{flex:1}
+  .pu .puh .sb{min-height:40px}
+  .pxs{display:grid}
+  .pxl{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+  .pxl:first-child{border-top:0}
+  .pxl .pp{align-self:start}
+  .pxt b{display:block;font-weight:650;line-height:1.3}.pxt .mono{display:block;font:500 14px var(--f-body);font-variant-numeric:tabular-nums;color:var(--ink-2);margin-top:2px}
+  .pg:has(> .wkh){max-width:960px}.pxt small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+  @media (max-width:1100px){.kov{grid-template-columns:minmax(0,1fr)}}
+  @media (max-width:760px){
+    .kh{grid-template-columns:minmax(0,1fr);padding:10px 16px 12px}
+    .kback{display:inline-flex;align-items:center;min-height:36px;color:var(--ink-2);font-weight:650;text-decoration:none;font-size:14px;margin-bottom:2px}
+    h1{font-size:34px}
+    .kha{min-width:0}.kgo{min-height:60px;font-size:17px;padding:0 18px}
+    .pu .puh{row-gap:8px}.pu .puh .pill{order:-1}
+    .sx i{display:block;margin:0}.sg svg.spk{width:72px}
+  }
   @media (max-width:760px){
     .per{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px 6px}.per.peh{display:none}.pc input{padding:6px 5px;font-size:13.5px}.pc.chg input,.pc.bad input{padding:5px 4px}
     .per .pp{grid-column:1/2;justify-self:start}.per .pn{grid-column:2/6}
