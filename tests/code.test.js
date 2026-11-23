@@ -520,10 +520,13 @@ test('CW_BAZA, CW_ALIASY, CW_DODATKI: baza ćwiczeń do wczytania', () => {
     ['Snatch Pull', 'Block Power Clean', 'Chin-up', 'Dumbbell Lateral Raise', 'Single-Leg RDL', 'Block Power Snatch', 'Jerk Dip', '1-1/4 Back Squat']);
   assert.deepEqual(['Przysiad tylny', 'Ciąg rwaniowy (z podłogi, do pełnego wyprostu)', 'Wykroki bułgarskie (hantle), tempo 3-1-X', 'Sotts Press', 'Wypychanie na suwnicy', 'Power jerk z rack — 2 s pauza w dipie + 3 s fiksacja'].map(f),
     ['Back Squat', 'Snatch Pull', 'Bulgarian Split Squat', 'Press In Snatch (Sots Press)', 'Leg Press', 'Pause Power Jerk']);
+  // polskie nazwy (punkt 5 przeglądu v80): plan po polsku trafia w ćwiczenie z bazy
+  assert.deepEqual(['Martwy ciąg', 'Rwanie siłowe z zawisu', 'Zarzut z bloków', 'Wybicie nożycowe', 'Podciąganie podchwytem', 'Wyciskanie francuskie leżąc', 'Spacer farmera', 'Martwy robak', 'Deska', 'Przysiad z hantlą przy klatce', 'Szrugsy z hantlami'].map(f),
+    ['Deadlift', 'Hang Power Snatch', 'Block Clean', 'Split Jerk', 'Chin-up', 'Skullcrusher', 'Farmer Carry', 'Dead Bug', 'Plank', 'Goblet Squat', 'Dumbbell Shrug']);
   assert.deepEqual(['Ring Dips', 'Hanging Knee Raise', 'Pin OHS', 'Pushup Hold (jak najgłębiej)', 'Pause Clean (2 s pod kolanem)'].map(f), ['Ring Dip', 'Hanging Knee Raise', 'Pin Overhead Squat', 'Push-Up Hold', 'Segment Clean']);   // regresja i inny sprzęt to osobne ćwiczenia
   Object.keys(C.CW_WYCOFANE).forEach(k => { assert.ok(names.includes(k)); C.CW_WYCOFANE[k].split(';').forEach(a => assert.ok(!((C.CW_ALIASY[k] || '').split(';').map(C.exKey_).includes(C.exKey_(a))), a)); });
   const old = rows.map(r => r.cwiczenie === 'Dip' ? Object.assign({}, r, { aliasy: 'Ring Dips; Dipy' }) : r);
-  assert.deepEqual(plain(C.cwSync_(all, old, C.CW_WYCOFANE)), { add: [], aliases: [{ i: old.findIndex(r => r.cwiczenie === 'Dip'), value: 'Dipy; Parallel Bar Dip' }], drop: [], merged: 0, kept: [] });
+  assert.deepEqual(plain(C.cwSync_(all, old, C.CW_WYCOFANE)), { add: [], aliases: [{ i: old.findIndex(r => r.cwiczenie === 'Dip'), value: 'Dipy; Pompki na poręczach; Parallel Bar Dip' }], drop: [], merged: 0, kept: [] });
   const own = names.concat(D.map(x => x[0]), F.map(x => x[0])).map(C.exKey_);                       // scalone duplikaty: zostaje nazwa z bazy, dawna jest tylko aliasem
   Object.keys(C.CW_SCALONE).forEach(k => { assert.ok(own.includes(C.exKey_(k)), 'scalone do nieistniejącego ćwiczenia: ' + k); C.CW_SCALONE[k].split('; ').forEach(a => { assert.ok(!own.includes(C.exKey_(a)), 'dawna nazwa nadal jest wierszem: ' + a); assert.equal(f(a), k); }); });
   assert.equal([].concat(...Object.values(C.CW_SCALONE).map(v => v.split('; '))).length, 65);
