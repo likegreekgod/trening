@@ -3194,6 +3194,56 @@ test(`Stan ciała (${mode}, ${scheme}): ból / napięcie poza sesją, lista 14 d
   await ctx.close();
 });
 
+// punkt 15 przeglądu v80: Postęp → Ciało (masa i obwody), tylko z cfg.body; zapis, nadpisanie dnia, usuwanie, offline
+for (const [mode, simple, scheme] of [['pro', false, 'light'], ['prosty', true, 'dark']])
+test(`Postęp → Ciało (${mode}, ${scheme}): pomiar masy i obwodów, wykres, zmiany, usuwanie, offline; bez flagi zakładki nie ma`, async () => {
+  const calls = [], d = new Date(), z = n => String(n).padStart(2, '0'), iso = x => x.getFullYear() + '-' + z(x.getMonth() + 1) + '-' + z(x.getDate());
+  const today = iso(d), w1 = iso(new Date(d.getTime() - 7 * 864e5)), w4 = iso(new Date(d.getTime() - 28 * 864e5));
+  const base0 = simple ? DATA : PRO;
+  { const { ctx, p } = await page([], false, { data: base0, scheme });                       // bez flagi: bez zakładki
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('.set'); await p.click('#nav [data-tab="postep"]'); await p.waitForSelector('[data-pt="tyd"]');
+    assert.equal(await p.$('[data-pt="cialo"]'), null); await ctx.close(); }
+  const data = Object.assign({}, base0, { cfg: Object.assign({}, base0.cfg, { body: true }), cialo: [
+    { id: 'robert|' + w4, zapisano: w4 + 'T07:00:00.000Z', klient: 'robert', data: w4, masa: 82.4, talia: 90, biodra: '', klatka: 104, ramie: '', udo: '' },
+    { id: 'robert|' + w1, zapisano: w1 + 'T07:00:00.000Z', klient: 'robert', data: w1, masa: 81.2, talia: 88.5, biodra: '', klatka: '', ramie: 36, udo: '' }] });
+  const { ctx, p } = await page(calls, false, { data, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set');
+  await p.click('#nav [data-tab="postep"]'); await p.click('[data-pt="cialo"]'); await p.waitForSelector('#cb-save');
+  assert.equal(await p.inputValue('#cb-date'), today);
+  assert.equal(await p.getAttribute('[data-cb="masa"]', 'placeholder'), '81,2');            // poprzedni pomiar jako podpowiedź
+  assert.match(await p.textContent('#postep'), /Ostatnio\s*81,2\s*kg · .* · −1,2 kg od/);
+  assert.match(await p.textContent('.cia-p'), /Talia 88,5 cm −1,5/);
+  assert.match(await p.textContent('.cia-p'), /Klatka 104 cm/);
+  assert.equal(await p.$$eval('#postep .chart', c => c.length), 1);
+  // zły wpis: komunikat, nic nie wysłane
+  await p.fill('[data-cb="masa"]', '8'); await p.click('#cb-save');
+  assert.match(await p.textContent('#postep [role=alert]'), /Masa ciała: 25–300 kg/);
+  assert.equal(calls.filter(c => c.fn === 'saveCialo').length, 0);
+  await p.fill('[data-cb="masa"]', '80,6'); await p.fill('[data-cb="talia"]', '87');
+  assert.deepEqual(await a11y(p), []);
+  assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `cialo-${mode}-${scheme}.png`), fullPage: true }); }
+  await p.click('#cb-save'); await p.waitForTimeout(150);
+  assert.deepEqual(calls.filter(c => c.fn === 'saveCialo').map(c => c.args[0]), [{ date: today, masa: 80.6, talia: 87, biodra: '', klatka: '', ramie: '', udo: '' }]);
+  assert.match(await p.textContent('#postep'), /Ostatnio\s*80,6\s*kg/);
+  assert.equal(await p.$$eval('#postep .st-r', r => r.length), 3);
+  assert.equal((await p.textContent('#cb-save')).trim(), 'Zapisz zmiany');                  // dziś ma już pomiar: zapis go zastąpi
+  assert.equal(await p.inputValue('[data-cb="masa"]'), '80,6');
+  // bez sieci: poprawka dnia i usunięcie trafiają do kolejki, po ponownym otwarciu widać je w danych
+  await ctx.unroute('**/macros/**'); await ctx.route('**/macros/**', r => r.abort());
+  await p.fill('[data-cb="udo"]', '58'); await p.click('#cb-save'); await p.waitForTimeout(200);
+  const del = `[data-cbdel="${w4}"]`;
+  await p.click(del); assert.match(await p.textContent(del), /usuń\?/); await p.click(del); await p.waitForTimeout(200);
+  assert.deepEqual((await p.evaluate(() => JSON.parse(localStorage.getItem('q_kabc')))).map(x => x.fn + ':' + JSON.stringify(x.payload)),
+    ['saveCialo:' + JSON.stringify({ date: today, masa: 80.6, talia: 87, biodra: '', klatka: '', ramie: '', udo: 58 }), 'deleteCialo:' + JSON.stringify(w4)]);
+  await p.goto(base); await p.waitForSelector('.set', { state: 'attached' });
+  await p.click('#nav [data-tab="postep"]'); await p.click('[data-pt="cialo"]'); await p.waitForSelector('#cb-save');
+  const txt = await p.textContent('#postep');
+  assert.match(txt, /udo 58 cm/); assert.equal(await p.$(del), null);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 // --- rozgrzewka przy ćwiczeniu A: propozycja z ciężaru roboczego, „Wstaw (n)”, „+ rozgrzewka” bierze kolejny krok ---
 const WARM = Object.assign({}, PRO, {
   plan: [

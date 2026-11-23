@@ -1085,3 +1085,19 @@ test('likeLast / histKg / tplUnit: trening bez planu – „Jak ostatnio” i sz
   assert.deepEqual(L.tplUnit({ name: 'Full body A', ex: [{ name: 'Bench', sets: 4, reps: 8 }, { name: 'Plank', sets: 2, reps: '30 s', circuit: 'A' }] }, logs),
     { title: 'Full body A', list: [{ name: 'Bench', sets: 4, reps: '8', kg: 60, c: '' }, { name: 'Plank', sets: 2, reps: '30 s', kg: '', c: 'A' }] });
 });
+
+test('Ciało (punkt 15 przeglądu v80): cialoVal, cialoList, cialoApply / cialoDrop, cialoDelta', () => {
+  assert.equal(L.cialoVal('masa', ' 72,45 '), 72.5); assert.equal(L.cialoVal('udo', ''), null); assert.equal(L.cialoVal('talia', null), null);
+  assert.match(L.cialoVal('masa', '7'), /Masa ciała: 25–300 kg/); assert.match(L.cialoVal('ramie', 'abc'), /Ramię: 10–100 cm/);
+  assert.deepEqual(L.CIALO.map(x => x[0]), ['masa', 'talia', 'biodra', 'klatka', 'ramie', 'udo']);
+  const rows = [{ data: '2026-11-20', masa: '72,5', talia: 81 }, { data: '2026-09-01', masa: 75 }, { data: '2026-11-01', talia: '83', masa: '' }, { data: 'zła', masa: 70 }];
+  const l = L.cialoList(rows);
+  assert.deepEqual(l.map(o => [o.date, o.masa, o.talia, o.udo]), [['2026-09-01', 75, null, null], ['2026-11-01', null, 83, null], ['2026-11-20', 72.5, 81, null]]);
+  assert.deepEqual(L.cialoDelta(l, 'masa', '2026-11-23'), { now: 72.5, date: '2026-11-20', from: 75, since: '2026-09-01', d: -2.5 });
+  assert.deepEqual(L.cialoDelta(l, 'talia', '2026-11-23', 4), { now: 81, date: '2026-11-20', from: 83, since: '2026-11-01', d: -2 });
+  assert.equal(L.cialoDelta(l, 'udo', '2026-11-23'), null);
+  assert.equal(L.cialoDelta(l, 'masa', '2026-11-23', 1).since, '2026-11-20', 'tylko jeden pomiar w oknie = bez zmiany');
+  const up = L.cialoApply(rows, { date: '2026-11-20', masa: 72, talia: '', biodra: '', klatka: '', ramie: '', udo: 50 }, 'T');
+  assert.equal(up.length, 4); assert.deepEqual(L.cialoList(up).pop(), { date: '2026-11-20', masa: 72, talia: null, biodra: null, klatka: null, ramie: null, udo: 50 });
+  assert.deepEqual(L.cialoList(L.cialoDrop(rows, '2026-09-01')).map(o => o.date), ['2026-11-01', '2026-11-20']);
+});

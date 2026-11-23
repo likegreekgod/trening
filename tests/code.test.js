@@ -266,13 +266,13 @@ test('trKlientOf_ i trKlientVals_: klienci w panelu trenera (ustawienia ↔ wier
   const row = ['kabc', 'Ania', 'Ania', '', 'stary-link', 'tak', 'PROSTY', 2, 'TAK', 'TAK', 'RIR', 0.075, '', 'TAK'];
   const k = C.trKlientOf_(row, 'https://x.github.io/trening/');
   assert.deepEqual(JSON.parse(JSON.stringify(k)), { id: 'ania', name: 'Ania', on: true, mode: 'PROSTY', scale: 'RIR', swap: 'TRENER', pain: true, masters: true,
-    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc', email: '', mail: false, mailKom: false, seen: '', devs: 0 });
+    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc', email: '', mail: false, mailKom: false, seen: '', devs: 0, body: false });
   // pusty wiersz = wartości domyślne; bez adresu aplikacji link z kolumny E
   const d = C.trKlientOf_(['k1', 'bo', 'Bo', 'NIE', 'link-E'], '');
   assert.equal(d.on, false); assert.equal(d.mode, 'PRO'); assert.equal(d.swap, 'NIE'); assert.equal(d.oly, 5); assert.equal(d.own, true); assert.equal(d.link, 'link-E');
   // panel → kolumny D, F–N
   const v = C.trKlientVals_({ on: false, mode: 'PRO', scale: 'RPE', swap: 'DOWOLNA', pain: true, masters: false, extra: 3, oly: 7.5, own: false, edit: true });
-  assert.deepEqual(JSON.parse(JSON.stringify(v.vals)), { 3: 'NIE', 5: 'TAK', 6: 'PRO', 7: 3, 8: '', 9: 'DOWOLNA', 10: 'RPE', 11: 0.075, 12: 'NIE', 13: 'TAK', 14: '', 15: '', 19: '' });
+  assert.deepEqual(JSON.parse(JSON.stringify(v.vals)), { 3: 'NIE', 5: 'TAK', 6: 'PRO', 7: 3, 8: '', 9: 'DOWOLNA', 10: 'RPE', 11: 0.075, 12: 'NIE', 13: 'TAK', 14: '', 15: '', 19: '', 22: '' });
   // zapis i odczyt dają to samo (np. sufit 7,5% → 0,075 → 7,5)
   const r2 = ['k', 'x', 'X']; Object.keys(v.vals).forEach(i => { r2[i] = v.vals[i]; });
   const back = C.trKlientOf_(r2, '');
@@ -914,6 +914,23 @@ test('pgBol_: Sesje.bol → „miejsce n/10”', () => {
   assert.equal(C.pgBol_('kolano:; bark:2'), 'bark 2/10');
   assert.equal(C.pgBol_(''), '');
   assert.equal(C.pgBol_(undefined), '');
+});
+
+test('cialoRow_: pomiar ciała (masa i obwody) → wiersz zakładki Ciało, zakresy, kolumna W „cialo” włącza pomiary', () => {
+  const r = C.cialoRow_('anna', { date: '2026-11-23', masa: '72,4', talia: 81, biodra: '', klatka: ' ', ramie: '31.25', udo: null }, 'T', '2026-11-23');
+  assert.deepEqual(plain(r.row), ['anna|2026-11-23', 'T', 'anna', '2026-11-23', 72.4, 81, '', '', 31.3, '']);
+  assert.equal(C.cialoRow_('anna', { masa: 70 }, 'T', '2026-11-23').row[3], '2026-11-23', 'bez daty = dziś');
+  assert.match(C.cialoRow_('anna', { date: '2026-11-23' }, 'T', '2026-11-23').error, /co najmniej jeden/);
+  assert.match(C.cialoRow_('anna', { masa: '7,2' }, 'T', '2026-11-23').error, /Masa ciała: 25–300 kg/);
+  assert.match(C.cialoRow_('anna', { talia: 'dużo' }, 'T', '2026-11-23').error, /talia: 30–250 cm/);
+  assert.match(C.cialoRow_('anna', { date: '2026-11-30', masa: 70 }, 'T', '2026-11-23').error, /przyszłości/);
+  assert.ok(C.cialoRow_('anna', { date: '2026-11-24', masa: 70 }, 'T', '2026-11-23').row, 'jutro (strefa czasowa telefonu) przechodzi');
+  assert.deepEqual(plain(C.CIALO_HEADERS), ['id', 'zapisano', 'klient', 'data', 'masa', 'talia', 'biodra', 'klatka', 'ramie', 'udo']);
+  const row = ['k', 'a', 'A']; row[22] = 'tak';
+  assert.equal(C.clientOf_(row).body, true); assert.equal(C.clientOf_(['k', 'a', 'A']).body, false);
+  assert.equal(C.trKlientOf_(row, '').body, true);
+  assert.equal(C.trKlientVals_(Object.assign({}, C.KL_DOMYSLNE, { body: true })).vals[22], 'TAK');
+  ['saveCialo', 'deleteCialo'].forEach(f => { assert.ok(C.API_FNS[f], f); assert.ok(!C.TR_FNS[f] && !C.LIVE_FNS[f], f); });
 });
 
 test('stanRows_: wpisy „Ból / napięcie” → wiersze Stanu (id z miejscem i stroną, walidacja, ćwiczenie tylko „w ćwiczeniu”)', () => {
@@ -2134,7 +2151,7 @@ test('wieczorny mail po komentarzu (komNowe_, komMail_, komPierwsze_) i „ostat
   assert.deepEqual([k.mailKom, k.seen, k.devs], [true, '2026-11-23T10:00:00.000Z', 2]);
   assert.equal(C.trKlientVals_(Object.assign({}, C.KL_DOMYSLNE, { email: 'a@b.pl', mailKom: true })).vals[19], 'TAK');
   assert.match(C.trKlientVals_(Object.assign({}, C.KL_DOMYSLNE, { mailKom: true })).error, /Mail po komentarzu/);
-  assert.deepEqual(C.KL_HEAD.concat(C.KL_EXTRA).slice(15), ['mail_rano', 'max_rwanie', 'max_podrzut', 'start', 'mail_kom', 'otwarta', 'urzadzenia']);
+  assert.deepEqual(C.KL_HEAD.concat(C.KL_EXTRA).slice(15), ['mail_rano', 'max_rwanie', 'max_podrzut', 'start', 'mail_kom', 'otwarta', 'urzadzenia', 'cialo']);
   // „Sprawdź arkusz”: mail po komentarzu bez wyzwalacza = błąd
   const dg = C.diagnose_({ pwaUrl: 'x', triggers: ['podsumowanie', 'wczytajPlany', 'kopiaArkusza'], klienci: [{ klucz: 'kaaaaaaaaaa1', klient_id: 'ania', imie: 'Ania', aktywny: 'TAK', mail_kom: 'TAK', email: 'a@b.pl' }], plan: [], log: [] });
   assert.ok(dg.some(x => /wieczornyMail/.test(x[1])), JSON.stringify(dg));
