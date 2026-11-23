@@ -73,7 +73,7 @@ const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChu
  * i jednostki trenera (Plan.zrodlo = „trener”, liczą się do planu jak zwykłe).
  */
 const LIVE_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, przesunJednostke, addOwnUnit, getExNames, logError,
-  logNote, editPlan, liveNote };
+  logNote, editPlan, liveNote, saveTemplate };
 var LIVE_ = false;   // var: widoczne w testach (piaskownica vm)
 
 function doPost(e) {
@@ -119,6 +119,7 @@ function getData(key) {
 function liveView_(d, live) {
   if (!live) { (d.logs || []).forEach(l => { delete l.notatka_trenera; }); return d; }
   d.cfg = Object.assign({}, d.cfg, { live: true, simple: false, edit: true, own: true, swap: 'DOWOLNA' });
+  d.templates = templates_();                                          // szablony jednostek trenera (trening bez planu)
   return d;
 }
 
@@ -661,6 +662,60 @@ function plain_(v) {
 }
 function plainRow_(row) { return row.map(plain_); }
 function plainRows_(rows) { return rows.map(plainRow_); }
+
+/* ---------- szablony jednostek trenera (prowadzony trening, punkt 17 przeglądu v80, 23.11.2026) ----------
+ * Zakładka Szablony: ćwiczenia jednostki zapisanej z „⋯ → Zapisz jako szablon” w trybie „Prowadź”, bez kg i bez imion klientów
+ * (kg aplikacja dobiera z historii klienta, lib histKg). Wspólne dla wszystkich klientów; getData w trybie trenera zwraca `templates`.
+ * Ten sam szablon (nazwa bez względu na wielkość liter) jest nadpisywany; del = usunięcie. Tylko w trybie trenera (LIVE_FNS).
+ */
+const SZ_HEADERS = ['szablon', 'nr', 'cwiczenie', 'serie', 'powt', 'obwod', 'zapisano'];
+const SZ_MAX = 30;
+
+/** Czysta funkcja: t = {name, ex: [{name, sets, reps, circuit}]} → {name, rows} albo {error} */
+function tplRows_(t, at) {
+  t = t || {};
+  const name = String(t.name || '').replace(/\s+/g, ' ').trim();
+  if (!name || name.length > 40) return { error: 'Nazwa szablonu: 1–40 znaków.' };
+  const ex = [].concat(t.ex || []).map(e => ({ name: String(e && e.name || '').replace(/\s+/g, ' ').trim().slice(0, 80), sets: Math.round(Number(e && e.sets)),
+    reps: String(e && e.reps === undefined || e && e.reps === null ? '' : e && e.reps).trim().slice(0, 12), circuit: circuit_(e && e.circuit) })).filter(e => e.name);
+  if (!ex.length) return { error: 'Szablon bez ćwiczeń.' };
+  if (ex.length > OWN_MAX) return { error: 'Najwyżej ' + OWN_MAX + ' ćwiczeń.' };
+  if (ex.some(e => !(e.sets >= 1 && e.sets <= SETS_MAX) || !e.reps)) return { error: 'Serie 1–' + SETS_MAX + ' i powtórzenia przy każdym ćwiczeniu.' };
+  return { name: name, rows: ex.map((e, i) => [name, i + 1, e.name, e.sets, e.reps, e.circuit || '', at || '']) };
+}
+/** Czysta funkcja: wiersze zakładki Szablony → [{name, ex: [{name, sets, reps, circuit}]}] (alfabetycznie, ćwiczenia wg nr) */
+function tplList_(rows) {
+  const T = {};
+  (rows || []).forEach(r => { const n = String(r.szablon || '').trim(); if (!n || !String(r.cwiczenie || '').trim()) return;
+    (T[n.toLowerCase()] = T[n.toLowerCase()] || { name: n, ex: [] }).ex.push({ nr: Number(r.nr) || 0, name: String(r.cwiczenie).trim(), sets: Number(r.serie) || 1, reps: String(r.powt === undefined || r.powt === null ? '' : r.powt).trim(), circuit: String(r.obwod || '').trim() }); });
+  return Object.keys(T).map(k => T[k]).sort((a, b) => a.name.localeCompare(b.name, 'pl')).slice(0, SZ_MAX)
+    .map(t => ({ name: t.name, ex: t.ex.sort((a, b) => a.nr - b.nr).map(e => ({ name: e.name, sets: e.sets, reps: e.reps, circuit: e.circuit })) }));
+}
+function templates_() {
+  try { return tplList_(tableOf_('Szablony')); } catch (e) { return []; }
+}
+function saveTemplate(key, t) {
+  if (!LIVE_) throw new Error('Brak dostępu.');
+  mustClient_(key);
+  const name = String(t && t.name || '').replace(/\s+/g, ' ').trim(), res = t && t.del ? { name: name, rows: [] } : tplRows_(t, new Date().toISOString());
+  if (res.error) throw new Error(res.error);
+  if (!name) throw new Error('Nazwa szablonu: 1–40 znaków.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Szablony', SZ_HEADERS), n = sh.getLastRow() - 1;
+    if (n > 0) {
+      const v = sh.getRange(2, 1, n, 1).getValues();
+      for (let i = n - 1; i >= 0; i--) if (String(v[i][0]).trim().toLowerCase() === name.toLowerCase()) sh.deleteRow(i + 2);
+    }
+    if (res.rows.length) {
+      const start = sh.getLastRow() + 1;
+      sh.getRange(start, 5, res.rows.length, 1).setNumberFormat('@');          // powt jako tekst („6-8”)
+      sh.getRange(start, 1, res.rows.length, SZ_HEADERS.length).setValues(plainRows_(res.rows));
+    }
+  } finally { lock.releaseLock(); }
+  return templates_();
+}
 
 function sheet_(name, headers) {
   const ss = SpreadsheetApp.getActive();

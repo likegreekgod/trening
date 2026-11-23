@@ -3413,3 +3413,53 @@ test('Prowadź → „Zaplanuj następną”: po zakończeniu ta sama jednostka 
   assert.equal(await p.$('#sheet .nu'), null);
   await ctx.close();
 });
+
+test('Prowadź bez planu na dziś: „Jak ostatnio”, szablon z kg z historii, pusty; „⋯ → Zapisz jako szablon”', async () => {
+  const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  const ex = (week, d, date, order, name, kg, o) => Object.assign({ week, day: d, title: 'Dół', date, order, name, prio: 'A', sets: 3, reps: '5', pct: null, kg, rpe: 8, note: '', extra: 1, drop: 0, block: 'B2' }, o);
+  const lg = (o, name, s, kg) => ({ id: 'ania|7|T1|' + o + '|' + s, tydzien: 7, jednostka: 'T1', data: day(-3), nr_cw: o, cwiczenie: name, seria: s, kg, powt: 5, rpe: 8, wykonane: 'TAK', typ: '', zapisano: day(-3) + 'T17:00:00.000Z', notatka_trenera: '', komentarz_trenera: '' });
+  const LD = { cfg: { name: 'Ania', pain: true, simple: false, extra: 1, swap: 'DOWOLNA', scale: 'RPE', edit: true, own: true, live: true },
+    plan: [ex(7, 'T1', day(-3), 1, 'Przysiad tylny', 100), ex(7, 'T1', day(-3), 2, 'Wiosłowanie', 60, { title: 'Dół' }), ex(8, 'T1', day(4), 1, 'Przysiad tylny', 102.5)],
+    logs: [lg(1, 'Przysiad tylny', 1, 100), lg(1, 'Przysiad tylny', 2, 102.5), lg(2, 'Wiosłowanie', 1, 62.5)],
+    sessions: [{ id: 'ania|7|T1', tydzien: 7, jednostka: 'T1', data: day(-3), start: day(-3) + 'T16:00:00.000Z', rpe_sesji: 8 }],
+    templates: [{ name: 'Full body A', ex: [{ name: 'Wiosłowanie', sets: 4, reps: '8', circuit: '' }, { name: 'Pompki', sets: 3, reps: '10', circuit: '' }] }] };
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const JWT = b64({ alg: 'none' }) + '.' + b64({ exp: Math.floor(Date.now() / 1000) + 3600, email: 't@example.com' }) + '.sig';
+  const api = b => b.fn === 'saveTemplate' ? [{ name: 'Dół', ex: [] }].concat(LD.templates) : b.fn === 'getExNames' ? [] : null;
+  for (const scheme of ['light', 'dark']) {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: LD, api, scheme });
+    await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); } catch (e) {} }, JWT);
+    await p.goto(base + '?prowadz=ania'); await p.waitForSelector('#np');
+    assert.match(await p.textContent('#sheet-t'), /Trening bez planu/);
+    assert.deepEqual(await p.$$eval('#np [data-np]', a => a.map(x => x.dataset.np)), ['last', 't0', 'empty']);
+    assert.match(await p.textContent('#np [data-np="last"]'), /Jak ostatnio: Dół.*2 ćwiczenia/);
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `bez-planu-${scheme}.png`) }); }
+    // szablon: kg z historii klienta (Wiosłowanie 62,5, Pompki bez historii)
+    await p.click('#np [data-np="t0"]'); await p.waitForSelector('#ow-list');
+    assert.equal(await p.inputValue('#ow-title'), 'Full body A');
+    assert.deepEqual(await p.$$eval('#ow-list input[data-f="kg"]', a => a.map(x => x.value)), ['62,5', '']);
+    await p.click('[data-close]');
+    // „Jak ostatnio”: serie zrobione i najcięższa seria → zapis jako nowa jednostka trenera
+    await p.click('#umore'); await p.click('#u-new'); await p.click('#np [data-np="last"]'); await p.waitForSelector('#ow-list');
+    assert.deepEqual(await p.$$eval('#ow-list input[data-f="kg"]', a => a.map(x => x.value)), ['102,5', '62,5']);
+    await p.click('#ow-save'); await p.waitForTimeout(200);
+    const add = calls.find(c => c.fn === 'addOwnUnit').args[0];
+    assert.match(add.day, /^T\d+$/); assert.equal(add.title, 'Dół'); assert.equal(add.date, day(0));
+    assert.deepEqual(add.exercises, [{ name: 'Przysiad tylny', sets: 2, reps: '5', kg: '102,5' }, { name: 'Wiosłowanie', sets: 1, reps: '5', kg: '62,5' }]);
+    // zapis jako szablon
+    await p.click('#umore'); await p.click('#u-tpl'); await p.waitForSelector('#tp-name');
+    assert.equal(await p.inputValue('#tp-name'), 'Dół');
+    await p.fill('#tp-name', 'full body a'); assert.equal(await p.isVisible('#tps-same'), true);   // ta sama nazwa: zastąpi
+    await p.fill('#tp-name', 'Dół'); await p.click('#tps-ok'); await p.waitForFunction(() => /Szablon zapisany/.test(document.querySelector('#toast').textContent));
+    assert.deepEqual(calls.find(c => c.fn === 'saveTemplate').args[0], { name: 'Dół', ex: [{ name: 'Przysiad tylny', sets: 2, reps: '5', circuit: '' }, { name: 'Wiosłowanie', sets: 1, reps: '5', circuit: '' }] });
+    for (const c of calls) assert.equal(c.as, 'ania', c.fn);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+  // jest jednostka na dziś: bez okna
+  const calls = []; const { ctx, p } = await page(calls, false, { data: Object.assign({}, LD, { plan: LD.plan.concat([ex(8, 'T2', day(0), 1, 'Wyciskanie', 60)]) }), api });
+  await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); } catch (e) {} }, JWT);
+  await p.goto(base + '?prowadz=ania'); await p.waitForSelector('.card[data-card]', { state: 'attached' }); await p.waitForTimeout(200);
+  assert.equal(await p.$('#np'), null);
+  await ctx.close();
+});

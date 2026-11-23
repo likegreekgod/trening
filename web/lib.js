@@ -254,6 +254,32 @@
   });
   /** następna wolna nazwa własnej jednostki w tygodniu: W1, W2… */
   /** nowa jednostka trenera z prowadzonego treningu: T<n> po najwyższym numerze jednostki w tym tygodniu (dowolny przedrostek) */
+  /* ---------- trening bez planu (prowadzony trening, punkt 17 przeglądu v80, 23.11.2026): „Jak ostatnio” i szablony ---------- */
+  const workDone_ = l => l.wykonane === 'TAK' && /^\d+$/.test(String(l.seria)) && +l.seria > 0 && !/FAIL/.test(l.typ || '');
+  const logAt_ = l => String(l.data || '').slice(0, 10) + String(l.zapisano || '');
+  /** najcięższa zaliczona seria robocza ćwiczenia z ostatniego treningu, w którym było (po nazwie) → liczba albo '' */
+  L.histKg = (logs, name) => {
+    const nm = String(name || '').trim().toLowerCase(), U = {};
+    (logs || []).forEach(l => { if (!workDone_(l) || String(l.cwiczenie || '').trim().toLowerCase() !== nm) return; const k = l.tydzien + '|' + l.jednostka;
+      const u = U[k] = U[k] || { at: '', kg: [] }; if (logAt_(l) > u.at) u.at = logAt_(l); const kg = parseFloat(String(l.kg).replace(',', '.')); if (kg > 0) u.kg.push(kg); });
+    const u = Object.keys(U).map(k => U[k]).filter(x => x.kg.length).sort((a, b) => b.at < a.at ? -1 : 1)[0];
+    return u ? Math.max(...u.kg) : '';
+  };
+  /** „Jak ostatnio”: ostatnia jednostka klienta z zaliczoną serią (bez własnych) → {week, day, title, date, list: [{name, sets, reps, kg, c}]} albo null */
+  L.likeLast = (plan, logs) => {
+    const own = {}; (plan || []).forEach(r => { if (r.own) own[r.week + '|' + r.day] = 1; });
+    const U = {}; (logs || []).forEach(l => { const k = l.tydzien + '|' + l.jednostka; if (!workDone_(l) || own[k]) return; if (!U[k] || logAt_(l) > U[k]) U[k] = logAt_(l); });
+    const k = Object.keys(U).sort((a, b) => U[b] < U[a] ? -1 : 1)[0]; if (!k) return null;
+    const [w, ...d] = k.split('|'), week = +w, day = d.join('|');
+    const rows = (plan || []).filter(r => r.week === week && r.day === day && !r.own).sort((a, b) => a.order - b.order); if (!rows.length) return null;
+    const ls = (logs || []).filter(l => +l.tydzien === week && l.jednostka === day && workDone_(l));
+    return { week, day, title: rows[0].title || day, date: U[k].slice(0, 10), list: rows.map(r => {
+      const mine = ls.filter(l => +l.nr_cw === r.order), kgs = mine.map(l => parseFloat(String(l.kg).replace(',', '.'))).filter(x => x > 0);
+      return { name: r.name, sets: mine.length || r.sets, reps: String(r.reps), kg: kgs.length ? Math.max(...kgs) : r.kg === null || r.kg === undefined ? '' : r.kg, c: r.circuit || '' };
+    }) };
+  };
+  /** szablon trenera {name, ex: [{name, sets, reps, circuit}]} → lista do kreatora z kg z historii klienta */
+  L.tplUnit = (tpl, logs) => ({ title: tpl.name, list: (tpl.ex || []).map(e => ({ name: e.name, sets: e.sets, reps: String(e.reps), kg: L.histKg(logs, e.name), c: e.circuit || '' })) });
   L.liveNextDay = (plan, week) => {
     const n = plan.filter(r => r.week === week).map(r => +((/(\d+)$/.exec(String(r.day)) || [])[1] || 0));
     return 'T' + ((n.length ? Math.max(...n) : 0) + 1);

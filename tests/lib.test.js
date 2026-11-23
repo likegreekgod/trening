@@ -1069,3 +1069,19 @@ test('dayLabel / importDay: trening z importu w pasku tygodnia i nagłówku nazy
   assert.ok(L.importDay('H260303') && !L.importDay('S1'));
   assert.equal(L.weekDays([{ week: 0, day: 'H261019', title: 'Hevy · Nogi', date: '2026-10-19', done: true }], '2026-10-19', '2026-10-21')[0].items[0].title, 'Hevy · Nogi');
 });
+
+test('likeLast / histKg / tplUnit: trening bez planu – „Jak ostatnio” i szablony z kg z historii', () => {
+  const P = (week, day, order, name, o) => Object.assign({ week, day, order, name, title: 'Dół', sets: 3, reps: '5', kg: 80, circuit: '' }, o);
+  const plan = [P(1, 'T1', 1, 'Back Squat'), P(1, 'T1', 2, 'RDL', { kg: 'guma' }), P(1, 'T2', 1, 'Bench', { title: 'Góra' }), P(1, 'W1', 1, 'Bieg', { own: true, title: 'Własny' })];
+  const lg = (w, d, o, name, s, kg, at, x) => Object.assign({ tydzien: w, jednostka: d, nr_cw: o, cwiczenie: name, seria: s, kg, wykonane: 'TAK', typ: '', data: at.slice(0, 10), zapisano: at }, x);
+  const logs = [lg(1, 'T1', 1, 'Back Squat', 1, 90, '2026-11-16T10:00'), lg(1, 'T1', 1, 'Back Squat', 2, 95, '2026-11-16T10:05'), lg(1, 'T1', 1, 'Back Squat', 'R1', 120, '2026-11-16T09:55'),
+    lg(1, 'T1', 1, 'Back Squat', 3, 100, '2026-11-16T10:10', { typ: 'FAIL' }), lg(1, 'T2', 1, 'Bench', 1, 60, '2026-11-12T10:00'), lg(1, 'W1', 1, 'Bieg', 1, '', '2026-11-20T10:00')];
+  const l = L.likeLast(plan, logs);                                      // własny trening (W1) później, ale się nie liczy
+  assert.deepEqual([l.week, l.day, l.title, l.date], [1, 'T1', 'Dół', '2026-11-16']);
+  assert.deepEqual(l.list, [{ name: 'Back Squat', sets: 2, reps: '5', kg: 95, c: '' }, { name: 'RDL', sets: 3, reps: '5', kg: 'guma', c: '' }]);
+  assert.equal(L.likeLast(plan, []), null);
+  assert.equal(L.histKg(logs, 'back squat'), 95);                        // bez rozgrzewki i nieudanej
+  assert.equal(L.histKg(logs, 'Deadlift'), '');
+  assert.deepEqual(L.tplUnit({ name: 'Full body A', ex: [{ name: 'Bench', sets: 4, reps: 8 }, { name: 'Plank', sets: 2, reps: '30 s', circuit: 'A' }] }, logs),
+    { title: 'Full body A', list: [{ name: 'Bench', sets: 4, reps: '8', kg: 60, c: '' }, { name: 'Plank', sets: 2, reps: '30 s', kg: '', c: 'A' }] });
+});
