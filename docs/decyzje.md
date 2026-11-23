@@ -2,6 +2,13 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-23 · „Zrobiona” jednostka: Sesje albo seria A/B, nie sama korekcja i nie wyzerowana seria
+
+- Zgłoszenie: seria korekcji (K) zaznaczona dzień przed treningiem robiła jednostkę „zrobioną”, więc import pomijał poprawki planu (a poranny mail i Plan w panelu też traktowały ją jak zaczętą). Wiersz w Logu powstawał też bez ✓: seria odznaczona do pustego, dwa dotknięcia numeru (FAIL), sam film albo prędkość.
+- Damian 22.11: seria wyzerowana do pustego nie może robić jednostki zrobionej; reguła A/B.
+- Teraz jedna reguła (`unitsDone_` w Code.gs, lib `doneUnits` w panelu): wpis w Sesjach albo seria robocza / dodatkowa / drop z ✓ lub FAIL w ćwiczeniu innym niż K; jednostka z samymi K liczy się po serii K. Import, poranny mail, próbny mail, Plan w panelu. Aplikacja klienta liczy dalej tylko Sesje (bez zmian).
+- Id serii zawiera numer ćwiczenia: gdy import zmienia niezrobioną jednostkę z zapisaną serią i pod tym numerem plik ma inne ćwiczenie, w Import jest uwaga (seria przypisze się do nowego ćwiczenia). Bez przenoszenia serii (Log bez zmian).
+
 ## 2026-11-23 · Zamiany ćwiczeń naprawione; „max dziś” w bojach (PRO) dopiero po bardzo łatwym podejściu (v84)
 
 - Zgłoszenie klienta 19.11 przy „Dumbbell Incline Bench Row”: „coś nie tak z zamianami”. Przyczyny: automatyczne zamienniki (wzorzec ruchu, `SWAP_BY`) brały „bench” przed „row” i podsuwały wyciskania, podpisane „Zamienniki od trenera”; wyszukiwarka DOWOLNA nie szukała w aliasach (podpowiedź w polu „wiosłowanie” nie dawała nic, „bent over row” nie znajdował „Bent Row”); serie zapisane przed zamianą zostawały w Logu pod starą nazwą bez `zamiana`; panel w ogóle nie pokazywał zamiany.

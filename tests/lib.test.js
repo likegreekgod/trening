@@ -238,6 +238,14 @@ test('swapOptions: wiosłowanie „…Bench Row” to nie wyciskanie; swapAuto; 
   assert.deepEqual(n('row'), ['Bent Row', 'Bent Over Two-Dumbbell Row']);                     // trafienie po nazwie bez dopisku aliasu
 });
 
+test('doneUnits: ta sama reguła co unitsDone_ (sama korekcja K i wyzerowana seria = niezrobiona)', () => {
+  const plan = [{ week: 12, day: 'S1', order: 1, prio: 'K' }, { week: 12, day: 'S1', order: 2, prio: 'A' }, { week: 12, day: 'S2', order: 1, prio: 'K' }, { week: 12, day: 'S3', order: 1, prio: 'B' }];
+  const logs = [{ tydzien: '12', jednostka: 'S1', nr_cw: 1, seria: 1, wykonane: 'TAK' }, { tydzien: 12, jednostka: 'S2', nr_cw: 1, seria: 1, wykonane: 'TAK' },
+    { tydzien: 12, jednostka: 'S3', nr_cw: 1, seria: 1, wykonane: '' }, { tydzien: 12, jednostka: 'S3', nr_cw: 1, seria: 'R1', wykonane: 'TAK' }];
+  assert.deepEqual(L.doneUnits(plan, [{ tydzien: 13, jednostka: 'S1' }], logs), { '12|S2': 1, '13|S1': 1 });
+  assert.deepEqual(L.doneUnits(plan, [], logs.concat([{ tydzien: 12, jednostka: 'S3', nr_cw: 1, seria: 2, typ: 'FAIL' }])), { '12|S2': 1, '12|S3': 1 });
+});
+
 test('stan ciała: klucz, ostatnie 14 dni, nadpisanie tego samego miejsca, usunięcie', () => {
   assert.equal(L.stanKey('2026-11-18', ' Czworoboczny  lędźwi ', 'L'), '2026-11-18|Czworoboczny lędźwi L');
   assert.equal(L.stanKey('2026-11-18', 'Inne: stopa', ''), '2026-11-18|Inne: stopa');

@@ -261,6 +261,24 @@
     });
     return out.slice(0, limit);
   };
+  /**
+   * zrobione jednostki (ta sama reguła co unitsDone_ w Code.gs, 23.11.2026): Sesje albo seria (nie R, nie 0) z ✓ lub FAIL
+   * w ćwiczeniu innym niż K; jednostka z samymi K (albo seria spoza planu) liczy się po serii K. Wyzerowana seria i sam film nie.
+   * plan: wiersze z getData {week, day, order, prio}; sessions / logs: wiersze arkusza → {'tydzień|jednostka': 1}
+   */
+  L.doneUnits = (plan, sessions, logs) => {
+    const t = v => String(v === undefined || v === null ? '' : v).trim(), key = (w, d) => Number(w) + '|' + t(d);
+    const prio = {}, notK = {}, out = {};
+    (plan || []).forEach(r => { const u = key(r.week, r.day), p = t(r.prio).toUpperCase(); prio[u + '|' + Number(r.order)] = p; if (p !== 'K') notK[u] = 1; });
+    (sessions || []).forEach(x => { out[key(x.tydzien, x.jednostka)] = 1; });
+    (logs || []).forEach(l => {
+      const se = t(l.seria); if (!se || se === '0' || /^R/i.test(se)) return;
+      if (t(l.wykonane).toUpperCase() !== 'TAK' && !/FAIL/i.test(t(l.typ))) return;
+      const u = key(l.tydzien, l.jednostka);
+      if (prio[u + '|' + Number(l.nr_cw)] !== 'K' || !notK[u]) out[u] = 1;
+    });
+    return out;
+  };
   /** partie mięśniowe z bazy [[nazwa, film, „partia; partia”]], alfabetycznie */
   L.exParts = base => [...new Set([].concat(...(base || []).map(b => String(b[2] || '').split(';').map(s => s.trim()).filter(Boolean))))].sort((a, b) => a.localeCompare(b, 'pl'));
   L.blockInfo = (plan, week) => {

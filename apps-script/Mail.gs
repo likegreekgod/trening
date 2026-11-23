@@ -31,14 +31,13 @@ const mailPl_ = n => String(Math.round(n * 10) / 10).replace('.', ',');
 function rannyDo_(klienci, plan, log, ses, today, dayOf) {
   dayOf = dayOf || (v => String(v === undefined || v === null ? '' : v).slice(0, 10));
   const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
-  const started = {};
-  (ses || []).concat(log || []).forEach(r => { started[lc(r.klient) + '|' + lc(r.tydzien) + '|' + lc(r.jednostka)] = true; });
+  const started = unitsDone_(plan, ses, log);                                   // zaczęta = Sesje albo seria A/B (nie sama korekcja K)
   const out = [];
   (klienci || []).forEach(r => {
     const c = clientOf_(r), cell = i => String(r[i] === undefined || r[i] === null ? '' : r[i]).trim();
     const email = cell(14);
     if (!c.id || !c.key || cell(3).toUpperCase() === 'NIE' || cell(15).toUpperCase() !== 'TAK' || !mailOk_(email)) return;
-    const units = rannyUnits_(c.id, plan, today, dayOf).filter(u => !started[c.id + '|' + lc(u[0].tydzien) + '|' + lc(u[0].jednostka)]);
+    const units = rannyUnits_(c.id, plan, today, dayOf).filter(u => !started[doneKey_(c.id, u[0].tydzien, u[0].jednostka)]);
     if (units.length) out.push({ c: c, key: c.key, email: email, units: units });
   });
   return out;
@@ -143,7 +142,7 @@ function mailLog_() {
 function porannyMail() {
   const props = PropertiesService.getScriptProperties(), today = today_(), dayOf = mailDayOf_();
   const plan = tableOf_('Plan');
-  const list = rannyDo_(klRows_(klSheet_()), plan, pgTable_('Log', ['klient', 'tydzien', 'jednostka']), pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), today, dayOf);
+  const list = rannyDo_(klRows_(klSheet_()), plan, pgTable_('Log', DONE_LOG_COLS), pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), today, dayOf);
   const log = mailLog_(), base = linkBase_(), sent = [], at = new Date().toISOString();
   list.forEach(x => {
     if (log[x.c.id] && log[x.c.id].day === today) return;   // już dziś wysłany (np. po zmianie godziny)

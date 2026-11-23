@@ -1074,13 +1074,12 @@ function trMailProba(id) {
   const row = klRows_(klSheet_()).find(r => String(r[1]).trim().toLowerCase() === id);
   if (!row) throw new Error('Nie ma klienta „' + id + '”.');
   const c = clientOf_(row), plan = tableOf_('Plan'), dayOf = mailDayOf_(), today = today_();
-  const started = {}, lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
-  pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']).concat(pgTable_('Log', ['klient', 'tydzien', 'jednostka']))
-    .forEach(r => { started[lc(r.klient) + '|' + lc(r.tydzien) + '|' + lc(r.jednostka)] = true; });
-  const days = plan.filter(r => lc(r.klient) === c.id && !offPlan_(r) && r.data && dayOf(r.data) >= today && !started[c.id + '|' + lc(r.tydzien) + '|' + lc(r.jednostka)])
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  const started = unitsDone_(plan, pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', DONE_LOG_COLS));
+  const days = plan.filter(r => lc(r.klient) === c.id && !offPlan_(r) && r.data && dayOf(r.data) >= today && !started[doneKey_(c.id, r.tydzien, r.jednostka)])
     .map(r => dayOf(r.data)).sort();
   if (!days.length) throw new Error('Klient nie ma w planie treningu z datą od dziś, więc nie ma czego wysłać.');
-  const units = rannyUnits_(c.id, plan, days[0], dayOf).filter(u => !started[c.id + '|' + lc(u[0].tydzien) + '|' + lc(u[0].jednostka)]).map(u => rannyUnit_(u, plan));
+  const units = rannyUnits_(c.id, plan, days[0], dayOf).filter(u => !started[doneKey_(c.id, u[0].tydzien, u[0].jednostka)]).map(u => rannyUnit_(u, plan));
   const base = linkBase_();
   mailSend_(to, rannyMail_(c, units, { url: base ? base + '?k=' + c.key : '', day: days[0], test: true }));
   return { day: days[0], title: units[0].title };
@@ -1121,8 +1120,8 @@ function trPlanEdit_(plan, ses, log, clientId, e) {
   const cur = unitOf(week);
   if (!(week >= 1) || !day || !cur.length) return { error: 'Nie ma takiej jednostki w planie.' };
   if (cur.some(x => own_(x.r))) return { error: 'To własny trening klienta – nie zmienia się go w panelu.' };
-  const done = {};
-  (ses || []).concat(log || []).forEach(s => { if (lc(s.klient) === clientId) done[Number(s.tydzien) + '|' + String(s.jednostka).trim()] = 1; });
+  const done = {}, dk = unitsDone_(plan, ses, log);                                   // zrobiona: Sesje albo seria A/B (unitsDone_)
+  Object.keys(dk).forEach(k => { const p = k.split('|'); if (p[0] === clientId) done[Number(p[1]) + '|' + p.slice(2).join('|')] = 1; });
   // live = zmiana z prowadzonego treningu (aplikacja w trybie trenera): bieżąca jednostka może być zaczęta
   if (done[week + '|' + day] && !e.live) return { error: 'Ta jednostka jest już zrobiona (albo klient zaczął ją zapisywać) – zmiany tylko w niezrobionych.' };
   const blok = lc(cur[0].r.blok);
@@ -1175,7 +1174,7 @@ function trPlan(id, e) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const res = trPlanEdit_(tableOf_('Plan'), pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', ['klient', 'tydzien', 'jednostka']), id, e);
+    const res = trPlanEdit_(tableOf_('Plan'), pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', DONE_LOG_COLS), id, e);
     if (res.error) throw new Error(res.error);
     if (res.set.length) {
       const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
