@@ -748,6 +748,8 @@ test('panel: Klienci (lista, kopiowanie linku, ustawienia klienta, nowy link, no
   // telefon, ciemny motyw
   for (const [scheme, nm] of [['dark', 'ciemny'], ['light', 'jasny']]) {
     const s2 = await page([], { loggedIn: true, vp: { width: 390, height: 844 }, scheme });
+    // telefon z udostępnianiem: trzy przyciski w rzędzie (Kopiuj, Wyślij, Ustawienia) muszą się zmieścić
+    await s2.ctx.addInitScript(() => { navigator.share = () => Promise.resolve(); });
     await s2.p.goto(base + 'trener.html#klienci/bartek');
     await s2.p.waitForSelector('#kl-form');
     assert.equal(await s2.p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'bez przewijania w bok');
@@ -755,6 +757,7 @@ test('panel: Klienci (lista, kopiowanie linku, ustawienia klienta, nowy link, no
     await s2.p.goto(base + 'trener.html#klienci');
     await s2.p.waitForSelector('table.kl');
     assert.equal(await s2.p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'lista bez przewijania w bok');
+    assert.equal(await s2.p.$$eval('table.kl tr:not(.off) .lk', l => l.every(x => x.children.length === 3 && x.scrollWidth <= x.clientWidth && new Set([...x.children].map(b => b.offsetTop)).size === 1)), true, 'trzy przyciski w jednym rzędzie, bez ucięcia');
     await shot(s2.p, 'trener-klienci-telefon-' + nm + '.png');
     assert.deepEqual(s2.p.errors, []);
     await s2.ctx.close();
