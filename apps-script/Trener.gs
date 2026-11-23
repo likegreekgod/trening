@@ -92,7 +92,7 @@ function ustawPanel() {
 function trPulpit() {
   const tz = Session.getScriptTimeZone(), localDay = t => Utilities.formatDate(new Date(t), tz, 'yyyy-MM-dd');
   const log = pgTable_('Log', ['klient', 'zapisano', 'tydzien', 'jednostka', 'nr_cw', 'cwiczenie', 'seria', 'kg', 'powt', 'rpe', 'film_link',
-    'uwagi', 'typ', 'ocena', 'komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at', 'wykonane']);
+    'uwagi', 'typ', 'ocena', 'komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at', 'wykonane', 'zamiana']);
   const ses = pgTable_('Sesje', ['klient', 'tydzien', 'jednostka', 'start', 'czas_min', 'rpe_sesji', 'komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at']);
   const plan = pgTable_('Plan', ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'cwiczenie', 'serie', 'zrodlo']);
   return trPulpit_({ prz: tableOf_('Przegląd'), sum: tableOf_('Podsumowanie'), bloki: tableOf_('Bloki'), klienci: tableOf_('Klienci'), log: log, ses: ses, plan: plan },
@@ -142,7 +142,7 @@ function trPulpit_(t, o) {
   const videos = (t.log || []).filter(l => !blank_(l.film_link) && fileIdOf_(l.film_link)).map(l => ({
     id: lc(l.klient), name: names[lc(l.klient)] || String(l.klient), at: d10(l.zapisano), week: l.tydzien, day: String(l.jednostka || ''),
     order: l.nr_cw, ex: String(l.cwiczenie || ''), set: String(l.seria), kg: l.kg === '' ? '' : l.kg, reps: String(l.powt === undefined ? '' : l.powt),
-    rpe: l.rpe === '' ? '' : l.rpe, ocena: String(l.ocena || ''), typ: String(l.typ || ''), note: String(l.uwagi || ''),
+    rpe: l.rpe === '' ? '' : l.rpe, ocena: String(l.ocena || ''), typ: String(l.typ || ''), note: String(l.uwagi || ''), swap: String(l.zamiana || ''),
     file: fileIdOf_(l.film_link), link: String(l.film_link), kom: [l.komentarz_dysk, l.komentarz_trenera].filter(x => !blank_(x)).map(String).join('\n'),
     komT: blank_(l.komentarz_trenera) ? '' : String(l.komentarz_trenera), komD: blank_(l.komentarz_dysk) ? '' : String(l.komentarz_dysk),
     rep: blank_(l.odpowiedz_klienta) ? '' : String(l.odpowiedz_klienta).trim(), repAt: d10(l.odpowiedz_at) }))
