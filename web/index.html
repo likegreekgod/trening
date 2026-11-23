@@ -1041,7 +1041,7 @@ let PT = 'tyd', PEX = '', PWK = null, PBL = null;   // zakładka, ćwiczenie, ty
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
-const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, effFine, effHint, EASY_RPE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
+const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, effFine, effHint, filmOk, EASY_RPE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
   RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, planEdit, restSec, fmtClock, plates,
   isOly, RATE, rateOf, olyCap, sugOly, olyLocked, SWAP_WHY, swapOptions, swapAuto, swapText, parseSwap,
@@ -4161,6 +4161,7 @@ async function queueVideo(ex, s0, file, row){
   const set = setKey(row.dataset.s), v = { week: cur.week, day: cur.day, order: ex.order, set, name: ex.name, date: s0.date };
   const r = { id: vqId(v), key: KEY, file, size: file.size, v, created: Date.now(),
     meta: { date: s0.date, day: cur.day, name: ex.name, set, fileName: file.name, mimeType: file.type || 'video/mp4', size: file.size } };
+  const bad = filmOk({ size: file.size, mimeType: file.type, fileName: file.name }); if (bad) { toast(bad); return; }   // 1 GB, tylko wideo (jak serwer)
   await vqDel(r.id); await vqPut(r);
   closeSheet(); vqMarks();
   toast(navigator.onLine === false ? 'Brak sieci: film poczeka w telefonie i wyśle się sam po odzyskaniu zasięgu.'
@@ -4170,6 +4171,7 @@ async function queueVideo(ex, s0, file, row){
 /** film skoku CMJ → kolejka (ta sama wysyłka co filmy serii) → Dysk „<Imię>/Dyspozycja/<data>/”, link w Dyspozycja.film_link */
 async function queueCmjVideo(file, date, n){
   if (!file) return;
+  const bad = filmOk({ size: file.size, mimeType: file.type, fileName: file.name }); if (bad) { toast(bad); return; }
   const v = { kind: 'cmj', date, set: n, name: 'CMJ skok ' + n };
   const r = { id: [KEY, 'cmj', date, n].join('|'), key: KEY, file, size: file.size, v, created: Date.now(),
     meta: { kind: 'cmj', date, day: 'Dyspozycja', name: 'CMJ', set: n, fileName: file.name, mimeType: file.type || 'video/mp4', size: file.size } };
@@ -4209,6 +4211,7 @@ async function vqRun(){
         if (vqNet(e)) break;                                    // sieć: spróbujemy przy powrocie do aplikacji / sieci
         const p = vqP(r.id); p.tries = (p.tries || 0) + 1;
         if (/wygasła|expired/i.test(e.message)) { p.url = null; p.uploadId = null; p.next = 0; }
+        if (/limit to 1 GB|To nie jest film|Pusty plik/.test(e.message)) p.tries = 3;   // serwer odrzucił plik (filmOk_): bez ponawiania
         if (p.tries >= 3) { p.failed = e.message; reportErr('film', r.v.name + ' S' + r.v.set + ', ' + Math.round(r.size / 1048576) + ' MB: ' + e.message); }
         vqPSet(r.id, p); delete VQ_LIVE[r.id];
         if (!p.failed) break;

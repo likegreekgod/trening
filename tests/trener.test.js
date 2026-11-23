@@ -133,7 +133,7 @@ async function page(calls, opt = {}) {
     if (b.fn === 'trConfig') out = { ok: true, result: { clientId: 'test.apps.googleusercontent.com', ready: opt.ready !== false } };
     else if (!b.token) out = { ok: false, error: 'Logowanie: brak biletu' };
     else if (st.authFail > 0) { st.authFail--; out = { ok: false, error: 'Logowanie: bilet wygasł' }; }
-    else if (b.fn === 'trPulpit' || b.fn === 'trPrzelicz') out = { ok: true, result: Object.assign({}, PULPIT, b.fn === 'trPrzelicz' ? { at: TODAY + 'T09:30:00.000Z' } : {},
+    else if (b.fn === 'trPulpit' || b.fn === 'trPrzelicz') out = { ok: true, result: Object.assign({}, PULPIT, b.fn === 'trPrzelicz' ? { at: TODAY + 'T09:30:00.000Z' } : {}, opt.diskLow ? { dysk: { used: 13.5 * 1024 ** 3, limit: 15 * 1024 ** 3, free: 1.5 * 1024 ** 3, low: true } } : {},
       opt.pkg ? { clients: PULPIT.clients.map(c => PKG[c.id] ? Object.assign({}, c, { pkg: PKG[c.id] }) : c) } : {}) };
     else if (b.fn === 'trPakiet') { await new Promise(res => setTimeout(res, 100)); const f = b.args[1], k = st.pkg || (st.pkg = opt.pkg ? JSON.parse(JSON.stringify(PKG.ania)) : null);
       if (f.mode === 'nowy' && !(f.n >= 1 && f.n <= 100)) out = { ok: false, error: 'Liczba treningów: 1–100.' };
@@ -169,6 +169,11 @@ async function page(calls, opt = {}) {
       day: { day: TODAY, at: TODAY + 'T05:02:00.000Z', names: ['Ania', 'Bartek'] }, log: { ania: { at: TODAY + 'T05:02:00.000Z', day: TODAY, title: 'Siła B' } } } };
     else if (b.fn === 'trMailUstaw') { await new Promise(res => setTimeout(res, 100)); st.hour = b.args[0];
       out = { ok: true, result: { hour: st.hour, hours: [5, 6, 7, 8, 9], trigger: true, quota: 97, day: null, log: {} } }; }
+    else if (b.fn === 'trDysk' || b.fn === 'trKopia') { const G = 1024 * 1024 * 1024;   // miejsce na Dysku i kopie arkusza (apps-script/Kopia.gs)
+      if (b.fn === 'trKopia') { await new Promise(res => setTimeout(res, 100)); st.kopia = true; }
+      const kopie = [7, 14].map(d => ({ name: 'Trening – kopia ' + addDays(TODAY, -d), at: addDays(TODAY, -d) + 'T03:05:00.000Z' }));
+      if (st.kopia) kopie.unshift({ name: 'Trening – kopia ' + TODAY, at: TODAY + 'T10:00:00.000Z' });
+      out = { ok: true, result: { dysk: { used: 12.5 * G, limit: 15 * G, free: 2.5 * G, low: false }, kopie, ile: 8, at: '', trigger: true } }; }
     else if (b.fn === 'trMailProba') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { day: addDays(TODAY, 2), title: 'Trening A' } }; }
     else if (b.fn === 'trPlan') { await new Promise(res => setTimeout(res, 100)); const e = b.args[1];
       if (/błąd/.test(e.unote || '')) out = { ok: false, error: 'Ta jednostka jest już zrobiona (albo klient zaczął ją zapisywać) – zmiany tylko w niezrobionych.' };
@@ -464,6 +469,15 @@ test('panel: komentarz do sesji ze szkicem AI (szkic, poprawka „Krócej”, za
   await s3.ctx.close();
 });
 
+test('panel: mało miejsca na Dysku = czerwony wpis w „Wymaga uwagi” z linkiem do Ustawień', async () => {
+  const { ctx, p } = await page([], { loggedIn: true, diskLow: true });
+  await p.goto(base + 'trener.html'); await p.waitForSelector('.todo .it');
+  const it = await p.$$eval('.todo .it', a => a.map(x => [x.querySelector('b').textContent, x.querySelector('.dot').className, x.querySelector('a') ? x.querySelector('a').getAttribute('href') : '']));
+  const d = it.find(x => /Dysku/.test(x[0]));
+  assert.ok(d, 'wpis o Dysku'); assert.equal(d[0], 'Na Dysku zostało 1,5 GB'); assert.match(d[1], /lv-bad/); assert.equal(d[2], '#ustawienia');
+  await ctx.close();
+});
+
 test('panel: Ustawienia, klucz Claude API wklejany w panelu (też na telefonie), bez pokazywania całego klucza', async () => {
   for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
     const calls = [];
@@ -482,6 +496,15 @@ test('panel: Ustawienia, klucz Claude API wklejany w panelu (też na telefonie),
     assert.match(await p.textContent('#aikey-card .saved'), /Klucz działa/);
     assert.match(await p.textContent('#aikey-card .kstat'), /Klucz ustawiony …AbCd/);
     assert.ok(!(await p.content()).includes(key), 'cały klucz nie zostaje na stronie');
+    // Dysk i kopie arkusza: miejsce, ostatnia kopia, „Zrób kopię teraz”
+    await p.waitForSelector('#dysk-card .dbar');
+    assert.match(await p.textContent('#dysk-card'), /wolne 2,5 GB/);
+    assert.match(await p.textContent('#dysk-card'), /2 z 8 kopii/);
+    assert.equal(await p.$('#dysk-card .dbar.low'), null);
+    await p.click('#kopia-go'); await p.waitForSelector('#dysk-card .saved');
+    assert.match(await p.textContent('#dysk-card .saved'), /Kopia zapisana/);
+    assert.match(await p.textContent('#dysk-card'), /3 z 8 kopii/);
+    assert.equal(calls.filter(c => c.fn === 'trKopia').length, 1);
     if (vp) { assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390)); await shot(p, 'trener-ustawienia-telefon-ciemny.png'); }
     else await shot(p, 'trener-ustawienia-jasny.png');
     await p.click('#aikey-del'); assert.match(await p.textContent('#aikey-del'), /Na pewno/);   // usunięcie: drugie dotknięcie

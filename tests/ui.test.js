@@ -681,6 +681,9 @@ test('Film: kamera przy każdej serii (nie przy rozgrzewce), wgranie do wybranej
   assert.equal(await p.$eval('.set[data-o="1"][data-s="2"] .cam', b => b.classList.contains('has')), true);
   await p.click('.set[data-o="1"][data-s="2"] .cam');
   assert.deepEqual(await p.$$eval('#sheet input[type=file]', i => i.map(x => [x.id, x.accept, x.getAttribute('capture')])), [['cam-rec', 'video/*', 'environment'], ['cam-file', 'video/*', null]]);   // osobno aparat i wybór pliku
+  await p.setInputFiles('#cam-file', { name: 'zdjecie.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('nie film') });   // nie film: komunikat, nic nie idzie do kolejki
+  await p.waitForFunction(() => /To nie jest film/.test(document.querySelector('#toast').textContent));
+  assert.equal(calls.filter(c => c.fn === 'startUpload').length, 0);
   await p.setInputFiles('#cam-file', MP4); await p.waitForSelector('#sheet', { state: 'hidden' });   // okno zamyka się od razu, film idzie w tle
   await p.waitForFunction(() => /Film wysłany/.test(document.querySelector('#toast').textContent));
   assert.equal(calls.find(c => c.fn === 'startUpload').args[0].set, 2);

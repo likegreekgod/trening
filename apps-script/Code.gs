@@ -441,6 +441,7 @@ function logSession(key, s) {
 /** Start wgrywania filmu: tworzy sesję resumable w Drive, zwraca uploadId. */
 function startUpload(key, meta) {
   const client = mustClient_(key);
+  const bad = filmOk_(meta); if (bad) throw new Error(bad);          // limit 1 GB i tylko filmy (Kopia.gs)
   meta.date = meta.date || today_();
   const folder = meta.kind === 'cmj' ? readyFolder_(client, meta.date) : sessionFolder_(client, meta.date, meta.day);
   const safe = String(meta.name).replace(/[^\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ \-]/g, '').slice(0, 40);
@@ -916,6 +917,7 @@ function onOpen() {
     .addItem('Usuń plany bez klienta', 'usunPlanyBezKlienta')
     .addItem('Uzupełnij puste bloki', 'uzupelnijBloki')
     .addItem('Zainstaluj wyzwalacze', 'menuWyzwalacze')
+    .addItem('Zrób kopię arkusza teraz', 'menuKopia')
     .addItem('Ustaw adres alertu', 'ustawAlert')
     .addItem('Ustaw panel trenera', 'ustawPanel')
     .addItem('Ustaw klucz Claude API', 'ustawAI')
@@ -946,7 +948,12 @@ function menuLinki() {
 
 function menuWyzwalacze() {
   instalujWyzwalacze();
-  alert_('Wyzwalacze', 'Zainstalowano: podsumowanie i przegląd codziennie ok. 5:00, plany z Drive co 15 min, poranny mail do klientów ok. ' + mailGodz_() + ':00 (tylko klienci z włączonym mailem w panelu → Klienci).');
+  alert_('Wyzwalacze', 'Zainstalowano: podsumowanie i przegląd codziennie ok. 5:00, plany z Drive co 15 min, poranny mail do klientów ok. ' + mailGodz_() + ':00 (tylko klienci z włączonym mailem w panelu → Klienci), kopia arkusza w niedzielę ok. 3:00 (folder „' + ROOT_FOLDER_NAME + '/' + KOPIE_FOLDER + '”, ' + KOPIE_ILE + ' ostatnich).');
+}
+
+function menuKopia() {
+  const r = kopiaArkusza();
+  alert_('Kopia arkusza', 'Zapisano „' + kopiaNazwa_(r.day) + '” w folderze „' + ROOT_FOLDER_NAME + '/' + KOPIE_FOLDER + '”. Zostaje ' + KOPIE_ILE + ' ostatnich kopii.');
 }
 
 /**
@@ -964,6 +971,7 @@ function diagnose_(d) {
   (d.klienci || []).forEach(k => { if (!blank_(k.klient_id)) ids[lc(k.klient_id)] = (ids[lc(k.klient_id)] || 0) + 1; });
   Object.keys(ids).forEach(id => { if (ids[id] > 1) add('błąd', 'Powtórzone klient_id „' + id + '” w zakładce Klienci (' + ids[id] + ' wiersze).'); });
   const mailOn = active.filter(k => String(k.mail_rano || '').trim().toUpperCase() === 'TAK');
+  if (d.triggers && d.triggers.indexOf('kopiaArkusza') < 0) add('uwaga', 'Brak cotygodniowej kopii arkusza: menu Trening → Zainstaluj wyzwalacze.');
   if (mailOn.length && d.triggers && (d.triggers || []).indexOf('porannyMail') < 0) add('błąd', 'Brak wyzwalacza „porannyMail”: poranny mail nie wyjdzie (menu Trening → Zainstaluj wyzwalacze).');
   mailOn.forEach(k => { if (!mailOk_(k.email)) add('uwaga', lc(k.klient_id) + ': poranny mail włączony, ale brak poprawnego adresu w kolumnie email.'); });
   active.forEach(k => {
@@ -1046,7 +1054,8 @@ function instalujWyzwalacze() {
   ScriptApp.newTrigger('podsumowanie').timeBased().everyDays(1).atHour(5).create();
   ScriptApp.newTrigger('wczytajPlany').timeBased().everyMinutes(15).create();
   mailWyzwalacz_(mailGodz_());
-  Logger.log('OK: podsumowanie codziennie ~5:00, plany z „' + ROOT_FOLDER_NAME + '/_plany” co 15 min, poranny mail ~' + mailGodz_() + ':00.');
+  kopiaWyzwalacz_();
+  Logger.log('OK: podsumowanie codziennie ~5:00, plany z „' + ROOT_FOLDER_NAME + '/_plany” co 15 min, poranny mail ~' + mailGodz_() + ':00, kopia arkusza w niedzielę ~3:00.');
 }
 
 /** e: zdarzenie wyzwalacza czasowego (wtedy idzie też alert mailowy); z menu bez argumentu. */
@@ -2011,8 +2020,12 @@ function ownWrite_(clientId, week, day, rows) {
  * Mail idzie tylko, gdy któryś klient ma czerwony sygnał, którego nie było w poprzednim alercie (ten sam ból nie wraca co rano).
  * sig = aktualne czerwone sygnały („klient|sygnał”, po jednym w wierszu) do zapamiętania we właściwości skryptu ALERT_SIG.
  */
-function alertMail_(ov, prev, url) {
+function alertMail_(ov, prev, url, disk) {
   const ix = k => PRZ_HEADERS.indexOf(k), old = String(prev || '').split('\n'), sig = [], fresh = [], rest = [];
+  if (disk && disk.low) {   // mało miejsca na Dysku (dyskStan_, Kopia.gs): ten sam mechanizm „nowy sygnał” co u klientów
+    sig.push('_dysk|low');
+    (old.indexOf('_dysk|low') < 0 ? fresh : rest).push('• Dysk Google: zostało ' + (Math.round(disk.free / 1024 / 1024 / 102.4) / 10).toString().replace('.', ',') + ' GB wolnego. Pełny Dysk = filmy klientów i kopie arkusza przestają się zapisywać.');
+  }
   (ov || []).forEach(r => {
     const n = Number(r[ix('czerwone')]) || 0; if (!n) return;
     const all = String(r[ix('do_reakcji')]).split('; '), red = all.slice(0, n), keys = red.map(s => r[ix('klient')] + '|' + s);
@@ -2021,8 +2034,8 @@ function alertMail_(ov, prev, url) {
     (keys.some(k => old.indexOf(k) < 0) ? fresh : rest).push(line);
   });
   if (!fresh.length) return { send: false, subject: '', body: '', sig: sig.join('\n') };
-  const n = fresh.length, word = n === 1 ? 'klient' : 'klientów';
-  return { send: true, sig: sig.join('\n'), subject: 'Trening: ' + n + ' ' + word + ' do reakcji',
+  const dk = fresh[0].indexOf('• Dysk Google') === 0 ? 1 : 0, n = fresh.length - dk, word = n === 1 ? 'klient' : 'klientów';
+  return { send: true, sig: sig.join('\n'), subject: 'Trening: ' + (n ? n + ' ' + word + ' do reakcji' + (dk ? ', mało miejsca na Dysku' : '') : 'mało miejsca na Dysku'),
     body: 'Nowe sygnały do reakcji:\n' + fresh.join('\n') + (rest.length ? '\n\nBez zmian od poprzedniego alertu:\n' + rest.join('\n') : '') +
       '\n\nSzczegóły w zakładce Przegląd' + (url ? ':\n' + url : '.') +
       '\n\nTo flagi do Twojej decyzji, nie diagnoza. Adres zmienisz albo wyłączysz w menu Trening → Ustaw adres alertu.' };
@@ -2032,7 +2045,7 @@ function alertMail_(ov, prev, url) {
 function alertRano_(ov) {
   const props = PropertiesService.getScriptProperties(), to = String(props.getProperty('ALERT_EMAIL') || '').trim();
   if (!to) return;
-  const m = alertMail_(ov, props.getProperty('ALERT_SIG'), SpreadsheetApp.getActive().getUrl());
+  const m = alertMail_(ov, props.getProperty('ALERT_SIG'), SpreadsheetApp.getActive().getUrl(), dysk_());
   if (m.send) MailApp.sendEmail(to, m.subject, m.body);
   props.setProperty('ALERT_SIG', m.sig.slice(0, 8000));
 }
