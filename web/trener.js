@@ -552,6 +552,8 @@ const klLink = 'style="display:inline-flex;align-items:center;text-decoration:no
 const klFlags = k => [k.mode === 'PROSTY' ? 'Prosty' : 'PRO', k.mode === 'PRO' && k.scale === 'RIR' ? 'RIR' : '', k.swap === 'DOWOLNA' ? 'zamiana dowolna' : k.swap === 'TRENER' ? 'zamiana od trenera' : '',
   k.edit ? 'zmiany w treningu' : '', k.masters ? 'masters' : '', k.pain ? 'ból zawsze' : '', k.extra ? '+' + k.extra + (k.extra === 1 ? ' seria' : ' serie') : '', k.own ? '' : 'bez własnych',
   k.oly !== 5 ? 'sufit ' + pl(k.oly) + '%' : '', k.mail ? 'mail rano' : ''].filter(Boolean).join(' · ');
+// lista klientów: każde ustawienie osobno (na telefonie jako „pigułki”), kropki tylko na komputerze
+const klFlagsH = k => (k.on ? [] : ['<b>nieaktywny</b>']).concat(klFlags(k).split(' · ').map(esc)).map(t => '<span class="fl">' + t + '</span>').join('<span class="sp"> · </span>');
 async function copyTxt(t){
   try { await navigator.clipboard.writeText(t); return true; } catch (e) {}
   const a = document.createElement('textarea'); a.value = t; a.setAttribute('readonly', ''); a.style.position = 'fixed'; a.style.opacity = '0'; document.body.appendChild(a); a.select();
@@ -581,8 +583,9 @@ async function renderKlienci(sub){
   const on = KL.filter(k => k.on).length, off = KL.length - on;
   const rows = KL.slice().sort((a, b) => (b.on - a.on) || a.name.localeCompare(b.name, 'pl')).map(k => {
     const c = PUL.clients.find(x => x.id === k.id);
-    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="' + (k.on ? kHref(k.id) : '#klienci/' + encodeURIComponent(k.id)) + '"><span class="dot ' + (k.on ? 'lv-ok' : '') + '"></span>' + esc(k.name) + '</a><div class="flags mono">' + esc(k.id) + '</div></td>' +
-      '<td class="flags">' + (k.on ? '' : '<b>nieaktywny</b> · ') + esc(klFlags(k)) + '</td>' +
+    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="' + (k.on ? kHref(k.id) : '#klienci/' + encodeURIComponent(k.id)) + '"><span class="dot ' + (k.on ? 'lv-ok' : '') + '"></span>' + esc(k.name) + '</a><div class="flags mono">' + esc(k.id) + '</div>' +
+      (k.on ? '<div class="km">Ostatni trening: <b>' + (c ? agoTxt(c) : '–') + '</b>' + (c && c.planLeft !== null ? ' · plan ' + (c.planLeft < 0 ? '<b>skończony</b>' : 'jeszcze <b>' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni') + '</b>') : '') + '</div>' : '') + '</td>' +
+      '<td class="flags">' + klFlagsH(k) + '</td>' +
       '<td class="nw hide-m">' + (c ? agoTxt(c) : '–') + '</td><td class="nw hide-m">' + (!c || c.planLeft === null ? '–' : c.planLeft < 0 ? 'skończony' : 'za ' + c.planLeft + ' dni') + '</td>' +
       '<td class="nw"><span class="lk">' + (k.on ? cpBtn(k) : '') + '<a class="cp" href="#klienci/' + encodeURIComponent(k.id) + '">Ustawienia ›</a></span></td></tr>';
   }).join('');
