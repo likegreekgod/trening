@@ -140,12 +140,42 @@ function doPost(e) {
 
 /* ---------- API (google.script.run – stara wersja, link /exec?k=) ---------- */
 
-function getData(key) {
+function getData(key, o) {
   const t0 = Date.now(), c = mustClient_(key), d = clientData_(c, t0);
   // pakiet treningów (Pakiety.gs): trener w „Prowadź” zawsze, klient tylko z włączonym licznikiem
   let k = null; try { k = pkgOf_(c.id); } catch (e) { d.ms = Object.assign({}, d.ms, { pakietErr: String(e && e.message || e) }); }
   if (LIVE_) d.pkg = pkgShort_(k); else if (k && k.show) d.cfg.pkg = pkgShort_(k);
+  if (!LIVE_ && o && o.dev) seen_(c, o.dev);       // „ostatnio otwarta” w panelu (trener prowadzący trening się nie liczy)
   return liveView_(d, LIVE_);
+}
+
+/* ---------- „ostatnio otwarta” (punkt 13 przeglądu v80, 23.11.2026) ----------
+ * Aplikacja przy pobraniu planu wysyła losowy znacznik telefonu (localStorage „dev”, bez danych o urządzeniu). Serwer zapisuje
+ * w Klienci U „otwarta” chwilę otwarcia i w V „urzadzenia” listę [[znacznik, ostatnio]] z SEEN_DNI dni (najwyżej SEEN_MAX).
+ * Najwyżej raz na SEEN_CO sekund na telefon (CacheService), żeby nie pisać do arkusza przy każdym odświeżeniu. Panel: Klienci.
+ */
+const SEEN_DNI = 60, SEEN_MAX = 5, SEEN_CO = 600;
+/** Czysta: lista urządzeń (tekst JSON z kolumny S) + znacznik + teraz → nowy tekst JSON (najnowsze najpierw). */
+function seenUpd_(json, dev, now) {
+  let a = []; try { a = JSON.parse(String(json || '[]')); } catch (e) {}
+  if (!Array.isArray(a)) a = [];
+  const min = new Date(Date.parse(now) - SEEN_DNI * 864e5).toISOString();
+  a = a.filter(x => Array.isArray(x) && x[0] !== dev && String(x[1]) >= min);
+  a.unshift([dev, now]);
+  return JSON.stringify(a.sort((x, y) => String(y[1]).localeCompare(String(x[1]))).slice(0, SEEN_MAX));
+}
+function seen_(c, dev) {
+  try {
+    dev = String(dev || '');
+    if (!/^[0-9a-f]{8,16}$/.test(dev)) return;
+    const cache = CacheService.getScriptCache(), ck = 'seen|' + c.id + '|' + dev;
+    if (cache.get(ck)) return;
+    cache.put(ck, '1', SEEN_CO);
+    const sh = klSheet_(), rows = klRows_(sh), i = rows.findIndex(r => String(r[0]).trim() === c.key);
+    if (i < 0) return;
+    const now = new Date().toISOString();
+    sh.getRange(i + 2, 21, 1, 2).setValues(plainRows_([[now, seenUpd_(rows[i][21], dev, now)]]));
+  } catch (e) { /* bez wpisu: plan ma się wczytać zawsze */ }
 }
 /**
  * Czysta funkcja: dane getData dla klienta albo dla trenera, który prowadzi trening. Klient nie dostaje prywatnych
@@ -1127,6 +1157,9 @@ function diagnose_(d) {
   if (d.triggers && d.triggers.indexOf('kopiaArkusza') < 0) add('uwaga', 'Brak cotygodniowej kopii arkusza: menu Trening → Zainstaluj wyzwalacze.');
   if (mailOn.length && d.triggers && (d.triggers || []).indexOf('porannyMail') < 0) add('błąd', 'Brak wyzwalacza „porannyMail”: poranny mail nie wyjdzie (menu Trening → Zainstaluj wyzwalacze).');
   mailOn.forEach(k => { if (!mailOk_(k.email)) add('uwaga', lc(k.klient_id) + ': poranny mail włączony, ale brak poprawnego adresu w kolumnie email.'); });
+  const komOn = active.filter(k => String(k.mail_kom || '').trim().toUpperCase() === 'TAK');
+  if (komOn.length && d.triggers && d.triggers.indexOf('wieczornyMail') < 0) add('błąd', 'Brak wyzwalacza „wieczornyMail”: mail po komentarzu nie wyjdzie (menu Trening → Zainstaluj wyzwalacze).');
+  komOn.forEach(k => { if (!mailOk_(k.email)) add('uwaga', lc(k.klient_id) + ': mail po komentarzu włączony, ale brak poprawnego adresu w kolumnie email.'); });
   active.forEach(k => {
     const id = lc(k.klient_id);
     if (!/^k[0-9a-f]{11}$/.test(String(k.klucz))) add('błąd', id + ': brak poprawnego klucza (uruchom setup w edytorze albo dodaj klienta z menu).');
@@ -1207,8 +1240,9 @@ function instalujWyzwalacze() {
   ScriptApp.newTrigger('podsumowanie').timeBased().everyDays(1).atHour(5).create();
   ScriptApp.newTrigger('wczytajPlany').timeBased().everyMinutes(15).create();
   mailWyzwalacz_(mailGodz_());
+  komWyzwalacz_();
   kopiaWyzwalacz_();
-  Logger.log('OK: podsumowanie codziennie ~5:00, plany z „' + ROOT_FOLDER_NAME + '/_plany” co 15 min, poranny mail ~' + mailGodz_() + ':00, kopia arkusza w niedzielę ~3:00.');
+  Logger.log('OK: podsumowanie codziennie ~5:00, plany z „' + ROOT_FOLDER_NAME + '/_plany” co 15 min, poranny mail ~' + mailGodz_() + ':00, mail po komentarzu ~' + MAIL_KOM_GODZ + ':00, kopia arkusza w niedzielę ~3:00.');
 }
 
 /** e: zdarzenie wyzwalacza czasowego (wtedy idzie też alert mailowy); z menu bez argumentu. */

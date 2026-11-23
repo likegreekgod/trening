@@ -611,11 +611,18 @@ let MS = null, MT = { id: '', busy: false, ok: '', err: '' };   // poranny mail:
 const mailAt = iso => { const d = new Date(iso); return isNaN(d) ? '' : DOW[d.getDay()] + ' ' + d.getDate() + '.' + String(d.getMonth() + 1).padStart(2, '0') + ', ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
 const mailHour = () => MS ? MS.hour : 6;
 const slug = s => String(s || '').replace(/[łŁ]/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-const KL_F = ['on', 'mode', 'scale', 'swap', 'pain', 'masters', 'extra', 'oly', 'own', 'edit', 'email', 'mail'];
+const KL_F = ['on', 'mode', 'scale', 'swap', 'pain', 'masters', 'extra', 'oly', 'own', 'edit', 'email', 'mail', 'mailKom'];
 const klLink = 'style="display:inline-flex;align-items:center;text-decoration:none"';
 const klFlags = k => [k.mode === 'PROSTY' ? 'Prosty' : 'PRO', k.mode === 'PRO' && k.scale === 'RIR' ? 'RIR' : '', k.swap === 'DOWOLNA' ? 'zamiana dowolna' : k.swap === 'TRENER' ? 'zamiana od trenera' : '',
   k.edit ? 'zmiany w treningu' : '', k.masters ? 'masters' : '', k.pain ? 'ból zawsze' : '', k.extra ? '+' + k.extra + (k.extra === 1 ? ' seria' : ' serie') : '', k.own ? '' : 'bez własnych',
-  k.oly !== 5 ? 'sufit ' + pl(k.oly) + '%' : '', k.mail ? 'mail rano' : ''].filter(Boolean).join(' · ');
+  k.oly !== 5 ? 'sufit ' + pl(k.oly) + '%' : '', k.mail ? 'mail rano' : '', k.mailKom ? 'mail po komentarzu' : ''].filter(Boolean).join(' · ');
+/** „ostatnio otwarta” (Klienci U/V, punkt 13 przeglądu v80): kiedy klient otworzył aplikację i na ilu telefonach (60 dni); 3+ = uwaga */
+function seenTxt(k){
+  if (!k.seen) return '<span class="muted">aplikacja: brak danych o otwarciu</span>';
+  const m = Math.max(0, Math.round((Date.now() - Date.parse(k.seen)) / 60000)), ago = m < 2 ? 'przed chwilą' : m < 60 ? m + ' min temu' : m < 1440 ? Math.round(m / 60) + ' h temu' : Math.round(m / 1440) === 1 ? 'wczoraj' : Math.round(m / 1440) + ' dni temu';
+  const d = k.devs || 0, dev = d ? d + ' ' + plN(d, 'telefon', 'telefony', 'telefonów') : '';
+  return 'otwarta ' + ago + (dev ? ' · ' + (d >= 3 ? '<b class="warn" title="Ten sam link na 3 lub więcej telefonach w 60 dni: może poszedł dalej? „Wygeneruj nowy link” w ustawieniach klienta.">⚠ ' + dev + '</b>' : dev) : '');
+}
 // lista klientów: każde ustawienie osobno (na telefonie jako „pigułki”), kropki tylko na komputerze
 const klFlagsH = k => (k.on ? [] : ['<b>nieaktywny</b>']).concat(klFlags(k).split(' · ').map(esc)).map(t => '<span class="fl">' + t + '</span>').join('<span class="sp"> · </span>');
 async function copyTxt(t){
@@ -647,7 +654,7 @@ async function renderKlienci(sub){
   const on = KL.filter(k => k.on).length, off = KL.length - on;
   const rows = KL.slice().sort((a, b) => (b.on - a.on) || a.name.localeCompare(b.name, 'pl')).map(k => {
     const c = PUL.clients.find(x => x.id === k.id);
-    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="' + (k.on ? kHref(k.id) : '#klienci/' + encodeURIComponent(k.id)) + '"><span class="dot ' + (k.on ? 'lv-ok' : '') + '"></span>' + esc(k.name) + '</a><div class="flags mono">' + esc(k.id) + '</div>' +
+    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="' + (k.on ? kHref(k.id) : '#klienci/' + encodeURIComponent(k.id)) + '"><span class="dot ' + (k.on ? 'lv-ok' : '') + '"></span>' + esc(k.name) + '</a><div class="flags mono">' + esc(k.id) + '</div>' + (k.on ? '<div class="seen">' + seenTxt(k) + '</div>' : '') +
       (k.on ? '<div class="km">Ostatni trening: <b>' + (c ? agoTxt(c) : '–') + '</b>' + (c && c.planLeft !== null ? ' · plan ' + (c.planLeft < 0 ? '<b>skończony</b>' : 'jeszcze <b>' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni') + '</b>') : '') + '</div>' : '') + '</td>' +
       '<td class="flags">' + klFlagsH(k) + '</td>' +
       '<td class="nw hide-m">' + (c ? agoTxt(c) : '–') + '</td><td class="nw hide-m">' + (!c || c.planLeft === null ? '–' : c.planLeft < 0 ? 'skończony' : 'za ' + c.planLeft + ' dni') + '</td>' +
@@ -695,15 +702,17 @@ function renderKlientUst(id){
     '<div class="sec">Obciążenie</div>' +
     frH('Masters', 'Ostrzejsze progi „za dużo / uwaga” w podsumowaniu.', swH('masters', d.masters, 'Masters')) +
     frH('Sufit w bojach', 'O ile ponad plan (w % maksa) klient może pójść w rwaniu i podrzucie.', numH('oly', d.oly, 0, 20, 2.5, '%')) +
-    '<div class="sec">Poranny mail</div>' +
-    '<div class="fr fr1"><div><b>E-mail klienta</b><small>Tylko do porannego maila. Zostaje w arkuszu (zakładka Klienci), nie w aplikacji.</small></div>' +
+    '<div class="sec">Maile do klienta</div>' +
+    '<div class="fr fr1"><div><b>E-mail klienta</b><small>Tylko do maili z aplikacji (poranny, po komentarzu). Zostaje w arkuszu (zakładka Klienci), nie w aplikacji.</small></div>' +
     '<input class="inp" id="kl-email" type="email" autocomplete="off" spellcheck="false" placeholder="adres@przyklad.pl" value="' + esc(d.email || '') + '"' + dis + '></div>' +
     frH('Mail w dniu treningu', 'Ok. ' + mailHour() + ':00, gdy plan ma na dziś trening z datą, a klient go jeszcze nie zaczął. Bez daty w planie, w dni wolne i przy własnych treningach mail nie idzie.', swH('mail', d.mail, 'Mail w dniu treningu')) +
-    mailTestH(k, ch) + '</div>' +
+    mailTestH(k, ch) +
+    frH('Mail po komentarzu', 'Ok. 20:00, gdy tego dnia skomentowałeś jego trening (sesja, ćwiczenie, film): pierwsze zdanie i przycisk do zakładki Trener. Najwyżej jeden dziennie.', swH('mailKom', d.mailKom, 'Mail po komentarzu')) + '</div>' +
     '<div class="row2" style="margin-top:14px"><button class="b p" type="button" id="kl-save"' + (ch && !m.busy ? '' : ' disabled') + '>' + (m.busy === 'save' ? 'Zapisuję…' : 'Zapisz zmiany') + '</button>' +
     (ch ? '<button class="b" type="button" id="kl-undo"' + dis + '>Cofnij</button><span class="hint">Zmienione: ' + ch + '</span>' : m.ok ? '<span class="saved" role="status">' + esc(m.ok) + '</span>' : '') + '</div>' +
     (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '');
   const side = '<div class="card"><h2>Link do aplikacji</h2>' + (k.link ? '<div class="linkbox mono" id="kl-link">' + esc(k.link) + '</div><div class="row2">' + cpBtn(k) + '</div>' +
+      '<p class="mstat" id="kl-seen">' + seenTxt(k) + '</p>' +
       '<p class="legend">„Wyślij…” (na telefonie) otwiera SMS, WhatsApp albo mail. Na iPhonie klient po dodaniu aplikacji do ekranu głównego wkleja ten link jeszcze raz.</p>'
       : '<p class="muted">Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL.</p>') +
     '<div class="sec" style="border:0">Nowy link</div><p class="legend" style="font-size:13px">Gdy link trafił do niewłaściwej osoby. Stary link przestaje działać, a klient musi dostać nowy. Treningi i historia zostają.</p>' +
