@@ -450,6 +450,28 @@ test('cwSync_: nowe wiersze, dopisane aliasy, usuwane zaślepki; ręczne wpisy z
   assert.deepEqual(plain(C.cwBaza_([['A', 'id1', 'p', 'x'], ['B', 'id2', '']], { A: 'y; z', B: 'b' }, [['D', 'd1; d2', 'łydki']])),
     [['A', 'id1', 'p', 'x; y; z'], ['B', 'id2', '', 'b'], ['D', '', 'łydki', 'd1; d2']]);
   assert.deepEqual(plain(C.cwBaza_([], {}, [], [['F', 'klatka']])), [['F', '', 'klatka', '']]);
+  assert.deepEqual(plain(C.cwBaza_([['A', 'id1', 'p']], { A: 'y' }, [['D', 'd1', 'łydki']], [['F', 'klatka']], { A: 'Stara A', D: 'Stara D', F: 'Stara F; F2' })),
+    [['A', 'id1', 'p', 'y; Stara A'], ['D', '', 'łydki', 'd1; Stara D'], ['F', '', 'klatka', 'Stara F; F2']]);
+});
+
+test('cwSync_: scalone duplikaty, dawny wiersz znika tylko bez ręcznych wpisów', () => {
+  const sc = { 'Hamstring Curl': 'Lying Leg Curls; Leg Curl Old', Crunch: 'Crunches', Glute: 'Bridge' };
+  const baza = C.cwBaza_([['Hamstring Curl', 'abcdefghijk', 'dwugłowe uda'], ['Crunch', 'bcdefghijkl', 'brzuch'], ['Glute', 'cdefghijklm', 'pośladki']], {}, [], [], sc);
+  const sheet = [
+    { cwiczenie: 'Hamstring Curl', aliasy: 'Uginanie nóg leżąc', instruktaz: 'https://www.youtube.com/watch?v=abcdefghijk', partia: 'dwugłowe uda' },
+    { cwiczenie: 'Lying Leg Curls', partia: 'dwugłowe uda' },                                   // jak z bazy: znika
+    { cwiczenie: 'Crunch', instruktaz: 'https://www.youtube.com/watch?v=bcdefghijkl', partia: 'brzuch' },
+    { cwiczenie: 'Crunches', partia: 'brzuch', instruktaz: 'https://example.test/moj-film' },     // link trenera: zostaje
+    { cwiczenie: 'Leg Curl Old' },                                                              // zaślepka: znika jak dotąd
+    { cwiczenie: 'Bridge', partia: 'pośladki', glowna: 'Glute' }];                               // już wskazuje główne: zostaje dla cwMerge_
+  const s = plain(C.cwSync_(baza, sheet, {}, sc));
+  assert.deepEqual(s.add, [['Glute', 'Bridge', 'https://www.youtube.com/watch?v=cdefghijklm', 'pośladki', '', '']]);
+  assert.deepEqual(s.aliases, [{ i: 0, value: 'Uginanie nóg leżąc; Lying Leg Curls; Leg Curl Old' }, { i: 2, value: 'Crunches' }]);
+  assert.deepEqual([s.drop.slice().sort(), s.merged, s.kept], [[1, 4], 1, ['Crunches → Crunch']]);
+  const after = sheet.map((r, i) => (s.aliases.find(a => a.i === i) ? Object.assign({}, r, { aliasy: s.aliases.find(a => a.i === i).value }) : r)).filter((r, i) => s.drop.indexOf(i) < 0);
+  const ix = C.exIndex_(after);
+  assert.equal(C.exFind_(ix, 'Lying Leg Curls').name, 'Hamstring Curl');
+  assert.equal(C.exFind_(ix, 'Crunches').info, 'https://example.test/moj-film');              // wiersz z wpisem trenera działa jak dotąd
 });
 
 test('zaślepka nie zasłania aliasu, „tempo” to dopisek', () => {
@@ -468,12 +490,12 @@ test('CW_BAZA, CW_ALIASY, CW_DODATKI: baza ćwiczeń do wczytania', () => {
   const names = B.map(b => b[0]), D = Array.from(C.CW_DODATKI);
   Object.keys(C.CW_ALIASY).forEach(k => assert.ok(names.includes(k), 'alias do nieistniejącego ćwiczenia: ' + k));
   D.forEach(d => { assert.equal(d.length, 3); assert.ok(!names.includes(d[0]), d[0]); assert.ok(d[1] || d[2], d[0]); });   // wiersz bez danych byłby zaślepką
-  const F = Array.from(C.CW_FEDB), all = C.cwBaza_(B, C.CW_ALIASY, D, F), s = C.cwSync_(all, []);
+  const F = Array.from(C.CW_FEDB), all = C.cwBaza_(B, C.CW_ALIASY, D, F, C.CW_SCALONE), s = C.cwSync_(all, []);
   assert.equal(s.add.length, 624 + D.length + F.length);
-  assert.ok(F.length > 700); F.forEach(x => { assert.equal(x.length, 2); assert.ok(x[0] && x[1], x[0]); });
+  assert.equal(F.length, 700); F.forEach(x => { assert.equal(x.length, 2); assert.ok(x[0] && x[1], x[0]); });
   const rows = plain(s.add).map(r => Object.fromEntries(C.CW_HEADERS.map((h, i) => [h, r[i]]))), ix = C.exIndex_(rows), f = n => (C.exFind_(ix, n) || {}).name || null;
   const keys = {}; rows.forEach(r => [r.cwiczenie].concat(r.aliasy.split(';')).map(C.exKey_).filter(Boolean).forEach(k => { assert.ok(!keys[k], 'powtórzona nazwa lub alias: ' + k); keys[k] = 1; }));
-  assert.deepEqual(plain(C.cwSync_(all, rows)), { add: [], aliases: [], drop: [] });   // drugie wczytanie nic nie zmienia
+  assert.deepEqual(plain(C.cwSync_(all, rows, {}, C.CW_SCALONE)), { add: [], aliases: [], drop: [], merged: 0, kept: [] });   // drugie wczytanie nic nie zmienia
   assert.deepEqual(['Snatch Pull', 'Power Clean from Block', 'Chin Up', 'DB Lateral Raise', 'SL RDL', 'Block Power Snatch (nad kolanem)', 'Jerk Dip z pauzą 3 s', 'Back Squat 1¼'].map(f),
     ['Snatch Pull', 'Block Power Clean', 'Chin-up', 'Dumbbell Lateral Raise', 'Single-Leg RDL', 'Block Power Snatch', 'Jerk Dip', '1-1/4 Back Squat']);
   assert.deepEqual(['Przysiad tylny', 'Ciąg rwaniowy (z podłogi, do pełnego wyprostu)', 'Wykroki bułgarskie (hantle), tempo 3-1-X', 'Sotts Press', 'Wypychanie na suwnicy', 'Power jerk z rack — 2 s pauza w dipie + 3 s fiksacja'].map(f),
@@ -481,7 +503,12 @@ test('CW_BAZA, CW_ALIASY, CW_DODATKI: baza ćwiczeń do wczytania', () => {
   assert.deepEqual(['Ring Dips', 'Hanging Knee Raise', 'Pin OHS', 'Pushup Hold (jak najgłębiej)', 'Pause Clean (2 s pod kolanem)'].map(f), ['Ring Dip', 'Hanging Knee Raise', 'Pin Overhead Squat', 'Push-Up Hold', 'Segment Clean']);   // regresja i inny sprzęt to osobne ćwiczenia
   Object.keys(C.CW_WYCOFANE).forEach(k => { assert.ok(names.includes(k)); C.CW_WYCOFANE[k].split(';').forEach(a => assert.ok(!((C.CW_ALIASY[k] || '').split(';').map(C.exKey_).includes(C.exKey_(a))), a)); });
   const old = rows.map(r => r.cwiczenie === 'Dip' ? Object.assign({}, r, { aliasy: 'Ring Dips; Dipy' }) : r);
-  assert.deepEqual(plain(C.cwSync_(all, old, C.CW_WYCOFANE)), { add: [], aliases: [{ i: old.findIndex(r => r.cwiczenie === 'Dip'), value: 'Dipy' }], drop: [] });
+  assert.deepEqual(plain(C.cwSync_(all, old, C.CW_WYCOFANE)), { add: [], aliases: [{ i: old.findIndex(r => r.cwiczenie === 'Dip'), value: 'Dipy; Parallel Bar Dip' }], drop: [], merged: 0, kept: [] });
+  const own = names.concat(D.map(x => x[0]), F.map(x => x[0])).map(C.exKey_);                       // scalone duplikaty: zostaje nazwa z bazy, dawna jest tylko aliasem
+  Object.keys(C.CW_SCALONE).forEach(k => { assert.ok(own.includes(C.exKey_(k)), 'scalone do nieistniejącego ćwiczenia: ' + k); C.CW_SCALONE[k].split('; ').forEach(a => { assert.ok(!own.includes(C.exKey_(a)), 'dawna nazwa nadal jest wierszem: ' + a); assert.equal(f(a), k); }); });
+  assert.equal([].concat(...Object.values(C.CW_SCALONE).map(v => v.split('; '))).length, 62);
+  assert.deepEqual(['Lying Leg Curls', 'Barbell Full Squat', 'Crunches', 'Farmer\'s Walk', 'Rope Crunch', 'Butt Lift (Bridge)'].map(f), ['Hamstring Curl', 'Back Squat', 'Crunch', 'Farmer Carry', 'Cable Crunch', 'Glute Bridge']);
+  assert.ok(C.exInfo_(ix, 'Lying Leg Curls').infos.length === 1);                                   // dawna nazwa dostaje film ćwiczenia, które zostaje
   assert.deepEqual(['Slow Snatch', 'Single Arm Cable Pull (fixed on bench)', 'Barbell Squat', 'Jerk from blocks (cluster)', 'Dumbbell Bench Press'].map(f), ['Slow-Motion Snatch', 'Single-Arm Pulldown', 'Back Squat', 'Jerk From Blocks', 'Dumbbell Bench Press']);
   assert.deepEqual(['Snatch Pull z haka', 'Rot. wewn. biodra z gumą (siad na skrzyni)'].map(f), Array(2).fill(null));   // bez zgadywania: alias albo własny wiersz
   assert.deepEqual(C.exInfo_(ix, 'Hang Clean (nad kolanem) + Jerk').infos.map(i => i.n), ['Hang Clean', 'Split Jerk']);   // „Jerk” to alias Split Jerk

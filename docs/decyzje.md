@@ -2,6 +2,13 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-23 · Duplikaty w bazie ćwiczeń: 62 pewne scalone jako aliasy
+
+- Przegląd 22.11 znalazł 95 par: 62 to samo ćwiczenie pod dwiema nazwami (54 nazwy z free-exercise-db przy ćwiczeniach Catalyst z filmem i 8 dubletów w samej free-exercise-db), 33 różnią się sprzętem, chwytem albo pozycją (do decyzji Damiana), 17 tylko wygląda podobnie (nie ruszamy).
+- Scalenie = dawna nazwa staje się aliasem tej, która zostaje (`CW_SCALONE`), i znika z `CW_FEDB`. Nazwa w Planie i Logu się nie zmienia; dopasowanie idzie przez alias, więc dawna nazwa dostaje film i partie ćwiczenia głównego. Statystyki w aplikacji liczą się dalej po nazwie z Logu (bez łączenia historii dwóch nazw).
+- Arkusz: „Wczytaj bazę ćwiczeń” usuwa dawny wiersz tylko, gdy trener nic w nim nie wpisał (aliasy, link, zamienniki, grupa; partia z bazy się nie liczy). Wiersz z wpisami zostaje i działa jak dotąd; komunikat go wymienia, scalenie ręczne przez kolumnę `glowna`.
+- Wątpliwe pary scalamy tylko po odpowiedzi Damiana, tym samym mechanizmem (dopisanie do `CW_SCALONE`).
+
 ## 2026-11-23 · „Zrobiona” jednostka: Sesje albo seria A/B, nie sama korekcja i nie wyzerowana seria
 
 - Zgłoszenie: seria korekcji (K) zaznaczona dzień przed treningiem robiła jednostkę „zrobioną”, więc import pomijał poprawki planu (a poranny mail i Plan w panelu też traktowały ją jak zaczętą). Wiersz w Logu powstawał też bez ✓: seria odznaczona do pustego, dwa dotknięcia numeru (FAIL), sam film albo prędkość.
