@@ -2054,6 +2054,47 @@ test('mniej konfliktów: VERSION w sw.js nadaje publikacja, listy funkcji API po
   });
 });
 
+test('trCwiczenia_: ćwiczenia z planów aktywnych klientów bez filmu (części kompleksu osobno), od najczęstszych; martwe linki z ostatniego sprawdzenia', () => {
+  const cw = [{ cwiczenie: 'Back Squat', aliasy: 'Przysiad tylny', instruktaz: 'https://www.youtube.com/watch?v=aaaaaaaaaaa' },
+    { cwiczenie: 'Goblet Squat', aliasy: 'Przysiad goblet', partia: 'czworogłowe' },
+    { cwiczenie: 'Hang Clean', instruktaz: 'https://youtu.be/bbbbbbbbbbb' },
+    { cwiczenie: 'Face Pull', partia: 'barki' },
+    { cwiczenie: 'Przysiad tylny stary', glowna: 'Back Squat' }];
+  const kl = [{ klient_id: 'anna', aktywny: 'TAK' }, { klient_id: 'bartek', aktywny: 'TAK' }, { klient_id: 'stary', aktywny: 'NIE' }];
+  const plan = [
+    { klient: 'anna', cwiczenie: 'Przysiad tylny', data: '2026-11-20' }, { klient: 'anna', cwiczenie: 'Przysiad goblet', data: '2026-11-21' },
+    { klient: 'bartek', cwiczenie: 'Goblet Squat', data: '2026-11-25' }, { klient: 'bartek', cwiczenie: 'Hang Clean + Face Pull', data: '2026-11-24' },
+    { klient: 'anna', cwiczenie: 'Wymyślone ćwiczenie', data: '' }, { klient: 'anna', cwiczenie: 'Face Pull', zrodlo: 'usuniete' },
+    { klient: 'stary', cwiczenie: 'Nieaktywny ruch', data: '2026-11-01' }];
+  const r = plain(C.trCwiczenia_(plan, cw, kl, [{ u: 'https://youtu.be/bbbbbbbbbbb', s: 'brak' }, { u: 'https://inny.test/x', s: 'prywatny' }]));
+  assert.deepEqual(r.missing, [
+    { name: 'Goblet Squat', inBase: true, as: ['Przysiad goblet'], n: 2, clients: 2, last: '2026-11-25' },
+    { name: 'Face Pull', inBase: true, as: ['Hang Clean + Face Pull'], n: 1, clients: 1, last: '2026-11-24' },
+    { name: 'Wymyślone ćwiczenie', inBase: false, as: [], n: 1, clients: 1, last: '' }]);
+  assert.deepEqual(r.dead, [{ name: 'Hang Clean', url: 'https://youtu.be/bbbbbbbbbbb', why: 'brak', n: 1 }]);
+  assert.equal(r.links, 2);
+  assert.deepEqual(plain(C.trCwiczenia_([], [], [], [])), { missing: [], dead: [], links: 0 });
+});
+
+test('cwFilm_, linkProbe_, linkStan_: zapis linku trenera do bazy i ocena odpowiedzi przy sprawdzaniu', () => {
+  const rows = [{ cwiczenie: 'Back Squat' }, { cwiczenie: 'Stary', glowna: 'Back Squat' }, { cwiczenie: 'Face  Pull' }];
+  assert.deepEqual(plain(C.cwFilm_(rows, 'face pull', ' https://youtu.be/x ')), { i: 2, value: 'https://youtu.be/x' });
+  assert.deepEqual(plain(C.cwFilm_(rows, 'Back Squat', '')), { i: 0, value: '' });                 // pusty = usuń film
+  assert.deepEqual(plain(C.cwFilm_(rows, 'Nowe  ćwiczenie', 'https://a.test/v')).add, ['Nowe ćwiczenie', '', 'https://a.test/v', '', '', '', '']);
+  assert.deepEqual(plain(C.cwFilm_(rows, 'Stary', 'https://a.test/v')).add[0], 'Stary');           // wiersz z „glowna” nie dostaje filmu
+  assert.throws(() => C.cwFilm_(rows, 'Back Squat', 'javascript:alert(1)'), /https/);
+  assert.throws(() => C.cwFilm_(rows, 'Back Squat', '=HYPERLINK("x")'), /https/);
+  assert.throws(() => C.cwFilm_(rows, 'Back Squat', 'https://a.test/' + 'x'.repeat(600)), /https/);
+  assert.throws(() => C.cwFilm_(rows, 'Nie ma', ''), /Nie ma/);
+  assert.throws(() => C.cwFilm_(rows, ' ', 'https://a.test'), /nazwy/);
+  assert.equal(C.linkProbe_('https://www.youtube.com/watch?v=abc&t=3'), 'https://www.youtube.com/oembed?format=json&url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc%26t%3D3');
+  assert.match(C.linkProbe_('https://youtu.be/abc'), /^https:\/\/www\.youtube\.com\/oembed\?/);
+  assert.match(C.linkProbe_('https://youtube.com/shorts/abc'), /oembed/);
+  assert.equal(C.linkProbe_('https://vimeo.com/1'), 'https://vimeo.com/1');
+  assert.deepEqual([200, 302, 404, 410, 400, 401, 403, 429, 500, 0].map(C.linkStan_), ['', '', 'brak', 'brak', 'brak', 'prywatny', 'prywatny', null, null, null]);
+  ['trCwiczenia', 'trCwFilm', 'trCwSprawdz'].forEach(f => { assert.ok(C.TR_FNS[f], f); assert.ok(!C.API_FNS[f] && !C.LIVE_FNS[f], f); });
+});
+
 test('wieczorny mail po komentarzu (komNowe_, komMail_, komPierwsze_) i „ostatnio otwarta” (seenUpd_, devsOf_, kolumny T–V)', () => {
   const kl = (key, id, name, email, kom, on) => { const r = [key, id, name, on || '', '', '', '', '', '', '', '', '', '', '', email, '', '', '', '', kom]; return r; };
   const klienci = [kl('kaaaaaaaaaa1', 'ania', 'Ania', 'ania@example.com', 'TAK'), kl('kbbbbbbbbbb2', 'bartek', 'Bartek', 'b@example.com', ''), kl('kcccccccccc3', 'ewa', 'Ewa', '', 'TAK')];

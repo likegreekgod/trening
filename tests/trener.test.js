@@ -178,6 +178,15 @@ async function page(calls, opt = {}) {
       out = { ok: true, result: m === prev ? { mies: m, months: [TODAY.slice(0, 7), prev], clients: [], n: 0, min: 0 } : { mies: m, months: [TODAY.slice(0, 7), prev], n: 3, min: 160,
         clients: [{ id: 'ania', name: 'Ania', n: 2, min: 100, items: [{ date: m + '-03', week: 12, day: 'T1', title: 'Dół; „mocno”', min: 55 }, { date: m + '-10', week: 13, day: 'T1', title: 'Dół', min: 45 }] },
           { id: 'bartek', name: 'Bartek', n: 1, min: 60, items: [{ date: m + '-05', week: 4, day: 'T2', title: 'FBW', min: 60 }] }] } }; }
+    else if (b.fn === 'trCwiczenia' || b.fn === 'trCwFilm' || b.fn === 'trCwSprawdz') {   // panel → Ćwiczenia (apps-script/Instruktaz.gs)
+      if (b.fn !== 'trCwiczenia') await new Promise(res => setTimeout(res, 100));
+      st.cw = st.cw || { films: {}, at: '' };
+      if (b.fn === 'trCwFilm') st.cw.films[b.args[0]] = b.args[1];
+      if (b.fn === 'trCwSprawdz') st.cw.at = TODAY + 'T09:30:00.000Z';
+      const miss = [{ name: 'Goblet Squat', inBase: true, as: ['Przysiad goblet'], n: 6, clients: 2, last: TODAY }, { name: 'Face Pull', inBase: true, as: ['Hang Clean + Face Pull'], n: 2, clients: 1, last: addDays(TODAY, -3) },
+        { name: 'Wymyślone „ćwiczenie” <b>', inBase: false, as: [], n: 1, clients: 1, last: '' }].filter(x => !st.cw.films[x.name]);
+      const dead = [{ name: 'Hang Clean', url: 'https://youtu.be/bbbbbbbbbbb', why: 'brak', n: 2 }].filter(x => !st.cw.films[x.name]);
+      out = { ok: true, result: { missing: miss, dead, links: 640, at: st.cw.at, checked: st.cw.at ? 641 : 0, trigger: true } }; }
     else if (b.fn === 'trMailProba') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { day: addDays(TODAY, 2), title: 'Trening A' } }; }
     else if (b.fn === 'trPlan') { await new Promise(res => setTimeout(res, 100)); const e = b.args[1];
       if (/błąd/.test(e.unote || '')) out = { ok: false, error: 'Ta jednostka jest już zrobiona (albo klient zaczął ją zapisywać) – zmiany tylko w niezrobionych.' };
@@ -510,6 +519,47 @@ test('panel: Więcej → Prowadzone treningi (miesiąc, na klienta, CSV do rozli
     await p.selectOption('#pw-m', { index: 1 }); await p.waitForSelector('.es b');
     assert.match(await p.textContent('.es'), /Brak prowadzonych treningów/);
     assert.equal(await p.$('#pw-csv'), null);
+    await ctx.close();
+  }
+});
+
+test('panel: Ćwiczenia bez filmu (link trenera do bazy, martwe linki, szukanie, sprawdzenie teraz)', async () => {
+  for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
+    const calls = [];
+    const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
+    if (vp) { await p.goto(base + 'trener.html#wiecej'); await p.waitForSelector('.mo a[href="#cwiczenia"]'); await p.click('.mo a[href="#cwiczenia"]'); }
+    else { await p.goto(base + 'trener.html#dzis'); await p.waitForSelector('#nav a[data-v="cwiczenia"]'); await p.click('#nav a[data-v="cwiczenia"]'); }
+    await p.waitForSelector('#cw-sum');
+    assert.match(await p.textContent('#cw-sum'), /3 ćwiczenia bez filmu · 1 martwy link · 640 z filmem w bazie/);
+    assert.deepEqual(await p.$$eval('#cw-miss .cwn b', b => b.map(x => x.textContent)), ['Goblet Squat', 'Face Pull', 'Wymyślone „ćwiczenie” <b>']);   // tekst, nie HTML
+    assert.match(await p.textContent('#cw-miss .cwr'), /2 klientów · 6 wierszy planu · ostatnio .* · w planie: Przysiad goblet/);
+    assert.match(await p.textContent('#cw-dead'), /Hang Clean.*Film usunięty albo zły adres · 2 wiersze planu/s);
+    assert.match(await p.textContent('#cw-miss .cwr:last-child'), /nowe w bazie/);
+    if (!vp) assert.equal(await p.getAttribute('#nav a[data-v="cwiczenia"]', 'aria-current'), 'page');
+    else { assert.equal(await p.getAttribute('#bnav a[data-v="wiecej"]', 'aria-current'), 'page'); assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390)); }
+    // zły link: przycisk nieaktywny, komunikat; dobry: zapis, ćwiczenie zostaje na liście z potwierdzeniem
+    const inp = '[data-cwu="m:Goblet Squat"]', btn = '[data-cws="m:Goblet Squat"]';
+    assert.ok(await p.$eval(btn, b => b.disabled));
+    await p.fill(inp, 'youtu.be/abc'); await p.locator(inp).blur();
+    assert.ok(await p.$eval(btn, b => b.disabled)); assert.ok(await p.isVisible('[data-cwbad="m:Goblet Squat"]'));
+    assert.ok(!(await p.isVisible('[data-cwbad="m:Face Pull"]')));
+    await p.fill(inp, ' https://youtu.be/goblet01 ');
+    assert.ok(!(await p.$eval(btn, b => b.disabled)));
+    await p.click(btn); await p.waitForSelector('#cw-miss .saved');
+    assert.deepEqual(calls.filter(c => c.fn === 'trCwFilm').pop().args, ['Goblet Squat', 'https://youtu.be/goblet01']);
+    assert.match(await p.textContent('#cw-miss .cwr'), /Goblet Squat.*Zapisano/s);
+    assert.match(await p.textContent('#cw-sum'), /2 ćwiczenia bez filmu/);
+    await shot(p, 'trener-cwiczenia-' + (vp ? 'telefon-ciemny' : 'jasny') + '.png');
+    // szukanie po nazwie i po nazwie z planu
+    await p.fill('#cw-q', 'hang');
+    assert.deepEqual(await p.$$eval('.cwn b', b => b.map(x => x.textContent)), ['Hang Clean', 'Face Pull']);
+    assert.equal(await p.evaluate(() => document.activeElement.id), 'cw-q');
+    await p.fill('#cw-q', '');
+    // sprawdzenie linków teraz
+    assert.match(await p.textContent('#cw-chk'), /Sprawdź teraz/); assert.match(await p.textContent('#main'), /Linki nie były jeszcze sprawdzane/);
+    await p.click('#cw-chk'); await p.waitForFunction(() => /Sprawdzone/.test(document.querySelector('#main').textContent));
+    assert.match(await p.textContent('#main'), /Sprawdzone .*, 641 linków\. Samo sprawdza co poniedziałek ok\. 4:00\./);
+    assert.deepEqual(p.errors, []);
     await ctx.close();
   }
 });
