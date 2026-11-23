@@ -618,8 +618,17 @@
         // trener (prowadzony trening): zwykłe ćwiczenie planu (coach, prio B, nr po ostatnim), ta sama nazwa dodana przez trenera = już jest
         if (!rows.length || rows.some(r => lc(r.name) === lc(name) && (w !== week || r.added || (e.trainer && r.coach)))) return;
         const order = Math.max(e.trainer ? 0 : L.EDIT_NR, ...rows.map(r => Number(r.order) || 0), ...removed.filter(x => inU(x, w)).map(x => Number(x.order) || 0)) + 1, b = rows[0];
-        out.push({ week: w, day, title: b.title, date: b.date, order, name, prio: e.trainer ? 'B' : 'A', sets, reps, pct: null, kg, rpe: '', note: '', extra: null, drop: 0,
-          group: '', block: b.block || '', swaps: [], infos: e.infos || [], parts: e.parts || [], ...(e.trainer ? { coach: true } : { added: true }) });
+        // trener: priorytet z okna, „połącz z poprzednim” = obwód z ostatnim ćwiczeniem jednostki (ta sama reguła co planEdit_)
+        let circuit = '';
+        if (e.trainer && e.link) {
+          const last = rows.slice().sort((a, c) => (Number(c.order) || 0) - (Number(a.order) || 0))[0];
+          if (last && !/EMOM/i.test(String(last.mode || ''))) {
+            circuit = last.circuit || 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').find(c => !rows.some(r => r.circuit === c)) || 'Z';
+            if (!last.circuit) out = out.map(r => r === last ? Object.assign({}, r, { circuit }) : r);
+          }
+        }
+        out.push({ week: w, day, title: b.title, date: b.date, order, name, prio: e.trainer ? (/^[ABK]$/.test(String(e.prio || '')) ? String(e.prio) : 'B') : 'A', sets, reps, pct: null, kg, rpe: '', note: '', extra: null, drop: 0,
+          group: '', block: b.block || '', swaps: [], infos: e.infos || [], parts: e.parts || [], circuit, ...(e.trainer ? { coach: true } : { added: true }) });
         n++;
       });
       return { plan: out, removed: rem, n };
