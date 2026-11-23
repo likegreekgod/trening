@@ -299,6 +299,18 @@ const SERIES = Object.assign({}, PRO, {
   logs: [1, 2].map(s => ({ id: `robert|1|T1|1|${s}`, zapisano: '2026-10-06T10:00:00.000Z', cwiczenie: 'Przysiad', tydzien: 1, jednostka: 'T1', seria: s, kg: s === 1 ? 65 : 67.5, powt: 5, rpe: s === 1 ? 7 : 8.5, wykonane: 'TAK', typ: '' }))
 });
 
+test('Światła przy skali RIR: podpisy „RIR ≥ 3 / 2 / 0–1”, przy RPE „zapas …” (23.11)', async () => {
+  const { ctx, p } = await page([], false, { data: SERIES });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const hints = async () => { await p.click('.set[data-o="1"][data-s="1"] .ef'); const h = await p.$$eval('.efp [data-q] small', a => a.map(x => x.textContent)); await p.click('.set[data-o="1"][data-s="1"] .ef'); return h; };
+  const r = await hints();
+  assert.match(r[0], /^RIR ≥ 3 · /); assert.match(r[1], /^RIR 2 · /); assert.match(r[2], /^RIR 0–1 · /); assert.equal(r[3], 'Seria nie wyszła');
+  await p.click('[data-sc="RPE"]'); await p.waitForSelector('.set[data-o="1"]');
+  assert.match((await hints())[0], /zapas ≥ 3/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('Serie: ✓ → ✕ (FAIL) → puste, poprawka zapisanej serii zapisuje od razu', async () => {
   const calls = [];
   const { ctx, p } = await page(calls, false, { data: PRO });
@@ -2248,7 +2260,7 @@ for (const scheme of ['light', 'dark']) test('Karta „dziś” (' + scheme + ')
   assert.equal(await p.$('#today .td-pb'), null);
   assert.equal(await p.$('#main .wk .wk-hint'), null);                              // pasek tygodnia na Treningu bez podpowiedzi
   assert.ok((await p.$eval('#td-go', b => b.getBoundingClientRect().height)) >= 44);
-  assert.ok(await p.$eval('#today', t => t.nextElementSibling.classList.contains('wk')));
+  assert.ok(await p.$eval('#today', t => t.nextElementSibling.nextElementSibling.classList.contains('wk')));   // między nimi #wkm (schowana linia z punktu 9)
   if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `dzis-${scheme}.png`) }); }
   // „Zacznij” przewija do pierwszego niezrobionego ćwiczenia
   await p.click('#td-go');
@@ -2257,6 +2269,15 @@ for (const scheme of ['light', 'dark']) test('Karta „dziś” (' + scheme + ')
   for (const s of [1, 2, 3]) await p.click(`.set[data-o="1"][data-s="${s}"] .ok`);
   await p.waitForFunction(() => /Zrobione 3 z 5/.test(document.querySelector('#today').textContent));
   await p.waitForSelector('.card[data-card="1"].fold');                             // zrobione ćwiczenie zwija się samo (z opóźnieniem)
+  // punkt 9 v80: od 1. serii karta „dziś”, pasek tygodnia i baner = jedna linia #wkm; ▾ rozwija do końca jednostki
+  assert.ok(await p.$eval('#main', m => m.classList.contains('slim')));
+  assert.ok(await p.isVisible('#wkm')); assert.ok(!(await p.isVisible('#today'))); assert.ok(!(await p.isVisible('#main .wk')));
+  assert.match(await txt('#wkm .mut'), /ok\. 5 min$/);
+  assert.ok((await p.$eval('#wkm-x', b => b.getBoundingClientRect().height)) >= 44);
+  if (process.env.SCREENS !== '0') { await p.evaluate(() => { window.scrollTo(0, 0); document.querySelector('#toast').style.display = 'none'; }); await p.waitForTimeout(300); await p.screenshot({ path: path.join(SCREENS, `dzis-linia-${scheme}.png`) }); }
+  await p.click('#wkm-x');
+  assert.ok(await p.isVisible('#today')); assert.ok(await p.isVisible('#main .wk')); assert.ok(!(await p.isVisible('#wkm')));
+  await p.evaluate(() => document.querySelector('#toast').style.display = '');
   assert.equal(await txt('#today .td-s'), 'Zrobione 3 z 5 serii · zostało ok. 5 min');
   assert.equal(await txt('#today .td-n'), 'Następne: Zarzut i podrzut');
   assert.equal(await p.getAttribute('#today .td-pb', 'aria-valuenow'), '3');
@@ -2272,6 +2293,7 @@ for (const scheme of ['light', 'dark']) test('Karta „dziś” (' + scheme + ')
   await p.click('.set[data-o="1"][data-s="3"] .ok'); await p.click('.set[data-o="1"][data-s="3"] .ok');
   await p.waitForFunction(() => /Zrobione 2 z 5/.test(document.querySelector('#today').textContent));
   assert.equal(await txt('#today .td-n'), 'Następne: Wyciskanie sztangi na ławce płaskiej');
+  assert.ok(!(await p.$eval('#main', m => m.classList.contains('slim'))));          // rozwinięte zostaje do końca jednostki
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
@@ -2918,7 +2940,7 @@ test('Tryb skupienia: jedno ćwiczenie na ekranie, obwód jako jeden krok, „Na
   await p.reload(); await p.waitForSelector('#fx');
   assert.deepEqual(await shown(), [2, 3, 4]);
   // powrót do listy: wszystkie karty, zrobiona zwinięta, „Zwiń zrobione” wraca
-  await p.click('#fx-list'); await p.waitForSelector('.wk');
+  await p.click('#fx-list'); await p.waitForSelector('#wkm');                      // seria już zapisana → zamiast tygodnia jedna linia (punkt 9)
   assert.equal(await p.$('#fx'), null);
   assert.deepEqual(await shown(), [1, 2, 3, 4, 5]);
   assert.equal(await p.$eval('.card[data-card="1"]', c => c.classList.contains('fold')), true);

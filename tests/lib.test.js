@@ -934,3 +934,12 @@ test('emomSegs / emomKg: pasek rund EMOM i zakres ciężarów', () => {
   assert.equal(L.emomKg([105, 105]), '105 kg');
   assert.equal(L.emomKg(['', 'BW']), '');
 });
+
+test('effHint: przy skali RIR podpis zaczyna się od RIR, przy RPE jak dotąd (23.11)', () => {
+  assert.equal(L.effHint('L', false), L.EFF.L.hint);
+  assert.match(L.effHint('L', true), /^RIR ≥ 3/);
+  assert.match(L.effHint('S', true), /^RIR 2 /);
+  assert.match(L.effHint('W', true), /^RIR 0–1/);
+  assert.equal(L.effHint('X', true), L.EFF.X.hint);
+  assert.equal(L.effHint('', true), '');
+});
