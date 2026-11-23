@@ -68,7 +68,8 @@ function route(){
   const sec = v === 'k' ? 'klienci' : v;                         // karta klienta należy do „Klienci”
   document.querySelectorAll('#nav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === sec ? 'page' : 'false'));
   $('#set').setAttribute('aria-current', v === 'ustawienia' ? 'page' : 'false');
-  document.querySelectorAll('#bnav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === (['wiecej', 'bloki', 'ustawienia'].includes(v) ? 'wiecej' : sec) ? 'page' : 'false'));
+  $('#prow').setAttribute('aria-current', v === 'prowadzone' ? 'page' : 'false');
+  document.querySelectorAll('#bnav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === (['wiecej', 'bloki', 'ustawienia', 'prowadzone'].includes(v) ? 'wiecej' : sec) ? 'page' : 'false'));
   const nv = PUL.videos.filter(x => !x.kom).length || '';
   $('#n-filmy').textContent = nv; $('#n-filmy-m').textContent = nv;
   $('#n-bloki').textContent = PUL.blocks.length || '';
@@ -83,6 +84,7 @@ function route(){
   if (v === 'ustawienia') return renderUstawienia();
   if (v === 'klienci') return renderKlienci(decodeURIComponent(h[1] || ''));
   if (v === 'wiecej') return renderWiecej();
+  if (v === 'prowadzone') return renderProwadzone(decodeURIComponent(h[1] || ''));
   renderDzis();
 }
 /** lista klientów w menu po lewej (komputer): kropka = najpilniejszy sygnał, alfabetycznie */
@@ -221,6 +223,7 @@ function renderWiecej(){
   const ic = n => document.querySelector('#nav a[data-v="' + n + '"] svg, #' + n + ' svg') ? document.querySelector('#nav a[data-v="' + n + '"] svg, #' + n + ' svg').outerHTML : '';
   $('#main').innerHTML = head('Panel trenera', 'Więcej') + '<div class="pg"><div class="card mo">' +
     '<a href="#bloki">' + ic('bloki') + 'Bloki do zamknięcia<em>' + (PUL.blocks.length || '') + '</em></a>' +
+    '<a href="#prowadzone">' + ic('prow') + 'Prowadzone treningi</a>' +
     '<a href="#ustawienia">' + ic('set') + 'Ustawienia</a>' +
     '<a href="./">' + ic('mine') + 'Mój trening ›</a>' +
     '<button type="button" id="recalc-w">' + $('#recalc-m svg').outerHTML + 'Przelicz dane teraz<small>' + esc($('#at').textContent) + '</small></button>' +
@@ -498,6 +501,36 @@ function renderBloki(){
   $('#main').innerHTML = head('Koniec w ciągu 7 dni albo już po, bez wniosków', 'Bloki do zamknięcia') + '<div class="pg"><div class="card">' +
     (rows ? '<div class="tw"><table><thead><tr><th>Klient</th><th>Blok</th><th>Daty</th><th>Stan</th><th>Dla klienta</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div><p class="legend">„Zamknij blok” otwiera kartę klienta: wnioski i notatkę „dla klienta” wpiszesz sam albo zaczniesz od szkicu AI.</p>'
       : '<div class="es"><b>Wszystkie bloki zamknięte</b>Wnioski są wpisane.</div>') + '</div></div>';
+}
+
+/* ---------- Więcej → Prowadzone (punkt 16 przeglądu v80): treningi z trybu „Prowadź” w miesiącu, CSV do rozliczeń (trProwadzone) ---------- */
+const PRW = {};   // miesiąc → odpowiedź trProwadzone, tylko w pamięci strony
+const hMin = m => m >= 60 ? Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '') : m + ' min';
+const MIES = ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'];
+const miesTxt = m => MIES[+m.slice(5, 7) - 1] + ' ' + m.slice(0, 4);
+async function renderProwadzone(mies){
+  const k = mies || '_';
+  if (!PRW[k]) { $('#main').innerHTML = head('Panel trenera', 'Prowadzone treningi') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
+    try { PRW[k] = await guard(api('trProwadzone', mies)); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Prowadzone treningi') + errBox(e); return; }
+    if (!location.hash.startsWith('#prowadzone')) return; }
+  const r = PRW[k];
+  const rows = r.clients.map(c => '<tr class="row" data-k="' + esc(c.id) + '"><td><a class="who" href="#k/' + encodeURIComponent(c.id) + '/sesje">' + esc(c.name) + '</a></td><td class="mono">' + c.n + '</td><td class="nw">' + (c.min ? esc(hMin(c.min)) : '–') + '</td>' +
+    '<td><div class="pw-d">' + c.items.map(i => '<span title="' + esc(i.title + ' · tydz. ' + i.week) + '">' + esc(dowDm(i.date)) + (i.min ? ' · ' + i.min + ' min' : '') + '</span>').join('') + '</div></td></tr>').join('');
+  $('#main').innerHTML = head('Treningi zapisane w trybie „Prowadź”', 'Prowadzone treningi') + '<div class="pg"><div class="card">' +
+    '<div class="pw-f"><label>Miesiąc<select id="pw-m">' + r.months.map(m => '<option value="' + m + '"' + (m === r.mies ? ' selected' : '') + '>' + esc(miesTxt(m)) + '</option>').join('') + '</select></label>' +
+    (r.n ? '<button class="b" type="button" id="pw-csv">Pobierz CSV</button>' : '') + '</div>' +
+    (r.n ? '<p class="kstat" id="pw-sum"><b>' + r.n + ' ' + plN(r.n, 'trening', 'treningi', 'treningów') + '</b> · ' + esc(hMin(r.min)) + ' · ' + r.clients.length + ' ' + plN(r.clients.length, 'klient', 'klientów', 'klientów') + '</p>' +
+      '<div class="tw"><table><thead><tr><th>Klient</th><th>Treningi</th><th>Czas</th><th>Daty</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="legend">Liczą się treningi zakończone w trybie „Prowadź” (Sesje: prowadził = trener), dzień według startu treningu. Czas to minuty zapisane w podsumowaniu jednostki.</p>'
+      : '<div class="es"><b>Brak prowadzonych treningów</b>W ' + esc(miesTxt(r.mies)) + ' nie zakończyłeś żadnego treningu w trybie „Prowadź”.</div>') + '</div></div>';
+  $('#pw-m').onchange = e => { location.hash = '#prowadzone/' + e.target.value; };
+  const cb = $('#pw-csv'); if (cb) cb.onclick = () => {
+    const q = v => { const t = String(v); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+    const lines = [['klient', 'data', 'tydzien', 'jednostka', 'tytul', 'minuty']].concat(...r.clients.map(c => c.items.map(i => [c.name, i.date, i.week, i.day, i.title, i.min || ''])), [['RAZEM', r.mies, '', '', r.n + ' treningów', r.min]]);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.map(l => l.map(q).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'prowadzone-' + r.mies + '.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  };
 }
 
 /* ---------- ustawienia: klucz Claude API (trAI, trUstawAI); panel widzi tylko końcówkę klucza ---------- */

@@ -174,6 +174,10 @@ async function page(calls, opt = {}) {
       const kopie = [7, 14].map(d => ({ name: 'Trening – kopia ' + addDays(TODAY, -d), at: addDays(TODAY, -d) + 'T03:05:00.000Z' }));
       if (st.kopia) kopie.unshift({ name: 'Trening – kopia ' + TODAY, at: TODAY + 'T10:00:00.000Z' });
       out = { ok: true, result: { dysk: { used: 12.5 * G, limit: 15 * G, free: 2.5 * G, low: false }, kopie, ile: 8, at: '', trigger: true } }; }
+    else if (b.fn === 'trProwadzone') { const m = b.args[0] || TODAY.slice(0, 7), prev = addDays(TODAY.slice(0, 7) + '-01', -1).slice(0, 7);
+      out = { ok: true, result: m === prev ? { mies: m, months: [TODAY.slice(0, 7), prev], clients: [], n: 0, min: 0 } : { mies: m, months: [TODAY.slice(0, 7), prev], n: 3, min: 160,
+        clients: [{ id: 'ania', name: 'Ania', n: 2, min: 100, items: [{ date: m + '-03', week: 12, day: 'T1', title: 'Dół; „mocno”', min: 55 }, { date: m + '-10', week: 13, day: 'T1', title: 'Dół', min: 45 }] },
+          { id: 'bartek', name: 'Bartek', n: 1, min: 60, items: [{ date: m + '-05', week: 4, day: 'T2', title: 'FBW', min: 60 }] }] } }; }
     else if (b.fn === 'trMailProba') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { day: addDays(TODAY, 2), title: 'Trening A' } }; }
     else if (b.fn === 'trPlan') { await new Promise(res => setTimeout(res, 100)); const e = b.args[1];
       if (/błąd/.test(e.unote || '')) out = { ok: false, error: 'Ta jednostka jest już zrobiona (albo klient zaczął ją zapisywać) – zmiany tylko w niezrobionych.' };
@@ -482,6 +486,32 @@ test('panel: mało miejsca na Dysku = czerwony wpis w „Wymaga uwagi” z linki
   const d = it.find(x => /Dysku/.test(x[0]));
   assert.ok(d, 'wpis o Dysku'); assert.equal(d[0], 'Na Dysku zostało 1,5 GB'); assert.match(d[1], /lv-bad/); assert.equal(d[2], '#ustawienia');
   await ctx.close();
+});
+
+test('panel: Więcej → Prowadzone treningi (miesiąc, na klienta, CSV do rozliczeń)', async () => {
+  for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
+    const calls = [];
+    const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
+    await p.goto(base + 'trener.html#wiecej'); await p.waitForSelector('.mo a[href="#prowadzone"]');
+    await p.click('.mo a[href="#prowadzone"]'); await p.waitForSelector('#pw-sum');
+    assert.equal(calls.find(c => c.fn === 'trProwadzone').args[0], '');
+    assert.match(await p.textContent('#pw-sum'), /3 treningi · 2 h 40 min · 2 klientów/);
+    assert.deepEqual(await p.$$eval('tr.row', a => a.map(x => [...x.querySelectorAll('td')].slice(0, 3).map(t => t.textContent))), [['Ania', '2', '1 h 40 min'], ['Bartek', '1', '1 h']]);
+    if (!vp) assert.equal(await p.getAttribute('#prow', 'aria-current'), 'page');
+    else assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    await shot(p, 'trener-prowadzone-' + (vp ? 'telefon-ciemny' : 'jasny') + '.png');
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#pw-csv')]);
+    assert.match(dl.suggestedFilename(), /^prowadzone-\d{4}-\d{2}\.csv$/);
+    const csv = fs.readFileSync(await dl.path(), 'utf8');
+    assert.equal(csv.split('\r\n')[0], '\ufeffklient;data;tydzien;jednostka;tytul;minuty');
+    assert.match(csv, /\r\nAnia;\d{4}-\d{2}-03;12;T1;"Dół; „mocno”";55\r\n/);
+    assert.match(csv, /RAZEM;\d{4}-\d{2};;;3 treningów;160$/);
+    // poprzedni miesiąc: pusty stan
+    await p.selectOption('#pw-m', { index: 1 }); await p.waitForSelector('.es b');
+    assert.match(await p.textContent('.es'), /Brak prowadzonych treningów/);
+    assert.equal(await p.$('#pw-csv'), null);
+    await ctx.close();
+  }
 });
 
 test('panel: Ustawienia, klucz Claude API wklejany w panelu (też na telefonie), bez pokazywania całego klucza', async () => {

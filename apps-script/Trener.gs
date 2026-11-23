@@ -13,7 +13,7 @@
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
 const TR_FNS = { trPakiet, trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
-  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj, trDysk, trKopia, trImport, trNastepna };
+  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj, trDysk, trKopia, trImport, trNastepna, trProwadzone };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -101,6 +101,40 @@ function trPulpit() {
   out.dysk = dysk_();                    // miejsce na Dysku: mało = czerwony wpis w „Wymaga uwagi” (Kopia.gs)
   out.clients.forEach(c => { if (pk[c.id]) c.pkg = pk[c.id]; });
   return out;
+}
+
+/* ---------- panel → Więcej → Prowadzone (punkt 16 przeglądu v80, 23.11.2026) ----------
+ * Treningi zapisane w trybie „Prowadź” (Sesje.prowadzil = trener) w wybranym miesiącu, na klienta: liczba, daty, minuty.
+ * Dzień = Sesje.start w strefie skryptu (inaczej Sesje.data). Tylko odczyt; CSV składa panel.
+ */
+/** Czysta funkcja: → {mies, months: ['RRRR-MM' malejąco], clients: [{id, name, n, min, items: [{date, week, day, title, min}]}], n, min} */
+function trProwadzone_(ses, klienci, plan, mies, today, localDay) {
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase(), N = {}, T = {};
+  (klienci || []).forEach(k => { const id = lc(k.klient_id); if (id) N[id] = String(k.imie || '').trim() || id; });
+  (plan || []).forEach(r => { const k = [lc(r.klient), r.tydzien, String(r.jednostka).trim()].join('|'); if (!T[k] && String(r.tytul || '').trim()) T[k] = String(r.tytul).trim(); });
+  const led = [];
+  (ses || []).forEach(s => {
+    if (lc(s.prowadzil) !== 'trener') return;
+    const st = s.start instanceof Date ? s.start.toISOString() : String(s.start || ''), d0 = s.data instanceof Date ? s.data.toISOString().slice(0, 10) : String(s.data || '').slice(0, 10);
+    const date = /^\d{4}-\d{2}-\d{2}T/.test(st) ? (localDay || localDayDefault_)(st) : /^\d{4}-\d{2}-\d{2}$/.test(d0) ? d0 : '';
+    if (!date) return;
+    const id = lc(s.klient), m = Number(s.czas_min);
+    led.push({ id, date, week: Number(s.tydzien), day: String(s.jednostka).trim(), title: T[[id, s.tydzien, String(s.jednostka).trim()].join('|')] || String(s.jednostka).trim(), min: isFinite(m) && m > 0 ? Math.round(m) : 0 });
+  });
+  const months = [...new Set(led.map(x => x.date.slice(0, 7)).concat([String(today || '').slice(0, 7)]).filter(Boolean))].sort().reverse();
+  const mm = /^\d{4}-\d{2}$/.test(String(mies || '')) ? String(mies) : months[0] || '';
+  const C = {};
+  led.filter(x => x.date.slice(0, 7) === mm).sort((a, b) => a.date.localeCompare(b.date)).forEach(x => {
+    const c = C[x.id] = C[x.id] || { id: x.id, name: N[x.id] || x.id, n: 0, min: 0, items: [] };
+    c.n++; c.min += x.min; c.items.push({ date: x.date, week: x.week, day: x.day, title: x.title, min: x.min });
+  });
+  const clients = Object.keys(C).map(k => C[k]).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'pl'));
+  return { mies: mm, months: months, clients: clients, n: clients.reduce((a, c) => a + c.n, 0), min: clients.reduce((a, c) => a + c.min, 0) };
+}
+function trProwadzone(mies) {
+  const tz = Session.getScriptTimeZone(), localDay = t => Utilities.formatDate(new Date(t), tz, 'yyyy-MM-dd');
+  return trProwadzone_(pgTable_('Sesje', ['klient', 'tydzien', 'jednostka', 'data', 'start', 'czas_min', 'prowadzil']), tableOf_('Klienci'),
+    pgTable_('Plan', ['klient', 'tydzien', 'jednostka', 'tytul']), mies, today_(), localDay);
 }
 
 /** Przelicza podsumowanie (jak menu „Odśwież podsumowanie”) i zwraca świeży pulpit. */

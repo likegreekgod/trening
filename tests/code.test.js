@@ -1999,3 +1999,19 @@ test('tplRows_ / tplList_: szablony jednostek trenera (bez kg i imion klientów)
   assert.ok(C.LIVE_FNS.saveTemplate && !C.API_FNS.saveTemplate && !C.TR_FNS.saveTemplate);
   try { C.LIVE_ = false; assert.throws(() => C.saveTemplate('k', {}), /Brak dostępu/); } finally { C.LIVE_ = false; }
 });
+
+test('trProwadzone_: treningi prowadzone przez trenera w miesiącu, na klienta (liczba, daty, minuty)', () => {
+  const S = (klient, w, d, start, min, pr, data) => ({ klient, tydzien: w, jednostka: d, start, czas_min: min, prowadzil: pr, data: data || '' });
+  const ses = [S('ania', 12, 'T1', '2026-11-03T16:00:00.000Z', 55, 'trener'), S('Ania', 13, 'T1', '2026-11-10T16:00:00.000Z', '', 'trener'), S('bartek', 4, 'T2', '2026-11-05T07:00:00.000Z', 60, 'trener'),
+    S('ania', 14, 'T1', '2026-11-12T16:00:00.000Z', 50, ''), S('ewa', 2, 'T1', '', 45, 'trener', '2026-10-28'), S('ania', 11, 'T1', '2026-10-27T16:00:00.000Z', 40, 'trener')];
+  const kl = [{ klient_id: 'ania', imie: 'Ania' }, { klient_id: 'bartek', imie: 'Bartek' }, { klient_id: 'ewa', imie: 'Ewa' }];
+  const plan = [{ klient: 'ania', tydzien: 12, jednostka: 'T1', tytul: 'Dół' }, { klient: 'bartek', tydzien: 4, jednostka: 'T2', tytul: 'FBW' }];
+  const r = plain(C.trProwadzone_(ses, kl, plan, '', '2026-11-23', t => t.slice(0, 10)));
+  assert.deepEqual([r.mies, r.months, r.n, r.min], ['2026-11', ['2026-11', '2026-10'], 3, 115]);
+  assert.deepEqual(r.clients.map(c => [c.name, c.n, c.min, c.items.map(i => [i.date, i.title, i.min])]), [
+    ['Ania', 2, 55, [['2026-11-03', 'Dół', 55], ['2026-11-10', 'T1', 0]]], ['Bartek', 1, 60, [['2026-11-05', 'FBW', 60]]]]);
+  const o = plain(C.trProwadzone_(ses, kl, plan, '2026-10', '2026-11-23', t => t.slice(0, 10)));
+  assert.deepEqual(o.clients.map(c => [c.name, c.n, c.min]), [['Ania', 1, 40], ['Ewa', 1, 45]]);   // bez startu: data z Sesji
+  assert.deepEqual(plain(C.trProwadzone_([], kl, [], '', '2026-11-23')), { mies: '2026-11', months: ['2026-11'], clients: [], n: 0, min: 0 });
+  assert.ok(C.TR_FNS.trProwadzone);
+});
