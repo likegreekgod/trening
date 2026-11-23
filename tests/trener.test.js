@@ -573,16 +573,16 @@ test('panel: odtwarzacz filmu (klatka, prędkość, pętla, powiększenie, pełn
   // suwak → „Wstaw chwilę” dopisuje sekundę na początku linii
   await p.$eval('#pvr', r => { r.value = '1.2'; r.dispatchEvent(new Event('input')); });
   await p.waitForFunction(() => /0:01,2/.test(document.querySelector('#pvt').textContent));
-  assert.match(await p.textContent('#kf-ins'), /Wstaw chwilę 0:01/);
+  assert.match(await p.textContent('#kf-ins'), /Wstaw chwilę 0:01,2/);
   await p.click('#kf-ins');
   await p.type('#kf-txt', 'Kolana na zewnątrz.');
-  assert.equal(await p.inputValue('#kf-txt'), '0:01 Kolana na zewnątrz.');
+  assert.equal(await p.inputValue('#kf-txt'), '0:01,2 Kolana na zewnątrz.');
   assert.equal(await p.$$eval('#pvm button', a => a.length), 1);                     // kreska na pasku w tej chwili
   await p.$eval('#pvr', r => { r.value = '0'; r.dispatchEvent(new Event('input')); });
   await p.click('#pvm button');
-  assert.ok(Math.abs(await p.$eval('#pvv', v => v.currentTime) - 1) < 0.05);       // kreska przewija film
+  assert.ok(Math.abs(await p.$eval('#pvv', v => v.currentTime) - 1.2) < 0.05);       // kreska przewija film
   await p.click('#kf-ins');                                                           // druga chwila w nowej linii
-  assert.equal(await p.inputValue('#kf-txt'), '0:01 Kolana na zewnątrz.\n0:01 ');
+  assert.equal(await p.inputValue('#kf-txt'), '0:01,2 Kolana na zewnątrz.\n0:01,2 ');
   await p.fill('#kf-txt', '0:01 Kolana na zewnątrz.');
   await shot(p, 'trener-filmy-telefon-ciemny.png');
   await p.click('#kf-save'); await p.waitForSelector('#kfw .saved');

@@ -2045,7 +2045,9 @@ function ustawAlert() {
  */
 const KOM_DNI = 30;
 const fileIdOf_ = link => { const m = /\/d\/([\w-]{20,})|[?&]id=([\w-]{20,})/.exec(String(link || '')); return m ? (m[1] || m[2]) : ''; };
-const mmss_ = s => Math.floor(s / 60) + ':' + ('0' + Math.floor(s % 60)).slice(-2);
+// „0:05” albo z dziesiątymi „0:05,1” (jak „Wstaw chwilę” w panelu), gdy kotwica nie jest pełną sekundą
+const mmss_ = s => { s = Math.round(Math.max(0, s) * 10) / 10; const m = Math.floor(s / 60), x = Math.round((s - m * 60) * 10) / 10, f = Math.round(x * 10) % 10;
+  return m + ':' + ('0' + Math.floor(x)).slice(-2) + (f ? ',' + f : ''); };
 
 /**
  * Czysta funkcja: kotwica komentarza Dysku → sekunda filmu albo null. Dysk zapisuje czas filmu jako tablicę
