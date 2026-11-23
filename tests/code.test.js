@@ -1708,3 +1708,27 @@ test('Pakiety (atrapa arkusza): nowy pakiet, trening z „Prowadź” zdejmuje r
   assert.deepEqual([k.n, k.carry, k.left, k.show], [13, 8, 13, true], 'reszta i widoczność przechodzą do nowego pakietu');
   assert.deepEqual(S.pkgAll_(S.tableOf_('Pakiety')).anna.left, 13);
 });
+
+test('trNextUnit_: „Zaplanuj następną” – zmiana jednostki w tyg. + 1 albo nowa jednostka trenera (kopia dzisiejszej)', () => {
+  const J = x => JSON.parse(JSON.stringify(x));
+  const R = (w, d, nr, name, o) => Object.assign({ klient: 'ania', tydzien: w, jednostka: d, tytul: 'Dół', data: '2026-11-23', nr, cwiczenie: name, prio: 'A', serie: 4, powt: '5', kg: 100, procent: '', rpe_max: 8,
+    uwagi: 'kolana na zewnątrz', grupa: '', zamienniki: 'Front Squat', blok: 'B2', zrodlo: '', obwod: '', uwagi_jedn: 'notatka' }, o);
+  const plan = [R(7, 'T1', 1, 'Back Squat'), R(7, 'T1', 2, 'RDL', { prio: 'B', kg: 80 }), R(7, 'T1', 51, 'Curl', { zrodlo: 'dodane' }), R(7, 'T1', 3, 'Row', { zrodlo: 'usuniete' }),
+    R(7, 'T2', 1, 'Bench'), R(8, 'T2', 1, 'Bench', { kg: 70, data: '' }), R(8, 'T2', 2, 'Dip', { kg: 'BW' }), R(7, 'W1', 1, 'Bieg', { zrodlo: 'klient' }), R(7, 'T1', 1, 'Back Squat', { klient: 'bartek' })];
+  // tyg. 8 bez T1: nowa jednostka trenera, kopia bez dodanych i usuniętych, data + 7, zmiany pól
+  const n = J(C.trNextUnit_(plan, 'ania', { week: 7, day: 'T1', ex: [{ order: 1, kg: '102,5' }, { order: 2, sets: '3', reps: '6', rpe: '' }] }));
+  assert.equal(n.mode, 'new'); assert.equal(n.week, 8);
+  assert.deepEqual(n.rows.map(r => [r.tydzien, r.jednostka, r.nr, r.cwiczenie, r.serie, r.powt, r.kg, r.rpe_max, r.data, r.zrodlo, r.blok, r.zamienniki, r.uwagi_jedn]), [
+    [8, 'T1', 1, 'Back Squat', 4, '5', 102.5, 8, '2026-11-30', 'trener', 'B2', 'Front Squat', 'notatka'],
+    [8, 'T1', 2, 'RDL', 3, '6', 80, '', '2026-11-30', 'trener', 'B2', 'Front Squat', 'notatka']]);
+  assert.equal(n.rows[0].klient, 'ania'); assert.equal(n.rows[0].uwagi, 'kolana na zewnątrz');
+  assert.equal(C.trNextUnit_(plan, 'ania', { week: 7, day: 'T1', date: '2026-12-01', ex: [] }).rows[0].data, '2026-12-01');
+  // tyg. 8 z T2 już w planie: zmiana jak „zmień plan”, dopasowanie po nazwie
+  const e = J(C.trNextUnit_(plan, 'ania', { week: 7, day: 'T2', ex: [{ order: 1, kg: '72,5', sets: '4' }] }));
+  assert.deepEqual(e, { mode: 'edit', week: 8, edit: { week: 8, day: 'T2', ex: [{ order: 1, kg: '72,5', sets: '4' }] } });
+  // błędy
+  assert.match(C.trNextUnit_(plan, 'ania', { week: 7, day: 'W1', ex: [] }).error, /własny trening/);
+  assert.match(C.trNextUnit_(plan, 'ania', { week: 9, day: 'T1', ex: [] }).error, /Nie ma takiej jednostki/);
+  assert.match(C.trNextUnit_(plan, 'ania', { week: 7, day: 'T1', ex: [{ order: 1, kg: 'x'.repeat(20) }] }).error, /Back Squat: kg/);
+  assert.ok(C.TR_FNS.trNastepna && !C.LIVE_FNS.trNastepna && !C.API_FNS.trNastepna);
+});

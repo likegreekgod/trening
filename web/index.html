@@ -769,6 +769,10 @@
   /* zmiany w jednostce trenera (flaga „edycja”) */
   .ed-q{text-align:left}
   .sh-in .ed-s{margin:0}
+  .nu{border-bottom:1px solid var(--line)}
+  .nu>button{display:grid;width:100%;align-items:baseline;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 0;min-height:56px;background:none;border:0;color:var(--ink);text-align:left;font:15px/1.3 var(--f-body);cursor:pointer}
+  .nu b{font:700 16px var(--f-body)}.nu small{grid-column:1;color:var(--ink-2);font-size:13px}.nu .ch{grid-row:span 2;align-self:center;font:800 18px var(--f-display);color:var(--accent)}.nu .ch.eq{color:var(--ink-2)}
+  .nu .ed-4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 0 12px}.nu .ed-4 input{width:100%;min-width:0;font-size:20px}
   .ed-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
   .ed-3 input{width:100%;min-width:0}
   .ed-3 input:disabled{opacity:.55}
@@ -1041,7 +1045,7 @@ let PT = 'tyd', PEX = '', PWK = null, PBL = null;   // zakładka, ćwiczenie, ty
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
-const { fmtKg, num, esc, blank, plural, EFF, EFF_FINE, effFine, effHint, filmOk, EASY_RPE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
+const { fmtKg, num, esc, blank, plural, nextUnit, EFF, EFF_FINE, effFine, effHint, filmOk, EASY_RPE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
   RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, planEdit, restSec, fmtClock, plates,
   isOly, RATE, rateOf, olyCap, sugOly, olyLocked, SWAP_WHY, swapOptions, swapAuto, swapText, parseSwap,
@@ -3731,6 +3735,65 @@ function openDone(u, off){
   // Postęp liczy się z danych serwera: po przejściu dociągnij świeże (z tą jednostką); bez sieci zostaje dotychczasowy stan
   $('#dn-go').onclick = () => { closeSheet(); TAB = 'postep'; PT = 'tyd'; PWK = null; render(); window.scrollTo(0, 0); refreshData(); };
 }
+/* ---------- „Zaplanuj następną” (prowadzony trening, punkt 3c przeglądu v80, 23.11.2026) ----------
+ * Po „Zakończ i zapisz” w trybie trenera: ta sama jednostka w tyg. + 1 z kg według dzisiejszych świateł (lib nextUnit),
+ * poprawki w miejscu (serie, powt., kg, RPE max), „Zapisz w planie” → trNastepna (zmiana jednostki albo nowa jednostka trenera).
+ * Potem zwykłe okno „Trening zrobiony”. Klient tego okna nie widzi.
+ */
+const NU_EMO = { L: '🟢', S: '🟡', W: '🔴', X: '✖' };
+let NU = null;   // szkic: {week, day, title, date, exists, items}, tylko w pamięci strony
+function nextDraft(){
+  if (!LIVE) return null;
+  const raw = PLAN.filter(r => r.week === cur.week && r.day === cur.day && !r.added).sort((a, b) => a.order - b.order);
+  if (!raw.length || raw.some(r => r.own)) return null;
+  const week = cur.week + 1, target = PLAN.filter(r => r.week === week && r.day === cur.day).sort((a, b) => a.order - b.order);
+  if (target.some(r => r.own) || target.length && sessDone(week, cur.day)) return null;
+  const exs = curExs(), done = {};
+  raw.forEach(r => { const ex = exs.find(x => x.order === r.order); if (!ex) return; const L2 = exLogs(ex);
+    done[r.order] = Object.keys(L2).filter(k => /^\d+$/.test(k) && +k > 0).map(k => L2[k]).filter(l => l.wykonane === 'TAK' || /FAIL/.test(l.typ || ''))
+      .map(l => ({ kg: num(l.kg), rpe: num(l.rpe), fail: /FAIL/.test(l.typ || '') })); });
+  const t0 = target[0], date = t0 ? t0.date || '' : addDays(curDate(), 7);
+  return { week, day: cur.day, title: (t0 || raw[0]).title || cur.day, date, exists: !!target.length,
+    items: nextUnit(raw.map(r => ({ order: r.order, name: r.name, sets: r.sets, reps: r.reps, kg: r.kg, rpe: r.rpe, prio: r.prio })), done, target.length ? target : null) };
+}
+const nuKg = v => typeof v === 'number' ? fmtKg(v) : String(v === null || v === undefined ? '' : v);
+function nuRow(it, i){
+  const kg = it.kg === '' ? '' : it.up && typeof it.was === 'number' ? fmtKg(it.was) + ' → ' + fmtKg(it.kg) + ' kg' : typeof it.kg === 'number' ? fmtKg(it.kg) + ' kg' : nuKg(it.kg);
+  const ch = typeof it.kg === 'number' && typeof it.was === 'number' && it.kg !== it.was ? (it.kg > it.was ? '+' : '−') + fmtKg(Math.abs(it.kg - it.was)) : '=';
+  const today = it.lights.length ? 'dziś ' + (it.lights.every(q => q === 'L') ? 'same 🟢' : it.lights.map(q => NU_EMO[q] || '·').join(' ')) : '';
+  const sub = [it.sets + '×' + it.reps, kg, !blank(it.rpe) ? (SCALE === 'RIR' ? 'RIR ' + fmtKg(rirOfRpe(it.rpe)) : 'RPE ' + fmtKg(it.rpe)) : '', today].filter(Boolean).join(' · ');
+  const v = x => esc(nuKg(x));
+  return `<div class="nu" data-nu="${i}"><button type="button" aria-expanded="${!!it.open}"><b>${esc(it.name)}</b><span class="ch${ch === '=' ? ' eq' : ''}">${ch}</span><small>${esc(sub)}</small></button>` +
+    (it.open ? `<div class="ed-4"><label class="fl">Serie<input data-f="sets" inputmode="numeric" value="${v(it.sets)}"></label><label class="fl">Powt.<input data-f="reps" value="${v(it.reps)}"></label>` +
+      `<label class="fl">Kg<input data-f="kg" inputmode="decimal" value="${v(it.kg)}"></label><label class="fl">RPE<input data-f="rpe" inputmode="decimal" value="${v(it.rpe)}" placeholder="—"></label></div>` : '') + '</div>';
+}
+function openNext(nx, sum, off){
+  NU = nx;
+  const when = nx.date ? ' · ' + weekday(nx.date) + ' ' + ddmm(nx.date) : '';
+  openSheet(`<h2 id="sheet-t">Zaplanuj następną</h2><p class="sub">${esc(nx.title)} · tydz. ${nx.week}${esc(when)}. Propozycja z dzisiejszych świateł, popraw przed zapisem.</p>
+    <div id="nu-l">${nx.items.map(nuRow).join('')}</div>
+    <p class="sub" style="margin-top:10px">${nx.exists ? 'Ta jednostka w tyg. ' + nx.week + ' jest już w planie: zmieni się tylko to, co tu widać.' : 'Tej jednostki w tyg. ' + nx.week + ' jeszcze nie ma: dopiszę ją do planu jako Twoją.'} Dotknij ćwiczenia, żeby zmienić serie, powt., kg albo RPE.</p>
+    <p class="hint" id="nu-err" role="alert" hidden></p>
+    <button type="button" class="btn p" id="nu-ok">Zapisz w planie</button><button type="button" class="btn" id="nu-no">Nie teraz</button>`);
+  const done = () => { NU = null; if (sum) openDone(sum, off); else closeSheet(); };
+  const l = $('#nu-l');
+  l.addEventListener('click', e => { const b = e.target.closest('.nu>button'); if (!b) return; const i = +b.parentElement.dataset.nu;
+    nx.items[i].open = !nx.items[i].open; b.parentElement.outerHTML = nuRow(nx.items[i], i); });
+  l.addEventListener('input', e => { const f = e.target.dataset.f; if (!f) return; const it = nx.items[+e.target.closest('.nu').dataset.nu], t = e.target.value.trim(), n = Number(t.replace(',', '.'));
+    it[f] = f === 'sets' ? t : f === 'kg' ? (t !== '' && isFinite(n) ? n : t) : f === 'rpe' ? (t === '' ? null : t) : t; it.up = false; });
+  l.addEventListener('change', e => { const r = e.target.closest('.nu'); if (!r || !e.target.dataset.f) return; const i = +r.dataset.nu, f = e.target.dataset.f;   // po wyjściu z pola: nowa różnica i opis
+    const box = r.ownerDocument.createElement('div'); box.innerHTML = nuRow(nx.items[i], i); r.querySelector('button').replaceWith(box.firstElementChild.querySelector('button')); });
+  $('#nu-no').onclick = done;
+  $('#nu-ok').onclick = () => {
+    const err = t => { const x = $('#nu-err'); x.textContent = t; x.hidden = false; };
+    if (navigator.onLine === false) return err('Bez sieci planu nie zapiszę. Zrób to później w panelu → Plan.');
+    const b = $('#nu-ok'); b.disabled = true; b.textContent = 'Zapisuję…';
+    const s = x => x === null || x === undefined ? '' : String(typeof x === 'number' ? fmtKg(x) : x);
+    call('trNastepna', LIVE, { week: nx.week - 1, day: nx.day, date: nx.exists ? '' : nx.date, ex: nx.items.map(it => ({ order: it.order, sets: s(it.sets), reps: s(it.reps), kg: s(it.kg), rpe: s(it.rpe) })) })
+      .then(r => { toast(r.mode === 'new' ? 'Dopisane do planu: tydz. ' + r.week + '.' : r.n ? 'Plan na tydz. ' + r.week + ' zmieniony.' : 'Plan na tydz. ' + r.week + ' bez zmian.'); done(); refreshData(); })
+      .catch(e => { b.disabled = false; b.textContent = 'Zapisz w planie'; err(e.message); });
+  };
+}
 function sessClick(e){
   const pv = e.target.closest('.pv');
   if (pv) {
@@ -4112,8 +4175,8 @@ function bind(exs, s0){
       uwagi: p.note, start: p.start, koniec: p.end };
     const m = tGet(); delete m[k]; delete m['r|' + k]; tSet(m);
     // nowa jednostka: okno „Trening zrobiony” (liczone przed render, z danych w telefonie); poprawka zapisanej: tylko komunikat
-    const sum = s.id ? null : doneSummary(minutes);
-    const after = off => { render(); if (sum) openDone(sum, off); else toast(off ? 'Brak sieci – zapiszę, gdy wróci połączenie.' : 'Zmiany zapisane.'); };
+    const sum = s.id ? null : doneSummary(minutes), nx = s.id ? null : nextDraft();   // prowadzony trening: „Zaplanuj następną”
+    const after = off => { render(); if (nx && !off) openNext(nx, sum, off); else if (sum) openDone(sum, off); else toast(off ? 'Brak sieci – zapiszę, gdy wróci połączenie.' : 'Zmiany zapisane.'); };
     send('logSession', p).then(() => after(false)).catch(() => after(true));
   };
 }

@@ -958,3 +958,22 @@ test('filmOk: telefon odrzuca film > 1 GB i plik, który nie jest filmem, tak sa
   for (const m of cases) assert.equal(L.filmOk(m), C.filmOk_(m), JSON.stringify(m));
   assert.equal(L.FILM_MAX, 1024 ** 3);
 });
+
+test('nextUnit: „Zaplanuj następną” po prowadzonym treningu (same 🟢 = +2,5 kg dla A i B, inaczej plan)', () => {
+  const src = [{ order: 1, name: 'Back Squat', sets: 4, reps: '5', kg: 100, rpe: 8, prio: 'A' }, { order: 2, name: 'RDL', sets: 3, reps: '8', kg: 80, rpe: null, prio: 'B' },
+    { order: 3, name: 'Plank', sets: 2, reps: '30 s', kg: 'BW', prio: 'K' }, { order: 4, name: 'Row', sets: 4, reps: '8', kg: 61, prio: 'B' }, { order: 5, name: 'Dip', sets: 3, reps: '8', kg: 'BW', prio: 'B' }];
+  const g = kg => ({ kg, rpe: 7 }), done = { 1: [g(100), g(100), g(100), g(100)], 2: [g(80), { kg: 80, rpe: 8 }, { kg: 80, rpe: 9 }], 3: [{ kg: null, rpe: 7 }],
+    4: [g(60), g(61), g(61), g(61)], 5: [{ kg: null, rpe: 7 }] };
+  const r = L.nextUnit(src, done, null);
+  assert.deepEqual(r.map(x => [x.name, x.kg, x.up]), [['Back Squat', 102.5, true], ['RDL', 80, false], ['Plank', 'BW', false], ['Row', 62.5, true], ['Dip', 'BW', false]]);
+  assert.deepEqual(r[1].lights, ['L', 'S', 'W']);
+  assert.deepEqual([r[0].sets, r[0].reps, r[0].rpe, r[0].was, r[0].today, r[0].torder], [4, '5', 8, 100, 100, null]);
+  // nieudana seria albo seria bez oceny = bez podwyżki
+  assert.equal(L.nextUnit([src[0]], { 1: [g(100), { kg: 100, rpe: null, fail: true }] }, null)[0].kg, 100);
+  assert.equal(L.nextUnit([src[0]], { 1: [g(100), { kg: 100, rpe: null }] }, null)[0].kg, 100);
+  assert.equal(L.nextUnit([src[0]], {}, null)[0].kg, 100);                                         // nic nie zrobione = plan
+  // jednostka w tyg. + 1 już jest: jej serie i powt., kg wyższy z planu zostaje, dopasowanie po nazwie
+  const target = [{ order: 1, name: 'Back Squat', sets: 5, reps: '3', kg: 105, rpe: 8.5 }, { order: 2, name: 'RDL', sets: 3, reps: '6', kg: 85 }, { order: 3, name: 'Row', sets: 4, reps: '8', kg: 60 }];
+  const t = L.nextUnit([src[0], src[1], src[3]], done, target);
+  assert.deepEqual(t.map(x => [x.name, x.torder, x.sets, x.reps, x.kg, x.was, x.up]), [['Back Squat', 1, 5, '3', 105, 105, false], ['RDL', 2, 3, '6', 85, 85, false], ['Row', 3, 4, '8', 62.5, 60, true]]);
+});
