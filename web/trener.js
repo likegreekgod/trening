@@ -294,6 +294,7 @@ function renderFilmy(who){
   const view = cur ? '<div class="card">' + playerHtml(cur) +
     '<h2 style="margin-top:14px">' + esc(cur.name) + ' · ' + esc(cur.ex) + '</h2><p class="muted">' + esc(dowDm(cur.at)) + ' · tydz. ' + esc(cur.week) + ' · ' + esc(cur.day) + ' · seria ' + esc(cur.set) + ' · ' + what(cur) + (FB[cur.file] && FB[cur.file].size ? ' · plik ' + pl((FB[cur.file].size / 1048576).toFixed(FB[cur.file].size < 10485760 ? 1 : 0)) + ' MB' : '') + '</p>' +
     (FB[cur.file] && FB[cur.file].st === 'ok' ? '<details class="pvh" id="pvh"><summary>Czarny obraz, a słychać dźwięk?</summary><div id="pvh-b" class="hint">Sprawdzam plik…</div></details>' : '') +
+    (cur.swap && TL.parseSwap(cur.swap) ? '<p class="note">' + swapTxt(TL.parseSwap(cur.swap)) + '</p>' : '') +
     (cur.note ? '<div class="eb">Komentarz klienta</div><p class="note">' + esc(cur.note) + '</p>' : '') +
     (cur.komD ? '<div class="eb">Z komentarzy na Dysku</div><p class="kom">' + esc(cur.komD) + '</p>' : '') +
     '<div class="kfw" id="kfw"></div>' +
@@ -755,11 +756,14 @@ function setsOf(d, u){
   const P = {}; (d.plan || []).forEach(r => { P[uKey(r.week, r.day) + '|' + r.order] = r; });
   const by = {};
   (d.logs || []).filter(l => uKey(l.tydzien, l.jednostka) === u && logged(l)).forEach(l => {
-    const k = l.nr_cw, r = P[u + '|' + k] || {}; (by[k] = by[k] || { name: String(l.cwiczenie || r.name || ''), prio: r.prio || '', sets: [], note: String(l.uwagi || '') }).sets.push(l); });
+    const k = l.nr_cw, r = P[u + '|' + k] || {}; const e = by[k] = by[k] || { name: String(l.cwiczenie || r.name || ''), prio: r.prio || '', sets: [], note: String(l.uwagi || ''), swap: null };
+    e.sets.push(l); if (!e.swap && sv(l.zamiana)) { e.swap = TL.parseSwap(l.zamiana); if (e.swap) e.name = e.swap.to; } });
   return Object.keys(by).sort((a, b) => a - b).map(k => by[k]);
 }
 const setTxt = l => { const t = (nf(l.kg) > 0 ? pl(l.kg) + '×' : '') + esc(l.powt) + (l.ocena ? ' ' + esc(l.ocena) : nf(l.rpe) >= 0 ? ' @' + pl(l.rpe) : '') + (/FAIL/.test(l.typ || '') ? ' ✕' : '');
   return ticked(l) ? t + (l.film_link ? ' ▶' : '') : '<span class="nd" title="Seria nie odhaczona w aplikacji">' + (t || 's. ' + esc(sv(l.seria))) + (l.film_link ? ' ▶' : '') + '</span>'; };
+/** zamiana ćwiczenia przez klienta (Log „zamiana” = „oryginał → zamiennik | powód”) */
+const swapTxt = sw => sw ? '<span class="swp">⇄ zamiast ' + esc(sw.from) + (sw.why ? ' · ' + esc(sw.why) : '') + '</span>' : '';
 const ndNote = ex => ex.some(e => e.sets.some(l => !ticked(l))) ? '<p class="hint" style="margin:6px 0 0"><span class="nd">szare</span> = klient nagrał albo wpisał serię, ale jej nie odhaczył w aplikacji.</p>' : '';
 function przeglad(d, c, sets, dates, today){
   const ss = sessRows(d, dates), wk = ss.filter(x => x.day >= TL.addDays(today, -6) && x.day <= today);
@@ -787,7 +791,7 @@ function sesTable(d, ss){
     const p = painOf(x.s), main = setsOf(d, x.u).filter(e => e.prio === 'A').slice(0, 3);
     return '<tr><td class="nw">' + esc(dowDm(x.day)) + '</td><td><b>' + esc(x.s.jednostka) + (x.title ? ' · ' + esc(x.title) : '') + '</b></td><td class="mono">' + esc(x.s.czas_min || '–') + '</td><td class="mono">' + (nf(x.s.rpe_sesji) >= 0 ? pl(x.s.rpe_sesji) : '–') + '</td>' +
       '<td class="mono nw"' + (p[1] > 3 ? ' style="color:var(--bad)"' : '') + '>' + (isFinite(p[1]) ? pl(p[1]) + (p[0] ? ' ' + esc(p[0]) : '') : '–') + '</td>' +
-      '<td class="sets">' + (main.map(e => esc(e.name) + ': ' + e.sets.map(setTxt).join(', ')).join('<br>') || '<span class="muted">–</span>') + '</td><td>' + (x.s.uwagi ? esc(x.s.uwagi) : '<span class="muted">–</span>') + '</td></tr>';
+      '<td class="sets">' + (main.map(e => esc(e.name) + (e.swap ? ' ' + swapTxt(e.swap) : '') + ': ' + e.sets.map(setTxt).join(', ')).join('<br>') || '<span class="muted">–</span>') + '</td><td>' + (x.s.uwagi ? esc(x.s.uwagi) : '<span class="muted">–</span>') + '</td></tr>';
   }).join('') + '</tbody></table></div>';
 }
 function sesList(d, dates){
@@ -797,7 +801,7 @@ function sesList(d, dates){
     const p = painOf(x.s), ex = setsOf(d, x.u);
     return '<details class="ses"' + (i === 0 ? ' open' : '') + '><summary><b>' + esc(dowDm(x.day)) + ' · tydz. ' + esc(x.s.tydzien) + ' · ' + esc(x.s.jednostka) + (x.title ? ' · ' + esc(x.title) : '') + '</b>' +
       '<span class="muted">' + [x.s.czas_min ? x.s.czas_min + ' min' : '', nf(x.s.rpe_sesji) >= 0 ? 'RPE ' + pl(x.s.rpe_sesji) : '', nf(x.s.samopoczucie) > 0 ? 'samopoczucie ' + x.s.samopoczucie + '/5' : '', isFinite(p[1]) && p[1] > 0 ? 'ból ' + pl(p[1]) + (p[0] ? ' ' + p[0] : '') : '', sv(x.s.odpowiedz_klienta) ? '↩ odpowiedź klienta' : ''].filter(Boolean).map(esc).join(' · ') + '</span></summary>' +
-      '<div class="tw"><table><tbody>' + ex.map(e => '<tr><td><b>' + esc(e.name) + '</b> <span class="muted">' + esc(e.prio) + '</span></td><td class="sets">' + e.sets.map(setTxt).join(', ') + '</td><td>' + esc(e.note) + '</td></tr>').join('') + '</tbody></table></div>' + ndNote(ex) +
+      '<div class="tw"><table><tbody>' + ex.map(e => '<tr><td><b>' + esc(e.name) + '</b> <span class="muted">' + esc(e.prio) + '</span>' + (e.swap ? '<br>' + swapTxt(e.swap) : '') + '</td><td class="sets">' + e.sets.map(setTxt).join(', ') + '</td><td>' + esc(e.note) + '</td></tr>').join('') + '</tbody></table></div>' + ndNote(ex) +
       (x.s.uwagi ? '<p class="note"><span class="eb">Uwagi klienta</span><br>' + esc(x.s.uwagi) + '</p>' : '') +
       komBox(x.s, ex.length) + '</details>';
   }).join('') + '</div>';
