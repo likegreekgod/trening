@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-23 · Pakiet treningów personalnych: księga wpisów, zdejmowanie przy „Prowadź”
+
+- Zakładka Pakiety to księga, nie licznik: zakup (+n, data, ważność, cena, przeniesione), trening (−1 z sesji „Prowadź”, id = klient|s|tydzień|jednostka), korekta (±1 z panelu). Zostało = (zakup + przeniesione) − wpisy po ostatnim zakupie. W razie sporu z klientem jest data każdego wejścia.
+- Zdejmuje tylko trening zakończony w „Prowadź” (trening personalny), z odhaczeniem w podsumowaniu (domyślnie tak; odznaczone = gratis albo próbny). Treningi, które klient robi sam, nie zdejmują. Trening poza aplikacją trener dopisuje ręcznie.
+- Reszta poprzedniego pakietu przechodzi do nowego, chyba że wygasł przed datą zakupu. Poniżej zera = treningi poza pakietem (czerwone w „Wymaga uwagi”), bez blokady prowadzenia.
+- Licznik u klienta domyślnie wyłączony; przełącznik w karcie pakietu zapisuje się w wierszu zakupu (kolumna `widoczny`), nie w zakładce Klienci (kolumny Q–S są zajęte przez inne zmiany), i przechodzi na kolejny pakiet.
+- Bez płatności i przypomnień do klienta (na później, razem ze stroną trenerską i Stripe).
+
 ## 2026-11-23 · Duplikaty w bazie ćwiczeń: 62 pewne scalone jako aliasy
 
 - Przegląd 22.11 znalazł 95 par: 62 to samo ćwiczenie pod dwiema nazwami (54 nazwy z free-exercise-db przy ćwiczeniach Catalyst z filmem i 8 dubletów w samej free-exercise-db), 33 różnią się sprzętem, chwytem albo pozycją (do decyzji Damiana), 17 tylko wygląda podobnie (nie ruszamy).

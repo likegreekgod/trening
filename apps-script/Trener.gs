@@ -12,7 +12,7 @@
  * Klienci: trKlienci (lista z ustawieniami i linkiem), trKlientUstaw (flagi z zakładki Klienci), trKlientNowy (nowy klient), trKlientLink (nowy klucz = nowy link).
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
-const TR_FNS = { trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
+const TR_FNS = { trPakiet, trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
   trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
@@ -95,8 +95,11 @@ function trPulpit() {
     'uwagi', 'typ', 'ocena', 'komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at', 'wykonane', 'zamiana']);
   const ses = pgTable_('Sesje', ['klient', 'tydzien', 'jednostka', 'start', 'czas_min', 'rpe_sesji', 'komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at']);
   const plan = pgTable_('Plan', ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'cwiczenie', 'serie', 'zrodlo']);
-  return trPulpit_({ prz: tableOf_('Przegląd'), sum: tableOf_('Podsumowanie'), bloki: tableOf_('Bloki'), klienci: tableOf_('Klienci'), log: log, ses: ses, plan: plan },
+  const pk = pkgAll_(tableOf_('Pakiety'));
+  const out = trPulpit_({ prz: tableOf_('Przegląd'), sum: tableOf_('Podsumowanie'), bloki: tableOf_('Bloki'), klienci: tableOf_('Klienci'), log: log, ses: ses, plan: plan },
     { today: today_(), localDay: localDay, at: PropertiesService.getScriptProperties().getProperty('PODSUM_AT') || '' });
+  out.clients.forEach(c => { if (pk[c.id]) c.pkg = pk[c.id]; });
+  return out;
 }
 
 /** Przelicza podsumowanie (jak menu „Odśwież podsumowanie”) i zwraca świeży pulpit. */
@@ -209,6 +212,7 @@ function trKlient(id) {
   d.blocks = tableOf_('Bloki').filter(b => lc(b.klient) === c.id).map(b => Object.assign({}, b, { od: day(b.od), do: day(b.do) }));
   d.summary = tableOf_('Podsumowanie').filter(s => lc(s.klient) === c.id).map(s => ({ week: day(s.tydzien_od), srpe: s.sRPE_TL_AU, acwr: s.ACWR,
     ton: s.tonaz_kg, done: s['wykonanie_%'], hard: s.serie_twarde, status: String(s.status || ''), why: String(s.powody || '') }));
+  d.pkg = pkgOf_(c.id);
   return d;
 }
 

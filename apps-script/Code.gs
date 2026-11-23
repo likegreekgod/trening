@@ -105,7 +105,10 @@ function doPost(e) {
 /* ---------- API (google.script.run – stara wersja, link /exec?k=) ---------- */
 
 function getData(key) {
-  const t0 = Date.now(), d = clientData_(mustClient_(key), t0);
+  const t0 = Date.now(), c = mustClient_(key), d = clientData_(c, t0);
+  // pakiet treningów (Pakiety.gs): trener w „Prowadź” zawsze, klient tylko z włączonym licznikiem
+  let k = null; try { k = pkgOf_(c.id); } catch (e) { d.ms = Object.assign({}, d.ms, { pakietErr: String(e && e.message || e) }); }
+  if (LIVE_) d.pkg = pkgShort_(k); else if (k && k.show) d.cfg.pkg = pkgShort_(k);
   return liveView_(d, LIVE_);
 }
 /**
@@ -431,6 +434,7 @@ function logSession(key, s) {
   upsert_('Sesje', SES_HEADERS, id, [id, new Date(), client.id, s.week, s.day, s.date || today_(),
     s.knee, s.shoulder, s.feel, s.minutes, s.note || '', s.start || '', s.end || '', s.pain || '', s.painMax === undefined ? '' : s.painMax, s.rpeSession === undefined ? '' : s.rpeSession]);
   if (LIVE_) cellSet_('Sesje', SES_HEADERS, id, 'prowadzil', 'trener');      // trening prowadzony przez trenera
+  if (LIVE_ && s.pkg !== undefined) pkgSession_(client.id, s);              // „Zdejmij z pakietu” (Pakiety.gs)
   return { ok: true };
 }
 
@@ -1000,7 +1004,7 @@ function diagnose_(d) {
 }
 
 /** Zakładki z danymi od klientów: skrypt zapisuje w nich same wartości, więc formuła nie pochodzi od skryptu. */
-const DANE_TABS = ['Log', 'Sesje', 'Dyspozycja', 'Stan', 'Błędy', 'Plan'];
+const DANE_TABS = ['Log', 'Sesje', 'Dyspozycja', 'Stan', 'Błędy', 'Pakiety', 'Plan'];
 /** Numer kolumny → litery (1 → A, 27 → AA). */
 function colA1_(n) { let s = ''; for (; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; }
 /** Czysta funkcja: wynik getFormulas() od wiersza 2 → adresy komórek z formułą („P12”). */

@@ -3159,3 +3159,59 @@ test('Prowadź trening (tryb trenera): bilet trenera zamiast klucza, notatka, zm
     await ctx.close();
   }
 });
+
+test('Pakiet treningów: „Zdejmij 1 trening z pakietu” w podsumowaniu prowadzonego treningu (logSession pkg), licznik u klienta tylko z cfg.pkg', async () => {
+  const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  const ex = (order, name, prio, kg) => ({ week: 13, day: 'T1', title: 'Nogi', date: day(0), order, name, prio, sets: 3, reps: '5', pct: null, kg, rpe: 8, note: '', extra: 1, drop: 0, block: 'B2' });
+  const PK = { n: 10, left: 3, used: 7, from: day(-30), to: day(20), show: false };
+  const LD = { cfg: { name: 'Ania', pain: true, simple: false, extra: 1, swap: 'DOWOLNA', scale: 'RPE', edit: true, own: true, live: true },
+    plan: [ex(1, 'Przysiad tylny', 'A', 85), ex(2, 'Martwy ciąg rumuński', 'B', 70)], logs: [], sessions: [], pkg: PK };
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const JWT = b64({ alg: 'none' }) + '.' + b64({ exp: Math.floor(Date.now() / 1000) + 3600, email: 't@example.com' }) + '.sig';
+  for (const [on, scheme] of [[true, 'light'], [false, 'dark']]) {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: LD, scheme });
+    await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); localStorage.setItem('fx_L_ania', '0'); } catch (e) {} }, JWT);
+    await p.goto(base + '?prowadz=ania&j=13%7CT1'); await p.waitForSelector('.set[data-o="1"]');
+    await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.evaluate(() => stopRest());
+    assert.equal(await p.getAttribute('#pk-on', 'aria-pressed'), 'true');
+    assert.match(await p.textContent('#pk-on'), /Zdejmij 1 trening z pakietu\s*zostanie 2 z 10 · ważny do/);
+    if (!on) { await p.click('#pk-on'); assert.match(await p.textContent('#pk-on'), /nie zdejmuję/); assert.equal(await p.getAttribute('#pk-on', 'aria-pressed'), 'false'); }
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.locator('#pk-on').scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(SCREENS, `pakiet-prowadz-${scheme}.png`) }); }
+    await p.click('#saveSess'); await p.waitForTimeout(300);
+    const s = calls.filter(c => c.fn === 'logSession').pop().args[0];
+    assert.equal(s.pkg, on ? 1 : 0); assert.equal(s.title, 'Nogi');
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+  // klient bez pakietu w „Prowadź”: tylko informacja, pkg nie idzie
+  {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: Object.assign({}, LD, { pkg: null }) });
+    await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); localStorage.setItem('fx_L_ania', '0'); } catch (e) {} }, JWT);
+    await p.goto(base + '?prowadz=ania&j=13%7CT1'); await p.waitForSelector('.set[data-o="1"]');
+    await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.evaluate(() => stopRest());
+    assert.match(await p.textContent('.pkt-no'), /nie ma pakietu/);
+    await p.click('#saveSess'); await p.waitForTimeout(300);
+    assert.equal(calls.filter(c => c.fn === 'logSession').pop().args[0].pkg, undefined);
+    await ctx.close();
+  }
+  // klient: licznik w zakładce Trener tylko z cfg.pkg (trener włączył), bez przełącznika w podsumowaniu
+  const CD = Object.assign({}, LD, { pkg: undefined, cfg: Object.assign({}, LD.cfg, { live: false, pkg: PK }) });
+  for (const scheme of ['light', 'dark']) {
+    const { ctx, p } = await page([], false, { data: CD, scheme });
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+    assert.equal(await p.$$eval('#pk-on, .pkt-no', a => a.length), 0);
+    await p.click('#nav [data-tab="trener"]'); await p.waitForSelector('.pkc-c');
+    assert.match(await p.textContent('.pkc-c'), /Twój pakiet\s*3\s*z 10 treningów\s*zostało · ważny do/);
+    assert.equal(await p.$$eval('.pkc-c .pkc i', a => a.length), 10);
+    if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, `pakiet-klient-${scheme}.png`) });
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+  {
+    const { ctx, p } = await page([], false, { data: Object.assign({}, CD, { cfg: Object.assign({}, CD.cfg, { pkg: undefined }) }) });
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+    await p.click('#nav [data-tab="trener"]'); await p.waitForTimeout(200);
+    assert.equal(await p.$$eval('.pkc-c', a => a.length), 0);
+    await ctx.close();
+  }
+});

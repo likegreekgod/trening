@@ -1589,3 +1589,82 @@ test('Prowadź trening: ćwiczenie i jednostka trenera w planie (zrodlo „trene
   r = plain(C.trPlanEdit_(plan, [], log, 'ania', { week: 1, day: 'T1', live: true, next: true, ex: [{ order: 1, kg: '87,5' }] }));
   assert.deepEqual(r.rows.map(x => [x.week, x.f.kg]), [[1, 87.5], [2, 87.5]]);
 });
+
+test('pkgState_, pkgRow_, pkgAll_: pakiet treningów (zakup, treningi, korekty, przeniesienie reszty, poza pakietem)', () => {
+  const r = (typ, data, ile, x) => Object.assign({ id: typ + data, zapisano: '2026-11-' + data.slice(8) + 'T10:00:00Z', klient: 'ania', data: data, typ: typ, ile: ile }, x || {});
+  assert.equal(C.pkgState_([]), null, 'bez zakupu = brak pakietu');
+  assert.equal(C.pkgState_([r('trening', '2026-11-03', -1)]), null);
+  const rows = [
+    r('zakup', '2026-10-01', 5, { cena: 500 }), r('trening', '2026-10-05', -1),            // poprzedni pakiet: 4 zostały
+    r('zakup', '2026-11-01', 10, { przeniesione: 4, waznosc: '2026-12-31', cena: '1200', widoczny: 'TAK', notatka: 'przelew' }),
+    r('trening', '2026-11-03', -1, { notatka: 'Siła A' }), r('korekta', '2026-11-05', -1, { notatka: 'park' }), r('korekta', '2026-11-06', 1)
+  ];
+  const k = C.pkgState_(rows);
+  assert.equal(k.n, 14); assert.equal(k.bought, 10); assert.equal(k.carry, 4);
+  assert.equal(k.used, 1); assert.equal(k.left, 13);
+  assert.equal(k.from, '2026-11-01'); assert.equal(k.to, '2026-12-31'); assert.equal(k.price, 1200); assert.equal(k.show, true);
+  assert.deepEqual(Array.from(k.hist, h => h.d), [1, -1, -1, 10], 'historia od najnowszych, zakup na końcu');
+  assert.match(k.hist[2].txt, /Siła A · prowadzony/); assert.match(k.hist[1].txt, /park · dopisany ręcznie/); assert.match(k.hist[3].txt, /\+4 z poprzedniego/);
+  // poza pakietem: więcej treningów niż wejść
+  const over = C.pkgState_([r('zakup', '2026-11-01', 1), r('trening', '2026-11-02', -1), r('trening', '2026-11-04', -1)]);
+  assert.equal(over.left, -1); assert.equal(over.hist[0].over, true); assert.equal(over.hist[1].over, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(C.pkgShort_(over))), { n: 1, left: -1, used: 2, from: '2026-11-01', to: '', show: false });
+
+  // nowy pakiet: reszta przechodzi, chyba że stary wygasł przed datą zakupu
+  const nw = C.pkgRow_('ania', { mode: 'nowy', n: 8, from: '2026-11-20', price: '960 zł', note: ' =SUM(A1) ', show: true }, k, '2026-11-20', 7);
+  assert.equal(nw.row[0], 'ania|z|7'); assert.equal(nw.row[4], 'zakup'); assert.equal(nw.row[5], 8); assert.equal(nw.row[7], 960);
+  assert.equal(nw.row[8], 13, 'przeniesione'); assert.equal(nw.row[10], '=SUM(A1)'); assert.equal(nw.row[11], 'TAK');
+  const expired = Object.assign({}, k, { to: '2026-11-10' });
+  assert.equal(C.pkgRow_('ania', { mode: 'nowy', n: 8 }, expired, '2026-11-20', 1).row[8], '', 'wygasły pakiet nie przechodzi');
+  assert.equal(C.pkgRow_('ania', { mode: 'nowy', n: 8 }, k, '2026-11-20', 1).row[11], 'TAK', 'widoczność z poprzedniego pakietu');
+  for (const [f, e] of [[{ n: 0 }, /Liczba/], [{ n: 101 }, /Liczba/], [{ n: 5, to: '31.12' }, /Ważność/], [{ n: 5, from: '2026-11-20', to: '2026-11-01' }, /przed datą/], [{ n: 5, price: 'dużo' }, /Cena/]])
+    assert.match(C.pkgRow_('ania', Object.assign({ mode: 'nowy' }, f), null, '2026-11-20', 1).error, e);
+  // korekta
+  const kr = C.pkgRow_('ania', { mode: 'korekta', k: '-1', date: '2026-11-21', note: 'park' }, k, '2026-11-22', 9);
+  assert.deepEqual([kr.row[0], kr.row[3], kr.row[4], kr.row[5]], ['ania|k|9', '2026-11-21', 'korekta', -1]);
+  assert.match(C.pkgRow_('ania', { mode: 'korekta', k: -1 }, null, '2026-11-22', 1).error, /nie ma pakietu/);
+  assert.match(C.pkgRow_('ania', { mode: 'korekta', k: 2 }, k, '2026-11-22', 1).error, /−1/);
+  assert.match(C.pkgRow_('ania', { mode: 'korekta', k: 1, date: '2026-10-20' }, k, '2026-11-22', 1).error, /przed zakupem/);
+  // pulpit: wielu klientów z jednej zakładki
+  const all = C.pkgAll_(rows.concat([Object.assign(r('zakup', '2026-11-10', 5), { klient: 'Bartek' }), Object.assign(r('trening', '2026-11-11', -1), { klient: 'kasia' })]));
+  assert.deepEqual(Object.keys(all).sort(), ['ania', 'bartek']); assert.equal(all.ania.left, 13); assert.equal(all.bartek.left, 5);
+});
+
+test('Pakiety: trPakiet tylko w panelu trenera (nie w API klienta ani w „Prowadź”)', () => {
+  assert.ok(C.TR_FNS.trPakiet);
+  assert.ok(!C.API_FNS.trPakiet); assert.ok(!C.LIVE_FNS.trPakiet);
+});
+
+test('Pakiety (atrapa arkusza): nowy pakiet, trening z „Prowadź” zdejmuje raz, odhaczenie usuwa, korekta, widoczność; klient widzi licznik tylko po włączeniu', () => {
+  const S = require('./load-code')(), KEY = 'k0123456789a';
+  const F = fakeSheets({
+    Klienci: [['klucz', 'klient_id', 'imie', 'aktywny', 'link', 'bol', 'tryb', 'dod_serie', 'masters', 'zamiana', 'skala', 'sufit_oly', 'wlasne', 'edycja'],
+      [KEY, 'anna', 'Anna', 'TAK', '', '', 'PRO', '', '', '', '', '', '', '']]
+  });
+  S.SpreadsheetApp = { getActive: () => F.ss };
+  S.LockService = { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) };
+  S.Utilities = { formatDate: d => d.toISOString().slice(0, 10) };
+  S.Session = { getScriptTimeZone: () => 'Europe/Warsaw' };
+  assert.throws(() => S.trPakiet('nikt', { mode: 'nowy', n: 5 }), /Nie ma klienta/);
+  assert.throws(() => S.trPakiet('anna', { mode: 'korekta', k: -1 }), /nie ma pakietu/);
+  let k = S.trPakiet('anna', { mode: 'nowy', n: 10, from: '2026-11-01', to: '2026-12-31', price: '1200', note: '=1+1' });
+  assert.equal(k.left, 10); assert.equal(k.show, false);
+  assert.deepEqual(F.formulas(), [], 'notatka „=1+1” zostaje tekstem');
+  const sess = { week: 3, day: 'A', start: '2026-11-03T17:00:00.000Z', title: 'Siła A', pkg: 1, feel: 4 };
+  S.LIVE_ = true;
+  S.logSession(KEY, sess); S.logSession(KEY, sess);                     // ponowny zapis tej samej jednostki nie zdejmuje drugi raz
+  assert.equal(S.pkgOf_('anna').left, 9);
+  S.logSession(KEY, Object.assign({}, sess, { pkg: 0 }));               // odhaczone („gratis”) = wpis usunięty
+  assert.equal(S.pkgOf_('anna').left, 10);
+  S.logSession(KEY, sess);
+  S.LIVE_ = false;
+  S.logSession(KEY, Object.assign({}, sess, { week: 4 }));              // klient sam: bez pakietu, nawet z pkg w danych
+  assert.equal(S.pkgOf_('anna').left, 9);
+  k = S.trPakiet('anna', { mode: 'korekta', k: -1, date: '2026-11-05', note: 'park' });
+  assert.equal(k.left, 8); assert.match(k.hist[0].txt, /park/);
+  k = S.trPakiet('anna', { mode: 'widok', show: true });
+  assert.equal(k.show, true);
+  k = S.trPakiet('anna', { mode: 'nowy', n: 5, from: '2026-11-20' });
+  assert.deepEqual([k.n, k.carry, k.left, k.show], [13, 8, 13, true], 'reszta i widoczność przechodzą do nowego pakietu');
+  assert.deepEqual(S.pkgAll_(S.tableOf_('Pakiety')).anna.left, 13);
+});

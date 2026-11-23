@@ -41,6 +41,14 @@ const PULPIT = {
     { kind: 'L', id: 'bartek', name: 'Bartek', at: addDays(TODAY, -1), week: 4, day: 'T1', order: 1, set: '2', title: 'Rwanie · seria 2', film: true, file: 'film4', kom: 'Dobra pozycja startowa', text: 'Dzięki, w końcu poczułem start z podłogi' }
   ]
 };
+// pakiety treningów (trPulpit clients[].pkg, trKlient pkg z historią): Ania 2 z 10 zostały, Bartek poza pakietem, Celina wygasa za 3 dni
+const PKG = {
+  ania: { n: 10, bought: 10, carry: 0, used: 8, left: 2, from: addDays(TODAY, -40), to: addDays(TODAY, 50), price: 1200, show: false, note: '',
+    hist: [{ date: addDays(TODAY, -2), typ: 'trening', d: -1, txt: 'Góra · prowadzony', over: false }, { date: addDays(TODAY, -6), typ: 'korekta', d: -1, txt: 'trening w parku · dopisany ręcznie', over: false },
+      { date: addDays(TODAY, -40), typ: 'zakup', d: 10, txt: 'zakup 10 treningów · 1200 zł' }] },
+  bartek: { n: 5, used: 6, left: -1, from: addDays(TODAY, -60), to: '', show: true },
+  celina: { n: 8, used: 3, left: 5, from: addDays(TODAY, -20), to: addDays(TODAY, 3), show: false }
+};
 const SZKIC = 'Przysiad 84 kg na 3×5 to Twój najlepszy wynik w tym bloku, a ostatnia seria była ciężka, ale czysta. W czwartek zostajemy przy tym ciężarze.\n\nKolano 5/10 traktuję poważnie: dłuższa rozgrzewka, a jeśli ból wróci powyżej 3/10, zejdź o 10% i napisz mi.';
 function klient() {
   const plan = [], logs = [], sessions = [], readiness = [], summary = [];
@@ -125,8 +133,17 @@ async function page(calls, opt = {}) {
     if (b.fn === 'trConfig') out = { ok: true, result: { clientId: 'test.apps.googleusercontent.com', ready: opt.ready !== false } };
     else if (!b.token) out = { ok: false, error: 'Logowanie: brak biletu' };
     else if (st.authFail > 0) { st.authFail--; out = { ok: false, error: 'Logowanie: bilet wygasł' }; }
-    else if (b.fn === 'trPulpit' || b.fn === 'trPrzelicz') out = { ok: true, result: Object.assign({}, PULPIT, b.fn === 'trPrzelicz' ? { at: TODAY + 'T09:30:00.000Z' } : {}) };
-    else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: opt.noSets ? Object.assign(klient(), { logs: [] }) : opt.unticked ? untick(klient()) : klient() } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
+    else if (b.fn === 'trPulpit' || b.fn === 'trPrzelicz') out = { ok: true, result: Object.assign({}, PULPIT, b.fn === 'trPrzelicz' ? { at: TODAY + 'T09:30:00.000Z' } : {},
+      opt.pkg ? { clients: PULPIT.clients.map(c => PKG[c.id] ? Object.assign({}, c, { pkg: PKG[c.id] }) : c) } : {}) };
+    else if (b.fn === 'trPakiet') { await new Promise(res => setTimeout(res, 100)); const f = b.args[1], k = st.pkg || (st.pkg = opt.pkg ? JSON.parse(JSON.stringify(PKG.ania)) : null);
+      if (f.mode === 'nowy' && !(f.n >= 1 && f.n <= 100)) out = { ok: false, error: 'Liczba treningów: 1–100.' };
+      else if (f.mode === 'korekta' && !k) out = { ok: false, error: 'Klient nie ma pakietu: najpierw dodaj pakiet.' };
+      else { if (f.mode === 'nowy') { const carry = k && k.left > 0 ? k.left : 0; st.pkg = { n: f.n + carry, bought: f.n, carry, used: 0, left: f.n + carry, from: f.from || TODAY, to: f.to || '', price: Number(f.price) || 0, show: !!(k && k.show), note: f.note || '',
+          hist: [{ date: f.from || TODAY, typ: 'zakup', d: f.n, txt: 'zakup ' + f.n + ' treningów' + (carry ? ' · +' + carry + ' z poprzedniego' : '') }] }; }
+        else if (f.mode === 'korekta') { const d = Number(f.k); k.left += d; k.used -= d; k.hist.unshift({ date: f.date || TODAY, typ: 'korekta', d, txt: (f.note || 'trening') + ' · dopisany ręcznie' }); }
+        else k.show = !!f.show;
+        out = { ok: true, result: st.pkg }; } }
+    else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: Object.assign(opt.noSets ? Object.assign(klient(), { logs: [] }) : opt.unticked ? untick(klient()) : klient(), opt.pkg ? { pkg: PKG.ania } : {}) } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
     else if (b.fn === 'trKomentarz') out = { ok: true, result: { text: String(b.args[3]).trim(), at: TODAY + 'T19:52:00.000Z' } };
     else if (b.fn === 'trSzkic') { st.ai = (st.ai || 0) + 1; await new Promise(res => setTimeout(res, 150));
       out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).' }
@@ -896,4 +913,42 @@ test('panel: karta klienta → Plan, szybka zmiana kg / serii w niezrobionej jed
     assert.deepEqual(p.errors, []);
     await ctx.close();
   }
+});
+
+test('panel: pakiet treningów (Wymaga uwagi, Dziś trenują, karta klienta: nowy pakiet, trening poza aplikacją, licznik u klienta)', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, { loggedIn: true, pkg: true });
+  await p.goto(base + 'trener.html');
+  await p.waitForSelector('.dr');
+  const todo = await p.textContent('#main');
+  assert.match(todo, /Bartek: 1 trening poza pakietem/);
+  assert.match(todo, /Ania: zostały 2 treningi z pakietu/);
+  assert.match(todo, /Celina: pakiet ważny do/);
+  assert.match(await p.textContent('.dr[data-dz^="ania|"]'), /pakiet 2 z 10/);
+  await p.goto(base + 'trener.html#k/ania/przeglad'); await p.waitForSelector('#pakiet');
+  assert.match(await p.textContent('.kpl'), /pakiet 2 z 10/);
+  assert.match(await p.textContent('#pakiet'), /Pakiet treningów\s*Klient widzi licznik\s*2z 10 zostało/);
+  assert.match(await p.textContent('#pakiet .pkh'), /Góra · prowadzony[\s\S]*trening w parku/);
+  assert.equal(await p.$$eval('#pakiet .pkc i.u', a => a.length), 8);
+  await shot(p, 'trener-pakiet.png');
+  // licznik u klienta: przełącznik w karcie → trPakiet {mode: 'widok'}
+  await p.click('#pk-show'); await p.waitForSelector('#pk-show[aria-checked="true"]');
+  assert.deepEqual(calls.filter(c => c.fn === 'trPakiet').pop().args, ['ania', { mode: 'widok', show: true }]);
+  // trening poza aplikacją
+  await p.click('[data-pkf="korekta"]'); await p.waitForSelector('#pk-save');
+  await p.fill('#pk-note', 'trening w parku'); await p.click('#pk-save');
+  await p.waitForFunction(() => /^1/.test(document.querySelector('#pakiet .pkn b').textContent));
+  let a = calls.filter(c => c.fn === 'trPakiet').pop().args[1];
+  assert.equal(a.mode, 'korekta'); assert.equal(a.k, '-1'); assert.equal(a.note, 'trening w parku'); assert.equal(a.date, TODAY);
+  // nowy pakiet: 12 treningów, reszta przechodzi
+  await p.click('[data-pkf="nowy"]'); await p.waitForSelector('#pk-save');
+  assert.match(await p.textContent('#pakiet .pkf'), /Niewykorzystane z obecnego \(1\) przejdą do nowego: razem 11/);
+  await p.click('[data-seg="pk-n"][data-val="12"]');
+  assert.match(await p.textContent('#pakiet .pkf'), /razem 13/);
+  await p.fill('#pk-price', '1440'); await p.click('#pk-save');
+  await p.waitForFunction(() => /^13/.test(document.querySelector('#pakiet .pkn b').textContent));
+  a = calls.filter(c => c.fn === 'trPakiet').pop().args[1];
+  assert.equal(a.mode, 'nowy'); assert.equal(a.n, 12); assert.equal(a.price, '1440'); assert.equal(a.from, TODAY);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
 });
