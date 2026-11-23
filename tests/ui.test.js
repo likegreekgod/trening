@@ -1439,6 +1439,33 @@ test('Czas treningu: przypadkowy start 2 h wcześniej → liczy od pierwszej zap
   await ctx.close();
 });
 
+// --- punkt 6 przeglądu v80: zdjęcia i opis zamiast pustego miejsca ---
+test('„Jak wykonać” bez filmu: dwa zdjęcia i 4 kroki po polsku (nazwa z bazy z serwera albo z planu), film ma pierwszeństwo', async () => {
+  for (const scheme of ['light', 'dark']) {
+    const mine = [1, 2];   // w każdej jednostce: 1 = nazwa z bazy z serwera (fx), 2 = nazwa z planu, reszta z filmem
+    const data = Object.assign({}, PROG, { plan: PROG.plan.map(r => Object.assign({}, r,
+      r.order === 1 ? { infos: [], fx: ['Goblet Squat'] } : r.order === 2 ? { name: 'Barbell Curl', infos: [], fx: [] } : { infos: [{ n: 'X', u: 'https://example.test/x' }] })) });
+    const { ctx, p } = await page([], false, { data, scheme });
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('.set', { state: 'attached' });
+    await p.waitForSelector("[data-fx]");
+    assert.deepEqual(await p.$$eval('[data-fx]', b => b.map(x => x.dataset.fx).sort()), mine.slice(0, 2).map(String).sort());
+    assert.equal(await p.$$eval('a.inf', a => a.length), await p.$$eval('.card[data-card]', c => c.length) - 2, 'film z bazy zostaje linkiem');
+    await p.click(`[data-fx="${mine[0]}"]`); await p.waitForSelector('#sheet .fxk');
+    await p.waitForFunction(() => [...document.querySelectorAll('.fxi img')].every(i => i.complete && i.naturalWidth > 0));
+    assert.equal(await p.$$eval('.fxi img', i => i.length), 2);
+    assert.match(await p.textContent('#sheet'), /Goblet Squat.*Trzymaj kettla albo hantlę przy klatce/s);
+    assert.equal(await p.$$eval('.fxk li', l => l.length), 4);
+    assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    assert.deepEqual(await a11y(p), []);
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, 'jak-wykonac-zdjecia-' + (scheme === 'dark' ? 'ciemny' : 'jasny') + '.png') }); }
+    await p.click('#sheet [data-close]');
+    await p.click(`[data-fx="${mine[1]}"]`); await p.waitForSelector('#sheet .fxk');
+    assert.match(await p.textContent('#sheet'), /sztanga podchwytem na szerokość barków/);
+    assert.deepEqual(p.external, []); assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});
+
 // --- v3 PR 3: zakładka Ćwiczenia – instruktaż i partie ---
 test('Ćwiczenia: „Jak wykonać” z linkiem z bazy, kompleks z filmem każdej części, serie twarde na partię w Postęp → Objętość', async () => {
   const data = Object.assign({}, PROG, { cfg: Object.assign({}, PROG.cfg, { swap: true }), parts: { 'przysiad tylny': ['nogi'], 'rwanie': ['całe ciało'] },

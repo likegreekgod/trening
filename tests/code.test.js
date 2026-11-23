@@ -446,11 +446,14 @@ test('exFind_: dokładna nazwa, alias, nazwa podstawowa, te same słowa', () => 
 
 test('exInfo_ i missingExercises_: kompleksy składają się z części', () => {
   const ix = C.exIndex_(CW);
-  assert.deepEqual(plain(C.exInfo_(ix, 'Hang Clean (nad kolanem) + Jerk')), { found: true, infos: [{ n: 'Hang Clean', u: 'https://example.test/hc' }, { n: 'Jerk', u: 'https://example.test/jerk' }], parts: [], swaps: [], group: '' });
+  assert.deepEqual(plain(C.exInfo_(ix, 'Hang Clean (nad kolanem) + Jerk')), { found: true, infos: [{ n: 'Hang Clean', u: 'https://example.test/hc' }, { n: 'Jerk', u: 'https://example.test/jerk' }], parts: [], swaps: [], group: '', fx: [] });
   assert.deepEqual(plain(C.exInfo_(ix, 'Hang Clean + Hang Clean + Nieznane').infos), [{ n: 'Hang Clean', u: 'https://example.test/hc' }]);
   assert.deepEqual(plain(C.exInfo_(ix, 'Przysiad tylny + SL RDL').parts), ['czworogłowe', 'pośladki', 'dwugłowe uda']);
-  assert.deepEqual(plain(C.exInfo_(ix, 'Back Squat')), { found: true, infos: [{ n: 'Przysiad tylny', u: 'https://example.test/przysiad' }], parts: ['czworogłowe', 'pośladki'], swaps: ['Leg press', 'Hack'], group: 'PS' });
-  assert.deepEqual(plain(C.exInfo_(ix, 'Nieznane + Inne')), { found: false, infos: [], parts: [], swaps: [], group: '' });
+  assert.deepEqual(plain(C.exInfo_(ix, 'Back Squat')), { found: true, infos: [{ n: 'Przysiad tylny', u: 'https://example.test/przysiad' }], parts: ['czworogłowe', 'pośladki'], swaps: ['Leg press', 'Hack'], group: 'PS', fx: [] });
+  assert.deepEqual(plain(C.exInfo_(ix, 'Nieznane + Inne')), { found: false, infos: [], parts: [], swaps: [], group: '', fx: [] });
+  // bez filmu: nazwa z bazy do zdjęć i opisu w aplikacji (w kompleksie tylko części bez filmu, link „javascript:” to brak filmu)
+  assert.deepEqual(plain(C.exInfo_(ix, 'SL RDL').fx), ['Single-Leg RDL']);
+  assert.deepEqual(plain(C.exInfo_(ix, 'Hang Clean + Wiosłowanie hantlem + Leg press').fx), ['Wiosłowanie hantlem', 'Leg press']);
   const plan = [{ cwiczenie: 'Przysiad tylny' }, { cwiczenie: 'Żuraw' }, { cwiczenie: 'martwy ciąg' }, { cwiczenie: 'Martwy  ciąg' }, { cwiczenie: 'Back Squat (wysoko)' }, { cwiczenie: 'Jerk + Żuraw' }, { cwiczenie: '' }];
   assert.deepEqual(Array.from(C.missingExercises_(plan, CW)), ['martwy ciąg', 'Żuraw']);
   assert.deepEqual(Array.from(C.missingExercises_(plan, [])), ['Back Squat (wysoko)', 'Jerk + Żuraw', 'martwy ciąg', 'Przysiad tylny', 'Żuraw']);
@@ -536,6 +539,22 @@ test('CW_BAZA, CW_ALIASY, CW_DODATKI: baza ćwiczeń do wczytania', () => {
   assert.deepEqual(['Snatch Pull z haka', 'Rot. wewn. biodra z gumą (siad na skrzyni)'].map(f), Array(2).fill(null));   // bez zgadywania: alias albo własny wiersz
   assert.deepEqual(C.exInfo_(ix, 'Hang Clean (nad kolanem) + Jerk').infos.map(i => i.n), ['Hang Clean', 'Split Jerk']);   // „Jerk” to alias Split Jerk
   assert.deepEqual([C.exInfo_(ix, 'Snatch').parts.length, C.exInfo_(ix, 'Back Squat').parts.length > 0, C.exInfo_(ix, 'Suwnica').infos.length], [0, true, 0]);   // boje bez partii, dodatki bez filmu
+});
+
+test('opisy ćwiczeń (web/cw/opisy.json): każde ćwiczenie free-exercise-db ma 4 kroki po polsku i dwa zdjęcia, bez nazw spoza bazy', () => {
+  const fs = require('node:fs'), path = require('node:path'), dir = path.join(__dirname, '..', 'web', 'cw');
+  const O = JSON.parse(fs.readFileSync(path.join(dir, 'opisy.json'), 'utf8'));
+  const F = Array.from(C.CW_FEDB).map(x => x[0]), D = Array.from(C.CW_DODATKI).map(x => x[0]), known = new Set(F.concat(D));
+  Object.keys(O).forEach(n => assert.ok(known.has(n), 'opis ćwiczenia spoza bazy: ' + n));
+  F.forEach(n => assert.ok(O[n], 'brak opisu: ' + n));
+  const ids = new Set();
+  Object.entries(O).forEach(([n, o]) => {
+    assert.ok(Array.isArray(o.k) && o.k.length === 4 && o.k.every(s => typeof s === 'string' && s.length > 3 && s.length < 200), 'kroki: ' + n);
+    if (!o.i) return;
+    assert.match(o.i, /^[\w-]+$/, n); ids.add(o.i);
+    [0, 1].forEach(k => { const f = path.join(dir, o.i, k + '.jpg'); assert.ok(fs.existsSync(f) && fs.statSync(f).size < 120000, 'zdjęcie: ' + f); });
+  });
+  assert.deepEqual(fs.readdirSync(dir).filter(f => f !== 'opisy.json' && !ids.has(f)), [], 'zdjęcia bez opisu');
 });
 
 test('computeParts_: serie i serie twarde na partię, zamiana liczy zamiennik', () => {

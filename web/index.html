@@ -789,6 +789,11 @@
          padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:grid;gap:12px;max-width:640px;margin:0 auto}
   .sh-in h2{margin:0;font:800 28px/1 var(--f-display);text-transform:uppercase;letter-spacing:.01em;color:var(--ink-2)}
   .sh-in .sub{margin:-6px 0 0}
+  .fxe h3{font-size:15px;font-weight:600;margin:10px 0 6px}
+  .fxi{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 10px}
+  .fxi img{width:100%;height:auto;aspect-ratio:3/2;object-fit:cover;border-radius:var(--r);background:var(--surface-2)}
+  .fxk{margin:0 0 6px;padding-left:22px;display:grid;gap:6px;font-size:15px;line-height:1.4}
+  .fxs{font-size:12px;color:var(--muted);margin:4px 0 10px}
   /* zmiany w jednostce trenera (flaga „edycja”) */
   .ed-q{text-align:left}
   .sh-in .ed-s{margin:0}
@@ -3686,6 +3691,33 @@ function openNote(ex){
   $('#nt-ok').onclick = () => save(t.value.trim());
   const d = $('#nt-del'); if (d) d.onclick = () => save('');
 }
+/** ćwiczenie bez filmu: zdjęcia (początek i koniec ruchu) i 4 kroki po polsku z free-exercise-db (domena publiczna), cw/opisy.json */
+let FXD = null, FXL = null, FXE = [];   // FXE: ćwiczenia narysowanej jednostki (dla fxUpgrade)
+function fxLoad(){
+  if (FXD || FXL) return FXL;
+  FXL = fetch('cw/opisy.json').then(r => r.ok ? r.json() : null).then(d => { FXD = d || {}; fxUpgrade(); return FXD; }).catch(() => { FXL = null; return null; });
+  return FXL;
+}
+/** nazwy z bazy bez filmu: z serwera (row.fx), w zamianie albo własnym treningu sama nazwa */
+function fxNames(ex){ return ex.swap ? [ex.name] : ex.fx && ex.fx.length ? ex.fx : (ex.infos || []).length ? [] : [ex.name]; }
+function fxOf(ex){ return FXD ? fxNames(ex).filter(n => FXD[n]) : []; }
+function fxBtn(ex){ return `<button type="button" class="infb" data-fx="${ex.order}" aria-label="Jak wykonać: ${esc(ex.name)} (zdjęcia i opis)">${PLAY_SVG}</button>`; }
+/** opisy przyszły po narysowaniu kart: puste miejsce przy ćwiczeniu z opisem staje się przyciskiem */
+function fxUpgrade(){
+  document.querySelectorAll('span.infb[data-fxo]').forEach(sp => { const ex = FXE.find(e => e.order === +sp.dataset.fxo); if (!ex || !fxOf(ex).length) return;
+    sp.outerHTML = fxBtn(ex); const b = document.querySelector(`[data-fx="${ex.order}"]`); if (b) b.onclick = () => openFx(ex); });
+}
+function openFx(ex){
+  const ns = fxOf(ex);
+  if (!ns.length) return;
+  const one = n => { const d = FXD[n];
+    return `<div class="fxe">${ns.length > 1 || n !== ex.name ? `<h3>${esc(n)}</h3>` : ''}${d.i ? `<div class="fxi">${[0, 1].map(k => `<img src="cw/${encodeURIComponent(d.i)}/${k}.jpg" alt="${k ? 'Koniec ruchu' : 'Początek ruchu'}: ${esc(n)}" width="400" height="267" loading="lazy" decoding="async">`).join('')}</div>` : ''}
+      <ol class="fxk">${d.k.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>`; };
+  openSheet(`<h2 id="sheet-t">Jak wykonać</h2><p class="sub">${esc(ex.name)}</p>${ns.map(one).join('')}
+    <p class="fxs">Zdjęcia i opis: free-exercise-db (domena publiczna). Film od trenera, gdy go doda, pojawi się zamiast nich.</p>
+    <button type="button" class="btn" data-close>Zamknij</button>`);
+  document.querySelectorAll('.fxi img').forEach(im => im.onerror = () => { const w = im.parentNode; im.remove(); if (w && !w.querySelector('img')) w.remove(); });   // bez sieci sam opis
+}
 /** kompleks z kilkoma filmami: lista „Jak wykonać” */
 function openInf(ex){
   openSheet(`<h2 id="sheet-t">Jak wykonać</h2><p class="sub">${esc(ex.name)}</p>
@@ -3721,7 +3753,8 @@ function card(ex, tag){
   // film „Jak wykonać”: ikona w nagłówku (jeden film = link, kilka = lista); bez filmu puste miejsce, żeby „⋯” i strzałka stały w miejscu
   const infs = ex.swap ? [] : (ex.infos || []), prioTxt = ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne';
   const infBtn = infs.length === 1 ? `<a class="infb inf" href="${esc(infs[0].u)}" target="_blank" rel="noopener" aria-label="Jak wykonać: ${esc(ex.name)}">${PLAY_SVG}</a>`
-    : infs.length ? `<button type="button" class="infb" data-inf="${ex.order}" aria-label="Jak wykonać: ${esc(ex.name)} (${infs.length} filmy)">${PLAY_SVG}</button>` : '<span class="infb" aria-hidden="true"></span>';
+    : infs.length ? `<button type="button" class="infb" data-inf="${ex.order}" aria-label="Jak wykonać: ${esc(ex.name)} (${infs.length} filmy)">${PLAY_SVG}</button>`
+    : fxOf(ex).length ? fxBtn(ex) : `<span class="infb" data-fxo="${ex.order}" aria-hidden="true"></span>`;
   const top = `<div class="card ${ex.prio === 'K' ? 'k' : ''} ${oly ? 'oly' : ''} ${gone ? 'skip' : ''}" data-card="${ex.order}">
     <div class="ch"><button type="button" class="fold-b" data-fold="${ex.order}" aria-expanded="true">${tag ? `<span class="gl">${tag}</span>` : ''}<span class="ft"><span class="cn">${esc(ex.name)}</span><span class="badge ${ex.prio}">${prioTxt}</span><span class="fsum"></span></span></button>
       <div class="acts">${infBtn}<button type="button" class="more" data-more="${ex.order}" aria-label="Więcej akcji: ${esc(ex.name)}">${MORE_SVG}</button><button type="button" class="fold-c" data-fold="${ex.order}" aria-expanded="true" aria-label="Zwiń albo rozwiń: ${esc(ex.name)}"><i class="chev" aria-hidden="true"></i></button></div></div>
@@ -4256,6 +4289,8 @@ function bind(exs, s0){
   document.querySelectorAll('[data-more]').forEach(b => b.onclick = () => openMore(exOf(b.dataset.more)));
   document.querySelectorAll('[data-hist]').forEach(b => b.onclick = () => openHist(exOf(b.dataset.hist)));
   document.querySelectorAll('[data-inf]').forEach(b => b.onclick = () => openInf(exOf(b.dataset.inf)));
+  document.querySelectorAll('[data-fx]').forEach(b => b.onclick = () => openFx(exOf(b.dataset.fx)));
+  FXE = exs; if (!FXD) fxLoad();
   document.querySelectorAll('[data-unswap]').forEach(b => b.onclick = () => { const e = exOf(b.dataset.unswap); setSwap(e, null); if (e.swap) resaveSwap(e, e.swap.from, null); toast('Wrócono do ćwiczenia z planu.'); renderTrening(); });
   document.querySelectorAll('[data-unskip]').forEach(b => b.onclick = () => { unSkip(exOf(b.dataset.unskip)); toast('Przywrócono ćwiczenie.'); renderTrening(); });
   // komentarz do ćwiczenia: dotknięcie tekstu w karcie otwiera okno z tym komentarzem
