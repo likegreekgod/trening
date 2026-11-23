@@ -2,7 +2,7 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
-## 2026-11-23 · Reszta przeglądu v80: plan 12 PR-ów; RIR w podpisach świateł, jedna linia w trakcie treningu (v88)
+## 2026-11-23 · Reszta przeglądu v80: plan 12 PR-ów; RIR w podpisach świateł, jedna linia w trakcie treningu (v89)
 
 - Damian 23.11 zaakceptował wszystkie szkice pozostałych punktów (3c, 5–17 bez 4) z ustaleniami domyślnymi: punkt 9 zwija kartę „dziś”, pasek tygodnia i baner; zdjęcia free-exercise-db w repozytorium (ok. 15 MB, ładowane na żądanie, bez precache); „Zaplanuj następną” +2,5 kg po samych 🟢 dla A i B, K bez zmian; pomiary ciała: masa, talia, biodra, klatka, ramię, udo; limit filmu 1 GB. Kolejność: RIR + 9 → kopia arkusza + limit filmu → Zaplanuj następną → Trening bez planu i szablony → lista prowadzonych → mail o komentarzu + „ostatnio otwarta” → polskie nazwy → zdjęcia → zakładka Ćwiczenia → masa ciała → RODO → CSP w aplikacji (na końcu, bo przenosi cały kod).
 - Podpisy świateł przy skali RIR (PRO) zaczynają się od liczby RIR (lib `EFF_RIR`, `effHint`); przy RPE i w PROSTYM „zapas …” jak dotąd. Zapis RPE bez zmian.
