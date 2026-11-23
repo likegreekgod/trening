@@ -383,7 +383,7 @@ function playerBind(v, redraw){
     zl.hidden = Z.s === 1; zl.textContent = pl(Z.s.toFixed(1)) + '× · dotknij dwa razy, żeby wrócić'; };
   const tick = () => { if (!vid.isConnected || !$('#pvt')) return; const d = vid.duration || 0; $('#pvt').textContent = tFmt(vid.currentTime, true); if (d) { rng.max = d; rng.value = vid.currentTime; rng.style.setProperty('--p', (vid.currentTime / d * 100) + '%'); }
     pv.querySelector('[data-pv="play"]').textContent = vid.paused ? '▶' : '❚❚'; pv.querySelector('[data-pv="play"]').setAttribute('aria-label', vid.paused ? 'Odtwarzaj' : 'Pauza');
-    const w = $('#kf-ins'); if (w) w.textContent = '⏱ Wstaw chwilę ' + tFmt(vid.currentTime); };
+    const w = $('#kf-ins'); if (w) w.textContent = '⏱ Wstaw chwilę ' + tFmt(vid.currentTime, true); };
   let raf = 0; const loop = () => { tick(); raf = vid.paused ? 0 : requestAnimationFrame(loop); };
   // rozmiar filmu liczony z jego wymiarów i wpisany w piksele: Edge potrafi zignorować object-fit i rozciągnąć obraz na całą scenę
   const fit = () => { const vw = vid.videoWidth, vh = vid.videoHeight, sw = st.clientWidth, sh = st.clientHeight;
@@ -457,21 +457,21 @@ document.addEventListener('keydown', e => {
 });
 function marks(){
   const vid = $('#pvv'), m = $('#pvm'), t = $('#kf-txt'); if (!vid || !m || !vid.duration) { if (m) m.innerHTML = ''; return; }
-  m.innerHTML = komTimes(t ? t.value : '').filter(s => s <= vid.duration).map(s => '<button type="button" style="left:' + (s / vid.duration * 100) + '%" data-seek="' + s + '" aria-label="Przejdź do ' + tFmt(s) + '" title="' + tFmt(s) + '"></button>').join('');
+  m.innerHTML = komTimes(t ? t.value : '').filter(s => s <= vid.duration).map(s => '<button type="button" style="left:' + (s / vid.duration * 100) + '%" data-seek="' + s + '" aria-label="Przejdź do ' + tFmt(s, true) + '" title="' + tFmt(s, true) + '"></button>').join('');
   m.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => { vid.pause(); vid.currentTime = Number(b.dataset.seek); });
 }
 function komFilmDraw(v, who){
   const k = vKey(v), st = KF[k] || {}, w = $('#kfw'); if (!w) return;
   const text = st.text !== undefined ? st.text : v.komT, dis = st.busy ? ' disabled' : '';
-  w.innerHTML = '<div class="eb" style="margin:14px 0 6px">Twój komentarz</div><textarea id="kf-txt" aria-label="Twój komentarz do filmu" placeholder="Np. 0:03 Łokcie wyżej przy wejściu pod sztangę."' + dis + '>' + esc(text) + '</textarea>' +
-    '<div class="row2"><button class="b" type="button" id="kf-ins"' + (FB[v.file] && FB[v.file].st === 'ok' ? '' : ' disabled') + '>⏱ Wstaw chwilę 0:00</button><span class="sp"></span>' +
+  w.innerHTML = '<div class="eb" style="margin:14px 0 6px">Twój komentarz</div><textarea id="kf-txt" aria-label="Twój komentarz do filmu" placeholder="Np. 0:03,5 Łokcie wyżej przy wejściu pod sztangę."' + dis + '>' + esc(text) + '</textarea>' +
+    '<div class="row2"><button class="b" type="button" id="kf-ins"' + (FB[v.file] && FB[v.file].st === 'ok' ? '' : ' disabled') + '>⏱ Wstaw chwilę 0:00,0</button><span class="sp"></span>' +
     (st.ok ? '<span class="saved">✓ Zapisano</span>' : '') + '<button class="b p" type="button" id="kf-save"' + dis + '>' + (st.busy ? 'Zapisuję…' : 'Zapisz') + '</button></div>' +
     (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') + repBox(v.rep, v.repAt, v.name) +
-    '<p class="hint" style="margin-top:8px">Klient zobaczy komentarz przy tej serii w zakładce Trener. Linia zaczynająca się od „0:03” to chwila filmu: w panelu pokazuje się jako kreska na pasku, którą możesz kliknąć.</p>';
+    '<p class="hint" style="margin-top:8px">Klient zobaczy komentarz przy tej serii w zakładce Trener. Linia zaczynająca się od „0:03,5” (albo „0:03”) to chwila filmu z dokładnością do 1/10 s: w panelu pokazuje się jako kreska na pasku, którą możesz kliknąć.</p>';
   const ta = $('#kf-txt');
   ta.oninput = () => { (KF[k] = KF[k] || {}).text = ta.value; KF[k].ok = false; marks(); };
   $('#kf-ins').onclick = () => { const vid = $('#pvv'); if (!vid) return; vid.pause();
-    const tag = tFmt(vid.currentTime) + ' ', a = ta.selectionStart, pre = ta.value.slice(0, a), lineStart = pre.lastIndexOf('\n') + 1;
+    const tag = tFmt(vid.currentTime, true) + ' ', a = ta.selectionStart, pre = ta.value.slice(0, a), lineStart = pre.lastIndexOf('\n') + 1;
     const nl = pre.slice(lineStart).trim() ? '\n' : '';
     ta.value = pre + nl + tag + ta.value.slice(a); const pos = (pre + nl + tag).length; ta.focus(); ta.setSelectionRange(pos, pos); ta.oninput(); };
   $('#kf-save').onclick = async () => {

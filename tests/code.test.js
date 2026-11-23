@@ -541,7 +541,8 @@ test('anchorSec_, commentLines_, fileIdOf_: komentarze Dysku z czasem w filmie',
   const real = '[null,null,null,"0B9xsrVcsVgjpZWp3N015RmlzOEZLVG1qNUU5TFhMVDk1bG13PQ",null,[[5,70999999]]]';   // kotwica z prawdziwego komentarza do filmu
   assert.deepEqual([sec(real), sec('[null,null,null,"x",null,[[75]]]'), sec('[null,null,null,"x",null,[[null,500000000]]]'), sec('[null,null,null,"x",null,[[0,0]]]')], [5.070999999, 75, 0.5, 0]);
   assert.deepEqual([sec('[null,null,null,"x"]'), sec('[]'), sec('[[["a"]]]')], [null, null, null]);
-  assert.equal(C.commentLines_([{ content: 'Biodra', anchor: real }]).text, '0:05 Biodra');
+  assert.equal(C.commentLines_([{ content: 'Biodra', anchor: real }]).text, '0:05,1 Biodra');
+  assert.deepEqual([0, 9.96, 23.5, 24.1, 59.97, 75].map(C.mmss_), ['0:00', '0:10', '0:23,5', '0:24,1', '1:00', '1:15']);   // dziesiąte tylko, gdy są
   assert.deepEqual([sec('to nie json'), sec('{"page":3}'), sec(''), sec(null), sec('{"time":"jutro"}')], [null, null, null, null, null]);
   const c = C.commentLines_([{ content: ' Łokcie wyżej\nprzy 2. powtórzeniu ', anchor: '{"timestamp":75}', createdTime: '2026-10-12T10:00:00Z' },
     { content: 'Dobre zejście', anchor: '{"timestamp":15}', createdTime: '2026-10-12T10:05:00Z' }, { content: 'Ogólnie lepiej niż tydzień temu', createdTime: '2026-10-12T09:00:00Z' },
