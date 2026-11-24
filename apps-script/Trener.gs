@@ -13,7 +13,7 @@
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
 const TR_FNS = { trPakiet, trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
-  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj, trDysk, trKopia };
+  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj, trDysk, trKopia, trImport };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
