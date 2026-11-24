@@ -686,8 +686,8 @@
   .efp .fine button[aria-pressed="true"],.rate .fine button[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
   /* boje: światła sędziowskie, wybór oceny, propozycja ciężaru */
   .set .lt,.set-head .hl2{grid-column:span 2}
-  .lt{min-height:44px;border:0;border-radius:var(--r);background:var(--panel);color:var(--light-white);display:flex;align-items:center;justify-content:center;gap:8px;padding:0 8px}
-  .lt small{font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase}
+  .lt{min-height:44px;border:0;border-radius:var(--r);background:var(--panel);color:var(--light-white);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:4px;min-width:0}   /* światła nad napisem: obok siebie „ŚREDNIO” / „SPALONE” nie mieściły się w kolumnie (v95) */
+  .lt small{font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;max-width:100%}
   .lt.pend{outline:3px solid var(--warn);outline-offset:-3px}
   .lights{display:inline-flex;gap:4px}
   .lights i{width:14px;height:14px;border-radius:50%;background:var(--light-off);display:block}
@@ -1562,8 +1562,15 @@ function askKey(){
   $('#key-go').onclick = go;
   $('#key-in').onkeydown = e => { if (e.key === 'Enter') go(); };
 }
+// ostatnio otwarta jednostka (cu_<klucz>): po zamknięciu aplikacji w tle wraca do niej tego samego dnia, a nie do dzisiejszej (lib keepUnit)
+const CUK = 'cu_' + KEY;
+function curKeep(){
+  if (!cur.day) return;
+  try { localStorage.setItem(CUK, JSON.stringify({ w: cur.week, d: cur.day, t: localDate(), at: Date.now() })); } catch (e) {}
+}
 function pickDefault(){
-  const s = pickUnit(unitList(), localDate());       // dzisiejsza niezrobiona, potem najbliższa następna (strefa telefonu)
+  let kept = null; try { kept = JSON.parse(localStorage.getItem(CUK) || 'null'); } catch (e) {}
+  const s = TL.keepUnit(kept, unitList(), localDate(), Date.now()) || pickUnit(unitList(), localDate());   // ostatnio otwarta (ten sam dzień), inaczej dzisiejsza niezrobiona, potem najbliższa następna (strefa telefonu)
   if (s) { cur.week = s.week; cur.day = s.day; }
   const j = LIVE_J.split('|');                       // „▶ Prowadź” z panelu na konkretną jednostkę
   if (LIVE_J && PLAN.some(r => r.week === +j[0] && r.day === j.slice(1).join('|'))) { cur.week = +j[0]; cur.day = j.slice(1).join('|'); }
@@ -1755,6 +1762,7 @@ function render(){
   if (TAB === 'plan') renderPlan(); else if (TAB === 'dysp') renderDysp(); else if (TAB === 'postep') renderPostep(); else if (TAB === 'trener') renderTrener(); else renderTrening();
   navDot();
   if (TAB !== 'trening') tipDraw();
+  curKeep();
 }
 /** pusty stan: karta z ikoną; btn = [id albo atrybut, napis] */
 const ES_ICON = {
@@ -1772,7 +1780,7 @@ function head(eyebrow, title, stats, extra){
   // tryb trenera: czyj trening (data jest w pasku tygodnia)
   $('#eyebrow').textContent = LIVE && NAME ? 'Prowadzisz · ' + NAME : eyebrow; $('#title').textContent = title; $('#stats').innerHTML = stats || ''; $('#hx').innerHTML = extra || '';
 }
-const weekLabel = w => { const b = blockInfo(PLAN, w); return b ? 'Blok ' + b.block + ' · tydz. ' + b.n : 'Tydz. ' + w; };
+const weekLabel = w => { if (String(w) === '0') return 'Historia'; const b = blockInfo(PLAN, w); return b ? 'Blok ' + b.block + ' · tydz. ' + b.n : 'Tydz. ' + w; };
 /** czas, serie zrobione/wszystkie, tonaż bieżącej jednostki w nagłówku */
 function refreshStats(){
   if (TAB !== 'trening') return;
@@ -2305,10 +2313,10 @@ function weekBar(mode){
       <button type="button" class="btn sm wk-now" data-wkd="0" ${mon === mondayOf(today) ? 'aria-pressed="true"' : ''}>Dziś</button></div>
     <div class="wk-g">${days.map((d, i) => {
       const curIn = mode === 't' && d.items.some(it => it.week === cur.week && it.day === cur.day);
-      const lbl = WD[i] + ' ' + ddmm(d.date) + (d.items.length ? ': ' + d.items.map(it => it.day + ' ' + WK_TXT[it.st]).join(', ') : ': wolne');
+      const lbl = WD[i] + ' ' + ddmm(d.date) + (d.items.length ? ': ' + d.items.map(it => window.TL.dayLabel(it.day, it.title) + ' ' + WK_TXT[it.st]).join(', ') : ': wolne');
       return `<button type="button" class="wk-d ${d.date === today ? 'now' : ''} ${d.items.length ? '' : 'free'} ${curIn ? 'cur' : ''}" data-date="${d.date}" aria-label="${esc(lbl)}" ${d.items.length ? '' : 'tabindex="-1"'}>
         <span class="wk-wd">${WD[i]}</span><span class="wk-dd">${d.date.slice(8, 10)}</span>
-        ${d.items.map(it => `<span class="wk-u st-${it.st}">${esc(it.day)}<i aria-hidden="true">${WK_MARK[it.st]}</i></span>`).join('')}</button>`; }).join('')}</div>
+        ${d.items.map(it => `<span class="wk-u st-${it.st}">${esc(window.TL.dayLabel(it.day, it.title))}<i aria-hidden="true">${WK_MARK[it.st]}</i></span>`).join('')}</button>`; }).join('')}</div>
     ${mode === 't' ? '' : '<p class="wk-hint">Dotknij dnia, aby otworzyć trening · przytrzymaj, aby zmienić dzień</p>'}${offer}</section>`;
 }
 function bindWeekBar(){
@@ -2319,7 +2327,7 @@ function bindWeekBar(){
     TAB = 'trening'; render(); window.scrollTo(0, 0);
   };
   const choose = (us, then, title) => {
-    openSheet(`<h2 id="sheet-t">${title}</h2><div class="opts">${us.map((u, i) => `<button type="button" class="opt" data-i="${i}"><b>${esc(u.day)}</b> ${esc(u.title || '')}${u.done ? ' · zrobiona ✓' : ''}</button>`).join('')}</div><button type="button" class="btn" data-close>Anuluj</button>`);
+    openSheet(`<h2 id="sheet-t">${title}</h2><div class="opts">${us.map((u, i) => `<button type="button" class="opt" data-i="${i}"><b>${esc(window.TL.dayLabel(u.day, u.title))}</b> ${esc(u.title || '')}${u.done ? ' · zrobiona ✓' : ''}</button>`).join('')}</div><button type="button" class="btn" data-close>Anuluj</button>`);
     document.querySelectorAll('#sheet [data-i]').forEach(b => b.onclick = () => { closeSheet(); then(us[+b.dataset.i]); });
   };
   bar.querySelectorAll('[data-wkd]').forEach(b => b.onclick = () => {
@@ -2376,7 +2384,7 @@ function renderPlan(){
     const k = u.week + '|' + u.day, exs = byKey[k].rows.slice().sort((a, b) => a.order - b.order);
     h += `<section class="unit ${state(u)}" id="u-${u.week}-${esc(u.day)}">
       <div class="uh"><div class="dd"><b>${u.date.slice(8, 10)}</b><small>${weekday(u.date)} · ${monthShort(u.date)}</small></div>
-        <div class="ut"><strong>${esc(u.day)}</strong> ${esc(u.title)}${u.own ? ' <span class="tag">własny</span>' : ''}<small>${exs.length} ${plural(exs.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} · ${u.done ? 'zrobiona ✓' : u.date === today ? 'dziś' : u.date < today ? 'zaległa' : 'zaplanowana'}</small></div>
+        <div class="ut"><strong>${esc(window.TL.dayLabel(u.day, u.title))}</strong> ${esc(u.title)}${u.own ? ' <span class="tag">własny</span>' : ''}<small>${exs.length} ${plural(exs.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} · ${u.done ? 'zrobiona ✓' : u.date === today ? 'dziś' : u.date < today ? 'zaległa' : 'zaplanowana'}</small></div>
         ${calOk(u) ? `<button type="button" class="btn cal" data-cal="${k}" title="Dodaj do kalendarza" aria-label="Dodaj do kalendarza: ${esc(u.day)}">${CAL_ADD_SVG}</button>` : ''}</div>
       <details><summary>Ćwiczenia</summary><ol>${exs.map(ex => `<li><b>${esc(ex.name)}</b><span>${SIMPLE ? rxSimple(ex) : rxPro(ex)}</span></li>`).join('')}</ol></details>
       <div class="uact"><button class="btn go" data-go="${k}">Przejdź do treningu</button>
@@ -3027,7 +3035,7 @@ function renderTrening(){
     return;
   }
   const s0 = exs[0];
-  head(weekLabel(cur.week) + ' · ' + cur.day + ' · ' + weekday(s0.date) + ' ' + ddmm(s0.date) + (sessDone(cur.week, cur.day) ? ' · zrobiona ✓' : ''),
+  head(weekLabel(cur.week) + ' · ' + window.TL.dayLabel(cur.day, s0.title) + ' · ' + weekday(s0.date) + ' ' + ddmm(s0.date) + (sessDone(cur.week, cur.day) ? ' · zrobiona ✓' : ''),
     s0.title || cur.day,
     `<span>Czas <b class="clock">${clockText()}</b></span><span>Serie <b id="st-sets"></b></span><span>Tonaż <b id="st-ton"></b> kg</span>`,
     (SIMPLE ? '' : `<span class="sc" role="group" aria-label="Skala">${['RPE', 'RIR'].map(s => `<button type="button" data-sc="${s}" aria-pressed="${SCALE === s}">${s}</button>`).join('')}</span>`) +

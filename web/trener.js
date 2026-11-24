@@ -675,11 +675,11 @@ function renderKlientUst(id){
       : '<p class="muted">Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL.</p>') +
     '<div class="sec" style="border:0">Nowy link</div><p class="legend" style="font-size:13px">Gdy link trafił do niewłaściwej osoby. Stary link przestaje działać, a klient musi dostać nowy. Treningi i historia zostają.</p>' +
     '<button class="cp danger" type="button" id="kl-rekey"' + dis + '>' + (m.busy === 'rekey' ? 'Generuję…' : m.rekey === id ? 'Na pewno? Stary link przestanie działać' : 'Wygeneruj nowy link') + '</button></div>' +
-    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>';
+    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>' + importCard(k);
   $('#main').innerHTML = head('<a href="#klienci" style="color:inherit">Klienci</a> › ustawienia', k.name, '<a class="b" ' + klLink + ' href="#k/' + encodeURIComponent(id) + '">Karta klienta ›</a>') +
     '<div class="pg"><div class="kgrid"><div class="card" id="kl-form">' + f + '</div><div class="stack">' + side + '</div></div></div>';
   const re = () => { KLM = { ok: '', err: '', busy: false, rekey: '' }; renderKlientUst(id); };
-  klCtl(d, re); klBind();
+  klCtl(d, re); klBind(); importBind(k, () => { if (location.hash === '#klienci/' + encodeURIComponent(id)) renderKlientUst(id); });
   const em = $('#kl-email');
   if (em) em.oninput = () => { d.email = em.value.trim(); const n = KL_F.filter(f => d[f] !== k[f]).length, sv = $('#kl-save'); if (sv && !KLM.busy) sv.disabled = !n; };
   const mt = $('#kl-mailtest');
@@ -706,6 +706,79 @@ function renderKlientUst(id){
     catch (e) { KLM = { ok: '', err: e.auth ? '' : e.message, busy: false, rekey: '' }; }
     if (location.hash.startsWith('#klienci/')) renderKlientUst(id);
   };
+}
+/* ---------- historia z innej aplikacji: plik CSV czytany w przeglądarce (lib importParse / importPick), dopasowanie do bazy i zapis w skrypcie (trImport) ---------- */
+let HV = null;                                   // {id, file, text, P, from, lbs, withTaken, srv, busy, err, ok, sure}; tylko w pamięci strony
+const HV_FROM = [['all', 'Cała historia'], ['12', '12 mies.'], ['6', '6 mies.']];
+const dmy = d => d ? dm(d) + '.' + d.slice(0, 4) : '';
+const hvFrom = f => { if (f === 'all') return ''; const d = new Date(); d.setMonth(d.getMonth() - Number(f)); return d.toISOString().slice(0, 10); };
+const hvN = n => n + ' ' + plN(n, 'trening', 'treningi', 'treningów');
+const hvPick = h => TL.importPick(h.P, { from: hvFrom(h.from || '12'), taken: new Set((h.srv && h.srv.taken) || []), withTaken: h.withTaken });
+const HV_TPL = 'data:text/csv;charset=utf-8,' + encodeURIComponent('﻿' + TL.IMPORT_TEMPLATE);
+function importCard(k){
+  const h = HV && HV.id === k.id ? HV : { id: k.id }, srv = h.srv || {}, prev = srv.prev, pick = h.P && !h.P.error ? hvPick(h) : null;
+  const top = '<div class="card hv" id="import"><h2>Historia z innej aplikacji</h2>';
+  const prevH = prev ? '<div class="hvprev"><span>' + esc(prev.src || 'Import') + ' w aplikacji: <b>' + hvN(prev.n) + '</b>, ' + dmy(prev.first) + ' – ' + dmy(prev.last) + '</span>' +
+    '<button class="cp danger" type="button" id="hv-undo"' + (h.busy ? ' disabled' : '') + '>' + (h.busy === 'undo' ? 'Usuwam…' : h.sure === 'undo' ? 'Na pewno? Usuń wczytaną historię' : 'Cofnij import') + '</button></div>' : '';
+  const msg = (h.ok ? '<div class="okbox" role="status">' + h.ok + '</div>' : '') + (h.err ? '<p class="err" role="alert">' + esc(h.err) + '</p>' : '');
+  if (!pick) return top + msg + prevH + '<p class="legend" style="font-size:13px;margin-top:0">' + esc(k.name) + ' eksportuje treningi i wysyła Ci plik CSV. Przed zapisem zobaczysz podgląd.</p>' +
+    '<ul class="hvh"><li><b>Hevy:</b> Profil → ⚙ → Export &amp; Import Data → Export Workouts</li><li><b>Strong:</b> Profil → ⚙ → Export Strong Data</li>' +
+    '<li><b>Inna aplikacja albo zeszyt:</b> <a href="' + HV_TPL + '" download="szablon-treningi.csv">szablon CSV</a> (jedna linia = jedna seria, otwiera się w Excelu)</li></ul>' +
+    '<label class="cp hvf' + (h.busy ? ' dis' : '') + '">' + (h.busy === 'look' ? 'Czytam plik…' : '📂 Wybierz plik CSV') + '<input type="file" id="hv-file" accept=".csv,text/csv"' + (h.busy ? ' disabled' : '') + ' hidden></label></div>';
+  const M = srv.match || {}, miss = pick.names.filter(([n]) => !M[n]), hit = pick.names.filter(([n]) => M[n]);
+  const exRow = ([n, c], m) => '<li><span class="hvn">' + esc(n) + '</span>' + (m ? '<span class="hva">→ ' + esc(m) + '</span>' : '<span class="hva no">zostaje pod tą nazwą</span>') + '<span class="hvc">' + c + '×</span></li>';
+  return top + msg +
+    '<div class="hvfile"><b>' + esc(h.file) + '</b><span>Rozpoznano: ' + esc(h.P.src) + ' · ' + hvN(pick.all) + ' w pliku' + (h.P.lbs && !h.P.unitAsk ? ' · funty przeliczone na kg' : '') + '</span></div>' +
+    (h.P.bad.length ? '<p class="legend" style="font-size:13px">Pominięte wiersze bez daty albo ćwiczenia: ' + h.P.bad.length + ' (np. linia ' + h.P.bad.slice(0, 3).join(', ') + ').</p>' : '') +
+    (h.P.unitAsk ? '<div class="fr fr1"><div><b>Ciężar w pliku</b><small>Strong nie zapisuje jednostki. Sprawdź jedną serię: 80 kg czy 80 lb?</small></div><div class="seg">' +
+      [[false, 'kg'], [true, 'funty (lb)']].map(([v, t]) => '<button type="button" data-hvlbs="' + v + '" aria-pressed="' + (!!h.lbs === v) + '">' + t + '</button>').join('') + '</div></div>' : '') +
+    '<div class="fr fr1"><div><b>Od kiedy</b><small>Starsza historia też liczy się do rekordów, ale wydłuża ładowanie aplikacji klienta (ok. 0,5 MB na rok przy 3 treningach w tygodniu).</small></div>' +
+      '<div class="seg">' + HV_FROM.map(([v, t]) => '<button type="button" data-hvfrom="' + v + '" aria-pressed="' + ((h.from || '12') === v) + '">' + t + '</button>').join('') + '</div></div>' +
+    '<div class="hvst"><div><b>' + pick.n + '</b><span>' + plN(pick.n, 'trening', 'treningi', 'treningów') + '</span></div><div><b>' + pick.work.toLocaleString('pl-PL') + '</b><span>serii roboczych</span></div><div><b>' + pick.names.length + '</b><span>ćwiczeń</span></div></div>' +
+    (pick.n ? '<p class="legend" style="font-size:13px">Od ' + dmy(pick.first) + ' do ' + dmy(pick.last) + '</p>' : '<p class="legend" style="font-size:13px">W tym okresie nie ma treningów do wczytania.</p>') +
+    (pick.dup ? '<div class="fr"><div><b>' + pick.dup + ' ' + plN(pick.dup, 'dzień', 'dni', 'dni') + ' już w aplikacji</b><small>W tym dniu klient ma już trening w aplikacji, więc z pliku go pomijam, żeby nie liczyć dwa razy.</small></div>' + swH('hv-taken', !!h.withTaken, 'Wczytaj też te dni') + '</div>' : '') +
+    '<div class="sec">Ćwiczenia</div>' +
+    (miss.length ? '<p class="legend" style="font-size:13px;margin-top:0"><b>' + miss.length + ' bez odpowiednika w bazie.</b> Wczytają się pod nazwą z pliku. Gdy dopiszesz ją jako alias w zakładce Ćwiczenia i wczytasz plik jeszcze raz, połączy się z resztą historii.</p><ul class="hvl">' + miss.map(x => exRow(x, '')).join('') + '</ul>' : '') +
+    (hit.length ? '<details class="hvd"' + (miss.length ? '' : ' open') + '><summary>Dopasowane do bazy: ' + hit.length + ' z ' + pick.names.length + '</summary><ul class="hvl">' + hit.map(x => exRow(x, M[x[0]])).join('') + '</ul></details>' : '') +
+    '<p class="legend" style="font-size:13px">Każdy trening wejdzie jako własny trening klienta z RPE i notatkami. Liczy się do rekordów, wykresu Siły i objętości, nie zmienia wykonania planu.' + (prev ? ' Ponowny import zastępuje poprzedni.' : '') + '</p>' +
+    '<div class="row2"><button class="b p" type="button" id="hv-go"' + (pick.n && !h.busy ? '' : ' disabled') + '>' + (h.busy === 'go' ? 'Wczytuję…' : h.sure === 'go' ? 'Na pewno? Wczytaj ' + pick.n : 'Wczytaj ' + hvN(pick.n)) + '</button>' +
+    '<button class="b" type="button" id="hv-x"' + (h.busy ? ' disabled' : '') + '>Anuluj</button></div></div>';
+}
+function importBind(k, re){
+  const set = o => { HV = Object.assign({}, HV && HV.id === k.id ? HV : { id: k.id }, o); re(); };
+  const isoOf = t => t ? new Date(t).toISOString() : '';            // czas z pliku = czas lokalny trenera
+  const look = async (text, file, lbs) => {
+    const P = TL.importParse(text, { lbs });
+    if (P.error) return set({ P: null, err: P.error, ok: '', busy: '' });
+    const names = [...new Set([].concat(...P.workouts.map(w => w.ex.map(e => e.name))))], dates = [...new Set(P.workouts.map(w => w.date))];
+    set({ busy: 'look', err: '', ok: '', sure: '' });
+    try { const r = await guard(api('trImport', k.id, { mode: 'podglad', names, dates })); set({ file, text, P, lbs, srv: r, busy: '' }); }
+    catch (e) { set({ P: null, err: e.auth ? '' : e.message, busy: '' }); }
+  };
+  const f = $('#hv-file');
+  if (f) f.onchange = async () => { const file = f.files && f.files[0]; if (!file) return; HV = Object.assign({}, HV, { from: '12', withTaken: false }); await look(await file.text(), file.name, false); };
+  document.querySelectorAll('[data-hvfrom]').forEach(b => b.onclick = () => set({ from: b.dataset.hvfrom, sure: '' }));
+  document.querySelectorAll('[data-hvlbs]').forEach(b => b.onclick = () => { const P = TL.importParse(HV.text, { lbs: b.dataset.hvlbs === 'true' }); if (!P.error) set({ P, lbs: b.dataset.hvlbs === 'true', sure: '' }); });
+  const tk = document.querySelector('[data-sw="hv-taken"]'); if (tk) tk.onclick = () => set({ withTaken: !HV.withTaken, sure: '' });
+  const x = $('#hv-x'); if (x) x.onclick = () => set({ P: null, text: '', file: '', sure: '', err: '' });
+  const go = $('#hv-go');
+  if (go) go.onclick = async () => {
+    if (HV.sure !== 'go') return set({ sure: 'go' });
+    const pick = hvPick(HV), src = HV.P.fmt;
+    set({ busy: 'go', sure: '' });
+    try { const r = await guard(api('trImport', k.id, { mode: 'wczytaj', src, workouts: pick.workouts.map(w => Object.assign({}, w, { start: isoOf(w.start), end: isoOf(w.end) })) }));
+      delete CK[k.id];
+      set({ busy: '', P: null, text: '', srv: { prev: r.prev }, ok: '<b>✓ Wczytano ' + hvN(r.units) + ' (' + r.sets.toLocaleString('pl-PL') + ' serii).</b> ' + esc(k.name) + ' zobaczy je w Postępie i w historii ćwiczeń przy następnym otwarciu aplikacji. Podsumowania w arkuszu policzą się przy najbliższym przeliczeniu.' }); }
+    catch (e) { set({ busy: '', err: e.auth ? '' : e.message }); }
+  };
+  const u = $('#hv-undo');
+  if (u) u.onclick = async () => {
+    if (HV.sure !== 'undo') return set({ sure: 'undo' });
+    set({ busy: 'undo', sure: '' });
+    try { const r = await guard(api('trImport', k.id, { mode: 'cofnij' })); delete CK[k.id]; set({ busy: '', srv: { prev: null }, ok: '✓ Usunięto ' + hvN(r.units) + ' z importu.' }); }
+    catch (e) { set({ busy: '', err: e.auth ? '' : e.message }); }
+  };
+  if (!HV || HV.id !== k.id) { HV = { id: k.id, srv: {} }; guard(api('trImport', k.id, { mode: 'stan' })).then(r => { if (HV.id === k.id && !HV.P) set({ srv: Object.assign({}, HV.srv, r) }); }).catch(() => {}); }
 }
 function renderNowyKlient(){
   const n = NK = NK || { imie: '', id: '', touched: false, mode: 'PROSTY', swap: 'TRENER', masters: false, err: '', busy: false, done: null };

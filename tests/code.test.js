@@ -1732,3 +1732,88 @@ test('trNextUnit_: „Zaplanuj następną” – zmiana jednostki w tyg. + 1 alb
   assert.match(C.trNextUnit_(plan, 'ania', { week: 7, day: 'T1', ex: [{ order: 1, kg: 'x'.repeat(20) }] }).error, /Back Squat: kg/);
   assert.ok(C.TR_FNS.trNastepna && !C.LIVE_FNS.trNastepna && !C.API_FNS.trNastepna);
 });
+
+// ---------- import historii z innej aplikacji (Import.gs), dane syntetyczne ----------
+const CW_TEST = [['Bench Press', 'Wyciskanie leżąc'], ['Dumbbell Bench Press', ''], ['Back Squat', 'Barbell Squat'], ['Lat Pulldown', ''], ['Press', 'Wyciskanie żołnierskie'], ['Plank', '']]
+  .map(([n, a]) => ({ cwiczenie: n, aliasy: a, instruktaz: 'https://example.com/' + n.length, partia: '', zamienniki: '', grupa: '', glowna: '' }));
+
+test('importFind_ / importMatch_: sprzęt z nawiasu przed nazwą, hantle nie łączą się ze sztangą, słownik CW_IMPORT', () => {
+  const m = C.importMatch_(CW_TEST, ['Bench Press (Barbell)', 'Bench Press (Dumbbell)', 'Squat (Barbell)', 'Lat Pulldown (Cable)', 'Overhead Press (Barbell)', 'Plank', 'Incline Bench Press (Dumbbell)', 'Zercher Hold', '']);
+  assert.deepEqual(m, { 'Bench Press (Barbell)': 'Bench Press', 'Bench Press (Dumbbell)': 'Dumbbell Bench Press', 'Squat (Barbell)': 'Back Squat', 'Lat Pulldown (Cable)': 'Lat Pulldown',
+    'Overhead Press (Barbell)': 'Press', 'Plank': 'Plank', 'Incline Bench Press (Dumbbell)': '', 'Zercher Hold': '' });
+  const full = C.cwBaza_(C.CW_BAZA, C.CW_ALIASY, C.CW_DODATKI, C.CW_FEDB, C.CW_SCALONE).map(b => ({ cwiczenie: b[0], aliasy: b[3], instruktaz: b[1] ? 'https://example.com/' + b[1] : '', partia: b[2], zamienniki: '', grupa: '', glowna: '' }));
+  const ix = C.exIndex_(full);
+  Object.keys(C.CW_IMPORT).forEach(k => assert.ok(C.exFind_(ix, C.CW_IMPORT[k]), 'cel słownika jest w bazie: ' + C.CW_IMPORT[k]));
+  assert.equal(C.importFind_(ix, 'Bench Press (Dumbbell)').name, 'Dumbbell Bench Press');
+});
+
+test('importRows_: wiersze Planu, Logu i Sesji (tydzień 0, H<rrmmdd>, rozgrzewka, drop, superseria, na czas), błędy', () => {
+  const W = [{ date: '2026-03-03', day: 'H260303', start: '2026-03-03T17:05:00.000Z', end: '2026-03-03T18:10:00.000Z', title: 'Nogi', note: '=1+1',
+    ex: [{ name: 'Squat (Barbell)', sup: '', note: 'kolano', sets: [{ t: 'R', kg: 40, reps: 8 }, { t: 'W', kg: 100, reps: 5, rpe: 8 }, { t: 'W', kg: 100, reps: 4, rpe: 10 }, { t: 'D', kg: 80, reps: 6 }] },
+      { name: 'Bench Press (Dumbbell)', sup: '0', sets: [{ t: 'W', kg: 26, reps: 10, rpe: 11 }] }, { name: 'Lat Pulldown (Cable)', sup: '0', sets: [{ t: 'W', kg: 55, reps: 10 }] },
+      { name: 'Plank', sup: '', sets: [{ t: 'W', kg: '', reps: '', sec: 60 }] }] },
+    { date: '2026-03-03', day: 'H260303b', start: '', end: '', title: '', ex: [{ name: 'Zercher Hold', sets: [{ t: 'W', kg: 60, reps: '', sec: 20 }] }] }];
+  const r = C.importRows_('anna', W, { 'Squat (Barbell)': 'Back Squat', 'Bench Press (Dumbbell)': 'Dumbbell Bench Press' }, 'hevy', '2026-11-24T12:00:00.000Z');
+  assert.deepEqual([r.units, r.sets, r.plan.length, r.log.length, r.ses.length], [2, 8, 5, 8, 2]);
+  assert.deepEqual(r.plan.map(p => [p.jednostka, p.nr, p.cwiczenie, p.serie, p.powt, p.obwod, p.uwagi, p.tytul]), [
+    ['H260303', 1, 'Back Squat', 2, '5', '', 'Hevy: Squat (Barbell)', 'Hevy · Nogi'], ['H260303', 2, 'Dumbbell Bench Press', 1, '10', 'A', 'Hevy: Bench Press (Dumbbell)', 'Hevy · Nogi'],
+    ['H260303', 3, 'Lat Pulldown (Cable)', 1, '10', 'A', '', 'Hevy · Nogi'], ['H260303', 4, 'Plank', 1, '60 s', '', '', 'Hevy · Nogi'], ['H260303b', 1, 'Zercher Hold', 1, '20 s', '', '', 'Hevy · Trening']]);
+  assert.ok(r.plan.every(p => p.tydzien === 0 && p.zrodlo === 'klient' && p.prio === 'A' && p.blok === '' && C.own_(p)));
+  assert.deepEqual(r.log.slice(0, 4).map(l => [l.id, l.seria, l.kg, l.powt, l.rpe, l.typ, l.uwagi, l.wykonane]), [
+    ['anna|0|H260303|1|R1', 'R1', 40, 8, '', '', 'kolano', 'TAK'], ['anna|0|H260303|1|1', 1, 100, 5, 8, '', 'kolano', 'TAK'],
+    ['anna|0|H260303|1|2', 2, 100, 4, 10, '', 'kolano', 'TAK'], ['anna|0|H260303|1|D1', 'D1', 80, 6, '', 'DROP', 'kolano', 'TAK']]);
+  assert.equal(r.log[4].rpe, '', 'RPE ponad 10 odrzucone');
+  assert.equal(r.log[6].powt, 60, 'seria na czas: sekundy w powt');
+  assert.deepEqual([r.ses[0].czas_min, r.ses[0].start, r.ses[0].uwagi, r.ses[1].czas_min, r.log[7].zapisano], [65, '2026-03-03T17:05:00.000Z', '=1+1', '', '2026-11-24T12:00:00.000Z']);
+  assert.match(C.importRows_('anna', [], {}, 'hevy', '').error, /Brak treningów/);
+  assert.match(C.importRows_('anna', [Object.assign({}, W[0], { day: 'H260304' })], {}, 'hevy', '').error, /Zła data/);
+  assert.match(C.importRows_('anna', [W[0], W[0]], {}, 'hevy', '').error, /tym samym oznaczeniem/);
+  assert.match(C.importRows_('anna', [Object.assign({}, W[0], { day: 'W1' })], {}, 'hevy', '').error, /Zła data/);
+  assert.equal(C.importRows_('anna', W, {}, 'szablon', '').plan[0].tytul, 'Import · Nogi');
+});
+
+test('importTaken_ / importState_: dni z treningiem w aplikacji (bez importu), stan poprzedniego importu', () => {
+  const log = [{ klient: 'anna', tydzien: 3, jednostka: 'A', data: '2026-03-03', wykonane: 'TAK' }, { klient: 'anna', tydzien: 3, jednostka: 'B', data: '2026-03-05', wykonane: '' },
+    { klient: 'anna', tydzien: 0, jednostka: 'H260306', data: '2026-03-06', wykonane: 'TAK' }, { klient: 'bartek', tydzien: 1, jednostka: 'A', data: '2026-03-07', wykonane: 'TAK' }];
+  const ses = [{ klient: 'anna', tydzien: 4, jednostka: 'A', data: '2026-03-09', start: '2026-03-10T17:00:00.000Z' }];
+  assert.deepEqual(Object.keys(C.importTaken_(log, ses, 'anna', t => t.slice(0, 10))).sort(), ['2026-03-03', '2026-03-10']);
+  const plan = [{ klient: 'anna', tydzien: 0, jednostka: 'H260306', data: '2026-03-06', tytul: 'Hevy · Nogi' }, { klient: 'anna', tydzien: 0, jednostka: 'H260301', data: '2026-03-01', tytul: 'Hevy · Góra' },
+    { klient: 'anna', tydzien: 0, jednostka: 'H260301', data: '2026-03-01', tytul: 'Hevy · Góra' }, { klient: 'anna', tydzien: 1, jednostka: 'W1', data: '2026-03-02', zrodlo: 'klient' }];
+  assert.deepEqual(C.importState_(plan, 'anna'), { n: 2, first: '2026-03-01', last: '2026-03-06', src: 'Hevy' });
+  assert.equal(C.importState_(plan, 'bartek'), null);
+  assert.ok(C.TR_FNS.trImport && !C.API_FNS.trImport && !C.LIVE_FNS.trImport);
+});
+
+test('Import (atrapa arkusza): trImport wczytuje, ponowny import zastępuje, cofnięcie usuwa tylko import; zwykły trening zostaje', () => {
+  const S = require('./load-code')();
+  const F = fakeSheets({
+    Klienci: [['klucz', 'klient_id', 'imie', 'aktywny'], ['k0123456789a', 'anna', 'Anna', 'TAK']],
+    Plan: [S.PLAN_HEADERS, S.PLAN_HEADERS.map(h => ({ klient: 'anna', tydzien: 1, jednostka: 'A', tytul: 'Siła', data: '2026-03-03', nr: 1, cwiczenie: 'Back Squat', prio: 'A', serie: 3, powt: '5' }[h] || ''))],
+    Log: [S.LOG_HEADERS, S.LOG_HEADERS.map(h => ({ id: 'anna|1|A|1|1', klient: 'anna', tydzien: 1, jednostka: 'A', data: '2026-03-03', nr_cw: 1, cwiczenie: 'Back Squat', seria: 1, kg: 90, powt: 5, wykonane: 'TAK' }[h] || ''))],
+    Sesje: [S.SES_HEADERS], 'Ćwiczenia': [S.CW_HEADERS].concat(CW_TEST.map(r => S.CW_HEADERS.map(h => r[h])))
+  });
+  S.SpreadsheetApp = { getActive: () => F.ss };
+  S.LockService = { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) };
+  S.CacheService = { getScriptCache: () => ({ get: () => null, getAll: () => ({}), putAll() {}, remove() {} }) };
+  S.Utilities = { formatDate: d => d.toISOString().slice(0, 10) };
+  S.Session = { getScriptTimeZone: () => 'Europe/Warsaw' };
+  assert.throws(() => S.trImport('nikt', { mode: 'stan' }), /Nie ma aktywnego klienta/);
+  assert.deepEqual(S.trImport('anna', { mode: 'stan' }), { prev: null });
+  const look = S.trImport('anna', { mode: 'podglad', names: ['Squat (Barbell)', 'Moje ćwiczenie'], dates: ['2026-03-03', '2026-03-04'] });
+  assert.deepEqual(look.match, { 'Squat (Barbell)': 'Back Squat', 'Moje ćwiczenie': '' });
+  assert.deepEqual(look.taken, ['2026-03-03']);
+  const w = (d, n) => ({ date: d, day: 'H' + d.slice(2).replace(/-/g, ''), start: d + 'T17:00:00.000Z', end: d + 'T18:00:00.000Z', title: 'Nogi', note: '',
+    ex: [{ name: 'Squat (Barbell)', sets: Array.from({ length: n }, (_, i) => ({ t: 'W', kg: 100, reps: 5, rpe: i ? 8 : '' })) }] });
+  let r = S.trImport('anna', { mode: 'wczytaj', src: 'hevy', workouts: [w('2026-03-04', 2), w('2026-03-06', 3)] });
+  assert.deepEqual([r.units, r.sets, r.prev.n, r.prev.src], [2, 5, 2, 'Hevy']);
+  assert.equal(S.tableOf_('Log').length, 6); assert.equal(S.tableOf_('Sesje').length, 2); assert.equal(S.tableOf_('Plan').length, 3);
+  assert.equal(S.tableOf_('Plan')[1].cwiczenie, 'Back Squat');
+  r = S.trImport('anna', { mode: 'wczytaj', src: 'hevy', workouts: [w('2026-03-08', 1)] });
+  assert.deepEqual([r.units, S.tableOf_('Log').length, S.tableOf_('Sesje').length, S.tableOf_('Plan').length], [1, 2, 1, 2], 'ponowny import zastępuje poprzedni');
+  assert.throws(() => S.trImport('anna', { mode: 'wczytaj', src: 'hevy', workouts: [Object.assign(w('2026-03-09', 1), { day: 'A' })] }), /Zła data/);
+  assert.equal(S.tableOf_('Log').length, 2, 'błąd = nic nie usunięte');
+  assert.deepEqual(S.trImport('anna', { mode: 'cofnij' }), { units: 1 });
+  assert.deepEqual(S.tableOf_('Log').map(l => l.id), ['anna|1|A|1|1']);
+  assert.equal(S.tableOf_('Plan').length, 1); assert.equal(S.tableOf_('Sesje').length, 0);
+  assert.deepEqual(F.formulas(), []);
+});

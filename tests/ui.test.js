@@ -166,6 +166,15 @@ test('Plan: dolne menu, pasek tygodnia Pn–Nd, tydzień bloku, lżejszy tydzie�
   // pasek na Treningu: dotknięcie dnia otwiera jednostkę
   await p.click('#main .wk-d[data-date="2026-10-05"]'); await p.waitForTimeout(100);
   assert.match(await p.textContent('#eyebrow'), /T1 · pn 05\.10 · zrobiona/);
+  // aplikacja zamknięta w tle i otwarta ponownie: ten sam dzień = ostatnio otwarta jednostka, nie dzisiejsza
+  await p.reload(); await p.waitForSelector('#main:not([hidden]) .set');
+  assert.match(await p.textContent('#eyebrow'), /T1 · pn 05\.10 · zrobiona/);
+  const cu = JSON.parse(await p.evaluate(() => localStorage.getItem('cu_kabc')));
+  assert.deepEqual([cu.w, cu.d], [7, 'T1']);
+  // następnego dnia (po 6 h) znów dzisiejsza
+  await p.evaluate(() => { const c = JSON.parse(localStorage.getItem('cu_kabc')); c.t = '2000-01-01'; c.at = 1; localStorage.setItem('cu_kabc', JSON.stringify(c)); });
+  await p.reload(); await p.waitForSelector('#main:not([hidden]) .set');
+  assert.doesNotMatch(await p.textContent('#eyebrow'), /T1 · pn 05\.10/);
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });

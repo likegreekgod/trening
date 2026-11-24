@@ -183,6 +183,12 @@ async function page(calls, opt = {}) {
     else if (b.fn === 'trBlokPlan') { await new Promise(res => setTimeout(res, 150)); const o = b.args[1];
       out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).' } : { ok: true, result: blokPlan(o) }; }
     else if (b.fn === 'trBlokWczytaj') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { status: 'OK', text: 'Wczytano blok B3: ' + new Set(b.args[1].map(r => r.tydzien + r.jednostka)).size + ' jednostek. Import: OK. Klient widzi plan w aplikacji.' } }; }
+    else if (b.fn === 'trImport') { await new Promise(res => setTimeout(res, 80)); const a = b.args[1];
+      if (a.mode === 'stan') out = { ok: true, result: { prev: st.imp || null } };
+      else if (a.mode === 'podglad') out = { ok: true, result: { match: Object.fromEntries(a.names.map(n => [n, { 'Squat (Barbell)': 'Back Squat', 'Bench Press (Dumbbell)': 'Dumbbell Bench Press' }[n] || ''])), taken: a.dates.filter(d => d === '2026-03-05'), prev: st.imp || null } };
+      else if (a.mode === 'wczytaj') { const ds = a.workouts.map(w => w.date).sort(); st.imp = { n: a.workouts.length, first: ds[0], last: ds[ds.length - 1], src: 'Hevy' };
+        out = { ok: true, result: { units: a.workouts.length, sets: a.workouts.reduce((x, w) => x + w.ex.reduce((y, e) => y + e.sets.length, 0), 0), prev: st.imp } }; }
+      else { const n = st.imp ? st.imp.n : 0; st.imp = null; out = { ok: true, result: { units: n } }; } }
     else out = { ok: false, error: 'Nieznana funkcja: ' + b.fn };
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, body: JSON.stringify(out) });
   });
@@ -972,6 +978,54 @@ test('panel: pakiet treningów (Wymaga uwagi, Dziś trenują, karta klienta: now
   await p.waitForFunction(() => /^13/.test(document.querySelector('#pakiet .pkn b').textContent));
   a = calls.filter(c => c.fn === 'trPakiet').pop().args[1];
   assert.equal(a.mode, 'nowy'); assert.equal(a.n, 12); assert.equal(a.price, '1440'); assert.equal(a.from, TODAY);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+// syntetyczny eksport Hevy: 3 treningi (jeden w dniu, w którym klient ma już trening w aplikacji)
+const HEVY = ['"title","start_time","end_time","description","exercise_title","superset_id","exercise_notes","set_index","set_type","weight_kg","reps","distance_km","duration_seconds","rpe"']
+  .concat([['1 Mar 2026', 'Nogi'], ['5 Mar 2026', 'Góra'], ['8 Mar 2026', 'Nogi']].flatMap(([d, t]) => (t === 'Nogi' ? [['Squat (Barbell)', 'warmup', 40, 8], ['Squat (Barbell)', 'normal', 100, 5], ['Squat (Barbell)', 'normal', 100, 5], ['Zercher Hold', 'normal', 60, '']]
+    : [['Bench Press (Dumbbell)', 'normal', 26, 10], ['Bench Press (Dumbbell)', 'normal', 26, 9]]).map(([n, ty, kg, r], i) => `"${t}","${d}, 18:00","${d}, 19:05","","${n}",,"",${i},"${ty}",${kg},${r},,${r === '' ? 30 : ''},${ty === 'normal' && kg > 50 ? 8 : ''}`))).join('\n');
+
+test('panel: historia z innej aplikacji (plik Hevy → podgląd → wczytanie → cofnięcie)', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, { loggedIn: true });
+  await p.goto(base + 'trener.html#klienci/ania'); await p.waitForSelector('#import #hv-file', { state: 'attached' });
+  assert.match(await p.textContent('#import'), /Hevy:.*Export Workouts[\s\S]*Strong:[\s\S]*szablon CSV/);
+  assert.match(await p.getAttribute('#import a[download]', 'href'), /^data:text\/csv/);
+  await p.setInputFiles('#hv-file', { name: 'hevy_workouts.csv', mimeType: 'text/csv', buffer: Buffer.from(HEVY) });
+  await p.waitForSelector('#hv-go');
+  assert.deepEqual(calls.filter(c => c.fn === 'trImport').pop().args[1], { mode: 'podglad', names: ['Squat (Barbell)', 'Zercher Hold', 'Bench Press (Dumbbell)'], dates: ['2026-03-01', '2026-03-05', '2026-03-08'] });
+  await p.click('[data-hvfrom="all"]');
+  let t = await p.textContent('#import');
+  assert.match(t, /Rozpoznano: Hevy · 3 treningi w pliku/);
+  assert.match(t, /2\s*treningi\s*6\s*serii roboczych\s*2\s*ćwiczeń/, 'dzień z treningiem w aplikacji pominięty');
+  assert.match(t, /1 dzień już w aplikacji/);
+  assert.match(t, /1 bez odpowiednika w bazie[\s\S]*Zercher Hold\s*zostaje pod tą nazwą/);
+  assert.match(t, /Dopasowane do bazy: 1 z 2/);
+  await shot(p, 'trener-import.png');
+  await p.click('[data-sw="hv-taken"]');
+  assert.match(await p.textContent('#hv-go'), /Wczytaj 3 treningi/);
+  await p.click('[data-sw="hv-taken"]');
+  await p.click('#hv-go');
+  assert.match(await p.textContent('#hv-go'), /Na pewno\? Wczytaj 2/);
+  assert.equal(calls.filter(c => c.fn === 'trImport' && c.args[1].mode === 'wczytaj').length, 0, 'pierwsze dotknięcie niczego nie zapisuje');
+  await p.click('#hv-go'); await p.waitForSelector('#import .okbox');
+  const a = calls.filter(c => c.fn === 'trImport').pop().args[1];
+  assert.equal(a.mode, 'wczytaj'); assert.equal(a.src, 'hevy');
+  assert.deepEqual(a.workouts.map(w => [w.day, w.date, w.title, w.ex.length]), [['H260301', '2026-03-01', 'Nogi', 2], ['H260308', '2026-03-08', 'Nogi', 2]]);
+  assert.match(a.workouts[0].start, /^2026-03-01T\d{2}:00:00\.000Z$/);
+  assert.deepEqual(a.workouts[0].ex[0].sets.map(s => s.t), ['R', 'W', 'W']);
+  assert.deepEqual(a.workouts[0].ex[1].sets[0].sec, 30);
+  t = await p.textContent('#import');
+  assert.match(t, /Wczytano 2 treningi \(8 serii\)/);
+  assert.match(t, /Hevy w aplikacji: 2 treningi, 01\.03\.2026 – 08\.03\.2026/);
+  await p.click('#hv-undo'); assert.match(await p.textContent('#hv-undo'), /Na pewno/);
+  await p.click('#hv-undo'); await p.waitForFunction(() => /Usunięto 2 treningi/.test(document.querySelector('#import').textContent));
+  assert.equal(await p.$('#hv-undo'), null);
+  // plik spoza obsługiwanych formatów
+  await p.setInputFiles('#hv-file', { name: 'inne.csv', mimeType: 'text/csv', buffer: Buffer.from('a,b\n1,2') });
+  await p.waitForFunction(() => /Nie rozpoznaję/.test(document.querySelector('#import').textContent));
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });

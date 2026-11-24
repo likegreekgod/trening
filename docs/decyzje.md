@@ -2,7 +2,17 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
-## 2026-11-23 · „Zaplanuj następną” po prowadzonym treningu (v94, punkt 3c przeglądu v80)
+## 2026-11-24 · Import historii z innej aplikacji (Hevy, Strong, szablon), API dla agenta klienta później
+
+- Prośba klienta: przenieść historię z Hevy i docelowo API dla własnego agenta AI. Najpierw import (prosty, bez ryzyka), API osobno, gdy klient faktycznie się przeniesie.
+- Wspólny importer + mały adapter na format (lib `IMPORT_FMT`), format rozpoznany po nagłówku. Start: Hevy, Strong (najczęstszy standard eksportu) i własny szablon CSV na każdą inną aplikację albo zeszyt. Kolejny format dopiero, gdy przyjdzie klient z tą aplikacją.
+- Plik czyta panel trenera (nie klient), więc bez nowej akcji w API klienta. Nie trzymamy kluczy API Hevy klienta (eksport CSV działa też bez Hevy Pro).
+- Historia = własne treningi klienta w tygodniu 0 (dzień H<rrmmdd>, bez bloku): id serii bez bloku, więc tydzień 0 nie nadpisze planu (plany zaczynają się od 1), a cofnięcie usuwa wszystko po tym oznaczeniu. Własne = poza wykonaniem planu, ale w rekordach, Sile i objętości.
+- Dzień, w którym klient ma już trening w aplikacji, domyślnie pominięty (nie liczymy dwa razy). Domyślny okres 12 miesięcy: cała historia idzie do telefonu przy każdym otwarciu (ok. 0,5 MB na rok przy 3 treningach w tygodniu).
+- Dopasowanie nazw: sprzęt z nawiasu przed nazwą („Bench Press (Dumbbell)” → „Dumbbell Bench Press”); sama nazwa bez nawiasu tylko dla sztangi, maszyny, wyciągu, masy ciała i TRX, bo w bazie „Bench Press” to sztanga i hantle pomieszałyby rekordy. Niedopasowane zostają pod nazwą z pliku; trener dopisuje alias i wczytuje plik ponownie.
+- API dla agenta klienta (na później): osobny, odwoływalny klucz API klienta (nie loginy ani hasła), tylko odczyt planu i historii + dodanie własnego treningu, dzienny limit zapytań (wspólne limity Google dla wszystkich klientów).
+
+## 2026-11-23 · „Zaplanuj następną” po prowadzonym treningu (v98, punkt 3c przeglądu v80)
 
 - Okno tylko w trybie trenera, po pierwszym „Zakończ i zapisz” jednostki (nie po poprawce zapisanej), z siecią; potem „Trening zrobiony”. Własny trening klienta i jednostka w tyg. + 1 już zrobiona = bez okna.
 - Propozycja (lib `nextUnit`): A i B z liczbą kg, co najmniej jedna seria robocza, wszystkie 🟢 (RPE ≤ 7,5, bez nieudanej) → najcięższa dzisiejsza + 2,5 kg (w dół do 2,5). Inaczej kg z planu. Plan z wyższym ciężarem niż propozycja zostaje (nie obniżamy progresji trenera). K, na czas i kg słowem bez zmian. Serie, powt. i RPE z jednostki w tyg. + 1, jeśli jest, inaczej z dzisiejszej.

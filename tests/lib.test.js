@@ -550,6 +550,13 @@ test('weekDays i pickUnit: pasek Pn–Nd ze stanami, domyślna jednostka', () =>
   assert.equal(L.pickUnit(list, '2026-10-21').day, 'S2');
   assert.equal(L.pickUnit(list, '2026-10-22').day, 'T2');                         // najbliższa następna
   assert.equal(L.pickUnit(list.slice(0, 1), '2026-10-30').day, 'S1');             // nic dalej: ostatnia
+  // keepUnit: ostatnio otwarta jednostka po ponownym otwarciu aplikacji
+  const at = Date.parse('2026-10-21T22:00:00');
+  assert.equal(L.keepUnit({ w: 1, d: 'T1', t: '2026-10-21', at }, list, '2026-10-21', at + 60e3).day, 'T1');   // ten sam dzień
+  assert.equal(L.keepUnit({ w: 1, d: 'T1', t: '2026-10-21', at }, list, '2026-10-22', at + 3 * 3600e3).day, 'T1');   // po północy, < 6 h
+  assert.equal(L.keepUnit({ w: 1, d: 'T1', t: '2026-10-21', at }, list, '2026-10-22', at + 7 * 3600e3), null);   // następny dzień: dzisiejsza
+  assert.equal(L.keepUnit({ w: 1, d: 'X9', t: '2026-10-21', at }, list, '2026-10-21', at), null);   // jednostki już nie ma
+  assert.equal(L.keepUnit(null, list, '2026-10-21', at), null);
 });
 
 test('skipText / parseSkip i cutPlan: kolejność cięcia, serie_min, domyślnie B od końca', () => {
@@ -976,4 +983,74 @@ test('nextUnit: „Zaplanuj następną” po prowadzonym treningu (same 🟢 = +
   const target = [{ order: 1, name: 'Back Squat', sets: 5, reps: '3', kg: 105, rpe: 8.5 }, { order: 2, name: 'RDL', sets: 3, reps: '6', kg: 85 }, { order: 3, name: 'Row', sets: 4, reps: '8', kg: 60 }];
   const t = L.nextUnit([src[0], src[1], src[3]], done, target);
   assert.deepEqual(t.map(x => [x.name, x.torder, x.sets, x.reps, x.kg, x.was, x.up]), [['Back Squat', 1, 5, '3', 105, 105, false], ['RDL', 2, 3, '6', 85, 85, false], ['Row', 3, 4, '8', 62.5, 60, true]]);
+});
+
+// ---------- import historii z innej aplikacji (dane syntetyczne) ----------
+const HEVY_CSV = ['"title","start_time","end_time","description","exercise_title","superset_id","exercise_notes","set_index","set_type","weight_kg","reps","distance_km","duration_seconds","rpe"',
+  '"Nogi","3 Mar 2026, 18:05","3 Mar 2026, 19:10","Mało snu, ""ale"" ok","Squat (Barbell)",,"kolano, lekko",0,"warmup",40,8,,,',
+  '"Nogi","3 Mar 2026, 18:05","3 Mar 2026, 19:10","Mało snu, ""ale"" ok","Squat (Barbell)",,"kolano, lekko",1,"normal",100,5,,,8',
+  '"Nogi","3 Mar 2026, 18:05","3 Mar 2026, 19:10","Mało snu, ""ale"" ok","Squat (Barbell)",,"kolano, lekko",2,"failure",100,4,,,',
+  '"Nogi","3 Mar 2026, 18:05","3 Mar 2026, 19:10","Mało snu, ""ale"" ok","Leg Press",,,0,"normal",160,10,,,',
+  '"Nogi","3 Mar 2026, 18:05","3 Mar 2026, 19:10","Mało snu, ""ale"" ok","Leg Press",,,1,"dropset",120,10,,,',
+  '"Nogi","3 Mar 2026, 18:05","3 Mar 2026, 19:10","Mało snu, ""ale"" ok","Plank",,,0,"normal",,,,60,',
+  '"Góra","3 Mar 2026, 07:00","3 Mar 2026, 07:40","","Bench Press (Dumbbell)",0,,0,"normal",26,10,,,7.5',
+  '"Góra","3 Mar 2026, 07:00","3 Mar 2026, 07:40","","Lat Pulldown (Cable)",0,,0,"normal",55,10,,,',
+  '"Góra","","","","Face Pull",,,0,"normal",20,15,,,'].join('\r\n');
+
+test('importParse: eksport Hevy (cudzysłowy, rozgrzewka, drop set, do upadku, seria na czas, superseria, zły wiersz)', () => {
+  const p = L.importParse(HEVY_CSV);
+  assert.equal(p.fmt, 'hevy'); assert.equal(p.src, 'Hevy'); assert.equal(p.lbs, false);
+  assert.deepEqual(p.bad, [10], 'wiersz bez daty pominięty z numerem linii');
+  assert.equal(p.workouts.length, 2);
+  const [g, n] = p.workouts;                                                     // od najwcześniejszego: Góra 7:00, Nogi 18:05
+  assert.deepEqual([g.title, g.start, n.start, n.end, n.note], ['Góra', '2026-03-03T07:00', '2026-03-03T18:05', '2026-03-03T19:10', 'Mało snu, "ale" ok']);
+  assert.deepEqual(g.ex.map(e => [e.name, e.sup]), [['Bench Press (Dumbbell)', '0'], ['Lat Pulldown (Cable)', '0']]);
+  assert.equal(n.ex[0].note, 'kolano, lekko');
+  assert.deepEqual(n.ex[0].sets.map(s => [s.t, s.kg, s.reps, s.rpe]), [['R', 40, 8, ''], ['W', 100, 5, 8], ['W', 100, 4, 10]], 'failure = zaliczona seria z RPE 10');
+  assert.deepEqual(n.ex[1].sets.map(s => s.t), ['W', 'D']);
+  assert.deepEqual([n.ex[2].sets[0].reps, n.ex[2].sets[0].sec], ['', 60]);
+  const lb = L.importParse(HEVY_CSV.replace('weight_kg', 'weight_lbs'));
+  assert.equal(lb.lbs, true); assert.equal(lb.workouts[1].ex[0].sets[1].kg, 45.4, '100 lb → 45,4 kg');
+});
+
+test('importParse: Strong (jednostka z pliku albo do wyboru, pomija przerwy, czas trwania) i szablon z Excela (średniki, przecinki)', () => {
+  const st = 'Date;Workout Name;Duration;Exercise Name;Set Order;Weight;Reps;Distance;Seconds;Notes;Workout Notes;RPE\n' +
+    '2024-01-15 08:30:00;Push;1h 5m;Bench Press (Barbell);W;40;10;0;0;;;\n2024-01-15 08:30:00;Push;1h 5m;Bench Press (Barbell);1;80;5;0;0;;;8\n' +
+    '2024-01-15 08:30:00;Push;1h 5m;Bench Press (Barbell);Rest Timer;;;;90;;;\n2024-01-15 08:30:00;Push;1h 5m;Bench Press (Barbell);F;80;3;0;0;;;\n';
+  let p = L.importParse(st);
+  assert.equal(p.fmt, 'strong'); assert.equal(p.unitAsk, true);
+  assert.equal(p.workouts[0].end, '2024-01-15T09:35');
+  assert.deepEqual(p.workouts[0].ex[0].sets.map(s => [s.t, s.kg, s.rpe]), [['R', 40, ''], ['W', 80, 8], ['W', 80, 10]]);
+  assert.equal(L.importParse(st, { lbs: true }).workouts[0].ex[0].sets[1].kg, 36.3);
+  p = L.importParse(st.replace('RPE\n', 'RPE;Weight Unit\n').replace(/;8\n/, ';8;lbs\n'));
+  assert.equal(p.unitAsk, false); assert.equal(p.workouts[0].ex[0].sets[1].kg, 36.3, 'jednostka z kolumny');
+  const sz = L.importParse('data;trening;cwiczenie;rodzaj;kg;powt;sek;rpe;uwagi\n14.03.2026;Nogi;Przysiad tylny;R;40;8;;;\n14.03.2026;Nogi;Przysiad tylny;;82,5;5;;8,5;ciężko\n14.03.2026;Nogi;Deska;;;;45;;\n');
+  assert.equal(sz.fmt, 'szablon');
+  assert.deepEqual(sz.workouts[0].ex.map(e => [e.name, e.sets.map(s => [s.t, s.kg, s.reps, s.sec, s.rpe])]),
+    [['Przysiad tylny', [['R', 40, 8, '', ''], ['W', 82.5, 5, '', 8.5]]], ['Deska', [['W', '', '', 45, '']]]]);
+  assert.equal(L.importParse(L.IMPORT_TEMPLATE).fmt, 'szablon', 'szablon z panelu czyta się sam');
+  assert.match(L.importParse('a,b\n1,2').error, /Nie rozpoznaję/);
+  assert.match(L.importParse('').error, /Pusty/);
+});
+
+test('importPick: okres, dni już w aplikacji, oznaczenie H<rrmmdd> z literą przy dwóch treningach dnia', () => {
+  const p = L.importParse(HEVY_CSV);
+  let k = L.importPick(p, {});
+  assert.deepEqual(k.workouts.map(w => w.day), ['H260303', 'H260303b']);
+  assert.deepEqual([k.n, k.all, k.dup, k.work, k.first, k.last], [2, 2, 0, 7, '2026-03-03', '2026-03-03']);
+  assert.deepEqual(k.names[0], ['Bench Press (Dumbbell)', 1]);
+  k = L.importPick(p, { taken: new Set(['2026-03-03']) });
+  assert.deepEqual([k.n, k.dup], [0, 2]);
+  assert.equal(L.importPick(p, { taken: new Set(['2026-03-03']), withTaken: true }).n, 2);
+  assert.equal(L.importPick(p, { from: '2026-03-04' }).n, 0);
+  assert.equal(p.workouts[0].day, undefined, 'importPick nie zmienia danych z pliku');
+});
+
+test('dayLabel / importDay: trening z importu w pasku tygodnia i nagłówku nazywa się źródłem, nie kodem H<rrmmdd>', () => {
+  assert.equal(L.dayLabel('H260303b', 'Hevy · Nogi'), 'Hevy');
+  assert.equal(L.dayLabel('H260303', ''), 'Import');
+  assert.equal(L.dayLabel('W1', 'Własny · Ręce'), 'W1');
+  assert.equal(L.dayLabel('H1', 'x'), 'H1', 'zwykły dzień H1 bez zmian');
+  assert.ok(L.importDay('H260303') && !L.importDay('S1'));
+  assert.equal(L.weekDays([{ week: 0, day: 'H261019', title: 'Hevy · Nogi', date: '2026-10-19', done: true }], '2026-10-19', '2026-10-21')[0].items[0].title, 'Hevy · Nogi');
 });
