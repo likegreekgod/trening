@@ -421,14 +421,26 @@ test('coachNotes: komentarze trenera do serii, filmu i treningu', () => {
   const ses = [{ id: 'a|1|T1', data: '2026-10-10', jednostka: 'T1', komentarz_trenera: 'Dobra robota' }, { id: 'a|1|T2', data: '2026-10-11', jednostka: 'T2', komentarz_trenera: '' }];
   const n = L.coachNotes(logs, ses);
   assert.deepEqual(n.map(x => [x.date, x.title, x.lines]), [
-    ['2026-10-12', 'Rwanie · seria 1', [{ t: '12:05', txt: 'biodra' }]],
-    ['2026-10-10', 'Przysiad tylny · seria 2', [{ t: '', txt: 'Pas od tej serii' }, { t: '0:15', txt: 'Dobre zejście' }, { t: '1:15', txt: 'Łokcie wyżej' }]],
-    ['2026-10-10', 'Trening T1', [{ t: '', txt: 'Dobra robota' }]]]);
+    ['2026-10-12', 'Rwanie · seria 1', [{ t: '12:05', s: 725, txt: 'biodra' }]],
+    ['2026-10-10', 'Przysiad tylny · seria 2', [{ t: '', s: -1, txt: 'Pas od tej serii' }, { t: '0:15', s: 15, txt: 'Dobre zejście' }, { t: '1:15', s: 75, txt: 'Łokcie wyżej' }]],
+    ['2026-10-10', 'Trening T1', [{ t: '', s: -1, txt: 'Dobra robota' }]]]);
   assert.equal(new Set(n.map(x => x.key)).size, 3);
   const n2 = L.coachNotes([Object.assign({}, logs[2], { komentarz_dysk: '12:05 biodra wyżej' })], []);
   assert.notEqual(n2[0].key, n[0].key);                                          // zmieniona treść = nowy komentarz
   assert.equal(L.coachNotes([Object.assign({}, logs[2])], [])[0].key, n[0].key);
   assert.deepEqual(L.coachNotes([], []), []); assert.deepEqual(L.coachNotes(undefined, undefined), []);
+});
+
+test('coachNotes: film przy komentarzu i chwile z dziesiątymi (v98)', () => {
+  const l = { id: 'a|1|T1|1|1', data: '2026-10-10', cwiczenie: 'Rwanie', seria: 1, komentarz_trenera: '0:23,5 kolano do środka\n1:02.4 łokcie\n0:75 to nie chwila', film_link: 'https://drive.google.com/file/d/abc/view' };
+  const n = L.coachNotes([l], [{ id: 'a|1|T1', data: '2026-10-10', jednostka: 'T1', komentarz_trenera: 'ok' }]);
+  const f = n.find(x => x.kind === 'L');
+  assert.equal(f.video, true);
+  assert.deepEqual(f.lines, [{ t: '0:23,5', s: 23.5, txt: 'kolano do środka' }, { t: '1:02.4', s: 62.4, txt: 'łokcie' }, { t: '', s: -1, txt: '0:75 to nie chwila' }]);
+  assert.equal(n.find(x => x.kind === 'S').video, false);
+  assert.equal(L.coachNotes([Object.assign({}, l, { film_link: '' })], [])[0].video, false);
+  assert.equal(L.coachNotes([Object.assign({}, l, { film_link: 'javascript:alert(1)' })], [])[0].video, false);
+  assert.equal(L.filmSec('0:03'), 3); assert.equal(L.filmSec('10:00,9'), 600.9); assert.equal(L.filmSec('1:60'), -1); assert.equal(L.filmSec(''), -1);
 });
 
 test('notesByWeek: komentarze trenera tygodniami i jednostkami', () => {

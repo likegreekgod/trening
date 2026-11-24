@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-24 · Film z komentarza trenera w aplikacji klienta (v98)
+
+- Prośba klienta: z komentarza przejść od razu do filmu. Filmy na Dysku są prywatne, więc sam link nie wystarczy (klient widzi „Potrzebujesz dostępu”).
+- Wybrane (Damian): odtwarzacz w aplikacji. Skrypt (konto trenera) czyta plik z Drive API kawałkami po 4 MB (`filmPart`, Range) i oddaje base64; telefon składa film w pamięci strony i startuje od chwili z komentarza. Dostęp tylko do serii klienta (id zaczyna się od jego klient_id) i tylko do pliku z jej `film_link`.
+- Odrzucone: udostępnienie pliku na konto Google klienta (wymaga konta i logowania, Dysk zwykle startuje od początku), link „każdy z linkiem” (filmy przestają być prywatne, dane o zdrowiu), oddanie klientowi biletu skryptu jak w panelu (bilet daje dostęp do całego Dysku trenera).
+
 ## 2026-11-24 · Tryb skupienia: przejście „karty w ręku” po łuku (v97)
 
 - Wybrany wariant A z dwóch szkiców: karta obraca się wokół punktu ok. 1100 px pod kartą (łuk, przechył ok. 11°), palec prowadzi ją na żywo, spod spodu wychyla się sąsiedni krok. Odrzucony wariant B (mały łuk 4° bez palca) jako za słaby efekt.
