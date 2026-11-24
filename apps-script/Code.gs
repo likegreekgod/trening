@@ -62,7 +62,7 @@ function oldLinkText_(pwa) {
  * POST (Content-Type text/plain, bez preflight CORS), body: {fn, key, args:[…]} → {ok:true, result} | {ok:false, error}
  */
 const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError,
-  logNote, logReadyVideo, editPlan, saveStan, deleteStan, replyNote };
+  logNote, logReadyVideo, editPlan, saveStan, deleteStan, replyNote, filmPart };
 /*
  * Trening prowadzony przez trenera („▶ Prowadź” w panelu): aplikacja klienta otwarta z ?prowadz=<klient_id> wysyła
  * {fn, token (bilet Google trenera), as: klient_id, args} zamiast klucza. doPost sprawdza bilet (trAuth_), bierze klucz
@@ -410,6 +410,43 @@ function replyNote(key, r) {
     sh.getRange(hit.getRow(), cA).setValue(plain_(x.text ? at : ''));
   } finally { lock.releaseLock(); }
   return { ok: true, text: x.text, at: x.text ? at.toISOString() : '' };
+}
+
+/*
+ * Film klienta do obejrzenia w aplikacji (przycisk „▶ Film” i chwile przy komentarzu trenera). Filmy na Dysku są prywatne,
+ * więc klient nie otworzy linku z Logu; skrypt (konto trenera) czyta plik kawałkami po FILM_PART bajtów i oddaje je
+ * w base64, a telefon składa film w pamięci strony. Tylko seria tego klienta (id zaczyna się od jego klient_id, jak
+ * replyRow_) i tylko plik z jej kolumny film_link. Id pliku i rozmiar w CacheService na czas oglądania.
+ */
+const FILM_PART = 4 * 1024 * 1024;
+function filmPartRange_(start, size) {
+  const a = Math.max(0, Math.floor(Number(start) || 0));
+  if (size && a >= size) throw new Error('Poza końcem filmu.');
+  return { a: a, b: (size ? Math.min(size, a + FILM_PART) : a + FILM_PART) - 1 };
+}
+function filmPart(key, r) {
+  const client = mustClient_(key), id = String(r && r.id || '').trim();
+  if (id.toLowerCase().indexOf(String(client.id).toLowerCase() + '|') !== 0) throw new Error('Brak dostępu.');
+  const cache = CacheService.getScriptCache(), ck = 'fp_' + Utilities.base64EncodeWebSafe(id).slice(0, 200);
+  let meta = null; try { meta = JSON.parse(cache.get(ck) || 'null'); } catch (e) {}
+  const tok = ScriptApp.getOAuthToken(), api = 'https://www.googleapis.com/drive/v3/files/';
+  if (!meta || !Number(r.start)) {
+    const sh = sheet_('Log', LOG_HEADERS);
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(id).matchEntireCell(true).findNext();
+    if (!hit || hit.getRow() < 2) throw new Error('Nie ma już tej serii.');
+    const file = fileIdOf_(sh.getRange(hit.getRow(), LOG_HEADERS.indexOf('film_link') + 1).getValue());
+    if (!file) throw new Error('Ta seria nie ma filmu.');
+    const m = UrlFetchApp.fetch(api + file + '?fields=size,mimeType', { headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true });
+    if (m.getResponseCode() === 404) throw new Error('Filmu nie ma już na Dysku.');
+    if (m.getResponseCode() !== 200) throw new Error('Dysk: ' + m.getResponseCode());
+    const j = JSON.parse(m.getContentText());
+    meta = { file: file, size: Number(j.size) || 0, type: String(j.mimeType || 'video/mp4') };
+    cache.put(ck, JSON.stringify(meta), 3600);
+  }
+  const g = filmPartRange_(r.start, meta.size);
+  const res = UrlFetchApp.fetch(api + meta.file + '?alt=media', { headers: { Authorization: 'Bearer ' + tok, Range: 'bytes=' + g.a + '-' + g.b }, muteHttpExceptions: true });
+  if (res.getResponseCode() !== 206 && res.getResponseCode() !== 200) throw new Error('Dysk: ' + res.getResponseCode());
+  return { b64: Utilities.base64Encode(res.getContent()), start: g.a, size: meta.size, type: meta.type };
 }
 
 /** Usunięcie serii dodanej przez klienta (rozgrzewka / dodatkowa / drop) — kasuje wiersz w Log. */

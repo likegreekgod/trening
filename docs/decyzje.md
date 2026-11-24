@@ -2,7 +2,7 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
-## 2026-11-24 · Metodyka obliczeń: progi zgodne z dokładnością danych (v98)
+## 2026-11-24 · Metodyka obliczeń: progi zgodne z dokładnością danych (v99)
 
 - Na podstawie przeglądu metodyki z badaniami (Damian zaakceptował 5 poprawek 24.11).
 - Spadek e1RM: 🟠 od −5%, 🔴 od −8% albo przy −5% drugi tydzień z rzędu (było −2,5% / −5%). Jedno światło to ok. 3,3% e1RM, więc mniejszy spadek to zwykle sama zmiana oceny.
@@ -11,6 +11,11 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - ACWR tylko jako 🟠 „skok obciążenia” (> 1,3, masters > 1,2), nigdy czerwony; tygodnie lżejsze z planu poza średnią z 4 tygodni. Powód: ACWR jako predyktor kontuzji jest podważony (Impellizzeri 2020, 2021), a deload zawyżał tydzień po nim.
 - Progresja przy małych ciężarach (hantle, kettle, wyciągi, maszyny w izolacji, < 20 kg): najpierw powtórzenia do górnej granicy zakresu, potem najmniejszy skok ciężaru. Na razie w zasadach szkicu AI następnego bloku; ta sama reguła obowiązuje „Zaplanuj następną” (zmienia ustalenie z 23.11 „+2,5 kg po samych 🟢 dla A i B” dla małych ciężarów).
 - Odłożone z przeglądu: próg ≥ 2% dla paska rekordu, partie pomocnicze po 0,5 serii, progi Hoopera względem zmienności klienta.
+## 2026-11-24 · Film z komentarza trenera w aplikacji klienta (v98)
+
+- Prośba klienta: z komentarza przejść od razu do filmu. Filmy na Dysku są prywatne, więc sam link nie wystarczy (klient widzi „Potrzebujesz dostępu”).
+- Wybrane (Damian): odtwarzacz w aplikacji. Skrypt (konto trenera) czyta plik z Drive API kawałkami po 4 MB (`filmPart`, Range) i oddaje base64; telefon składa film w pamięci strony i startuje od chwili z komentarza. Dostęp tylko do serii klienta (id zaczyna się od jego klient_id) i tylko do pliku z jej `film_link`.
+- Odrzucone: udostępnienie pliku na konto Google klienta (wymaga konta i logowania, Dysk zwykle startuje od początku), link „każdy z linkiem” (filmy przestają być prywatne, dane o zdrowiu), oddanie klientowi biletu skryptu jak w panelu (bilet daje dostęp do całego Dysku trenera).
 
 ## 2026-11-24 · Tryb skupienia: przejście „karty w ręku” po łuku (v97)
 

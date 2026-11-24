@@ -793,12 +793,14 @@
    * oraz Sesje.komentarz_trenera → [{key, date, title, lines: [{t, txt}], kind: 'L'|'S', id, rep, repAt}] od najnowszych; key zmienia się
    * razem z treścią trenera (nie z odpowiedzią klienta), więc poprawiony komentarz znów jest „nowy”. rep = odpowiedź klienta (odpowiedz_klienta)
    */
+  /** chwila filmu z komentarza („0:23”, „0:23,5”, „1:02.4”) → sekundy; zła = -1 */
+  L.filmSec = v => { const m = /^(\d{1,3}):(\d{2})(?:[,.](\d))?$/.exec(String(v || '').trim()); return m && +m[2] < 60 ? +m[1] * 60 + +m[2] + (m[3] ? +m[3] / 10 : 0) : -1; };
   L.coachNotes = (logs, sessions) => {
     const t = v => String(v === undefined || v === null ? '' : v).trim(), out = [];
     const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };
-    const lines = txt => txt.split(/\n+/).map(x => x.trim()).filter(Boolean).map(x => { const m = /^(\d{1,3}:\d{2})\s+(.*)$/.exec(x); return m ? { t: m[1], txt: m[2] } : { t: '', txt: x }; });
+    const lines = txt => txt.split(/\n+/).map(x => x.trim()).filter(Boolean).map(x => { const m = /^(\d{1,3}:[0-5]\d(?:[,.]\d)?)\s+(.*)$/.exec(x); return m ? { t: m[1], s: L.filmSec(m[1]), txt: m[2] } : { t: '', s: -1, txt: x }; });
     const add = (kind, r, title, txt, ord) => { if (txt) out.push({ key: kind + '|' + r.id + '|' + hash(txt), date: String(r.data || '').slice(0, 10), title, lines: lines(txt),
-      week: t(r.tydzien), unit: t(r.jednostka), ord, kind, id: t(r.id), rep: t(r.odpowiedz_klienta), repAt: t(r.odpowiedz_at).slice(0, 10) }); };
+      week: t(r.tydzien), unit: t(r.jednostka), ord, kind, id: t(r.id), rep: t(r.odpowiedz_klienta), repAt: t(r.odpowiedz_at).slice(0, 10), video: kind === 'L' && /^https:\/\/drive\.google\.com\//.test(t(r.film_link)) }); };
     (logs || []).forEach(l => add('L', l, t(l.cwiczenie) + ' · seria ' + t(l.seria), [t(l.komentarz_trenera), t(l.komentarz_dysk)].filter(Boolean).join('\n'), [nf(l.nr_cw) || 0, t(l.seria)]));
     (sessions || []).forEach(s => add('S', s, 'Trening ' + t(s.jednostka), t(s.komentarz_trenera), [-1, '']));
     return out.sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title, 'pl'));

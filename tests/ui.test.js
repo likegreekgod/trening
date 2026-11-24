@@ -1535,6 +1535,37 @@ test('Komentarze trenera: karta z nowymi, „Przeczytane”, zakładka Trener z 
   await t2.ctx.close();
 });
 
+test('Film z komentarza trenera: ▶ Film i chwile otwierają odtwarzacz (filmPart kawałkami), przewijanie, bez sieci komunikat', async () => {
+  const FILMB = fs.readFileSync(path.join(__dirname, 'fixtures', 'film.webm')), half = Math.ceil(FILMB.length / 2);
+  const data = Object.assign({}, PROG, { logs: PROG.logs.map((l, i) => i === 0 ? Object.assign({}, l, { komentarz_trenera: '0:01,5 Kolano do środka\nBez czasu', film_link: 'https://drive.google.com/file/d/abcdefghijklmnopqrstuv/view' }) : l) });
+  const calls = [], api = b => b.fn === 'filmPart' ? { b64: FILMB.subarray(b.args[0].start, b.args[0].start + half).toString('base64'), start: b.args[0].start, size: FILMB.length, type: 'video/webm' } : null;
+  const { ctx, p } = await page(calls, false, { data, api });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.cnote');
+  assert.equal(await p.textContent('.cnote .cn-fb'), '▶ Film');
+  assert.equal(await p.textContent('.cnote .cn-tb'), '▶ 0:01,5');
+  await p.click('.cnote .cn-tb'); await p.waitForSelector('#fv-v:not([hidden])');
+  const logId = data.logs[0].id;
+  assert.deepEqual(calls.filter(c => c.fn === 'filmPart').map(c => c.args[0]), [{ id: logId, start: 0 }, { id: logId, start: half }]);
+  await p.waitForFunction(() => document.querySelector('#fv-v').currentTime > 1.4);
+  assert.equal(await p.getAttribute('.fv-m.on', 'data-fs'), '1.5');
+  assert.equal(await p.textContent('.fv-p'), 'Bez czasu');
+  await p.click('[data-rate="0.5"]'); assert.equal(await p.$eval('#fv-v', v => v.playbackRate), 0.5);
+  assert.deepEqual(await a11y(p), []);
+  await p.click('#sheet [data-close]');
+  await p.click('.cnote .cn-fb'); await p.waitForSelector('#fv-v:not([hidden])');
+  assert.equal(calls.filter(c => c.fn === 'filmPart').length, 2);                 // drugi raz z pamięci strony
+  await p.click('#sheet [data-close]');
+  // komentarz bez filmu albo do treningu: bez przycisków
+  await p.click('#nav [data-tab="trener"]'); await p.waitForSelector('#trener .cn-l');
+  assert.equal(await p.$$eval('#trener .cn-fb', b => b.length), 1);
+  await ctx.setOffline(true);
+  await p.evaluate(() => { FVC.clear(); });
+  await p.click('#trener .cn-fb'); await p.waitForSelector('#fv-lt');
+  assert.match(await p.textContent('#fv-lt'), /po połączeniu z internetem/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('Odpowiedź na komentarz trenera: pisanie, wysyłka (replyNote), zmiana, usunięcie, bez sieci przez kolejkę', async () => {
   const data = Object.assign({}, PROG, { logs: PROG.logs.map((l, i) => i === 0 ? Object.assign({}, l, { komentarz_trenera: '0:15 Łokcie wyżej' }) : l),
     sessions: PROG.sessions.map((s, i) => i === 0 ? Object.assign({}, s, { komentarz_trenera: 'Dobry trening', odpowiedz_klienta: 'Dzięki <b>!</b>', odpowiedz_at: '2026-10-01T10:00:00.000Z' }) : s) });

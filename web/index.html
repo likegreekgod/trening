@@ -621,6 +621,25 @@
   .cn-l p{margin:2px 0 0;font-size:16px;line-height:1.4}
   .cn-t{font-family:var(--f-mono);font-weight:600}
   .cn-s{font-size:14px;color:var(--ink-2);margin:0 0 10px}
+  .cn-hr{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .cn-hr .cn-h{flex:1 1 auto;min-width:0}
+  .cn-fb{flex:0 0 auto;min-height:44px;padding:0 14px;font-weight:600;border-color:var(--accent);color:var(--accent)}
+  .cn-tb{display:inline-flex;align-items:center;min-height:44px;padding:0 10px;margin:2px 4px 2px 0;border:1px solid var(--accent);border-radius:var(--r);background:none;color:var(--accent);font-size:15px;cursor:pointer;vertical-align:baseline}
+  /* odtwarzacz filmu z komentarza (openFilm) */
+  .fv-box{background:var(--surface-2);border-radius:var(--r);overflow:hidden;min-height:180px;display:flex;align-items:center;justify-content:center}
+  .fv-box video{display:block;width:100%;max-height:52vh;background:var(--surface-2)}
+  .fv-ld{padding:24px 16px;text-align:center;color:var(--ink);font-size:15px;width:100%}
+  .fv-ld i{display:block;height:6px;border-radius:3px;background:var(--line);margin:12px auto 0;max-width:260px;overflow:hidden}
+  .fv-ld b{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+  .fv-sp{display:flex;align-items:center;gap:6px;margin:10px 0 0}
+  .fv-sp span{font-size:14px;color:var(--ink-2);margin-right:auto}
+  .fv-sp .btn{min-height:44px;min-width:52px}
+  .fv-sp .btn.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .fv-l{margin:10px 0 12px}
+  .fv-m{display:flex;gap:10px;align-items:baseline;width:100%;min-height:44px;padding:10px 12px;margin:0 0 6px;text-align:left;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);font:500 16px/1.35 var(--f-body);cursor:pointer}
+  .fv-m .cn-t{color:var(--accent);flex:0 0 auto}
+  .fv-m.on{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
+  .fv-p{margin:0 0 8px;font-size:16px;line-height:1.4}
   .cnote .row{display:flex;gap:8px;flex-wrap:wrap}
   .cnote .row .btn{flex:1 1 140px}
   /* zakładka Trener: tydzień = karta, starsze zwinięte; nowy komentarz z paskiem akcentu */
@@ -2724,8 +2743,11 @@ const CNK = 'cn_' + KEY;
 function cnSeen(){ try { return JSON.parse(localStorage.getItem(CNK) || '[]'); } catch (e) { return []; } }
 function cnMark(keys){ try { localStorage.setItem(CNK, JSON.stringify(cnSeen().concat(keys).slice(-400))); } catch (e) {} }
 const cnAll = () => coachNotes((DATA && DATA.logs) || [], (DATA && DATA.sessions) || []);
-const cnList = (notes, isNew, withDate = true) => '<ul class="cn-l">' + notes.map(n => `<li class="${isNew && isNew(n) ? 'new' : ''}"><span class="cn-h">${esc(n.title)}${withDate && n.date ? ' · ' + ddmm(n.date) : ''}${isNew && isNew(n) ? '<span class="cw-new">NOWE</span>' : ''}</span>` +
-  n.lines.map(l => `<p>${l.t ? `<b class="cn-t">${esc(l.t)}</b> ` : ''}${esc(l.txt)}</p>`).join('') + repArea(n) + '</li>').join('') + '</ul>';
+/** chwila z komentarza: przy serii z filmem przycisk, który otwiera film od tej chwili (openFilm) */
+const cnTime = (n, l) => !l.t ? '' : n.video && l.s >= 0 ? `<button type="button" class="cn-t cn-tb" data-fv="${esc(rkOf(n))}" data-ft="${l.s}" aria-label="Film od ${esc(l.t)}">▶ ${esc(l.t)}</button> ` : `<b class="cn-t">${esc(l.t)}</b> `;
+const cnList = (notes, isNew, withDate = true) => '<ul class="cn-l">' + notes.map(n => `<li class="${isNew && isNew(n) ? 'new' : ''}"><div class="cn-hr"><span class="cn-h">${esc(n.title)}${withDate && n.date ? ' · ' + ddmm(n.date) : ''}${isNew && isNew(n) ? '<span class="cw-new">NOWE</span>' : ''}</span>` +
+  (n.video && !LIVE ? `<button type="button" class="btn sm cn-fb" data-fv="${esc(rkOf(n))}" aria-label="Obejrzyj film: ${esc(n.title)}">▶ Film</button>` : '') + '</div>' +
+  n.lines.map(l => `<p>${cnTime(n, l)}${esc(l.txt)}</p>`).join('') + repArea(n) + '</li>').join('') + '</ul>';
 /* ---------- odpowiedź klienta na komentarz trenera (Log / Sesje odpowiedz_klienta, akcja replyNote; offline przez kolejkę) ---------- */
 const REPLY_MAX = 600;
 const REPD = {};                                    // komentarz (kind|id) → szkic odpowiedzi w trakcie pisania, tylko w pamięci strony
@@ -2769,6 +2791,46 @@ document.addEventListener('input', e => {
   const t = e.target, box = t.closest && t.closest('.cn-ed'); if (!box || t.tagName !== 'TEXTAREA') return;
   REPD[box.dataset.rk] = t.value; const c = box.querySelector('.cnt'); if (c) c.textContent = t.value.length + '/' + REPLY_MAX;
 });
+/* ---------- film z komentarza: odtwarzacz w aplikacji (filmy na Dysku są prywatne, więc plik idzie kawałkami przez skrypt: filmPart) ---------- */
+const FVC = new Map();                              // seria (kind|id) → adres pobranego filmu w pamięci strony, najwyżej 3
+function fvKeep(rk, url){ FVC.set(rk, url); while (FVC.size > 3) { const [k, u] = FVC.entries().next().value; URL.revokeObjectURL(u); FVC.delete(k); } }
+const fvMB = b => (b / 1048576).toLocaleString('pl-PL', { maximumFractionDigits: b < 10485760 ? 1 : 0 });
+async function fvLoad(n, st, prog){
+  const parts = []; let at = 0, size = 0, type = 'video/mp4';
+  do {
+    const r = await call('filmPart', { id: n.id, start: at });
+    if (st.stop) return '';
+    const bin = atob(r.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    parts.push(u); at += u.length; size = r.size || at; type = r.type || type; prog(at, size);
+    if (!u.length) break;
+  } while (at < size);
+  return URL.createObjectURL(new Blob(parts, { type }));
+}
+function openFilm(rk, sec){
+  const n = cnAll().find(x => rkOf(x) === rk); if (!n || !n.video) return;
+  const times = n.lines.filter(l => l.t && l.s >= 0), st = { stop: false };
+  const line = l => l.t && l.s >= 0 ? `<button type="button" class="fv-m" data-fs="${l.s}"><b class="cn-t">${esc(l.t)}</b><span>${esc(l.txt)}</span></button>` : `<p class="fv-p">${esc(l.txt)}</p>`;
+  openSheet(`<h2 id="sheet-t">${esc(n.title)}</h2><p class="sub">${n.date ? weekday(n.date) + ' ' + ddmm(n.date) + ' · ' : ''}${times.length ? 'dotknij chwili, żeby przewinąć film' : 'Twój film z tej serii'}</p>
+    <div class="fv-box"><video id="fv-v" playsinline controls preload="auto" hidden></video><div class="fv-ld" id="fv-ld" role="status"><span id="fv-lt">Wczytuję film…</span><i><b id="fv-lb"></b></i></div></div>
+    <div class="fv-sp" role="group" aria-label="Tempo"><span>Tempo</span>${[0.25, 0.5, 1].map(v => `<button type="button" class="btn sm${v === 1 ? ' on' : ''}" data-rate="${v}" aria-pressed="${v === 1}">${v === 1 ? '1×' : v === 0.5 ? '½×' : '¼×'}</button>`).join('')}</div>
+    <div class="fv-l">${n.lines.map(line).join('')}</div><button type="button" class="btn" data-close>Zamknij</button>`);
+  const v = $('#fv-v'), box = $('#sheet-in'), cur = { t: sec >= 0 ? sec : -1 };
+  const mark = () => box.querySelectorAll('.fv-m').forEach(b => b.classList.toggle('on', +b.dataset.fs === cur.t));
+  const go = t => { cur.t = t; mark(); if (v.hidden) return; v.currentTime = Math.min(t, (v.duration || t + 1) - 0.05); v.play().catch(() => {}); };
+  box.querySelectorAll('.fv-m').forEach(b => b.onclick = () => go(+b.dataset.fs));
+  box.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { v.playbackRate = +b.dataset.rate; box.querySelectorAll('[data-rate]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); });
+  mark();
+  SHEET_ON_CLOSE = () => { st.stop = true; v.pause(); };
+  const show = url => { if (st.stop) return; $('#fv-ld').hidden = true; v.hidden = false; v.src = url;
+    v.addEventListener('loadedmetadata', () => { if (cur.t >= 0) go(cur.t); }, { once: true });
+    v.addEventListener('error', () => { $('#fv-ld').hidden = false; v.hidden = true; $('#fv-lt').textContent = 'Telefon nie umie odtworzyć tego pliku. Poproś trenera o film w innym formacie.'; }, { once: true }); };
+  if (FVC.has(rk)) return show(FVC.get(rk));
+  if (!navigator.onLine) { $('#fv-lt').textContent = 'Film jest na Dysku trenera: obejrzysz go po połączeniu z internetem.'; return; }
+  fvLoad(n, st, (a, b) => { $('#fv-lt').textContent = 'Wczytuję film · ' + fvMB(a) + ' z ' + fvMB(b) + ' MB'; $('#fv-lb').style.width = Math.round(100 * a / Math.max(b, 1)) + '%'; })
+    .then(url => { if (!url) return; fvKeep(rk, url); show(url); })
+    .catch(e => { if (!st.stop) { $('#fv-lt').textContent = /Filmu nie ma/.test(e.message) ? 'Filmu nie ma już na Dysku trenera.' : 'Nie udało się wczytać filmu (' + e.message + '). Spróbuj za chwilę.'; $('#fv-lb').style.width = '0'; } });
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-fv]'); if (b) openFilm(b.dataset.fv, b.dataset.ft !== undefined ? +b.dataset.ft : -1); });
 const cnFresh = () => { const seen = cnSeen(); return cnAll().filter(n => seen.indexOf(n.key) < 0); };
 /** kropka na „Trener” w dolnym menu, gdy są nieprzeczytane komentarze */
 function navDot(){
@@ -2782,7 +2844,7 @@ function notesCard(){
   if (LIVE) return '';                                            // trener prowadzi trening: komentarze są dla klienta
   const fresh = cnFresh(); if (!fresh.length) return '';
   return `<section class="cnote" aria-label="Nowe komentarze trenera"><h3>Trener skomentował</h3>${cnList(fresh)}
-    <p class="cn-s">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>
+    <p class="cn-s">Dotknij ▶ przy komentarzu, żeby obejrzeć swój film od tej chwili.</p>
     <div class="row"><button type="button" class="btn" id="cn-ok">Przeczytane</button><button type="button" class="btn" id="cn-all">Wszystkie komentarze</button></div></section>`;
 }
 function bindNotes(){
@@ -2827,7 +2889,7 @@ function renderTrener(){
         return `<details class="card cw ${i ? '' : 'first'}" ${!i || nw ? 'open' : ''}><summary><span><span class="cn">${esc(weekLabel(+w.week || w.week))}</span>
           <span class="sub">${range(w)}${range(w) ? ' · ' : ''}${n} ${n === 1 ? 'komentarz' : n < 5 ? 'komentarze' : 'komentarzy'}${nw ? ' · ' + nw + ' ' + (nw === 1 ? 'nowy' : 'nowe') : ''}</span></span></summary>
           ${w.units.map(u => `<div class="cw-u">${unitHead(w, u)}</div>${cnList(u.notes, isNew, false)}`).join('')}</details>`;
-      }).join('') + '<p class="cn-s" style="margin-top:12px">Czas przy komentarzu to miejsce w Twoim filmie z tej serii.</p>') +
+      }).join('') + '<p class="cn-s" style="margin-top:12px">Dotknij ▶ przy komentarzu, żeby obejrzeć swój film od tej chwili.</p>') +
     '<button type="button" class="btn wl-again" id="wel-open">Jak zacząć · ekran główny</button>';
   $('#wel-open').onclick = welOpen;
   cnMark(all.filter(n => seen.indexOf(n.key) < 0).map(n => n.key));
