@@ -2,6 +2,12 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-24 · Tryb skupienia: przejście „karty w ręku” po łuku (v97)
+
+- Wybrany wariant A z dwóch szkiców: karta obraca się wokół punktu ok. 1100 px pod kartą (łuk, przechył ok. 11°), palec prowadzi ją na żywo, spod spodu wychyla się sąsiedni krok. Odrzucony wariant B (mały łuk 4° bez palca) jako za słaby efekt.
+- Odrzucone: stały wachlarz z kartami wystającymi po bokach przez cały czas (boczny margines 16 px, tłok na ekranie w trakcie treningu). Sąsiad widoczny tylko w trakcie przesuwania.
+- Gest: kierunek po pierwszych 10 px (w bok tylko przy |dx| > 1,5 × |dy|), próg przejścia bez zmian (70 px). Stara karta to kopia bez id i poza dostępnością, animowany tylko obrót i przezroczystość. Przy `prefers-reduced-motion` bez animacji (jak reszta ruchu w aplikacji).
+
 ## 2026-11-24 · Import historii z innej aplikacji (Hevy, Strong, szablon), API dla agenta klienta później
 
 - Prośba klienta: przenieść historię z Hevy i docelowo API dla własnego agenta AI. Najpierw import (prosty, bez ryzyka), API osobno, gdy klient faktycznie się przeniesie.
