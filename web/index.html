@@ -162,6 +162,9 @@
   .fx-nav .b{flex:1}
   .card.fxc .fold-c{visibility:hidden}
   .fx + .card, .fx + .grp{margin-top:var(--gap)}
+  /* przejście „karty w ręku”: fx-mv = karta kroku w ruchu (nad kopią starej), fx-gh = kopia starej karty albo sąsiedniej (fx-pk) przy przesuwaniu palcem */
+  .fx-mv{position:relative;z-index:3;will-change:transform}
+  .fx-gh{position:fixed!important;margin:0!important;pointer-events:none;will-change:transform,opacity}
   /* karta „dziś”: co dziś i ile to potrwa, przycisk do pierwszego niezrobionego ćwiczenia */
   /* w trakcie treningu (od 1. serii roboczej) karta „dziś”, pasek tygodnia i baner dyspozycji → jedna linia #wkm (punkt 9 v80) */
   .wkm{display:none}
@@ -3913,7 +3916,38 @@ function fxSet(on){
   if (c) { setFold(o, false, false); window.scrollTo(0, (c.closest('.grp') || c).getBoundingClientRect().top + window.scrollY - 8); } else window.scrollTo(0, 0);
   stickDraw();
 }
-function fxGo(i){ FXI = i; FXM = true; fxDraw(); recAll(); window.scrollTo(0, 0); stickDraw(); tipDraw(); }
+/** przejście do kroku i; z = obrót (°), na którym palec puścił kartę: wtedy (i przy „‹” / „Następne”) karty jadą po łuku, fxArc */
+function fxGo(i, z){ const g = z === undefined ? null : fxGhosts(); FXI = i; FXM = true; fxDraw(); recAll(); window.scrollTo(0, 0); stickDraw(); tipDraw(); if (g) fxArc(g, z); }
+/* ---------- przejście „karty w ręku” (tryb skupienia): karta obraca się wokół punktu daleko pod ekranem (FXA.piv, „dłoń”), więc jedzie po łuku;
+   palec prowadzi ją na żywo, spod spodu wychyla się sąsiedni krok; stara karta to kopia (fx-gh) nad stroną, bez id; przy ograniczeniu ruchu bez animacji ---------- */
+const FXA = { ang: 11, piv: 1100, dur: 380, peek: .35 };
+const fxStill = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fxVis = () => [...$('#main').children].filter(e => !e.classList.contains('fx-off') && e.id !== 'fx' && e.id !== 'fx-nav');
+/** obrót elementów kroku wokół wspólnego punktu pod pierwszym z nich */
+function fxPivot(els, top){ els.forEach(e => e.style.transformOrigin = `50% ${top + FXA.piv - e.getBoundingClientRect().top}px`); }
+/** kopia elementu w miejscu `r` (pozycja na ekranie), bez id i poza dostępnością */
+function fxGhost(el, r, z){
+  const c = el.cloneNode(true); c.classList.remove('fx-off'); c.classList.add('fx-gh'); c.removeAttribute('id'); c.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+  c.setAttribute('aria-hidden', 'true'); c.inert = true;
+  Object.assign(c.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', zIndex: z, transform: el.style.transform, transformOrigin: el.style.transformOrigin });
+  document.body.appendChild(c); return c;
+}
+function fxGhosts(){
+  document.querySelectorAll('.fx-gh').forEach(g => g.remove());
+  if (fxStill()) return null;
+  const els = fxVis(); if (!els.length) return null;
+  return { top: els[0].getBoundingClientRect().top, g: els.map(e => fxGhost(e, e.getBoundingClientRect(), 2)), from: FXI };
+}
+/** stara karta odjeżdża po łuku w bok i gaśnie, nowa wjeżdża z drugiej strony na środek (nad starą) */
+function fxArc(o, z){
+  const d = FXI > o.from ? 1 : -1, ease = 'cubic-bezier(.25,.8,.3,1)', els = fxVis();
+  o.g.forEach(g => g.animate([{ transform: `rotate(${z}deg)` }, { opacity: 1, offset: .6 }, { transform: `rotate(${-d * FXA.ang * 1.6}deg)`, opacity: 0 }],
+    { duration: FXA.dur, easing: ease, fill: 'forwards' }).onfinish = () => g.remove());
+  if (!els.length) return;
+  fxPivot(els, els[0].getBoundingClientRect().top);
+  els.forEach(e => { e.classList.add('fx-mv'); e.animate([{ transform: `rotate(${d * FXA.ang}deg)` }, { transform: 'rotate(0deg)' }], { duration: FXA.dur, easing: ease })
+    .onfinish = () => { e.classList.remove('fx-mv'); e.style.transformOrigin = ''; }; });
+}
 /** rysuje pasek i przyciski, pokazuje bieżący krok; wołane też po każdej serii (odcinki paska) */
 function fxDraw(){
   const bar = $('#fx'); if (!bar) return;
@@ -3939,20 +3973,45 @@ function fxDraw(){
   nav.innerHTML = add + (st
     ? `<button type="button" id="fx-prev" aria-label="Poprzednie ćwiczenie" ${FXI ? '' : 'disabled'}>‹</button><button type="button" class="n" id="fx-next"><small>${nx ? 'Następne' : 'Dalej'}</small><span>${esc(nxName)} ›</span></button>`
     : '<button type="button" class="b" id="fx-prev">‹ Wróć do ćwiczeń</button>');
-  $('#fx-prev').onclick = () => fxGo(FXI - 1);
+  $('#fx-prev').onclick = () => fxGo(FXI - 1, 0);
   const fa = $('#fx-add'); if (fa) fa.onclick = openAdd;
-  const nb = $('#fx-next'); if (nb) nb.onclick = () => fxGo(FXI + 1);
+  const nb = $('#fx-next'); if (nb) nb.onclick = () => fxGo(FXI + 1, 0);
 }
-// przesunięcie palcem w bok = poprzednie / następne ćwiczenie (tylko w trybie skupienia)
+// przesunięcie palcem w bok = poprzednie / następne ćwiczenie (tylko w trybie skupienia); kierunek ustala pierwsze 10 px ruchu,
+// w bok: karta idzie za palcem po łuku (obrót = dx / promień), spod spodu sąsiedni krok (fx-pk); przesunięcie zaczęte na przycisku go nie naciska
 (() => {
-  let x0 = null, y0 = null; const m = $('#main');
-  m.addEventListener('touchstart', e => { x0 = fxOn() ? e.touches[0].clientX : null; y0 = e.touches[0].clientY; }, { passive: true });
+  let x0 = null, y0 = null, lock = null, ang = 0, pk = null, els = [], top = 0; const m = $('#main');
+  const reset = () => { els.forEach(e => { e.style.transform = ''; e.classList.remove('fx-mv'); }); if (pk) pk.remove(); pk = null; els = []; };
+  m.addEventListener('touchstart', e => { x0 = fxOn() ? e.touches[0].clientX : null; y0 = e.touches[0].clientY; lock = null; ang = 0; }, { passive: true });
+  m.addEventListener('touchmove', e => {
+    if (x0 === null) return; const dx = e.touches[0].clientX - x0, dy = e.touches[0].clientY - y0;
+    if (lock === null && Math.hypot(dx, dy) > 10) lock = Math.abs(dx) > 1.5 * Math.abs(dy) ? 'x' : 'y';
+    if (lock !== 'x') return;
+    if (e.cancelable) e.preventDefault();
+    if (fxStill()) return;
+    if (!els.length) { els = fxVis(); if (!els.length) return; top = els[0].getBoundingClientRect().top; fxPivot(els, top); els.forEach(c => c.classList.add('fx-mv')); }
+    ang = dx / FXA.piv * 180 / Math.PI;
+    els.forEach(c => c.style.transform = `rotate(${ang}deg)`);
+    const d = dx < 0 ? 1 : -1;
+    if (pk && +pk.dataset.d !== d) { pk.remove(); pk = null; }
+    if (!pk) {
+      const steps = focusSteps(curExs(), CIRC), st = steps[FXI + d], j = FXI + d;
+      const t = j < 0 || j > steps.length ? null : !st ? $('#main > .card.sess') : st.grp ? $(`#main > .grp[data-grp="${st.grp}"]`) : $(`#main > .card[data-card="${st.orders[0]}"]`);
+      if (t) { const r = els[0].getBoundingClientRect(); pk = fxGhost(t, { left: r.left, top, width: r.width }, 1); pk.dataset.d = d; pk.style.transformOrigin = `50% ${FXA.piv}px`; }
+    }
+    if (pk) { pk.style.transform = `rotate(${d * FXA.ang + ang * FXA.peek}deg)`; pk.style.opacity = Math.min(1, Math.abs(dx) / 120); }
+  }, { passive: false });
   m.addEventListener('touchend', e => {
-    if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
-    if (!fxOn() || Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return;
+    if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0, a = ang, live = els.slice(); x0 = null; ang = 0;
+    if (lock === 'x') { const eat = ev => { ev.stopPropagation(); ev.preventDefault(); }; addEventListener('click', eat, true); setTimeout(() => removeEventListener('click', eat, true), 400); }
     const n = focusSteps(curExs(), CIRC).length, i = FXI + (dx < 0 ? 1 : -1);
-    if (i >= 0 && i <= n) fxGo(i);
+    const go = fxOn() && Math.abs(dx) >= 70 && Math.abs(dx) >= 2 * Math.abs(dy) && i >= 0 && i <= n;
+    if (pk) { pk.remove(); pk = null; }
+    if (go) { els = []; fxGo(i, a); live.forEach(c => { c.style.transform = ''; c.classList.remove('fx-mv'); }); return; }
+    reset();
+    if (live.length && !fxStill()) live.forEach(c => { c.classList.add('fx-mv'); c.animate([{ transform: `rotate(${a}deg)` }, { transform: 'rotate(0deg)' }], { duration: 220, easing: 'ease-out' }).onfinish = () => c.classList.remove('fx-mv'); });
   });
+  m.addEventListener('touchcancel', () => { x0 = null; reset(); });
 })();
 /** stan pola odhaczenia: '' (puste) → ok (✓ zrobiona) → x (✕ nieudana, FAIL); pend = czeka na zapis / w kolejce */
 function setState(row, st, pend){
