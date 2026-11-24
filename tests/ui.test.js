@@ -2978,9 +2978,43 @@ test('Tryb skupienia: przesunięcie palcem zmienia ćwiczenie; zrzuty PROSTY / P
     await swipe(-120); assert.deepEqual(await shown(), []);                       // podsumowanie
     await swipe(-120); assert.equal(await p.textContent('#fx-title'), 'Podsumowanie');   // dalej nie ma
     await swipe(120); assert.deepEqual(await shown(), [2]);
+    assert.equal(await p.$$eval('.fx-gh', g => g.length), 0);                     // ograniczenie ruchu: bez kopii kart i bez łuku
     assert.deepEqual(p.errors, []);
     await ctx.close();
   }
+});
+
+// „karty w ręku”: karta idzie za palcem po łuku, spod spodu sąsiednia (kopia bez id), po puszczeniu stara odjeżdża, nowa wjeżdża; kopie znikają
+for (const scheme of ['light', 'dark']) test(`Tryb skupienia ${scheme}: przejście po łuku jak karty w ręku`, async () => {
+  const { ctx, p } = await page([], false, { scheme, motion: true });
+  await ctx.addInitScript(() => { try { localStorage.setItem('fx_kabc', '1'); } catch (e) {} });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('#fx');
+  const shown = () => p.$$eval('#main > .card[data-card]', cs => cs.filter(c => c.offsetParent !== null).map(c => +c.dataset.card));
+  const touch = (n, x, y = 300) => p.evaluate(([n, x, y]) => { const t = [{ clientX: x, clientY: y }];
+    document.querySelector('#main').dispatchEvent(Object.assign(new Event(n, { bubbles: true, cancelable: true }), { touches: n === 'touchend' ? [] : t, changedTouches: t })); }, [n, x, y]);
+  const rot = () => p.$eval('#main > .card[data-card="1"]', c => c.style.transform);
+  await touch('touchstart', 300); await touch('touchmove', 296, 330); await touch('touchmove', 290, 360);   // w pionie = przewijanie, karta stoi
+  assert.equal(await rot(), '');
+  await touch('touchend', 290, 360);
+  await touch('touchstart', 300); await touch('touchmove', 280); await touch('touchmove', 180);
+  const r = await rot(); assert.match(r, /^rotate\(-\d/);                       // w lewo = obrót przeciwnie do zegara wokół „dłoni”
+  assert.equal(await p.$$eval('.fx-gh', g => g.length), 1);                      // spod spodu wychyla się ćwiczenie 2
+  assert.equal(await p.$eval('.fx-gh', g => g.dataset.card + '|' + g.getAttribute('aria-hidden') + '|' + g.querySelectorAll('[id]').length), '2|true|0');
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `skupienie-luk-${scheme}.png`) }); }
+  await touch('touchmove', 260); await touch('touchend', 260);                     // za krótko: karta wraca, bez zmiany
+  assert.deepEqual(await shown(), [1]); assert.equal(await p.$$eval('.fx-gh', g => g.length), 0); assert.equal(await rot(), '');
+  await touch('touchstart', 300); await touch('touchmove', 280); await touch('touchmove', 160); await touch('touchend', 160);
+  assert.deepEqual(await shown(), [2]);
+  assert.ok(await p.$$eval('.fx-gh', g => g.length) >= 1);                       // stara karta odjeżdża jako kopia
+  await p.waitForTimeout(600);
+  assert.equal(await p.$$eval('.fx-gh', g => g.length), 0);
+  assert.equal(await p.$eval('#main > .card[data-card="2"]', c => c.style.transform + c.className.includes('fx-mv')), 'false');
+  await p.waitForTimeout(450); await p.click('#fx-prev');                          // przycisk: ten sam łuk
+  assert.deepEqual(await shown(), [1]); assert.ok(await p.$$eval('.fx-gh', g => g.length) >= 1);
+  await p.waitForTimeout(600); assert.equal(await p.$$eval('.fx-gh', g => g.length), 0);
+  assert.deepEqual(await a11y(p), []);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
 });
 
 // przejście z aplikacji do panelu trenera: tylko na urządzeniu, na którym ktoś zalogował się do panelu (tr_dev)
