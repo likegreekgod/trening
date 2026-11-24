@@ -686,8 +686,8 @@
   .efp .fine button[aria-pressed="true"],.rate .fine button[aria-pressed="true"]{background:var(--ink-2);color:var(--bg)}
   /* boje: światła sędziowskie, wybór oceny, propozycja ciężaru */
   .set .lt,.set-head .hl2{grid-column:span 2}
-  .lt{min-height:44px;border:0;border-radius:var(--r);background:var(--panel);color:var(--light-white);display:flex;align-items:center;justify-content:center;gap:8px;padding:0 8px}
-  .lt small{font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase}
+  .lt{min-height:44px;border:0;border-radius:var(--r);background:var(--panel);color:var(--light-white);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:4px;min-width:0}   /* światła nad napisem: obok siebie „ŚREDNIO” / „SPALONE” nie mieściły się w kolumnie (v95) */
+  .lt small{font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;max-width:100%}
   .lt.pend{outline:3px solid var(--warn);outline-offset:-3px}
   .lights{display:inline-flex;gap:4px}
   .lights i{width:14px;height:14px;border-radius:50%;background:var(--light-off);display:block}
