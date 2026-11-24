@@ -377,6 +377,9 @@ test('doneSets, e1rm, strengthSeries, records: siła z Logu', () => {
   assert.equal(Math.round(L.e1rm(80, 5, '') * 10) / 10, 93.3);              // bez RPE = jak RPE 10: 80 × (1 + 5/30)
   assert.equal(L.e1rm(80, 5, NaN), L.e1rm(80, 5, 10));
   assert.ok(isNaN(L.e1rm(80, 5, 4)));                                          // RPE < 5 pomijane
+  assert.equal(L.e1rm(150, 1, 10), 150);                                       // singiel do upadku = sam ciężar (24.11.2026)
+  assert.equal(L.e1rm(150, 1, ''), 150);                                       // singiel bez RPE (= RPE 10) też
+
   assert.deepEqual(L.strengthSeries(sets, 'Przysiad'), [{ date: '2026-09-28', v: 98.7, block: 'B1', pr: true }, { date: '2026-10-07', v: 104.8, block: 'B1', pr: true }]);
   assert.deepEqual(L.strengthSeries(sets, 'Rwanie').map(p => p.v), [70, 95]);  // boje: zaliczone kg, spalone 72,5 się nie liczy
   assert.deepEqual(L.records(sets).map(r => [r.name, r.oly, r.best, r.date]), [['Przysiad', false, 104.8, '2026-10-07'], ['Rwanie', true, 95, '2026-10-07']]);
@@ -421,14 +424,26 @@ test('coachNotes: komentarze trenera do serii, filmu i treningu', () => {
   const ses = [{ id: 'a|1|T1', data: '2026-10-10', jednostka: 'T1', komentarz_trenera: 'Dobra robota' }, { id: 'a|1|T2', data: '2026-10-11', jednostka: 'T2', komentarz_trenera: '' }];
   const n = L.coachNotes(logs, ses);
   assert.deepEqual(n.map(x => [x.date, x.title, x.lines]), [
-    ['2026-10-12', 'Rwanie · seria 1', [{ t: '12:05', txt: 'biodra' }]],
-    ['2026-10-10', 'Przysiad tylny · seria 2', [{ t: '', txt: 'Pas od tej serii' }, { t: '0:15', txt: 'Dobre zejście' }, { t: '1:15', txt: 'Łokcie wyżej' }]],
-    ['2026-10-10', 'Trening T1', [{ t: '', txt: 'Dobra robota' }]]]);
+    ['2026-10-12', 'Rwanie · seria 1', [{ t: '12:05', s: 725, txt: 'biodra' }]],
+    ['2026-10-10', 'Przysiad tylny · seria 2', [{ t: '', s: -1, txt: 'Pas od tej serii' }, { t: '0:15', s: 15, txt: 'Dobre zejście' }, { t: '1:15', s: 75, txt: 'Łokcie wyżej' }]],
+    ['2026-10-10', 'Trening T1', [{ t: '', s: -1, txt: 'Dobra robota' }]]]);
   assert.equal(new Set(n.map(x => x.key)).size, 3);
   const n2 = L.coachNotes([Object.assign({}, logs[2], { komentarz_dysk: '12:05 biodra wyżej' })], []);
   assert.notEqual(n2[0].key, n[0].key);                                          // zmieniona treść = nowy komentarz
   assert.equal(L.coachNotes([Object.assign({}, logs[2])], [])[0].key, n[0].key);
   assert.deepEqual(L.coachNotes([], []), []); assert.deepEqual(L.coachNotes(undefined, undefined), []);
+});
+
+test('coachNotes: film przy komentarzu i chwile z dziesiątymi (v98)', () => {
+  const l = { id: 'a|1|T1|1|1', data: '2026-10-10', cwiczenie: 'Rwanie', seria: 1, komentarz_trenera: '0:23,5 kolano do środka\n1:02.4 łokcie\n0:75 to nie chwila', film_link: 'https://drive.google.com/file/d/abc/view' };
+  const n = L.coachNotes([l], [{ id: 'a|1|T1', data: '2026-10-10', jednostka: 'T1', komentarz_trenera: 'ok' }]);
+  const f = n.find(x => x.kind === 'L');
+  assert.equal(f.video, true);
+  assert.deepEqual(f.lines, [{ t: '0:23,5', s: 23.5, txt: 'kolano do środka' }, { t: '1:02.4', s: 62.4, txt: 'łokcie' }, { t: '', s: -1, txt: '0:75 to nie chwila' }]);
+  assert.equal(n.find(x => x.kind === 'S').video, false);
+  assert.equal(L.coachNotes([Object.assign({}, l, { film_link: '' })], [])[0].video, false);
+  assert.equal(L.coachNotes([Object.assign({}, l, { film_link: 'javascript:alert(1)' })], [])[0].video, false);
+  assert.equal(L.filmSec('0:03'), 3); assert.equal(L.filmSec('10:00,9'), 600.9); assert.equal(L.filmSec('1:60'), -1); assert.equal(L.filmSec(''), -1);
 });
 
 test('notesByWeek: komentarze trenera tygodniami i jednostkami', () => {

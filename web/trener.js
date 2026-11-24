@@ -1125,7 +1125,7 @@ function nbCard(d, b){
     '<label class="nbh"><span class="eb">Wskazówki dla AI (opcjonalnie)</span><textarea data-nbf="hint" rows="2" maxlength="600" placeholder="np. więcej pracy nad rwaniem, ostatni tydzień lżejszy, bez martwego ciągu (plecy)"' + dis + '>' + esc(st.hint || '') + '</textarea></label></div>' +
     '<div class="row"><button class="b p ai" type="button" data-nb="go"' + dis + '>' + SPARK + (st.busy ? 'Układam blok…' : 'Szkic następnego bloku') + '</button><span class="hint">' + (st.busy ? 'to trwa do minuty…' : 'ok. 0,10–0,20 $ za szkic') + '</span></div>' +
     '<details class="ctx"><summary>Co dostaje AI (bez imienia klienta)</summary><ul><li>plan bloku ' + esc(b.blok) + ' tydzień po tygodniu i wykonanie: najlepsza seria, światła, nieudane, pominięte</li><li>ból z miejscem, dyspozycja, RPE sesji, komentarze klienta</li>' +
-    '<li>Twoje wnioski po bloku i Twoje zasady: kg w dół do 2,5, po samych 🟢 +2,5 kg, rpe_max to sufit, K = korekcyjne, boje bez serii dodatkowych</li><li>tryb (PRO / PROSTY), skala, masters, sufit w bojach</li></ul></details>';
+    '<li>Twoje wnioski po bloku i Twoje zasady: kg w dół do 2,5, po samych 🟢 +2,5 kg (małe ciężary: najpierw powtórzenia), rpe_max to sufit, K = korekcyjne, boje bez serii dodatkowych</li><li>tryb (PRO / PROSTY), skala, masters, sufit w bojach</li></ul></details>';
   return '<div class="card nb" id="nb"><h2>Następny blok</h2><div class="kedit nbk" style="border:0;margin:0;padding:0">' + inner + err + '</div></div>';
 }
 function nextBlok(b){ const m = /^(.*?)(\d+)$/.exec(String(b || '')); return m ? m[1] + (Number(m[2]) + 1) : String(b || 'B') + '2'; }

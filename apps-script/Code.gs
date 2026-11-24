@@ -62,7 +62,7 @@ function oldLinkText_(pwa) {
  * POST (Content-Type text/plain, bez preflight CORS), body: {fn, key, args:[…]} → {ok:true, result} | {ok:false, error}
  */
 const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError,
-  logNote, logReadyVideo, editPlan, saveStan, deleteStan, replyNote };
+  logNote, logReadyVideo, editPlan, saveStan, deleteStan, replyNote, filmPart };
 /*
  * Trening prowadzony przez trenera („▶ Prowadź” w panelu): aplikacja klienta otwarta z ?prowadz=<klient_id> wysyła
  * {fn, token (bilet Google trenera), as: klient_id, args} zamiast klucza. doPost sprawdza bilet (trAuth_), bierze klucz
@@ -410,6 +410,43 @@ function replyNote(key, r) {
     sh.getRange(hit.getRow(), cA).setValue(plain_(x.text ? at : ''));
   } finally { lock.releaseLock(); }
   return { ok: true, text: x.text, at: x.text ? at.toISOString() : '' };
+}
+
+/*
+ * Film klienta do obejrzenia w aplikacji (przycisk „▶ Film” i chwile przy komentarzu trenera). Filmy na Dysku są prywatne,
+ * więc klient nie otworzy linku z Logu; skrypt (konto trenera) czyta plik kawałkami po FILM_PART bajtów i oddaje je
+ * w base64, a telefon składa film w pamięci strony. Tylko seria tego klienta (id zaczyna się od jego klient_id, jak
+ * replyRow_) i tylko plik z jej kolumny film_link. Id pliku i rozmiar w CacheService na czas oglądania.
+ */
+const FILM_PART = 4 * 1024 * 1024;
+function filmPartRange_(start, size) {
+  const a = Math.max(0, Math.floor(Number(start) || 0));
+  if (size && a >= size) throw new Error('Poza końcem filmu.');
+  return { a: a, b: (size ? Math.min(size, a + FILM_PART) : a + FILM_PART) - 1 };
+}
+function filmPart(key, r) {
+  const client = mustClient_(key), id = String(r && r.id || '').trim();
+  if (id.toLowerCase().indexOf(String(client.id).toLowerCase() + '|') !== 0) throw new Error('Brak dostępu.');
+  const cache = CacheService.getScriptCache(), ck = 'fp_' + Utilities.base64EncodeWebSafe(id).slice(0, 200);
+  let meta = null; try { meta = JSON.parse(cache.get(ck) || 'null'); } catch (e) {}
+  const tok = ScriptApp.getOAuthToken(), api = 'https://www.googleapis.com/drive/v3/files/';
+  if (!meta || !Number(r.start)) {
+    const sh = sheet_('Log', LOG_HEADERS);
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(id).matchEntireCell(true).findNext();
+    if (!hit || hit.getRow() < 2) throw new Error('Nie ma już tej serii.');
+    const file = fileIdOf_(sh.getRange(hit.getRow(), LOG_HEADERS.indexOf('film_link') + 1).getValue());
+    if (!file) throw new Error('Ta seria nie ma filmu.');
+    const m = UrlFetchApp.fetch(api + file + '?fields=size,mimeType', { headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true });
+    if (m.getResponseCode() === 404) throw new Error('Filmu nie ma już na Dysku.');
+    if (m.getResponseCode() !== 200) throw new Error('Dysk: ' + m.getResponseCode());
+    const j = JSON.parse(m.getContentText());
+    meta = { file: file, size: Number(j.size) || 0, type: String(j.mimeType || 'video/mp4') };
+    cache.put(ck, JSON.stringify(meta), 3600);
+  }
+  const g = filmPartRange_(r.start, meta.size);
+  const res = UrlFetchApp.fetch(api + meta.file + '?alt=media', { headers: { Authorization: 'Bearer ' + tok, Range: 'bytes=' + g.a + '-' + g.b }, muteHttpExceptions: true });
+  if (res.getResponseCode() !== 206 && res.getResponseCode() !== 200) throw new Error('Dysk: ' + res.getResponseCode());
+  return { b64: Utilities.base64Encode(res.getContent()), start: g.a, size: meta.size, type: meta.type };
 }
 
 /** Usunięcie serii dodanej przez klienta (rozgrzewka / dodatkowa / drop) — kasuje wiersz w Log. */
@@ -879,20 +916,29 @@ function go(e){e.preventDefault();var f=e.target,b=document.getElementById('b'),
 /* ================== PODSUMOWANIE (dla trenera) ==================
  * Uruchom `podsumowanie` (albo menu Trening → Odśwież podsumowanie). `instalujPodsumowanie` = codziennie ok. 5:00.
  * Tydzień = pon–niedz wg daty jednostki z planu (plan bez dat: data z Sesji). Liczone tylko serie wykonane (✓), bez rozgrzewki (R…).
- * Miary: wykonanie planu, serie robocze / twarde (RPE ≥ 7, FAIL, DROP), tonaż [kg], NL i średnia intensywność [%1RM]
+ * Miary: wykonanie planu, serie robocze / twarde (RPE ≥ 7, FAIL, DROP; 🟢 Lekko = RPE 7, więc to w praktyce każda oceniona seria),
+ * serie blisko upadku (RPE ≥ 9 albo FAIL = 🔴 / ✖; 24.11.2026), tonaż [kg], NL i średnia intensywność [%1RM]
  * dla ćwiczeń z % w planie, % FAIL, serie dodatkowe + drop, sRPE-TL = RPE sesji × min [AU] (Foster 2001),
- * ACWR „uncoupled” = sRPE-TL tygodnia ÷ średnia 4 poprzednich tygodni (Gabbett 2016, Lolli 2019; min. 3 tyg. historii), monotonia i strain (Foster 1998), zmiana e1RM ćwiczeń głównych
- * [kg × (1 + (powt + RIR)/30), RIR = 10 − RPE], RPE względem rpe_max z planu, samopoczucie, ból.
+ * ACWR „uncoupled” = sRPE-TL tygodnia ÷ średnia 4 poprzednich tygodni bez tygodni lżejszych z planu (Gabbett 2016, Lolli 2019;
+ * min. 3 tyg. historii). Tylko pomarańczowy sygnał „skok obciążenia”: ACWR jako predyktor kontuzji jest podważony
+ * (Impellizzeri 2020, 2021), więc nie robi czerwonego statusu (24.11.2026). Monotonia i strain (Foster 1998), zmiana e1RM
+ * ćwiczeń głównych (e1rm_: Epley z RIR, singiel do upadku = sam ciężar), RPE względem rpe_max z planu, samopoczucie, ból.
+ * Spadek e1RM: 🟠 ≤ −5%, 🔴 ≤ −8% albo ≤ −5% drugi tydzień z rzędu (jedno światło ≈ 3,3% e1RM, więc mniejsze spadki to szum oceny).
  * Ciężarowcy: grupy R rwanie, P podrzut/zarzut, CR ciąg rwaniowy, CP ciąg podrzutowy, PS przysiad, I inne
  * (kolumna Plan „grupa” albo rozpoznanie po nazwie). NL w strefach intensywności jak u Torokhtiya / Miedwiediewa,
  * skuteczność ≥ 85%, spalone < 85%, prędkość VBT w strefie 80–90%. e1RM nie jest liczone dla R i P.
  * fail_% w Podsumowaniu = serie spalone BEZ bojów (R, P); boje ocenia „spal_<85_%” w Podsumowanie_OLY.
- * Klienci, kolumna I „masters” = TAK → ostrzejsze progi (ACWR 1,2/1,4; spalone < 85%: 7/15%).
+ * Klienci, kolumna I „masters” = TAK → ostrzejsze progi (skok obciążenia ACWR > 1,2 zamiast 1,3; spalone < 85%: 7/15%).
  * Status: 🔴 za dużo / 🟠 uwaga / 🟢 OK / 🔵 za lekko — flagi do decyzji trenera, nie diagnoza.
  */
+/**
+ * Szacowane maksimum (Epley z zapasem): kg × (1 + (powt + RIR) / 30), RIR = 10 − RPE. Gdy powt + RIR ≤ 1 (singiel do upadku),
+ * e1RM = sam ciężar: Epley dawałby 103,3% i fałszywy rekord (24.11.2026). Ta sama reguła w web/lib.js (L.e1rm).
+ */
+const e1rm_ = (kg, reps, rpe) => { const n = reps + (10 - rpe); return n <= 1 ? kg : kg * (1 + n / 30); };
 const SUM_HEADERS = ['klient', 'tydzien_od', 'tyg_planu', 'jednostki', 'wykonanie_%', 'serie_rob', 'serie_twarde', 'tonaz_kg',
   'NL_%', 'sr_int_%', 'fail_%', 'dod+drop', 'sRPE_TL_AU', 'ACWR', 'monotonia', 'strain', 'e1RM_zm_%', 'RPE_vs_plan',
-  'samopocz_sr', 'samopocz_min', 'bol_max', 'status', 'powody', 'opcjonalne'];
+  'samopocz_sr', 'samopocz_min', 'bol_max', 'status', 'powody', 'opcjonalne', 'blisko_upadku'];
 const OLY_HEADERS = ['klient', 'tydzien_od', 'masters', 'NL_R', 'NL_P', 'NL_CR', 'NL_CP', 'NL_PS', 'NL_I', 'NL_razem', 'spec_%',
   'int_R_%', 'int_P_%', 'int_CR_%', 'int_CP_%', 'int_PS_%', 'z≤60', 'z61-70', 'z71-80', 'z81-90', 'z91-100', 'z>100', 'z>80_%', 'NL>90',
   'max_R', 'max_P', 'skut_≥85_%', 'spal_<85_%', 'VBT_80-90_zm_ms', 'sygnaly'];
@@ -1174,7 +1220,7 @@ function computeSummary_(plan, log, ses, klienci, opts) {
   ses.forEach(s => { if (!blank_(s.data)) SD[key(String(s.klient).toLowerCase(), s.tydzien, s.jednostka)] = s.data; });
   // jednostka zrobiona: tydzień wg faktycznej daty treningu (jednostki bywają przesuwane)
   const AD = unitDates_(ses, opts && opts.localDay);
-  const acc = (c, w) => B[c + '|' + w] || (B[c + '|' + w] = { c, w, planW: {}, sess: 0, planned: 0, planTon: 0, donePlanned: 0, work: 0, hard: 0,
+  const acc = (c, w) => B[c + '|' + w] || (B[c + '|' + w] = { c, w, planW: {}, sess: 0, planned: 0, planTon: 0, donePlanned: 0, work: 0, hard: 0, near: 0,
     ton: 0, nl: 0, intSum: 0, fail: 0, addDrop: 0, e1: {}, rpeDiff: [], feel: [], pain: NaN, srpe: 0, srpeN: 0, ex: {},
     strWork: 0, strFail: 0, olyAny: false, optPlan: 0, optDone: {},
     o: { nl: g0(), int: g0(), intN: g0(), zones: [0, 0, 0, 0, 0, 0], nl90: 0, maxKg: { R: 0, P: 0 }, maxName: { R: '', P: '' }, maxRel: { R: 0, P: 0 },
@@ -1219,6 +1265,7 @@ function computeSummary_(plan, log, ses, klienci, opts) {
     const grp = groupOf_(pr.grupa, name), lift = grp === 'R' || grp === 'P', o = a.o;
     if (!lift) { a.strWork++; if (fail) a.strFail++; }
     if (fail || drop || rpe >= 7) a.hard++;
+    if (fail || rpe >= 9) a.near++;                                          // blisko upadku: 🔴 Ciężko / Walka albo ✖
     if (kg > 0 && reps > 0) { a.ton += kg * reps; x.ton += kg * reps; }
     const pct = n_(pr.procent), pkg = n_(pr.kg);
     const rel = pct > 0 && pkg > 0 && kg > 0 ? kg / (pkg / pct) : NaN;       // %1RM rzeczywisty z 1RM zakodowanego w planie
@@ -1243,7 +1290,7 @@ function computeSummary_(plan, log, ses, klienci, opts) {
     if (!fail && vb > 0 && rel >= 0.8 && rel <= 0.9) x.v80.push(vb);
     if (rpe >= 5) x.rpe.push(rpe);
     if (!fail && !lift && rpe >= 5 && kg > 0 && reps > 0) {                  // e1RM tylko poza rwaniem i podrzutem
-      const e = kg * (1 + (reps + (10 - rpe)) / 30);
+      const e = e1rm_(kg, reps, rpe);
       x.e1 = Math.max(x.e1, e);
       if (String(pr.prio) === 'A') a.e1[name] = Math.max(a.e1[name] || 0, e);
     }
@@ -1280,15 +1327,17 @@ function computeSummary_(plan, log, ses, klienci, opts) {
       const mono = a.srpeN >= 2 && sd > 0 ? mean / sd : NaN;
       // ACWR uncoupled: ten tydzień ÷ średnia z maks. 4 poprzednich tygodni kalendarzowych (brak treningu = 0)
       const prevW = [];
-      for (let k = 1; k <= 4; k++) { const d = day_(a.w); d.setUTCDate(d.getUTCDate() - 7 * k); const p = byClient[c].find(z => z.w === iso_(d)); prevW.push(p ? p.srpe : 0); }
+      for (let k = 1; k <= 4; k++) { const d = day_(a.w); d.setUTCDate(d.getUTCDate() - 7 * k); const p = byClient[c].find(z => z.w === iso_(d)); prevW.push(p ? { v: p.srpe, light: !!p.planLight } : { v: 0, light: false }); }
       const firstW = weeks.find(z => z.srpeN > 0);
       const histW = firstW ? Math.round((day_(a.w) - day_(firstW.w)) / 6048e5) : 0;
-      const nW = Math.min(4, histW);
-      const chronic = nW ? prevW.slice(0, nW).reduce((s2, v) => s2 + v, 0) / nW : 0;
+      // tygodnie lżejsze z planu (deload) poza średnią: inaczej tydzień po deloadzie zawsze wychodzi „skokiem”
+      const base = prevW.slice(0, Math.min(4, histW)).filter(p => !p.light);
+      const chronic = base.length ? base.reduce((s2, p) => s2 + p.v, 0) / base.length : 0;
       const acwr = a.srpeN && histW >= 3 && chronic > 0 ? a.srpe / chronic : NaN;
       // tydzień lżejszy z planu (deload): planowany tonaż ≥ 25% niższy niż średnia 3 poprzednich
       const pPrev = weeks.slice(Math.max(0, i - 3), i).map(z => z.planTon).filter(v => v > 0);
       const planLight = pPrev.length > 0 && a.planTon > 0 && a.planTon <= 0.75 * pPrev.reduce((s2, v) => s2 + v, 0) / pPrev.length;
+      a.planLight = planLight;
       // e1RM: bieżący tydzień vs średnia z 2 poprzednich (te same ćwiczenia główne)
       const chg = (back) => {
         const prev = weeks.slice(Math.max(0, i - back), i), d = [];
@@ -1299,9 +1348,11 @@ function computeSummary_(plan, log, ses, klienci, opts) {
         return d.length ? 100 * d.reduce((s, v) => s + v, 0) / d.length : NaN;
       };
       const e1chg = chg(2), e1flat3 = i >= 3 ? chg(3) : NaN;
+      a.e1chg = e1chg;
+      const prevE1 = i > 0 ? weeks[i - 1].e1chg : NaN;
       const rpeVs = a.rpeDiff.length ? a.rpeDiff.reduce((s, v) => s + v, 0) / a.rpeDiff.length : NaN;
       const failPct = a.strWork ? 100 * a.strFail / a.strWork : NaN;
-      const T = M[c] ? { aR: 1.4, aO: 1.2, mO: 7, mR: 15 } : { aR: 1.5, aO: 1.3, mO: 10, mR: 20 };
+      const T = M[c] ? { aO: 1.2, mO: 7, mR: 15 } : { aO: 1.3, mO: 10, mR: 20 };
       const o = a.o, prev3 = weeks.slice(Math.max(0, i - 3), i);
       const missPct = o.loSets ? 100 * o.loMiss / o.loSets : NaN;
       const vd = [];
@@ -1316,7 +1367,7 @@ function computeSummary_(plan, log, ses, klienci, opts) {
       const lowFeel = a.feel.filter(f => f <= 2).length;
       const feelAvg = a.feel.length ? a.feel.reduce((s, v) => s + v, 0) / a.feel.length : NaN;
       const R = [], O = [], L = [];
-      if (acwr > T.aR) R.push('ACWR > ' + T.aR); else if (acwr > T.aO) O.push('ACWR ' + T.aO + '–' + T.aR); else if (acwr < 0.8) L.push('ACWR < 0,8');
+      if (acwr > T.aO) O.push('skok obciążenia (ACWR ' + String(r2_(acwr)).replace('.', ',') + ')'); else if (acwr < 0.8) L.push('ACWR < 0,8');
       if (a.olyAny) {
         if (missPct > T.mR) OS.push('R', 'spalone < 85%: ' + r1_(missPct) + '%');
         else if (missPct > T.mO) OS.push('O', 'spalone < 85%: ' + r1_(missPct) + '%');
@@ -1324,7 +1375,9 @@ function computeSummary_(plan, log, ses, klienci, opts) {
         if (nl90jump) OS.push('O', 'NL > 90% +' + Math.round(100 * (o.nl90 / nl90prev - 1)) + '%');
         for (let k = 0; k < OS.length; k += 2) (OS[k] === 'R' ? R : O).push(OS[k + 1]);
       }
-      if (e1chg <= -5) R.push('e1RM −5% lub więcej'); else if (e1chg <= -2.5) O.push('e1RM spada');
+      if (e1chg <= -8) R.push('e1RM −8% lub więcej');
+      else if (e1chg <= -5 && prevE1 <= -5) R.push('e1RM −5% drugi tydzień');
+      else if (e1chg <= -5) O.push('e1RM −5% lub więcej');
       if (failPct > 10) R.push('FAIL > 10%'); else if (failPct >= 5) O.push('FAIL 5–10%');
       if (lowFeel >= 2) R.push('samopoczucie ≤ 2 (2×)'); else if (lowFeel === 1) O.push('samopoczucie ≤ 2');
       if (a.pain > 3) R.push('ból > 3/10');
@@ -1343,7 +1396,7 @@ function computeSummary_(plan, log, ses, klienci, opts) {
         a.srpeN ? Math.round(a.srpe) : '', r2_(acwr), r2_(mono), isFinite(mono) ? Math.round(a.srpe * mono) : '', r1_(e1chg), r2_(rpeVs),
         r1_(feelAvg), a.feel.length ? Math.min(...a.feel) : '', isNaN(a.pain) ? '' : a.pain, status,
         (planLight ? ['tydzień lżejszy z planu'] : []).concat(R, O, L).join('; '),
-        a.optPlan ? Object.keys(a.optDone).length + '/' + a.optPlan : '']);
+        a.optPlan ? Object.keys(a.optDone).length + '/' + a.optPlan : '', a.work ? a.near : '']);
       if (a.olyAny) {
         const nlAll = GROUPS.reduce((s2, g) => s2 + o.nl[g], 0), spec = nlAll - o.nl.I, zAll = o.zones.reduce((s2, v) => s2 + v, 0);
         const mx = g => o.maxKg[g] ? o.maxKg[g] + ' kg' + (o.maxRel[g] ? ' · ' + Math.round(100 * o.maxRel[g]) + '%' : '') + ' (' + o.maxName[g] + ')' : '';
@@ -1404,7 +1457,7 @@ function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
     const name = String(l.cwiczenie), grp = groupOf_(pr.grupa, name);
     if ((grp === 'R' || grp === 'P') && !fail && kg > x.best[grp][0]) x.best[grp] = [kg, name];
     if (grp !== 'R' && grp !== 'P' && String(pr.prio) === 'A' && !fail && rpe >= 5 && kg > 0 && reps > 0) {
-      const e = kg * (1 + (reps + (10 - rpe)) / 30), w = n_(l.tydzien), m = x.e1[name] || (x.e1[name] = {});
+      const e = e1rm_(kg, reps, rpe), w = n_(l.tydzien), m = x.e1[name] || (x.e1[name] = {});
       m[w] = Math.max(m[w] || 0, e);
     }
   });
@@ -1469,7 +1522,7 @@ function keepNotes_(rows, old) {
  * dostaje instruktaż każdej rozpoznanej części. Wiersz z samą nazwą (bez danych) nie bierze udziału w dopasowaniu. „… 1¼” szuka najpierw wariantu „1-1/4 …”, potem ćwiczenia bez dopisku.
  */
 const CW_HEADERS = ['cwiczenie', 'aliasy', 'instruktaz', 'partia', 'zamienniki', 'grupa', 'glowna'];
-const PART_HEADERS = ['klient', 'tydzien_od', 'partia', 'serie', 'serie_twarde', 'tonaz_kg'];
+const PART_HEADERS = ['klient', 'tydzien_od', 'partia', 'serie', 'serie_twarde', 'tonaz_kg', 'blisko_upadku'];
 const EX_ABBR = { db: 'dumbbell', kb: 'kettlebell', bb: 'barbell', sl: 'single leg', rdl: 'romanian deadlift', ohs: 'overhead squat' };
 const EX_STOP = ['and', 'from', 'the', 'a', 'on', 'with', 'to'];
 const exStr_ = v => String(v === undefined || v === null ? '' : v);
@@ -1635,7 +1688,7 @@ function uzupelnijCwiczenia() {
 /**
  * Czysta funkcja: serie na partię mięśniową (klient × tydzień × partia). Partie z nazwy wykonanego ćwiczenia
  * (po zamianie liczy się zamiennik), a gdy nie ma go w bazie – z nazwy z planu. Ćwiczenie z kilkoma partiami liczy się
- * do każdej. Serie twarde jak w podsumowaniu: RPE ≥ 7, FAIL albo DROP. Bez rozgrzewki; tydzień wg faktycznej daty treningu.
+ * do każdej. Serie twarde jak w podsumowaniu: RPE ≥ 7, FAIL albo DROP; blisko upadku: RPE ≥ 9 albo FAIL. Bez rozgrzewki; tydzień wg faktycznej daty treningu.
  */
 function computeParts_(plan, log, ses, dictRows, opts) {
   const ix = exIndex_(dictRows), key = (...a) => a.map(String).join('|'), AD = unitDates_(ses, opts && opts.localDay), P = {}, B = {}, memo = {};
@@ -1649,10 +1702,11 @@ function computeParts_(plan, log, ses, dictRows, opts) {
     let parts = partsOf(l.cwiczenie); if (!parts.length) parts = partsOf(pr.cwiczenie);
     const typ = String(l.typ || ''), kg = n_(l.kg), reps = timed_(pr.powt) ? 0 : n_(l.powt), rpe = n_(l.rpe);
     parts.forEach(part => {
-      const b = B[key(c, w, part)] || (B[key(c, w, part)] = [c, w, part, 0, 0, 0]);
+      const b = B[key(c, w, part)] || (B[key(c, w, part)] = [c, w, part, 0, 0, 0, 0]);
       b[3]++;
       if (/FAIL/.test(typ) || /DROP/.test(typ) || /^D/i.test(s) || rpe >= 7) b[4]++;
       if (kg > 0 && reps > 0) b[5] += kg * reps;
+      if (/FAIL/.test(typ) || rpe >= 9) b[6]++;
     });
   });
   return Object.values(B).map(b => { b[5] = Math.round(b[5]); return b; })
