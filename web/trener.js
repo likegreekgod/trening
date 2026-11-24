@@ -675,11 +675,11 @@ function renderKlientUst(id){
       : '<p class="muted">Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL.</p>') +
     '<div class="sec" style="border:0">Nowy link</div><p class="legend" style="font-size:13px">Gdy link trafił do niewłaściwej osoby. Stary link przestaje działać, a klient musi dostać nowy. Treningi i historia zostają.</p>' +
     '<button class="cp danger" type="button" id="kl-rekey"' + dis + '>' + (m.busy === 'rekey' ? 'Generuję…' : m.rekey === id ? 'Na pewno? Stary link przestanie działać' : 'Wygeneruj nowy link') + '</button></div>' +
-    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>';
+    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>' + hevyCard(k);
   $('#main').innerHTML = head('<a href="#klienci" style="color:inherit">Klienci</a> › ustawienia', k.name, '<a class="b" ' + klLink + ' href="#k/' + encodeURIComponent(id) + '">Karta klienta ›</a>') +
     '<div class="pg"><div class="kgrid"><div class="card" id="kl-form">' + f + '</div><div class="stack">' + side + '</div></div></div>';
   const re = () => { KLM = { ok: '', err: '', busy: false, rekey: '' }; renderKlientUst(id); };
-  klCtl(d, re); klBind();
+  klCtl(d, re); klBind(); hevyBind(k, () => { if (location.hash === '#klienci/' + encodeURIComponent(id)) renderKlientUst(id); });
   const em = $('#kl-email');
   if (em) em.oninput = () => { d.email = em.value.trim(); const n = KL_F.filter(f => d[f] !== k[f]).length, sv = $('#kl-save'); if (sv && !KLM.busy) sv.disabled = !n; };
   const mt = $('#kl-mailtest');
@@ -706,6 +706,70 @@ function renderKlientUst(id){
     catch (e) { KLM = { ok: '', err: e.auth ? '' : e.message, busy: false, rekey: '' }; }
     if (location.hash.startsWith('#klienci/')) renderKlientUst(id);
   };
+}
+/* ---------- historia z Hevy: plik CSV czytany w przeglądarce (lib hevyParse), dopasowanie do bazy i zapis po stronie skryptu (trHevy) ---------- */
+let HV = null;                                   // {id, file, P, from, withTaken, srv, busy, err, ok, sure}; tylko w pamięci strony
+const dmy = d => d ? dm(d) + '.' + d.slice(0, 4) : '';
+const HV_FROM = [['all', 'Cała historia'], ['12', '12 mies.'], ['6', '6 mies.']];
+const hvFrom = f => { if (f === 'all') return ''; const d = new Date(); d.setMonth(d.getMonth() - Number(f)); return d.toISOString().slice(0, 10); };
+function hevyCard(k){
+  const h = HV && HV.id === k.id ? HV : { id: k.id }, srv = h.srv || {}, prev = srv.prev;
+  const pick = (h.P && !h.P.error) ? TL.hevyPick(h.P, { from: hvFrom(h.from || 'all'), taken: new Set(srv.taken || []), withTaken: h.withTaken }) : null;
+  const top = '<div class="card hv" id="hevy"><h2>Historia z Hevy</h2>';
+  const prevH = prev ? '<div class="hvprev"><span>Z Hevy w aplikacji: <b>' + prev.n + ' ' + plN(prev.n, 'trening', 'treningi', 'treningów') + '</b>, ' + dmy(prev.first) + ' – ' + dmy(prev.last) + '</span>' +
+    '<button class="cp danger" type="button" id="hv-undo"' + (h.busy ? ' disabled' : '') + '>' + (h.sure === 'undo' ? 'Na pewno? Usuń wczytaną historię' : 'Cofnij import') + '</button></div>' : '';
+  const msg = (h.ok ? '<div class="okbox" role="status">' + h.ok + '</div>' : '') + (h.err ? '<p class="err" role="alert">' + esc(h.err) + '</p>' : '');
+  if (!pick) return top + msg + prevH + '<p class="legend" style="font-size:13px;margin-top:0">' + esc(k.name) + ' eksportuje treningi w Hevy: <b>Profil → ⚙ → Export &amp; Import Data → Export Workouts</b> i wysyła Ci plik CSV. Przed zapisem zobaczysz podgląd.</p>' +
+    '<label class="cp hvf">📂 Wybierz plik CSV z Hevy<input type="file" id="hv-file" accept=".csv,text/csv" hidden></label></div>';
+  const miss = pick.names.filter(([n]) => !(srv.match || {})[n]), hit = pick.names.filter(([n]) => (srv.match || {})[n]);
+  const exRow = ([n, c], m) => '<li><span class="hvn">' + esc(n) + '</span>' + (m ? '<span class="hva">→ ' + esc(m) + '</span>' : '<span class="hva no">zostaje pod tą nazwą</span>') + '<span class="hvc">' + c + '×</span></li>';
+  return top + msg +
+    '<div class="hvfile"><b>' + esc(h.file) + '</b><span>' + pick.all + ' ' + plN(pick.all, 'trening', 'treningi', 'treningów') + ' w pliku' + (h.P.lbs ? ' · funty przeliczone na kg' : '') + '</span></div>' +
+    '<div class="fr fr1"><div><b>Od kiedy</b><small>Starsza historia też liczy się do rekordów, ale wydłuża ładowanie aplikacji.</small></div>' +
+      '<div class="seg">' + HV_FROM.map(([v, t]) => '<button type="button" data-hvfrom="' + v + '" aria-pressed="' + ((h.from || 'all') === v) + '">' + t + '</button>').join('') + '</div></div>' +
+    '<div class="hvst"><div><b>' + pick.n + '</b><span>' + plN(pick.n, 'trening', 'treningi', 'treningów') + '</span></div><div><b>' + pick.work.toLocaleString('pl-PL') + '</b><span>serii roboczych</span></div><div><b>' + pick.names.length + '</b><span>ćwiczeń</span></div></div>' +
+    (pick.n ? '<p class="legend" style="font-size:13px">Od ' + dmy(pick.first) + ' do ' + dmy(pick.last) + '</p>' : '') +
+    (pick.dup ? '<div class="fr"><div><b>' + pick.dup + ' ' + plN(pick.dup, 'dzień', 'dni', 'dni') + ' już w aplikacji</b><small>W tym dniu klient ma już trening w aplikacji, więc z Hevy go pomijam, żeby nie liczyć dwa razy.</small></div>' + swH('hv-taken', !!h.withTaken, 'Wczytaj też te dni') + '</div>' : '') +
+    '<div class="sec">Ćwiczenia</div>' +
+    (miss.length ? '<p class="legend" style="font-size:13px;margin-top:0"><b>' + miss.length + ' bez odpowiednika w bazie.</b> Wczytają się pod nazwą z Hevy. Gdy dopiszesz ją jako alias w zakładce Ćwiczenia, połączy się z historią z planu.</p><ul class="hvl">' + miss.map(x => exRow(x, '')).join('') + '</ul>' : '') +
+    '<details class="hvd"' + (miss.length ? '' : ' open') + '><summary>Dopasowane do bazy: ' + hit.length + ' z ' + pick.names.length + '</summary><ul class="hvl">' + hit.map(x => exRow(x, srv.match[x[0]])).join('') + '</ul></details>' +
+    '<p class="legend" style="font-size:13px">Każdy trening wejdzie jako własny trening klienta (blok „Hevy”) z RPE i notatkami. Liczy się do rekordów, wykresu Siły i objętości, nie zmienia wykonania planu.' + (prev ? ' Ponowny import zastępuje poprzedni.' : '') + '</p>' +
+    '<div class="row2"><button class="b p" type="button" id="hv-go"' + (pick.n && !h.busy ? '' : ' disabled') + '>' + (h.busy === 'go' ? 'Wczytuję…' : h.sure === 'go' ? 'Na pewno? Wczytaj ' + pick.n : 'Wczytaj ' + pick.n + ' ' + plN(pick.n, 'trening', 'treningi', 'treningów')) + '</button>' +
+    '<button class="b" type="button" id="hv-x"' + (h.busy ? ' disabled' : '') + '>Anuluj</button></div></div>';
+}
+function hevyBind(k, re){
+  const set = o => { HV = Object.assign({}, HV && HV.id === k.id ? HV : { id: k.id }, o); re(); };
+  const f = $('#hv-file');
+  if (f) f.onchange = async () => {
+    const file = f.files && f.files[0]; if (!file) return;
+    const P = TL.hevyParse(await file.text());
+    if (P.error) return set({ P: null, err: P.error, ok: '' });
+    set({ file: file.name, P, from: 'all', withTaken: false, err: '', ok: '', sure: '', busy: 'look' });
+    const names = [...new Set([].concat(...P.workouts.map(w => w.ex.map(e => e.name))))], dates = [...new Set(P.workouts.map(w => w.date))];
+    try { set({ srv: await guard(api('trHevy', k.id, { mode: 'podglad', names, dates })), busy: '' }); }
+    catch (e) { set({ P: null, err: e.auth ? '' : e.message, busy: '' }); }
+  };
+  document.querySelectorAll('[data-hvfrom]').forEach(b => b.onclick = () => set({ from: b.dataset.hvfrom, sure: '' }));
+  const tk = document.querySelector('[data-sw="hv-taken"]'); if (tk) tk.onclick = () => set({ withTaken: !HV.withTaken, sure: '' });
+  const x = $('#hv-x'); if (x) x.onclick = () => set({ P: null, file: '', srv: Object.assign({}, HV.srv, { match: null }), sure: '', err: '' });
+  const go = $('#hv-go');
+  if (go) go.onclick = async () => {
+    if (HV.sure !== 'go') return set({ sure: 'go' });
+    const pick = TL.hevyPick(HV.P, { from: hvFrom(HV.from || 'all'), taken: new Set(HV.srv.taken || []), withTaken: HV.withTaken });
+    set({ busy: 'go', sure: '' });
+    try { const r = await guard(api('trHevy', k.id, { mode: 'wczytaj', workouts: pick.workouts }));
+      delete CK[k.id];
+      set({ busy: '', P: null, srv: { prev: r.prev }, ok: '<b>✓ Wczytano ' + r.units + ' ' + plN(r.units, 'trening', 'treningi', 'treningów') + ' (' + r.sets.toLocaleString('pl-PL') + ' serii).</b> ' + esc(k.name) + ' zobaczy je w Postępie i w historii ćwiczeń przy następnym otwarciu aplikacji.' }); }
+    catch (e) { set({ busy: '', err: e.auth ? '' : e.message }); }
+  };
+  const u = $('#hv-undo');
+  if (u) u.onclick = async () => {
+    if (HV.sure !== 'undo') return set({ sure: 'undo' });
+    set({ busy: 'undo', sure: '' });
+    try { const r = await guard(api('trHevy', k.id, { mode: 'cofnij' })); set({ busy: '', srv: { prev: null }, ok: '✓ Usunięto ' + r.units + ' ' + plN(r.units, 'trening', 'treningi', 'treningów') + ' z Hevy.' }); }
+    catch (e) { set({ busy: '', err: e.auth ? '' : e.message }); }
+  };
+  if (!HV || HV.id !== k.id || !HV.srv) { HV = { id: k.id, srv: {} }; guard(api('trHevy', k.id, { mode: 'stan' })).then(r => { if (HV.id === k.id) set({ srv: Object.assign({}, HV.srv, r) }); }).catch(() => {}); }
 }
 function renderNowyKlient(){
   const n = NK = NK || { imie: '', id: '', touched: false, mode: 'PROSTY', swap: 'TRENER', masters: false, err: '', busy: false, done: null };

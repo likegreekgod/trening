@@ -1309,6 +1309,85 @@
     });
   };
 
+  /* ---------- import historii z Hevy (eksport CSV z aplikacji Hevy) ---------- */
+  /** CSV → tablica wierszy (cudzysłowy, "" w środku, przecinki i nowe linie w polu, CRLF, BOM) */
+  L.csvRows = text => {
+    const s = String(text || '').replace(/^﻿/, ''), out = [];
+    let row = [], f = '', q = false;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (q) { if (c === '"') { if (s[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; continue; }
+      if (c === '"') q = true;
+      else if (c === ',') { row.push(f); f = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && s[i + 1] === '\n') i++; row.push(f); f = ''; if (row.length > 1 || row[0] !== '') out.push(row); row = []; }
+      else f += c;
+    }
+    if (f !== '' || row.length) { row.push(f); out.push(row); }
+    return out;
+  };
+  const MON = { jan: 1, sty: 1, feb: 2, lut: 2, mar: 3, apr: 4, kwi: 4, may: 5, maj: 5, jun: 6, cze: 6, jul: 7, lip: 7, aug: 8, sie: 8, sep: 9, wrz: 9, oct: 10, paz: 10, 'paź': 10, nov: 11, lis: 11, dec: 12, gru: 12 };
+  /** „14 Mar 2025, 18:05” (eksport Hevy) albo „2025-03-14 18:05[:ss]” → „2025-03-14T18:05”; inaczej '' */
+  L.hevyTime = v => {
+    const t = String(v || '').trim(), p = n => String(n).padStart(2, '0');
+    let m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})/.exec(t);
+    if (m) return m[1] + '-' + m[2] + '-' + m[3] + 'T' + p(m[4]) + ':' + m[5];
+    m = /^(\d{1,2})\s+([A-Za-zżźćńółęąś]{3})[a-zżźćńółęąś.]*\s+(\d{4}),?\s+(\d{1,2}):(\d{2})/.exec(t);
+    const mo = m && MON[m[2].toLowerCase()];
+    return mo ? m[3] + '-' + p(mo) + '-' + p(m[1]) + 'T' + p(m[4]) + ':' + m[5] : '';
+  };
+  /**
+   * Eksport treningów Hevy (CSV) → {workouts, sets, bad, lbs} albo {error}.
+   * Trening = ten sam start_time i tytuł; ćwiczenie = kolejne wiersze z tą samą nazwą (i supersetem).
+   * Seria: normal → 'W' (robocza), warmup → 'R', dropset → 'D', failure → 'W' z RPE 10, gdy pusty
+   * („do upadku” w Hevy to seria zaliczona, nie nieudana). Funty → kg (0,1 kg). Czas bez powtórzeń → seria na czas (s).
+   */
+  L.hevyParse = text => {
+    const rows = L.csvRows(text);
+    if (!rows.length) return { error: 'Pusty plik.' };
+    const h = rows[0].map(x => x.trim().toLowerCase()), col = n => h.indexOf(n);
+    const need = ['title', 'start_time', 'exercise_title', 'set_type', 'reps'];
+    if (need.some(n => col(n) < 0)) return { error: 'To nie jest eksport treningów z Hevy (brak kolumn: ' + need.filter(n => col(n) < 0).join(', ') + ').' };
+    const lbs = col('weight_kg') < 0 && col('weight_lbs') >= 0, wi = lbs ? col('weight_lbs') : col('weight_kg');
+    const g = (r, n) => { const i = col(n); return i < 0 ? '' : String(r[i] === undefined ? '' : r[i]).trim(); };
+    const nm = v => { const x = parseFloat(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
+    const W = [], by = {}, bad = [];
+    let sets = 0;
+    rows.slice(1).forEach((r, i) => {
+      const start = L.hevyTime(g(r, 'start_time')), name = g(r, 'exercise_title').replace(/\s+/g, ' ');
+      if (!start || !name) { bad.push(i + 2); return; }
+      const k = start + '|' + g(r, 'title');
+      let w = by[k];
+      if (!w) { w = by[k] = { date: start.slice(0, 10), start, end: L.hevyTime(g(r, 'end_time')), title: g(r, 'title') || 'Trening', note: g(r, 'description'), ex: [] }; W.push(w); }
+      const sup = g(r, 'superset_id'), last = w.ex[w.ex.length - 1];
+      let e = last && last.name === name && last.sup === sup ? last : null;
+      if (!e) { e = { name, sup, note: g(r, 'exercise_notes'), sets: [] }; w.ex.push(e); }
+      const ty = g(r, 'set_type').toLowerCase(), kg0 = wi < 0 ? null : nm(r[wi]), reps = nm(g(r, 'reps')), sec = nm(g(r, 'duration_seconds')), km = nm(g(r, 'distance_km'));
+      let rpe = nm(g(r, 'rpe'));
+      if (ty === 'failure' && rpe === null) rpe = 10;
+      const kg = kg0 === null ? '' : lbs ? Math.round(kg0 * 0.45359237 * 10) / 10 : kg0;
+      e.sets.push({ t: ty === 'warmup' ? 'R' : ty === 'dropset' ? 'D' : 'W', kg, reps: reps === null ? '' : reps, sec: reps === null && sec ? sec : '', km: km || '', rpe: rpe === null ? '' : rpe });
+      sets++;
+    });
+    if (!W.length) return { error: 'W pliku nie ma żadnego treningu.' };
+    W.sort((a, b) => a.start.localeCompare(b.start));
+    return { workouts: W, sets, bad, lbs };
+  };
+  /**
+   * Podgląd importu: treningi od daty `from` (RRRR-MM-DD albo ''), bez dni, w których klient ma już coś w aplikacji (`taken` = Set dat),
+   * chyba że `withTaken`. Zwraca liczby, zakres dat, ćwiczenia (nazwa → ile treningów) i dzień jednostki H<rrmmdd>[b, c…].
+   */
+  L.hevyPick = (parsed, o) => {
+    o = o || {};
+    const taken = o.taken || new Set(), all = (parsed && parsed.workouts) || [], inR = all.filter(w => !o.from || w.date >= o.from);
+    const dup = inR.filter(w => taken.has(w.date)), pick = o.withTaken ? inR : inR.filter(w => !taken.has(w.date));
+    const ex = {}, seen = {};
+    pick.forEach(w => { w.day = 'H' + w.date.slice(2).replace(/-/g, ''); seen[w.day] = (seen[w.day] || 0) + 1; if (seen[w.day] > 1) w.day += 'abcdefgh'[seen[w.day] - 1]; w.ex.forEach(e => { ex[e.name] = (ex[e.name] || 0) + 1; }); });
+    const work = pick.reduce((a, w) => a + w.ex.reduce((b, e) => b + e.sets.filter(s => s.t !== 'R').length, 0), 0);
+    return { workouts: pick, n: pick.length, all: all.length, dup: dup.length, work,
+      first: pick.length ? pick[0].date : '', last: pick.length ? pick[pick.length - 1].date : '',
+      names: Object.keys(ex).sort((a, b) => ex[b] - ex[a] || a.localeCompare(b)).map(n => [n, ex[n]]) };
+  };
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);
