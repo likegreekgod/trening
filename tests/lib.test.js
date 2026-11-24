@@ -377,6 +377,9 @@ test('doneSets, e1rm, strengthSeries, records: siła z Logu', () => {
   assert.equal(Math.round(L.e1rm(80, 5, '') * 10) / 10, 93.3);              // bez RPE = jak RPE 10: 80 × (1 + 5/30)
   assert.equal(L.e1rm(80, 5, NaN), L.e1rm(80, 5, 10));
   assert.ok(isNaN(L.e1rm(80, 5, 4)));                                          // RPE < 5 pomijane
+  assert.equal(L.e1rm(150, 1, 10), 150);                                       // singiel do upadku = sam ciężar (24.11.2026)
+  assert.equal(L.e1rm(150, 1, ''), 150);                                       // singiel bez RPE (= RPE 10) też
+
   assert.deepEqual(L.strengthSeries(sets, 'Przysiad'), [{ date: '2026-09-28', v: 98.7, block: 'B1', pr: true }, { date: '2026-10-07', v: 104.8, block: 'B1', pr: true }]);
   assert.deepEqual(L.strengthSeries(sets, 'Rwanie').map(p => p.v), [70, 95]);  // boje: zaliczone kg, spalone 72,5 się nie liczy
   assert.deepEqual(L.records(sets).map(r => [r.name, r.oly, r.best, r.date]), [['Przysiad', false, 104.8, '2026-10-07'], ['Rwanie', true, 95, '2026-10-07']]);

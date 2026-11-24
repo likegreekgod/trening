@@ -2,6 +2,16 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-24 · Metodyka obliczeń: progi zgodne z dokładnością danych (v98)
+
+- Na podstawie przeglądu metodyki z badaniami (Damian zaakceptował 5 poprawek 24.11).
+- Spadek e1RM: 🟠 od −5%, 🔴 od −8% albo przy −5% drugi tydzień z rzędu (było −2,5% / −5%). Jedno światło to ok. 3,3% e1RM, więc mniejszy spadek to zwykle sama zmiana oceny.
+- e1RM singla do upadku (powt. + RIR ≤ 1) = sam ciężar, w arkuszu (`e1rm_`), panelu i aplikacji (`L.e1rm`). Epley dawał 103,3% i fałszywe rekordy.
+- Nowa kolumna `blisko_upadku` (RPE ≥ 9 albo FAIL) na końcu Podsumowania i Podsumowania_partie. `serie_twarde` (RPE ≥ 7) bez zmian, choć przy 🟢 = 7 to w praktyce każda oceniona seria.
+- ACWR tylko jako 🟠 „skok obciążenia” (> 1,3, masters > 1,2), nigdy czerwony; tygodnie lżejsze z planu poza średnią z 4 tygodni. Powód: ACWR jako predyktor kontuzji jest podważony (Impellizzeri 2020, 2021), a deload zawyżał tydzień po nim.
+- Progresja przy małych ciężarach (hantle, kettle, wyciągi, maszyny w izolacji, < 20 kg): najpierw powtórzenia do górnej granicy zakresu, potem najmniejszy skok ciężaru. Na razie w zasadach szkicu AI następnego bloku; ta sama reguła obowiązuje „Zaplanuj następną” (zmienia ustalenie z 23.11 „+2,5 kg po samych 🟢 dla A i B” dla małych ciężarów).
+- Odłożone z przeglądu: próg ≥ 2% dla paska rekordu, partie pomocnicze po 0,5 serii, progi Hoopera względem zmienności klienta.
+
 ## 2026-11-24 · Tryb skupienia: przejście „karty w ręku” po łuku (v97)
 
 - Wybrany wariant A z dwóch szkiców: karta obraca się wokół punktu ok. 1100 px pod kartą (łuk, przechył ok. 11°), palec prowadzi ją na żywo, spod spodu wychyla się sąsiedni krok. Odrzucony wariant B (mały łuk 4° bez palca) jako za słaby efekt.
