@@ -550,6 +550,13 @@ test('weekDays i pickUnit: pasek Pn–Nd ze stanami, domyślna jednostka', () =>
   assert.equal(L.pickUnit(list, '2026-10-21').day, 'S2');
   assert.equal(L.pickUnit(list, '2026-10-22').day, 'T2');                         // najbliższa następna
   assert.equal(L.pickUnit(list.slice(0, 1), '2026-10-30').day, 'S1');             // nic dalej: ostatnia
+  // keepUnit: ostatnio otwarta jednostka po ponownym otwarciu aplikacji
+  const at = Date.parse('2026-10-21T22:00:00');
+  assert.equal(L.keepUnit({ w: 1, d: 'T1', t: '2026-10-21', at }, list, '2026-10-21', at + 60e3).day, 'T1');   // ten sam dzień
+  assert.equal(L.keepUnit({ w: 1, d: 'T1', t: '2026-10-21', at }, list, '2026-10-22', at + 3 * 3600e3).day, 'T1');   // po północy, < 6 h
+  assert.equal(L.keepUnit({ w: 1, d: 'T1', t: '2026-10-21', at }, list, '2026-10-22', at + 7 * 3600e3), null);   // następny dzień: dzisiejsza
+  assert.equal(L.keepUnit({ w: 1, d: 'X9', t: '2026-10-21', at }, list, '2026-10-21', at), null);   // jednostki już nie ma
+  assert.equal(L.keepUnit(null, list, '2026-10-21', at), null);
 });
 
 test('skipText / parseSkip i cutPlan: kolejność cięcia, serie_min, domyślnie B od końca', () => {
