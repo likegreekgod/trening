@@ -1095,6 +1095,17 @@
     const s = (list || []).slice().sort((a, b) => a.date.localeCompare(b.date));
     return s.find(u => u.date === today && !u.done) || s.find(u => u.date >= today && !u.done) || s.find(u => u.date >= today) || s[s.length - 1] || null;
   };
+  /**
+   * Ostatnio otwarta jednostka po ponownym uruchomieniu aplikacji (system zamknął ją w tle).
+   * saved = {w, d, t (dzień RRRR-MM-DD), at (ms)} z pamięci telefonu; wraca do niej tego samego dnia albo do KEEP_UNIT_H godzin
+   * po zamknięciu (trening po północy), o ile jednostka dalej jest w planie; inaczej null (= pickUnit, czyli dziś).
+   */
+  L.KEEP_UNIT_H = 6;
+  L.keepUnit = (saved, list, today, now) => {
+    if (!saved || saved.d == null) return null;
+    const fresh = saved.t === today || (+saved.at > 0 && now - saved.at >= 0 && now - saved.at < L.KEEP_UNIT_H * 3600e3);
+    return fresh ? (list || []).find(u => u.week === saved.w && u.day === saved.d) || null : null;
+  };
 
   /**
    * Karta „dziś” na górze Treningu. exs: [{order, name, prio, sets, done}] (done = zrobione serie z planu; sets 0 = pominięte),

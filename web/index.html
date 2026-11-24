@@ -1558,8 +1558,15 @@ function askKey(){
   $('#key-go').onclick = go;
   $('#key-in').onkeydown = e => { if (e.key === 'Enter') go(); };
 }
+// ostatnio otwarta jednostka (cu_<klucz>): po zamknięciu aplikacji w tle wraca do niej tego samego dnia, a nie do dzisiejszej (lib keepUnit)
+const CUK = 'cu_' + KEY;
+function curKeep(){
+  if (!cur.day) return;
+  try { localStorage.setItem(CUK, JSON.stringify({ w: cur.week, d: cur.day, t: localDate(), at: Date.now() })); } catch (e) {}
+}
 function pickDefault(){
-  const s = pickUnit(unitList(), localDate());       // dzisiejsza niezrobiona, potem najbliższa następna (strefa telefonu)
+  let kept = null; try { kept = JSON.parse(localStorage.getItem(CUK) || 'null'); } catch (e) {}
+  const s = TL.keepUnit(kept, unitList(), localDate(), Date.now()) || pickUnit(unitList(), localDate());   // ostatnio otwarta (ten sam dzień), inaczej dzisiejsza niezrobiona, potem najbliższa następna (strefa telefonu)
   if (s) { cur.week = s.week; cur.day = s.day; }
   const j = LIVE_J.split('|');                       // „▶ Prowadź” z panelu na konkretną jednostkę
   if (LIVE_J && PLAN.some(r => r.week === +j[0] && r.day === j.slice(1).join('|'))) { cur.week = +j[0]; cur.day = j.slice(1).join('|'); }
@@ -1751,6 +1758,7 @@ function render(){
   if (TAB === 'plan') renderPlan(); else if (TAB === 'dysp') renderDysp(); else if (TAB === 'postep') renderPostep(); else if (TAB === 'trener') renderTrener(); else renderTrening();
   navDot();
   if (TAB !== 'trening') tipDraw();
+  curKeep();
 }
 /** pusty stan: karta z ikoną; btn = [id albo atrybut, napis] */
 const ES_ICON = {
