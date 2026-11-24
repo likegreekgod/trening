@@ -155,6 +155,13 @@ function todoItems(){
   PUL.clients.forEach(c => { const v = nv[c.id]; if (!v) return;
     const ex = [...new Set(v.map(x => x.ex))], od = v.map(x => x.at).sort()[0];
     out.push({ o: 1, lv: 'lv-warn', t: c.name + ': ' + v.length + ' ' + plN(v.length, 'film', 'filmy', 'filmów') + ' bez komentarza', d: ex.slice(0, 2).join(', ') + (ex.length > 2 ? ' i inne' : '') + ' · od ' + dowDm(od), a: go('#filmy/' + encodeURIComponent(c.id), 'Filmy') }); });
+  PUL.clients.forEach(c => { const k = c.pkg; if (!k) return;   // pakiet treningów: kończy się, wygasa albo trening poza pakietem
+    const ref = go(kHref(c.id), 'Pakiet'), info = 'kupiony ' + dm(k.from) + (k.to ? ' · ważny do ' + dm(k.to) : '');
+    if (k.left < 0) out.push({ o: 0, lv: 'lv-bad', t: c.name + ': ' + -k.left + ' ' + plN(-k.left, 'trening', 'treningi', 'treningów') + ' poza pakietem', d: 'pakiet ' + k.n + ' wykorzystany · czas na nowy', a: ref });
+    else if (k.left === 0) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': pakiet wykorzystany', d: 'wszystkie ' + k.n + ' treningów · ' + info, a: ref });
+    else if (k.to && k.to < PUL.today) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': pakiet wygasł ' + dm(k.to), d: 'niewykorzystane: ' + k.left + ' z ' + k.n, a: ref });
+    else if (k.left <= PKG_LOW) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': ' + (k.left === 1 ? 'został 1 trening' : 'zostały ' + k.left + ' treningi') + ' z pakietu', d: info, a: ref });
+    else if (k.to && k.to <= TL.addDays(PUL.today, PKG_DAYS)) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': pakiet ważny do ' + dowDm(k.to), d: 'zostało ' + k.left + ' z ' + k.n + ' treningów', a: ref }); });
   PUL.blocks.forEach(b => out.push({ o: 3, lv: 'lv-warn', t: b.name + ': blok ' + b.block + ' do zamknięcia', d: (b.to < PUL.today ? 'skończył się ' : 'kończy się ') + dowDm(b.to) + ' · brak wniosków', a: go(kHref(b.id, 'bloki'), 'Zamknij') }));
   PUL.clients.forEach(c => { if (c.planLeft !== null && c.planLeft >= 0 && c.planLeft <= 7) out.push({ o: 4, lv: 'lv-warn', t: c.name + ': plan kończy się ' + (c.planLeft === 0 ? 'dziś' : 'za ' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni')), d: 'czas na kolejny blok', a: go(kHref(c.id, 'bloki'), 'Następny') }); });
   return out.sort((a, b) => a.o - b.o);
@@ -165,7 +172,7 @@ function dzisRow(u){
   const exN = u.ex ? u.ex + ' ' + plN(u.ex, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń') : '';
   const st = u.st === 'done' ? 'zrobiony' + (u.min ? ', ' + pl(u.min) + ' min' : '') + (u.rpe !== null && u.rpe !== undefined ? ', RPE ' + pl(u.rpe) : '')
     : u.st === 'live' ? 'w trakcie, ' + u.done + (u.sets ? ' z ' + u.sets : '') + ' ' + plN(u.sets || u.done, 'serii', 'serii', 'serii') : 'czeka';
-  const sub = [u.title, u.st === 'wait' ? exN : '', st].filter(Boolean).join(' · ');
+  const sub = [u.title, u.st === 'wait' ? exN : '', st, c.pkg ? 'pakiet ' + pkgLeft(c.pkg) : ''].filter(Boolean).join(' · ');
   const bar = u.st === 'live' && u.sets ? '<span class="dbar"><i style="width:' + Math.min(100, Math.round(u.done / u.sets * 100)) + '%"></i></span>' : '';
   // „▶ Prowadź”: aplikacja klienta w trybie trenera (zapis serii, notatki, ćwiczenia) na tę jednostkę
   const act = u.st === 'done' ? go(kHref(u.id, 'sesje'), 'Sesja') : go(liveHref(u.id, u.week, u.day), '▶ Prowadź', 'acc');
@@ -758,7 +765,8 @@ async function renderKlient(id, tab){
   const rd = (d.readiness || []).slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).pop();
   const rdOn = rd && String(rd.data).slice(0, 10) >= TL.addDays(today, -2) && /uwaga|zmęcz/i.test(rd.werdykt || '');
   const pills = (c.signals || []).map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('') +
-    (rdOn ? '<span class="pill ' + (/zmęcz/i.test(rd.werdykt) ? 'lv-bad' : 'lv-warn') + '">dyspozycja: ' + esc(String(rd.werdykt).toLowerCase()) + '</span>' : '');
+    (rdOn ? '<span class="pill ' + (/zmęcz/i.test(rd.werdykt) ? 'lv-bad' : 'lv-warn') + '">dyspozycja: ' + esc(String(rd.werdykt).toLowerCase()) + '</span>' : '') +
+    (d.pkg ? '<a class="pill pkp ' + pkgLv(d.pkg) + '" href="#pakiet" data-pkgo>pakiet ' + pkgLeft(d.pkg) + '</a>' : '');
   const nv = PUL.videos.filter(v => v.id === id && !v.kom).length;
   // bez konkretnej jednostki: na treningu personalnym często robimy coś innego niż w planie (jednostkę z planu otwiera „▶ Prowadź” w zakładce Plan)
   const live = '<a class="kgo" href="' + liveHref(id) + '"><span>▶ Prowadź trening</span></a>';
@@ -774,7 +782,62 @@ async function renderKlient(id, tab){
   else if (tab === 'dyspozycja') body = dyspList(d);
   else body = przeglad(d, c, sets, dates, today, rd);
   $('#main').innerHTML = kh + tabs + '<div class="pg">' + body + '</div>';
+  pkgBind(id);
 }
+/* ---------- pakiet treningów personalnych (apps-script/Pakiety.gs) ----------
+ * Zakładka Pakiety = księga: zakup (+n), trening (−1, z sesji „Prowadź”), korekta (±1, trening poza aplikacją albo zwrot).
+ * Zostało = suma od ostatniego zakupu (reszta poprzedniego pakietu przechodzi). trKlient → d.pkg, trPulpit → clients[].pkg.
+ */
+const PKG_LOW = 2, PKG_DAYS = 7;
+const pkgLeft = k => k.left < 0 ? '0 z ' + k.n + ' (+' + -k.left + ' poza)' : k.left + ' z ' + k.n;
+const pkgLv = k => k.left < 0 ? 'lv-bad' : k.left <= PKG_LOW || (k.to && k.to <= TL.addDays(PUL.today, PKG_DAYS)) ? 'lv-warn' : 'lv-ok';
+const zl = v => pl(Math.round(v * 100) / 100) + ' zł';
+let PKF = null;   // formularz: {id, mode: 'nowy' | 'korekta', …}, tylko w pamięci strony
+function pkgForm(d){
+  const f = PKF, k = d.pkg, today = PUL.today;
+  if (f.mode === 'korekta') return '<div class="pkf"><div class="sec" style="border:0;margin-top:0">Trening poza aplikacją albo poprawka</div>' +
+    frH('Co', '„Trening” zdejmuje 1 wejście z datą. „Oddaj” zwraca 1 wejście, np. za trening odwołany z winy trenera.', segH('pk-k', [['-1', 'Trening −1'], ['1', 'Oddaj +1']], f.k)) +
+    '<div class="pk2"><label>Data<input class="inp" type="date" id="pk-date" value="' + esc(f.date || today) + '"></label><label>Notatka<input class="inp" id="pk-note" placeholder="np. trening w parku" value="' + esc(f.note || '') + '"></label></div>' +
+    '<div class="row2"><button class="b p" type="button" id="pk-save">Zapisz</button><button class="b" type="button" id="pk-x">Anuluj</button></div></div>';
+  const carry = k && k.left > 0 && !(k.to && k.to < today) ? k.left : 0;
+  return '<div class="pkf"><div class="sec" style="border:0;margin-top:0">Nowy pakiet</div>' +
+    frH('Liczba treningów', carry ? 'Niewykorzystane z obecnego (' + carry + ') przejdą do nowego: razem ' + (f.n + carry) + '.' : 'Każdy trening zakończony w „Prowadź” zdejmuje 1.', segH('pk-n', [['5', '5'], ['8', '8'], ['10', '10'], ['12', '12'], ['20', '20']], String(f.n))) +
+    '<div class="pk2"><label>Kupiony<input class="inp" type="date" id="pk-from" value="' + esc(f.from || today) + '"></label>' +
+    '<label>Ważny do <small>(opcjonalnie)</small><input class="inp" type="date" id="pk-to" value="' + esc(f.to || '') + '"></label>' +
+    '<label>Cena <small>(opcjonalnie)</small><input class="inp" id="pk-price" inputmode="decimal" placeholder="zł" value="' + esc(f.price || '') + '"></label>' +
+    '<label>Notatka<input class="inp" id="pk-note" placeholder="np. przelew 03.11" value="' + esc(f.note || '') + '"></label></div>' +
+    '<div class="row2"><button class="b p" type="button" id="pk-save">Dodaj pakiet</button><button class="b" type="button" id="pk-x">Anuluj</button></div></div>';
+}
+function pkgCard(d){
+  const k = d.pkg, id = d.cfg.id, f = PKF && PKF.id === id ? PKF : null;
+  const btns = '<div class="row2 pkb"><button class="cp" type="button" data-pkf="nowy">+ Nowy pakiet</button>' + (k ? '<button class="cp" type="button" data-pkf="korekta">± Trening poza aplikacją</button>' : '') + '</div>';
+  if (!k) return '<div class="card pkg" id="pakiet"><div class="hrow"><h2>Pakiet treningów</h2></div>' + (f ? pkgForm(d) : '<p class="muted">Klient nie ma pakietu. Gdy go dodasz, każdy trening zakończony w „Prowadź” zdejmie 1 wejście.</p>' + btns) + '</div>';
+  const cells = Array.from({ length: Math.max(k.n, k.used) }, (_, i) => '<i class="' + (i < k.used ? (i >= k.n ? 'x' : 'u') : '') + '"></i>').join('');
+  const meta = ['kupiony ' + dm(k.from), k.to ? (k.to < PUL.today ? 'wygasł ' : 'ważny do ') + dm(k.to) : 'bez terminu', k.price ? zl(k.price) + (k.n ? ' · ' + zl(k.price / k.n) + ' / trening' : '') : ''].filter(Boolean).join(' · ');
+  const hist = (k.hist || []).slice(0, 6).map(h => '<li><span class="mono">' + esc(dm(h.date)) + '</span><span>' + esc(h.txt) + (h.over ? ' <b class="bad">poza pakietem</b>' : '') + '</span><b class="mono ' + (h.d > 0 ? 'plus' : '') + '">' + (h.d > 0 ? '+' : '−') + Math.abs(h.d) + '</b></li>').join('');
+  return '<div class="card pkg ' + pkgLv(k) + '" id="pakiet"><div class="hrow"><h2>Pakiet treningów</h2><span class="pkv">Klient widzi licznik<button type="button" class="sw" role="switch" id="pk-show" aria-checked="' + !!k.show + '" aria-label="Klient widzi licznik pakietu w aplikacji"></button></span></div>' +
+    '<div class="pkn"><b>' + Math.max(0, k.left) + '</b><span>z ' + k.n + ' zostało' + (k.left < 0 ? '<br><em class="bad">' + -k.left + ' ' + plN(-k.left, 'trening', 'treningi', 'treningów') + ' poza pakietem</em>' : '') + '</span></div>' +
+    '<div class="pkc" aria-hidden="true">' + cells + '</div><p class="legend">' + esc(meta) + '</p>' +
+    (f ? pkgForm(d) : btns) +
+    (hist ? '<details class="pkh"' + (f ? '' : ' open') + '><summary>Historia</summary><ul>' + hist + '</ul></details>' : '') + '</div>';
+}
+function pkgBind(id){
+  const re = () => renderKlient(id, 'przeglad');
+  document.querySelectorAll('[data-pkf]').forEach(b => b.onclick = () => { PKF = { id, mode: b.dataset.pkf, n: 10, k: '-1' }; re(); });
+  document.querySelectorAll('[data-pkgo]').forEach(a => a.onclick = e => { e.preventDefault(); const c = $('#pakiet'); if (c) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+  const sh = $('#pk-show');   // licznik u klienta (zakładka Trener): kolumna „widoczny” w wierszu zakupu
+  if (sh) sh.onclick = async () => { const on = sh.getAttribute('aria-checked') !== 'true'; sh.disabled = true;
+    try { CK[id].pkg = await guard(api('trPakiet', id, { mode: 'widok', show: on })); re(); }
+    catch (e) { sh.disabled = false; if (!e.auth) pkgErr(e); } };
+  if (!PKF || PKF.id !== id) return;
+  const keep = () => ['from', 'to', 'price', 'note', 'date'].forEach(f => { const el = $('#pk-' + f); if (el) PKF[f] = el.value; });
+  document.querySelectorAll('[data-seg^="pk-"]').forEach(b => b.onclick = () => { keep(); PKF[b.dataset.seg.slice(3)] = b.dataset.val; if (b.dataset.seg === 'pk-n') PKF.n = +b.dataset.val; re(); });
+  const x = $('#pk-x'); if (x) x.onclick = () => { PKF = null; re(); };
+  const sv = $('#pk-save'); if (sv) sv.onclick = async () => { keep(); sv.disabled = true; sv.textContent = 'Zapisuję…';
+    try { const r = await guard(api('trPakiet', id, Object.assign({}, PKF, { id: undefined }))); CK[id].pkg = r; PKF = null; re(); }
+    catch (e) { sv.disabled = false; sv.textContent = 'Zapisz'; if (!e.auth) pkgErr(e); } };
+}
+const pkgErr = e => { const c = $('#pakiet'); if (c) c.insertAdjacentHTML('beforeend', '<p class="err" role="alert">' + esc(e.message) + '</p>'); };
 function painOf(s){
   let top = ['', NaN];
   String(s.bol || '').split(';').forEach(x => { const q = x.split(':'), v = nf((q[1] || '').trim()); if (v > (isFinite(top[1]) ? top[1] : -1)) top = [(q[0] || '').trim(), v]; });
@@ -835,7 +898,7 @@ function przeglad(d, c, sets, dates, today, rd){
     return '<div class="sg"><div><b>' + esc(r.name) + '</b><small>' + (ser.length > 1 ? 'od ' + esc(dm(f.date)) + ': ' + (dv >= 0 ? '+' : '−') + esc(fmt1(Math.abs(dv))) + ' kg' : 'jeden wynik') + (r.oly ? ' · najlepsze kg' : '') + '</small></div>' +
       spark(ser.map(p => p.v), 110, 32) + '<span class="mono">' + esc(fmt1(l.v)) + ' kg</span></div>'; }).join('') : '<p class="muted">Brak wyników ćwiczeń głównych (prio A).</p>') + '</div>';
   const tonC = '<div class="card"><h2>Tonaż tygodniowy</h2>' + bars(ton.map(x => ({ week: x.week, v: x.ton })), 'Tonaż w 12 tygodniach') + '</div>';
-  return stats + '<div class="kov"><div class="stack">' + sesH + '</div><div class="stack">' + sila + tonC + '</div></div>';
+  return stats + '<div class="kov"><div class="stack">' + pkgCard(d) + sesH + '</div><div class="stack">' + sila + tonC + '</div></div>';
 }
 function sesList(d, dates){
   const ss = sessRows(d, dates);

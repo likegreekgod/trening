@@ -449,6 +449,16 @@
 
   /* podsumowanie jednostki */
   .sess .cn{margin-bottom:4px}
+  /* pakiet treningów: odhaczenie w podsumowaniu prowadzonego treningu, licznik klienta */
+  .pkt{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;margin-top:16px;padding:12px 14px;min-height:64px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);color:var(--ink);text-align:left;font:15px/1.3 var(--f-body);cursor:pointer}
+  .pkt .bx{width:28px;height:28px;border-radius:7px;border:2px solid var(--line);display:grid;place-items:center;font-weight:800;font-size:17px}
+  .pkt.on{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}.pkt.on .bx{background:var(--accent);border-color:var(--accent);color:var(--on-accent,#fff)}
+  .pkt.over .pkt-n{color:var(--bad)}
+  .pkt b{display:block;font-weight:700}.pkt small{display:block;color:var(--ink-2);font-size:13px;margin-top:2px}
+  .pkt-n{font:800 26px/1 var(--f-display)}.pkt-n i{font-style:normal;font-size:16px;color:var(--ink-2)}
+  .pkt-no{margin:14px 0 0;color:var(--ink-2);font-size:13px}
+  .pkc-c .pkn{display:flex;align-items:center;gap:12px;margin:6px 0 10px}.pkc-c .pkn b{font:800 52px/1 var(--f-display);color:var(--accent)}.pkc-c .pkn span{color:var(--ink-2);font-size:15px;line-height:1.35}
+  .pkc-c .pkc{display:grid;grid-template-columns:repeat(auto-fill,minmax(20px,1fr));gap:4px}.pkc-c .pkc i{height:14px;border-radius:3px;background:var(--accent)}.pkc-c .pkc i.u{background:var(--surface-2);border:1px solid var(--line)}
   .sess label{display:block;margin:14px 0 6px;font:600 12px/1.3 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
   details.opt{margin-top:14px;border-top:1px dashed var(--line);padding:4px 0}
   details.opt summary{font-size:15px;padding:10px 0;min-height:44px;color:var(--ink-2);cursor:pointer}
@@ -2771,6 +2781,25 @@ function bindNotes(){
 }
 /* ---------- zakładka Trener: wszystkie komentarze trenera, tygodniami ---------- */
 let CNEW = new Set();                               // nowe w chwili wejścia do zakładki: zostają oznaczone do jej opuszczenia
+/* ---------- pakiet treningów (Pakiety.gs): odhaczenie w trybie „Prowadź”, licznik u klienta (cfg.pkg) ---------- */
+let PKG_ON = true;   // „Zdejmij z pakietu” w podsumowaniu prowadzonego treningu, tylko w pamięci strony
+const pkgN = n => n === 1 ? 'trening' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'treningi' : 'treningów';
+function pkgLiveBox(s){
+  const k = LIVE && !s.id && DATA && DATA.pkg;
+  if (!LIVE || s.id) return '';
+  if (!k) return '<p class="pkt-no">Klient nie ma pakietu: trening zapisze się bez liczenia wejść.</p>';
+  const after = k.left - 1, to = k.to ? ' · ważny do ' + ddmm(k.to) : '';
+  const sub = !PKG_ON ? 'nie zdejmuję: np. trening gratis albo próbny' : after >= 0 ? 'zostanie ' + after + ' z ' + k.n + to : 'pakiet wykorzystany: zapiszę jako trening poza pakietem';
+  return `<button type="button" class="pkt${PKG_ON ? ' on' : ''}${PKG_ON && after < 0 ? ' over' : ''}" id="pk-on" aria-pressed="${PKG_ON}"><span class="bx" aria-hidden="true">${PKG_ON ? '✓' : ''}</span>
+    <span><b>Zdejmij 1 trening z pakietu</b><small>${esc(sub)}</small></span><span class="pkt-n">${Math.max(0, k.left)}<i>/${k.n}</i></span></button>`;
+}
+function pkgClient(){
+  const k = DATA && DATA.cfg && DATA.cfg.pkg;
+  if (!k) return '';
+  const cells = Array.from({ length: k.n }, (_, i) => `<i class="${i < k.n - Math.max(0, k.left) ? 'u' : ''}"></i>`).join('');
+  return `<div class="card pkc-c"><div class="cn">Twój pakiet</div><div class="pkn"><b>${Math.max(0, k.left)}</b><span>z ${k.n} ${pkgN(k.n)}<br>zostało${k.to ? ' · ważny do ' + ddmm(k.to) : ''}</span></div>
+    <div class="pkc" aria-hidden="true">${cells}</div>${k.left <= 0 ? '<p class="sub">Pakiet wykorzystany. Porozmawiaj z trenerem o kolejnym.</p>' : ''}</div>`;
+}
 function renderTrener(){
   const all = cnAll(), seen = cnSeen();
   all.forEach(n => { if (seen.indexOf(n.key) < 0) CNEW.add(n.key); });
@@ -2780,7 +2809,7 @@ function renderTrener(){
   const unitHead = (w, u) => esc((PLAN.find(r => String(r.week) === w.week && String(r.day) === u.unit && r.title) || {}).title || 'Trening ' + u.unit) + (u.date ? ' · ' + weekday(u.date) + ' ' + ddmm(u.date) : '');
   // przejście do panelu: tylko na urządzeniu, na którym trener raz zalogował się do panelu (trener.html ustawia tr_dev)
   let dev = false; try { dev = !!localStorage.getItem('tr_dev'); } catch (e) {}
-  $('#trener').innerHTML = (dev ? '<a class="btn trp" href="trener.html">Panel trenera ›</a>' : '') + (!all.length
+  $('#trener').innerHTML = (dev ? '<a class="btn trp" href="trener.html">Panel trenera ›</a>' : '') + pkgClient() + (!all.length
     ? emptyCard('note', 'Jeszcze bez komentarzy', 'Tu pojawią się komentarze trenera do Twoich filmów i treningów.')
     : weeks.map((w, i) => {
         const n = w.units.reduce((s, u) => s + u.notes.length, 0), nw = w.units.reduce((s, u) => s + u.notes.filter(isNew).length, 0);
@@ -3633,6 +3662,7 @@ function sessCard(s0){
     ${s.id ? '' : '<button type="button" class="btn sm" id="t-reset">Licz czas od teraz</button>'}
     <label class="fl" for="smin">Popraw czas, jeśli się nie zgadza (min)<input id="smin" inputmode="numeric" value="${esc(s.id && !blank(s.czas_min) ? s.czas_min : '')}" placeholder="policzę sam"></label>
     <label for="snote">Uwagi dla trenera</label><textarea id="snote" rows="3">${esc(s.uwagi || '')}</textarea>
+    ${pkgLiveBox(s)}
     <div style="height:10px"></div><button class="btn p" id="saveSess">${s.id ? 'Zapisz zmiany' : 'Zakończ i zapisz ' + (SIMPLE ? 'trening' : 'jednostkę')}</button></div>`;
 }
 /** zaliczone serie bieżącej jednostki z telefonu (bez rozgrzewki i pominięć) w kształcie dla lib unitSummary / unitRecord */
@@ -4051,6 +4081,8 @@ function bind(exs, s0){
     tr.dataset.arm = '1'; tr.textContent = 'Na pewno? Dotknij jeszcze raz';
     setTimeout(() => { if (tr.isConnected && tr.dataset.arm) { delete tr.dataset.arm; tr.textContent = 'Licz czas od teraz'; } }, 4000);
   };
+  const pk = $('#pk-on');   // „Zdejmij 1 trening z pakietu” (tylko „Prowadź”): przełącza na miejscu
+  if (pk) pk.onclick = () => { PKG_ON = !PKG_ON; const h = pk.onclick; $('#pk-on').outerHTML = pkgLiveBox(curSess()); $('#pk-on').onclick = h; };
   $('#saveSess').onclick = () => {
     stopRest(); wake(false);
     const s = curSess(), k = skey();
@@ -4070,6 +4102,12 @@ function bind(exs, s0){
       rpeSession: $('#srpe').dataset.v === '' ? '' : +$('#srpe').dataset.v, minutes, note: $('#snote').value,
       start: s.id ? (s.start || '') : (st ? new Date(st).toISOString() : ''),
       end: s.id ? (s.koniec || '') : new Date(end).toISOString() };
+    if (LIVE && !s.id && DATA && DATA.pkg) {   // logSession dopisuje wiersz „trening” w zakładce Pakiety (odhaczone = usuwa go)
+      p.pkg = PKG_ON ? 1 : 0;
+      p.title = (PLAN.find(r => String(r.week) === String(cur.week) && String(r.day) === String(cur.day) && r.title) || {}).title || '';
+      if (PKG_ON) DATA.pkg = Object.assign({}, DATA.pkg, { left: DATA.pkg.left - 1, used: DATA.pkg.used + 1 });
+      PKG_ON = true;
+    }
     SESS['local|' + k] = { id: 'local|' + k, bol_kolano: p.knee, bol_bark: p.shoulder, bol: p.pain, bol_max: p.painMax, rpe_sesji: p.rpeSession, samopoczucie: p.feel, czas_min: p.minutes,
       uwagi: p.note, start: p.start, koniec: p.end };
     const m = tGet(); delete m[k]; delete m['r|' + k]; tSet(m);

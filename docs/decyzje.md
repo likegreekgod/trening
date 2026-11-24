@@ -2,6 +2,14 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-23 · Pakiet treningów personalnych: księga wpisów, zdejmowanie przy „Prowadź”
+
+- Zakładka Pakiety to księga, nie licznik: zakup (+n, data, ważność, cena, przeniesione), trening (−1 z sesji „Prowadź”, id = klient|s|tydzień|jednostka), korekta (±1 z panelu). Zostało = (zakup + przeniesione) − wpisy po ostatnim zakupie. W razie sporu z klientem jest data każdego wejścia.
+- Zdejmuje tylko trening zakończony w „Prowadź” (trening personalny), z odhaczeniem w podsumowaniu (domyślnie tak; odznaczone = gratis albo próbny). Treningi, które klient robi sam, nie zdejmują. Trening poza aplikacją trener dopisuje ręcznie.
+- Reszta poprzedniego pakietu przechodzi do nowego, chyba że wygasł przed datą zakupu. Poniżej zera = treningi poza pakietem (czerwone w „Wymaga uwagi”), bez blokady prowadzenia.
+- Licznik u klienta domyślnie wyłączony; przełącznik w karcie pakietu zapisuje się w wierszu zakupu (kolumna `widoczny`), nie w zakładce Klienci (kolumny Q–S są zajęte przez inne zmiany), i przechodzi na kolejny pakiet.
+- Bez płatności i przypomnień do klienta (na później, razem ze stroną trenerską i Stripe).
+
 ## 2026-11-23 · Kopia arkusza co tydzień, limit filmu 1 GB, miejsce na Dysku (v92, punkty 10 i 8 przeglądu v80)
 
 - Kopia = cały plik arkusza (`makeCopy`) co niedzielę ok. 3:00 do `Trening – Klienci/_kopie`, 8 ostatnich (`KOPIE_ILE`), starsze do kosza Dysku (tam znikają same po 30 dniach). Usuwane są tylko pliki z nazwą zaczynającą się od „Trening – kopia ” (`kopieDoUsuniecia_`), więc ręcznie wrzucone pliki w `_kopie` zostają. Filmów nie kopiujemy (już są na Dysku, a kopia zjadałaby miejsce).
