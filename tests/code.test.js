@@ -544,9 +544,9 @@ test('computeParts_: serie i serie twarde na partię, zamiana liczy zamiennik', 
     L(2, 'Wiosłowanie hantlem', 1, { kg: 30, rpe: 7 }), L(2, 'Nieznane', 2, { kg: 30 }), L(3, 'Plank', 1, { kg: 'BW' })];
   const rows = C.computeParts_(plan, log, [], CW);
   assert.deepEqual(plain(rows), [
-    ['robert', d(1, 0), 'czworogłowe', 5, 4, 500 + 500 + 500 + 1000 + 400],      // 5 serii (bez R1 i niewykonanej), twarde: RPE 8, FAIL, RPE 9, drop
-    ['robert', d(1, 0), 'plecy', 2, 1, 300],                                    // „Nieznane” liczone wg nazwy z planu (nr 2)
-    ['robert', d(1, 0), 'pośladki', 4, 3, 500 + 500 + 500 + 400]]);             // przysiad liczy się do obu partii, leg press tylko do czworogłowych
+    ['robert', d(1, 0), 'czworogłowe', 5, 4, 500 + 500 + 500 + 1000 + 400, 2],   // 5 serii (bez R1 i niewykonanej), twarde: RPE 8, FAIL, RPE 9, drop; blisko upadku: FAIL, RPE 9
+    ['robert', d(1, 0), 'plecy', 2, 1, 300, 0],                                 // „Nieznane” liczone wg nazwy z planu (nr 2)
+    ['robert', d(1, 0), 'pośladki', 4, 3, 500 + 500 + 500 + 400, 1]]);             // przysiad liczy się do obu partii, leg press tylko do czworogłowych
   assert.deepEqual(Array.from(C.computeParts_(plan, log, [], [])), []);          // pusta baza = brak wierszy
 });
 
@@ -808,7 +808,7 @@ test('computeSummary_: pominięte opcjonalne nie obniżają wykonania, komentarz
   assert.equal(ex('Face Pull')[X.indexOf('pominiete')], '1× bez powodu');
   assert.equal(ex('Plank')[X.indexOf('pominiete')], '1× brak czasu');
   assert.equal(ex('Plank')[X.indexOf('serie')], 0);
-  assert.equal(X[X.length - 1], 'pominiete'); assert.equal(H[H.length - 1], 'opcjonalne');
+  assert.equal(X[X.length - 1], 'pominiete'); assert.equal(H[H.length - 2], 'opcjonalne'); assert.equal(H[H.length - 1], 'blisko_upadku');
 });
 
 test('computeOverview_: pominięte ćwiczenie główne lub korekcyjne = sygnał, opcjonalne nie', () => {
@@ -953,7 +953,7 @@ test('ćwiczenie na czas („30 s”): seria się liczy, sekundy nie wchodzą do
   const b = C.computeBlocks_(plan, log, ses, [], [], {}), BH = C.BLOK_HEADERS;
   assert.equal(b[0][BH.indexOf('tonaz_kg')], 1000); assert.equal(b[0][BH.indexOf('wykonanie_%')], 100);
   const parts = C.computeParts_([R(1), R(2, { powt: '30 s' })], log.map(l => Object.assign({}, l, { cwiczenie: 'Przysiad tylny' })), [], CW);
-  assert.deepEqual(plain(parts).map(r => r.slice(2)), [['czworogłowe', 4, 4, 1000], ['pośladki', 4, 4, 1000]]);
+  assert.deepEqual(plain(parts).map(r => r.slice(2)), [['czworogłowe', 4, 4, 1000, 0], ['pośladki', 4, 4, 1000, 0]]);
 });
 
 test('obwod: walidacja planu (litera, ≥ 2 ćwiczenia po sobie, bez EMOM) i własny trening', () => {
@@ -1802,4 +1802,61 @@ test('Import (atrapa arkusza): trImport wczytuje, ponowny import zastępuje, cof
   assert.deepEqual(S.tableOf_('Log').map(l => l.id), ['anna|1|A|1|1']);
   assert.equal(S.tableOf_('Plan').length, 1); assert.equal(S.tableOf_('Sesje').length, 0);
   assert.deepEqual(F.formulas(), []);
+});
+
+// --- metodyka 24.11.2026: singiel w e1RM, próg spadku e1RM, ACWR jako „skok obciążenia”, serie blisko upadku ---
+test('e1rm_: Epley z zapasem, singiel do upadku = sam ciężar', () => {
+  assert.equal(Math.round(C.e1rm_(80, 5, 8) * 10) / 10, 98.7);                    // 80 × (1 + 7/30)
+  assert.equal(C.e1rm_(150, 1, 10), 150);                                         // nie 155 (Epley dawałby 103,3%)
+  assert.equal(Math.round(C.e1rm_(150, 1, 9.5) * 10) / 10, 157.5);                // 1 + 0,5 zapasu = 1,5 do upadku
+  assert.equal(Math.round(C.e1rm_(100, 2, 10) * 10) / 10, 106.7);
+});
+
+test('computeSummary_: spadek e1RM 🟠 od −5%, 🔴 od −8% albo drugi tydzień z rzędu; −3% bez sygnału', () => {
+  const run = kgs => {
+    const plan = [], log = [];
+    kgs.forEach((kg, i) => {
+      const w = i + 1;
+      plan.push({ klient: 'ola', tydzien: w, jednostka: 'T1', data: d(w, 0), nr: 1, cwiczenie: 'Przysiad', prio: 'A', serie: 3, powt: '5', kg: 100 });
+      for (let s = 1; s <= 3; s++) log.push({ klient: 'ola', tydzien: w, jednostka: 'T1', data: d(w, 0), nr_cw: 1, cwiczenie: 'Przysiad', seria: s, kg, powt: 5, rpe: 8, wykonane: 'TAK', typ: '' });
+    });
+    const r = C.computeSummary_(plan, log, [], []), H = C.SUM_HEADERS;
+    return r.rows.map(x => [x[H.indexOf('status')], x[H.indexOf('powody')]]);
+  };
+  let r = run([100, 100, 97]);                                                     // −3%: szum jednego światła
+  assert.equal(r[2][0], '🟢 OK');
+  r = run([100, 100, 95]);
+  assert.equal(r[2][0], '🟠 uwaga'); assert.match(r[2][1], /e1RM −5%/);
+  r = run([100, 100, 90]);
+  assert.match(r[2][1], /e1RM −8%/);
+  r = run([100, 100, 95, 90]);                                                     // drugi tydzień ≤ −5% (90 vs śr. 97,5 = −7,7%)
+  assert.match(r[3][1], /e1RM −5% drugi tydzień/);
+});
+
+test('computeSummary_: ACWR tylko jako 🟠 „skok obciążenia”, deload z planu poza średnią', () => {
+  const plan = [], log = [], ses = [];
+  // tyg. 1–4 normalnie, tyg. 5 deload z planu (−50% tonażu, krótko), tyg. 6 wraca do normy, tyg. 7 duży skok
+  const mins = [60, 60, 60, 60, 25, 60, 140];
+  mins.forEach((mn, i) => {
+    const w = i + 1, serie = w === 5 ? 2 : 4;
+    plan.push({ klient: 'ola', tydzien: w, jednostka: 'T1', data: d(w, 0), nr: 1, cwiczenie: 'Przysiad', prio: 'A', serie, powt: '5', kg: 100 });
+    for (let s = 1; s <= serie; s++) log.push({ klient: 'ola', tydzien: w, jednostka: 'T1', data: d(w, 0), nr_cw: 1, cwiczenie: 'Przysiad', seria: s, kg: 100, powt: 5, rpe: 8, wykonane: 'TAK', typ: '' });
+    ses.push({ klient: 'ola', tydzien: w, jednostka: 'T1', data: d(w, 0), samopoczucie: 4, czas_min: mn, rpe_sesji: 7 });
+  });
+  const r = C.computeSummary_(plan, log, ses, []), H = C.SUM_HEADERS, col = (i, h) => r.rows[i][H.indexOf(h)];
+  assert.equal(col(5, 'ACWR'), 1);                                                 // tydzień po deloadzie: średnia bez deloadu = 420, nie skok
+  assert.equal(col(5, 'status'), '🟢 OK');
+  assert.ok(col(6, 'ACWR') > 2);
+  assert.equal(col(6, 'status'), '🟠 uwaga');                                      // sam skok to nie 🔴
+  assert.match(col(6, 'powody'), /skok obciążenia \(ACWR 2,33\)/);
+});
+
+test('computeSummary_: blisko_upadku = RPE ≥ 9 albo FAIL, serie twarde bez zmian', () => {
+  const plan = [{ klient: 'ola', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr: 1, cwiczenie: 'Przysiad', prio: 'A', serie: 5, powt: '5', kg: 100 }];
+  const L = (s, rpe, typ) => ({ klient: 'ola', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr_cw: 1, cwiczenie: 'Przysiad', seria: s, kg: 100, powt: 5, rpe, wykonane: 'TAK', typ: typ || '' });
+  const log = [L(1, 7), L(2, 8), L(3, 9), L(4, 9.5), L(5, '', 'FAIL'), L('R1', 9)];
+  const row = C.computeSummary_(plan, log, [], []).rows[0], H = C.SUM_HEADERS;
+  assert.equal(row[H.indexOf('serie_twarde')], 5);
+  assert.equal(row[H.indexOf('blisko_upadku')], 3);
+  assert.equal(H[H.length - 1], 'blisko_upadku');                                  // nowa kolumna na końcu
 });

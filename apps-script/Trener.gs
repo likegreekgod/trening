@@ -212,7 +212,7 @@ function trKlient(id) {
   d.cfg.masters = String(row[8] || '').trim().toUpperCase() === 'TAK';
   d.blocks = tableOf_('Bloki').filter(b => lc(b.klient) === c.id).map(b => Object.assign({}, b, { od: day(b.od), do: day(b.do) }));
   d.summary = tableOf_('Podsumowanie').filter(s => lc(s.klient) === c.id).map(s => ({ week: day(s.tydzien_od), srpe: s.sRPE_TL_AU, acwr: s.ACWR,
-    ton: s.tonaz_kg, done: s['wykonanie_%'], hard: s.serie_twarde, status: String(s.status || ''), why: String(s.powody || '') }));
+    ton: s.tonaz_kg, done: s['wykonanie_%'], hard: s.serie_twarde, near: s.blisko_upadku, status: String(s.status || ''), why: String(s.powody || '') }));
   d.pkg = pkgOf_(c.id);
   return d;
 }
@@ -634,7 +634,7 @@ function trBlokCtx_(d, blok) {
     });
   }
   const setTxt = l => num(l.kg) + (isFinite(Number(str(l.kg).replace(',', '.'))) ? ' kg' : '') + '×' + str(l.powt) + (str(l.rpe) ? ' @' + num(l.rpe) : '');
-  const e1 = l => { const kg = Number(str(l.kg).replace(',', '.')), r = Number(str(l.powt).replace(',', '.')), rp = Number(str(l.rpe).replace(',', '.')) || 10; return kg > 0 && r > 0 ? kg * (1 + (r + 10 - rp) / 30) : 0; };
+  const e1 = l => { const kg = Number(str(l.kg).replace(',', '.')), r = Number(str(l.powt).replace(',', '.')), rp = Number(str(l.rpe).replace(',', '.')) || 10; return kg > 0 && r > 0 ? e1rm_(kg, r, rp) : 0; };
   const A = {}; plan.filter(r => str(r.prio) === 'A').forEach(r => { A[str(r.name)] = 1; });
   const aLines = Object.keys(A).map(n => {
     const ls = logs.filter(l => work(l) && !/FAIL/.test(str(l.typ)) && str(l.cwiczenie) === n), ws = ls.map(l => Number(l.tydzien)).filter((w, i, a) => a.indexOf(w) === i).sort((x, y) => x - y);
@@ -704,7 +704,8 @@ const AI_SYSTEM_PLAN = [
   'Zasady trenera (obowiązują zawsze):',
   '- Te same jednostki (nazwy, tytuły, dni tygodnia) i te same ćwiczenia w tej samej kolejności co ostatni tydzień bloku, chyba że wskazówki trenera, ból albo wyniki wyraźnie mówią inaczej. Zmianę ćwiczenia uzasadnij.',
   '- Ciężary w kg zaokrąglone w dół do 2,5 kg (ćwiczenia ze sztangą i maszyny). Hantle i kettle: realne ciężary (co 1–2 kg).',
-  '- Progresja z wyników ostatniego tygodnia ćwiczenia: same lekkie serie (RPE ≤ 7,5) = +2,5 kg; średnie (RPE 8–8,5) = ten sam ciężar albo +2,5 kg, jeśli wszystkie powtórzenia zrobione; ciężkie (RPE ≥ 9) albo nieudane = ten sam ciężar albo mniej, ewentualnie więcej serii przy tym samym ciężarze. Seria bez RPE = brak danych, decyduj po reszcie.',
+  '- Małe ciężary (hantle, kettle, wyciągi i maszyny w ćwiczeniach izolowanych albo ciężar poniżej 20 kg): skok 2,5 kg to za dużo (przy 10 kg to +25%). Tam najpierw powtórzenia: po samych lekkich seriach +1 powtórzenie w serii do górnej granicy zakresu (np. 8 → 10 przy „8-10”; bez zakresu najwyżej +2 powt.), dopiero potem najmniejszy realny skok ciężaru (hantle +1–2 kg, wyciąg o jedno pole) i powrót do dolnej granicy powtórzeń.',
+  '- Progresja z wyników ostatniego tygodnia ćwiczenia (większe ciężary): same lekkie serie (RPE ≤ 7,5) = +2,5 kg; średnie (RPE 8–8,5) = ten sam ciężar albo +2,5 kg, jeśli wszystkie powtórzenia zrobione; ciężkie (RPE ≥ 9) albo nieudane = ten sam ciężar albo mniej, ewentualnie więcej serii przy tym samym ciężarze. Seria bez RPE = brak danych, decyduj po reszcie.',
   '- rpe_max to sufit wysiłku (np. 8), nie cel. Ćwiczenia korekcyjne mają priorytet K. Priorytety A/B/K zostają jak w bloku, chyba że zmieniasz ćwiczenie.',
   '- Boje olimpijskie i ich warianty: % z maksa przy każdym ćwiczeniu specjalnym, jeśli był w bloku; kg zgodne z %; bez RPE max (puste). Po spalonych podejściach najpierw stabilizuj ciężar, potem podnoś.',
   '- Ból powyżej 3/10 albo powtarzający się w tym samym miejscu: oszczędź to miejsce (lżej, zamiennik, mniej serii) i napisz to w uzasadnieniu.',

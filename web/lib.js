@@ -699,11 +699,13 @@
   };
   /* ---------- postęp: siła, objętość, obciążenie (cała historia z Logu) ---------- */
   const mondayOf = d => L.addDays(d, -((new Date(utc(d)).getUTCDay() + 6) % 7));
-  /** e1RM = kg × (1 + (powt. + RIR) / 30), RIR = 10 − RPE; jak w podsumowaniu: tylko serie z RPE ≥ 5 */
+  /** e1RM = kg × (1 + (powt. + RIR) / 30), RIR = 10 − RPE; jak w podsumowaniu: tylko serie z RPE ≥ 5; powt. + RIR ≤ 1 → sam ciężar */
   // seria bez RPE (puste pole) liczy się jak RPE 10: ostrożnie, najniższe szacowane maks. (ustalenie 17.11); RPE < 5 dalej pomijane
   L.e1rm = (kg, reps, rpe) => {
     const r = rpe === '' || rpe === null || rpe === undefined || (typeof rpe === 'number' && isNaN(rpe)) ? 10 : Number(rpe);
-    return kg > 0 && reps > 0 && r >= 5 ? kg * (1 + (reps + (10 - r)) / 30) : NaN;
+    if (!(kg > 0 && reps > 0 && r >= 5)) return NaN;
+    const n = reps + (10 - r);
+    return n <= 1 ? kg : kg * (1 + n / 30);                                    // singiel do upadku = sam ciężar (24.11.2026; e1rm_ w Code.gs)
   };
   /**
    * Serie z Logu z kontekstem planu. plan: wiersze getData (week, day, order, prio, group, pct, kg, block);

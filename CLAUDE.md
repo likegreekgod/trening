@@ -220,7 +220,7 @@ Konwencje Damiana:
 ## Podsumowanie (Code.gs, sekcja PODSUMOWANIE)
 
 `computeSummary_(plan, log, ses, klienci)` to czysta funkcja, testowana w `tests/code.test.js`. Liczy trzy zakładki:
-- **Podsumowanie** (klient × tydzień): sRPE-TL, ACWR uncoupled (tydzień ÷ średnia 4 poprzednich), monotonia, e1RM (bez R i P), serie twarde, fail_% bez bojów, status i powody;
+- **Podsumowanie** (klient × tydzień): sRPE-TL, ACWR uncoupled (tydzień ÷ średnia 4 poprzednich bez tygodni lżejszych z planu; tylko 🟠 „skok obciążenia”), monotonia, e1RM (`e1rm_`: Epley z RIR, singiel do upadku = ciężar; bez R i P; spadek 🟠 ≤ −5%, 🔴 ≤ −8% albo −5% dwa tygodnie), serie twarde (RPE ≥ 7), `blisko_upadku` (RPE ≥ 9 albo FAIL), fail_% bez bojów, status i powody;
 - **Podsumowanie_cw**: to samo per ćwiczenie;
 - **Podsumowanie_OLY**: NL per grupa i strefa intensywności, skuteczność ≥ 85%, spalone < 85%, VBT 80–90%.
 
