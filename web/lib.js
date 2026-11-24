@@ -1083,12 +1083,12 @@
   L.mondayOf = d => L.addDays(d, -((new Date(utc(d)).getUTCDay() + 6) % 7));
   /**
    * list: [{week, day, date, done}] (date = faktyczny dzień zrobionej albo data z planu) → 7 dni od poniedziałku
-   * [{date, items: [{week, day, st}]}], st: done ✓ / late ! (po terminie, bez sesji) / today ● / plan
+   * [{date, items: [{week, day, title, st}]}], st: done ✓ / late ! (po terminie, bez sesji) / today ● / plan
    */
   L.weekDays = (list, monday, today) => Array.from({ length: 7 }, (_, i) => {
     const date = L.addDays(monday, i);
     return { date, items: (list || []).filter(u => u.date === date)
-      .map(u => ({ week: u.week, day: u.day, st: u.done ? 'done' : date < today ? 'late' : date === today ? 'today' : 'plan' })) };
+      .map(u => ({ week: u.week, day: u.day, title: u.title, st: u.done ? 'done' : date < today ? 'late' : date === today ? 'today' : 'plan' })) };
   });
   /** domyślna jednostka: dzisiejsza niezrobiona, potem najbliższa następna niezrobiona, potem ostatnia */
   L.pickUnit = (list, today) => {
@@ -1309,16 +1309,17 @@
     });
   };
 
-  /* ---------- import historii z Hevy (eksport CSV z aplikacji Hevy) ---------- */
-  /** CSV → tablica wierszy (cudzysłowy, "" w środku, przecinki i nowe linie w polu, CRLF, BOM) */
+  /* ---------- import historii z innej aplikacji: wspólna postać + adapter na format (Hevy, Strong, szablon) ---------- */
+  /** CSV → tablica wierszy (cudzysłowy, "" w środku, separator w polu, CRLF, BOM); separator „,” albo „;” (polski Excel) wg pierwszej linii */
   L.csvRows = text => {
-    const s = String(text || '').replace(/^﻿/, ''), out = [];
+    const s = String(text || '').replace(/^﻿/, ''), out = [], head = s.split(/\r?\n/, 1)[0];
+    const sep = (head.match(/;/g) || []).length > (head.match(/,/g) || []).length ? ';' : ',';
     let row = [], f = '', q = false;
     for (let i = 0; i < s.length; i++) {
       const c = s[i];
       if (q) { if (c === '"') { if (s[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; continue; }
       if (c === '"') q = true;
-      else if (c === ',') { row.push(f); f = ''; }
+      else if (c === sep) { row.push(f); f = ''; }
       else if (c === '\n' || c === '\r') { if (c === '\r' && s[i + 1] === '\n') i++; row.push(f); f = ''; if (row.length > 1 || row[0] !== '') out.push(row); row = []; }
       else f += c;
     }
@@ -1326,67 +1327,103 @@
     return out;
   };
   const MON = { jan: 1, sty: 1, feb: 2, lut: 2, mar: 3, apr: 4, kwi: 4, may: 5, maj: 5, jun: 6, cze: 6, jul: 7, lip: 7, aug: 8, sie: 8, sep: 9, wrz: 9, oct: 10, paz: 10, 'paź': 10, nov: 11, lis: 11, dec: 12, gru: 12 };
-  /** „14 Mar 2025, 18:05” (eksport Hevy) albo „2025-03-14 18:05[:ss]” → „2025-03-14T18:05”; inaczej '' */
-  L.hevyTime = v => {
+  /** „14 Mar 2025, 18:05” (Hevy), „2025-03-14 18:05[:ss]” (Strong), „14.03.2025[ 18:05]” albo „2025-03-14” (szablon) → „2025-03-14T18:05”; inaczej '' */
+  L.importTime = v => {
     const t = String(v || '').trim(), p = n => String(n).padStart(2, '0');
-    let m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})/.exec(t);
-    if (m) return m[1] + '-' + m[2] + '-' + m[3] + 'T' + p(m[4]) + ':' + m[5];
+    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2}))?/.exec(t);
+    if (m) return m[1] + '-' + p(m[2]) + '-' + p(m[3]) + 'T' + p(m[4] || 12) + ':' + (m[5] || '00');
+    m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:,?\s+(\d{1,2}):(\d{2}))?/.exec(t);
+    if (m) return m[3] + '-' + p(m[2]) + '-' + p(m[1]) + 'T' + p(m[4] || 12) + ':' + (m[5] || '00');
     m = /^(\d{1,2})\s+([A-Za-zżźćńółęąś]{3})[a-zżźćńółęąś.]*\s+(\d{4}),?\s+(\d{1,2}):(\d{2})/.exec(t);
     const mo = m && MON[m[2].toLowerCase()];
     return mo ? m[3] + '-' + p(mo) + '-' + p(m[1]) + 'T' + p(m[4]) + ':' + m[5] : '';
   };
+  const inum = v => { const x = parseFloat(String(v === undefined || v === null ? '' : v).replace(/\s/g, '').replace(',', '.')); return isFinite(x) ? x : null; };
+  const LB = 0.45359237;
+  /** szablon do pobrania z panelu: jedna linia = jedna seria (rodzaj: puste = robocza, R = rozgrzewka, D = drop set) */
+  L.IMPORT_TEMPLATE = 'data;trening;cwiczenie;rodzaj;kg;powt;sek;rpe;uwagi\n2026-03-02;Nogi;Przysiad tylny;R;40;8;;;\n2026-03-02;Nogi;Przysiad tylny;;80;5;;8;\n2026-03-02;Nogi;Deska;;;;45;;\n';
   /**
-   * Eksport treningów Hevy (CSV) → {workouts, sets, bad, lbs} albo {error}.
-   * Trening = ten sam start_time i tytuł; ćwiczenie = kolejne wiersze z tą samą nazwą (i supersetem).
-   * Seria: normal → 'W' (robocza), warmup → 'R', dropset → 'D', failure → 'W' z RPE 10, gdy pusty
-   * („do upadku” w Hevy to seria zaliczona, nie nieudana). Funty → kg (0,1 kg). Czas bez powtórzeń → seria na czas (s).
+   * Formaty plików. Każdy: test(nagłówek) i row(g) → {start, end, title, note, name, sup, exNote, t: W|R|D, kg, reps, sec, rpe}
+   * (g(nazwa kolumny) = tekst komórki). „failure” w Hevy i „F” w Strongu = seria do upadku, zaliczona: RPE 10, gdy puste.
    */
-  L.hevyParse = text => {
+  L.IMPORT_FMT = {
+    hevy: { name: 'Hevy', test: h => h.indexOf('exercise_title') >= 0 && h.indexOf('set_type') >= 0 && h.indexOf('start_time') >= 0,
+      lbs: h => h.indexOf('weight_kg') < 0 && h.indexOf('weight_lbs') >= 0,
+      row: (g, lbs) => { const ty = g('set_type').toLowerCase(), rpe = inum(g('rpe'));
+        return { start: g('start_time'), end: g('end_time'), title: g('title'), note: g('description'), name: g('exercise_title'), sup: g('superset_id'), exNote: g('exercise_notes'),
+          t: ty === 'warmup' ? 'R' : ty === 'dropset' ? 'D' : 'W', kg: inum(g(lbs ? 'weight_lbs' : 'weight_kg')), reps: inum(g('reps')), sec: inum(g('duration_seconds')), rpe: ty === 'failure' && rpe === null ? 10 : rpe }; } },
+    strong: { name: 'Strong', test: h => h.indexOf('exercise name') >= 0 && h.indexOf('set order') >= 0 && h.indexOf('date') >= 0,
+      lbs: h => h.indexOf('weight unit') < 0 ? null : false,
+      row: (g, lbs) => { const so = g('set order').toUpperCase(), rpe = inum(g('rpe')), unit = g('weight unit').toLowerCase(), kg = inum(g('weight'));
+        if (/REST/.test(so)) return null;
+        return { start: g('date'), end: '', min: g('duration'), title: g('workout name'), note: g('workout notes'), name: g('exercise name'), sup: '', exNote: g('notes'),
+          t: so === 'W' ? 'R' : so === 'D' ? 'D' : 'W', kg: kg !== null && (/lb/.test(unit) || (!unit && lbs)) ? kg * LB : kg, reps: inum(g('reps')), sec: inum(g('seconds')), rpe: so === 'F' && rpe === null ? 10 : rpe }; } },
+    szablon: { name: 'szablon', test: h => h.indexOf('data') >= 0 && (h.indexOf('cwiczenie') >= 0 || h.indexOf('ćwiczenie') >= 0),
+      lbs: () => false,
+      row: g => { const r = g('rodzaj').toUpperCase();
+        return { start: g('data'), end: '', title: g('trening'), note: '', name: g('cwiczenie') || g('ćwiczenie'), sup: '', exNote: g('uwagi'),
+          t: r === 'R' ? 'R' : r === 'D' ? 'D' : 'W', kg: inum(g('kg')), reps: inum(g('powt')), sec: inum(g('sek')), rpe: inum(g('rpe')) }; } }
+  };
+  /** Strong „1h 5m” / „65m” / „3900” (s) → minuty */
+  const durMin = v => { const t = String(v || ''), h = /(\d+)\s*h/.exec(t), m = /(\d+)\s*m(?!s)/.exec(t); if (h || m) return (h ? +h[1] * 60 : 0) + (m ? +m[1] : 0); const s = inum(t); return s ? Math.round(s / 60) : 0; };
+  const addMin = (start, min) => { const d = new Date(Date.UTC(+start.slice(0, 4), +start.slice(5, 7) - 1, +start.slice(8, 10), +start.slice(11, 13), +start.slice(14, 16) + min)); return d.toISOString().slice(0, 16); };
+  /**
+   * Plik CSV z innej aplikacji → {fmt, src, workouts, sets, bad, lbs, unitAsk} albo {error}. Format rozpoznany po nagłówku.
+   * o.lbs: true / false wymusza jednostkę, gdy plik jej nie podaje (Strong bez kolumny „Weight Unit” → unitAsk, domyślnie kg).
+   * Trening = ten sam start i tytuł; ćwiczenie = kolejne wiersze z tą samą nazwą (i supersetem). Funty → kg (0,1 kg).
+   * Seria bez powtórzeń, a z czasem = seria na czas (sec).
+   */
+  L.importParse = (text, o) => {
+    o = o || {};
     const rows = L.csvRows(text);
     if (!rows.length) return { error: 'Pusty plik.' };
-    const h = rows[0].map(x => x.trim().toLowerCase()), col = n => h.indexOf(n);
-    const need = ['title', 'start_time', 'exercise_title', 'set_type', 'reps'];
-    if (need.some(n => col(n) < 0)) return { error: 'To nie jest eksport treningów z Hevy (brak kolumn: ' + need.filter(n => col(n) < 0).join(', ') + ').' };
-    const lbs = col('weight_kg') < 0 && col('weight_lbs') >= 0, wi = lbs ? col('weight_lbs') : col('weight_kg');
-    const g = (r, n) => { const i = col(n); return i < 0 ? '' : String(r[i] === undefined ? '' : r[i]).trim(); };
-    const nm = v => { const x = parseFloat(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
+    const h = rows[0].map(x => x.trim().toLowerCase()), fmt = Object.keys(L.IMPORT_FMT).find(k => L.IMPORT_FMT[k].test(h));
+    if (!fmt) return { error: 'Nie rozpoznaję tego pliku. Obsługuję eksport z Hevy i ze Stronga oraz szablon CSV z panelu.' };
+    const F = L.IMPORT_FMT[fmt], fl = F.lbs(h), unitAsk = fl === null && fmt === 'strong', lbs = typeof o.lbs === 'boolean' && (fl === null || unitAsk) ? o.lbs : !!fl;
     const W = [], by = {}, bad = [];
     let sets = 0;
     rows.slice(1).forEach((r, i) => {
-      const start = L.hevyTime(g(r, 'start_time')), name = g(r, 'exercise_title').replace(/\s+/g, ' ');
+      const g = n => { const j = h.indexOf(n); return j < 0 ? '' : String(r[j] === undefined ? '' : r[j]).trim(); };
+      const x = F.row(g, lbs); if (x === null) return;
+      const start = L.importTime(x.start), name = String(x.name || '').replace(/\s+/g, ' ').trim();
       if (!start || !name) { bad.push(i + 2); return; }
-      const k = start + '|' + g(r, 'title');
+      const k = start + '|' + x.title;
       let w = by[k];
-      if (!w) { w = by[k] = { date: start.slice(0, 10), start, end: L.hevyTime(g(r, 'end_time')), title: g(r, 'title') || 'Trening', note: g(r, 'description'), ex: [] }; W.push(w); }
-      const sup = g(r, 'superset_id'), last = w.ex[w.ex.length - 1];
+      if (!w) { const e = L.importTime(x.end), mn = x.min ? durMin(x.min) : 0; w = by[k] = { date: start.slice(0, 10), start, end: e || (mn ? addMin(start, mn) : ''), title: x.title || 'Trening', note: x.note || '', ex: [] }; W.push(w); }
+      const sup = String(x.sup || ''), last = w.ex[w.ex.length - 1];
       let e = last && last.name === name && last.sup === sup ? last : null;
-      if (!e) { e = { name, sup, note: g(r, 'exercise_notes'), sets: [] }; w.ex.push(e); }
-      const ty = g(r, 'set_type').toLowerCase(), kg0 = wi < 0 ? null : nm(r[wi]), reps = nm(g(r, 'reps')), sec = nm(g(r, 'duration_seconds')), km = nm(g(r, 'distance_km'));
-      let rpe = nm(g(r, 'rpe'));
-      if (ty === 'failure' && rpe === null) rpe = 10;
-      const kg = kg0 === null ? '' : lbs ? Math.round(kg0 * 0.45359237 * 10) / 10 : kg0;
-      e.sets.push({ t: ty === 'warmup' ? 'R' : ty === 'dropset' ? 'D' : 'W', kg, reps: reps === null ? '' : reps, sec: reps === null && sec ? sec : '', km: km || '', rpe: rpe === null ? '' : rpe });
+      if (!e) { e = { name, sup, note: x.exNote || '', sets: [] }; w.ex.push(e); }
+      const kg = x.kg === null ? '' : lbs && fmt === 'hevy' ? Math.round(x.kg * LB * 10) / 10 : Math.round(x.kg * 10) / 10;
+      e.sets.push({ t: x.t, kg, reps: x.reps === null ? '' : x.reps, sec: x.reps === null && x.sec ? x.sec : '', rpe: x.rpe === null || x.rpe > 10 ? '' : x.rpe });
       sets++;
     });
     if (!W.length) return { error: 'W pliku nie ma żadnego treningu.' };
     W.sort((a, b) => a.start.localeCompare(b.start));
-    return { workouts: W, sets, bad, lbs };
+    return { fmt, src: F.name, workouts: W, sets, bad, lbs, unitAsk };
   };
+  /** zgodność ze szkicem: sam Hevy */
+  L.hevyParse = text => L.importParse(text);
   /**
    * Podgląd importu: treningi od daty `from` (RRRR-MM-DD albo ''), bez dni, w których klient ma już coś w aplikacji (`taken` = Set dat),
-   * chyba że `withTaken`. Zwraca liczby, zakres dat, ćwiczenia (nazwa → ile treningów) i dzień jednostki H<rrmmdd>[b, c…].
+   * chyba że `withTaken`. Zwraca liczby, zakres dat, ćwiczenia (nazwa → w ilu treningach) i dzień jednostki H<rrmmdd>[b, c…].
    */
-  L.hevyPick = (parsed, o) => {
+  L.importPick = (parsed, o) => {
     o = o || {};
     const taken = o.taken || new Set(), all = (parsed && parsed.workouts) || [], inR = all.filter(w => !o.from || w.date >= o.from);
     const dup = inR.filter(w => taken.has(w.date)), pick = o.withTaken ? inR : inR.filter(w => !taken.has(w.date));
     const ex = {}, seen = {};
-    pick.forEach(w => { w.day = 'H' + w.date.slice(2).replace(/-/g, ''); seen[w.day] = (seen[w.day] || 0) + 1; if (seen[w.day] > 1) w.day += 'abcdefgh'[seen[w.day] - 1]; w.ex.forEach(e => { ex[e.name] = (ex[e.name] || 0) + 1; }); });
-    const work = pick.reduce((a, w) => a + w.ex.reduce((b, e) => b + e.sets.filter(s => s.t !== 'R').length, 0), 0);
-    return { workouts: pick, n: pick.length, all: all.length, dup: dup.length, work,
-      first: pick.length ? pick[0].date : '', last: pick.length ? pick[pick.length - 1].date : '',
+    const out = pick.map(w => { const base = 'H' + w.date.slice(2).replace(/-/g, ''); seen[base] = (seen[base] || 0) + 1;
+      w.ex.forEach(e => { ex[e.name] = (ex[e.name] || 0) + 1; });
+      return Object.assign({}, w, { day: base + (seen[base] > 1 ? 'abcdefgh'[seen[base] - 1] || '' : '') }); }).filter(w => /^H\d{6}[a-h]?$/.test(w.day));
+    const work = out.reduce((a, w) => a + w.ex.reduce((b, e) => b + e.sets.filter(s => s.t !== 'R').length, 0), 0);
+    return { workouts: out, n: out.length, all: all.length, dup: dup.length, work,
+      first: out.length ? out[0].date : '', last: out.length ? out[out.length - 1].date : '',
       names: Object.keys(ex).sort((a, b) => ex[b] - ex[a] || a.localeCompare(b)).map(n => [n, ex[n]]) };
   };
+  L.hevyPick = L.importPick;
+  /** jednostka z importu historii (tydzień 0, dzień H<rrmmdd>[b…]) i jej nazwa w aplikacji: źródło z tytułu („Hevy · Nogi” → „Hevy”) */
+  L.importDay = d => /^H\d{6}[a-h]?$/.test(String(d || ''));
+  L.dayLabel = (day, title) => L.importDay(day) ? (String(title || '').split(' · ')[0].trim() || 'Import') : String(day === undefined || day === null ? '' : day);
 
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
