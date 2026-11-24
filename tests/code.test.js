@@ -610,6 +610,16 @@ test('anchorSec_, commentLines_, fileIdOf_: komentarze Dysku z czasem w filmie',
     [['komentarz_trenera', 'komentarz_dysk', 'odpowiedz_klienta', 'odpowiedz_at', 'notatka_trenera'], ['komentarz_trenera', 'odpowiedz_klienta', 'odpowiedz_at', 'prowadzil'], 27, 20]);
 });
 
+test('filmPart: kawałki filmu tylko dla serii klienta (v98)', () => {
+  const M = 4 * 1024 * 1024;
+  assert.deepEqual(plain(C.filmPartRange_(0, 10 * M)), { a: 0, b: M - 1 });
+  assert.deepEqual(plain(C.filmPartRange_(8 * M, 10 * M)), { a: 8 * M, b: 9 * M - 1 });
+  assert.deepEqual(plain(C.filmPartRange_(9 * M + 5, 10 * M)), { a: 9 * M + 5, b: 10 * M - 1 });
+  assert.deepEqual(plain(C.filmPartRange_(-5, 100)), { a: 0, b: 99 });
+  assert.throws(() => C.filmPartRange_(100, 100), /Poza końcem/);
+  assert.ok(C.API_FNS.filmPart); assert.ok(!C.LIVE_FNS.filmPart);
+});
+
 test('replyRow_: odpowiedź klienta tylko w jego wierszu, długość, pusty tekst = usunięcie', () => {
   assert.deepEqual(plain(C.replyRow_('ania', { kind: 'L', id: 'ania|7|T1|1|2', text: '  Dzięki!\r\nJasne  ' })), { kind: 'L', id: 'ania|7|T1|1|2', text: 'Dzięki!\nJasne' });
   assert.deepEqual(plain(C.replyRow_('ania', { kind: 'S', id: 'ania|7|T1', text: '' })), { kind: 'S', id: 'ania|7|T1', text: '' });
