@@ -973,11 +973,20 @@ function trKlientVals_(f) {
 /** Domyślne ustawienia nowego klienta (jak pusty wiersz w arkuszu). */
 const KL_DOMYSLNE = { on: true, mode: 'PRO', scale: 'RPE', swap: 'NIE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false };
 
-/** Arkusz Klienci; brakujące nagłówki (puste komórki A1–P1) dopisuje, istniejących nie zmienia. */
+/**
+ * Kolumny Klienci za P, wpisywane przez trenera w arkuszu (panel ich nie zapisuje): Q max_rwanie, R max_podrzut [kg] (K-value
+ * w Podsumowanie_OLY), S start (RRRR-MM-DD, tekst; przy zawodach dwudniowych pierwszy dzień; kontrola taperu). 25.11.2026.
+ */
+const KL_EXTRA = ['max_rwanie', 'max_podrzut', 'start'];
+
+/** Arkusz Klienci; brakujące nagłówki (puste komórki A1–S1) dopisuje, istniejących nie zmienia. Kolumna „start” jako tekst. */
 function klSheet_() {
-  const sh = sheet_('Klienci', KL_HEAD.slice(0, 9));
-  const h = sh.getRange(1, 1, 1, KL_HEAD.length).getValues()[0];
-  if (h.some((x, i) => String(x).trim() === '')) sh.getRange(1, 1, 1, KL_HEAD.length).setValues(plainRows_([h.map((x, i) => String(x).trim() === '' ? KL_HEAD[i] : x)]));
+  const sh = sheet_('Klienci', KL_HEAD.slice(0, 9)), all = KL_HEAD.concat(KL_EXTRA);
+  const h = sh.getRange(1, 1, 1, all.length).getValues()[0];
+  if (h.some((x, i) => String(x).trim() === '')) {
+    if (String(h[all.length - 1]).trim() === '') sh.getRange(1, all.length, Math.max(sh.getMaxRows(), 2), 1).setNumberFormat('@');
+    sh.getRange(1, 1, 1, all.length).setValues(plainRows_([h.map((x, i) => String(x).trim() === '' ? all[i] : x)]));
+  }
   return sh;
 }
 function klRows_(sh) {
