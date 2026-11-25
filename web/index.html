@@ -365,6 +365,7 @@
   .opts.act .opt i{flex:none;width:24px;text-align:center;font-style:normal;color:var(--muted)}
   .opts.act .opt small{margin-left:auto;color:var(--muted);font-size:13px}
   .opts.act .opt.warnopt,.opts.act .opt.warnopt i{color:var(--bad)}
+  #np .opt{display:grid;grid-template-columns:24px 1fr;column-gap:12px;row-gap:2px;padding:10px 12px}#np .opt i{grid-row:span 2;align-self:center}#np .opt b{font-weight:600}#np .opt small{margin-left:0}
   .btn.bad{background:var(--bad);border-color:var(--bad);color:var(--surface);width:100%;padding:12px;font:800 20px/1 var(--f-display);letter-spacing:.06em;margin:14px 0 8px}
   .btn.wide{width:100%}
   .fold-b{flex:1;min-width:0;min-height:44px;border:0;background:transparent;padding:0;text-align:left;display:flex;align-items:flex-start;gap:10px;color:inherit}
@@ -1067,7 +1068,7 @@ let PT = 'tyd', PEX = '', PWK = null, PBL = null;   // zakładka, ćwiczenie, ty
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const $ = s => document.querySelector(s);
 // czyste funkcje z lib.js (testy: tests/lib.test.js)
-const { fmtKg, num, esc, blank, plural, nextUnit, EFF, EFF_FINE, effFine, effHint, filmOk, EASY_RPE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
+const { fmtKg, num, esc, blank, plural, nextUnit, likeLast, tplUnit, EFF, EFF_FINE, effFine, effHint, filmOk, EASY_RPE, lightOf, floor25, isNum, setKey, repsDefault, localDate,
   addDays, dayDiff, ddmm, weekday, monthShort, units, lightWeeks, blockInfo, unitStats,
   RIR_OPTS, rirOfRpe, rpeOfRir, rirMin, plateZone, lastTop, exHistory, planEdit, restSec, fmtClock, plates,
   isOly, RATE, rateOf, olyCap, sugOly, olyLocked, SWAP_WHY, swapOptions, swapAuto, swapText, parseSwap,
@@ -1556,6 +1557,8 @@ function load(){
     if (keep && !LIVE_J) { cur.week = keep.w; cur.day = keep.d; } else pickDefault();
     LIVE_J = '';
     render(); setSync('gotowe'); flush(); vqRun(); welMaybe();
+    if (NOPLAN_ASK) { NOPLAN_ASK = false; const t = localDate();   // „Prowadź” bez jednostki na dziś: trening bez planu
+      if (!unitList().some(u => !u.own && u.date === t)) openNoPlan(true); }
   }).catch(e => {
     if (LIVE && /^Logowanie: /.test(e.message)) { if (!cached) liveLogin(); return; }
     if (!cached) { $('#main').innerHTML = '<div class="empty">Błąd: ' + esc(e.message) + '</div>'; setSync('błąd'); }
@@ -2932,16 +2935,58 @@ function applyOwn(u, save){
   DATA.plan = DATA.plan.filter(r => !(r.week === u.week && r.day === u.day)).concat(rows); PLAN = DATA.plan;
   if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
 }
-function openOwn(unit){
+/* ---------- trening bez planu i szablony (prowadzony trening, punkt 17 przeglądu v80, 23.11.2026) ----------
+ * „Prowadź” bez jednostki na dziś (albo „⋯ → Nowa jednostka”): „Jak ostatnio” (lib likeLast), szablony trenera (DATA.templates,
+ * kg z historii klienta: lib tplUnit / histKg) albo pusty trening → kreator jednostki (openOwn) z gotową listą do poprawki.
+ * „⋯ → Zapisz jako szablon” → saveTemplate (zakładka Szablony, bez kg i imion klientów).
+ */
+let NOPLAN_ASK = LIVE && !LIVE_J;   // raz po pierwszym wczytaniu: wejście z panelu bez wskazanej jednostki
+function openNoPlan(auto){
+  const last = likeLast(PLAN, (DATA && DATA.logs) || []), tpls = (DATA && DATA.templates) || [], logs = (DATA && DATA.logs) || [];
+  const n = x => x + ' ' + plural(x, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń');
+  const opts = [];
+  if (last) opts.push(['last', 'Jak ostatnio: ' + last.title, weekday(last.date) + ' ' + ddmm(last.date) + ' · ' + n(last.list.length) + ' · kg z tamtego treningu']);
+  tpls.forEach((t, i) => opts.push(['t' + i, 'Szablon: ' + t.name, 'Twój szablon · ' + n(t.ex.length) + ' · kg z historii']));
+  opts.push(['empty', 'Pusty trening', 'Dodajesz ćwiczenia sam']);
+  openSheet(`<h2 id="sheet-t">${auto ? 'Trening bez planu' : 'Nowa jednostka'}</h2><p class="sub">${auto ? esc(NAME || 'Klient') + ' nie ma dziś jednostki w planie. ' : ''}Od czego zaczynasz?</p>
+    <div class="opts act" id="np">${opts.map(o => `<button type="button" class="opt" data-np="${o[0]}"><i aria-hidden="true">${o[0] === 'empty' ? '＋' : o[0] === 'last' ? '↻' : '⧉'}</i><b>${esc(o[1])}</b><small>${esc(o[2])}</small></button>`).join('')}</div>
+    <p class="sub">Trening trafi do planu jako Twoja jednostka (bieżący blok); przed zapisem poprawisz ćwiczenia, serie i kg.${tpls.length ? '' : ' Szablon zapiszesz z „⋯ → Zapisz jako szablon” w dowolnym treningu.'}</p>
+    <button type="button" class="btn" data-close>${auto ? 'Nie teraz' : 'Anuluj'}</button>`);
+  $('#np').onclick = e => { const b = e.target.closest('[data-np]'); if (!b) return; const k = b.dataset.np;
+    closeSheet(); openOwn(null, k === 'empty' ? null : k === 'last' ? { title: last.title, list: last.list } : tplUnit(tpls[+k.slice(1)], logs)); };
+}
+function openTplSave(s0){
+  const exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day && !r.own).sort((a, b) => a.order - b.order);
+  const name0 = String(s0.title || '').slice(0, 40), have = ((DATA && DATA.templates) || []).map(t => t.name.toLowerCase());
+  openSheet(`<h2 id="sheet-t">Zapisz jako szablon</h2><p class="sub">${esc(exs.map(e => e.name).join(' · '))}</p>
+    <label class="fl">Nazwa szablonu<input id="tp-name" maxlength="40" value="${esc(name0)}"></label>
+    <p class="hint" id="tps-same" hidden>Szablon o tej nazwie już jest: zapis go zastąpi.</p>
+    <p class="sub">Zapisuję ćwiczenia, serie i powtórzenia. Kg dobierze się z historii klienta, który z niego trenuje. Szablony są wspólne dla wszystkich Twoich klientów.</p>
+    <p class="hint" id="tps-err" role="alert" hidden></p>
+    <button type="button" class="btn p" id="tps-ok">Zapisz szablon</button><button type="button" class="btn" data-close>Anuluj</button>`);
+  const nm = $('#tp-name'), same = () => { $('#tps-same').hidden = have.indexOf(nm.value.trim().replace(/\s+/g, ' ').toLowerCase()) < 0; };
+  nm.oninput = same; same();
+  $('#tps-ok').onclick = () => {
+    const err = t => { const x = $('#tps-err'); x.textContent = t; x.hidden = false; };
+    if (!nm.value.trim()) return err('Wpisz nazwę szablonu.');
+    if (navigator.onLine === false) return err('Bez sieci szablonu nie zapiszę.');
+    const b = $('#tps-ok'); b.disabled = true; b.textContent = 'Zapisuję…';
+    call('saveTemplate', { name: nm.value.trim(), ex: exs.map(e => ({ name: e.name, sets: e.sets, reps: String(e.reps), circuit: e.circuit || '' })) })
+      .then(list => { DATA.templates = list || []; try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {} closeSheet(); toast('Szablon zapisany.'); })
+      .catch(e => { b.disabled = false; b.textContent = 'Zapisz szablon'; err(e.message); });
+  };
+}
+function openOwn(unit, preset){   // preset (trening bez planu): {title, list: [{name, sets, reps, kg, c}]} = gotowa lista do poprawki
+  const kgS = v => v === '' || v === null || v === undefined ? '' : typeof v === 'number' ? String(fmtKg(v)) : String(v);
   OWN = unit ? { week: unit.week, day: unit.day, date: unit.date, title: String(unit.title || '').replace(/^Własny( · )?/, ''), edit: true,
       list: unit.rows.slice().sort((a, b) => a.order - b.order).map(r => ({ name: r.name, sets: r.sets, reps: String(r.reps), kg: r.kg === '' ? '' : String(fmtKg(r.kg)), old: true, c: r.circuit || '' })) }
-    : { date: localDate(), title: '', list: [], edit: false };
+    : { date: localDate(), title: preset ? String(preset.title || '').slice(0, 40) : '', list: preset ? preset.list.map(e => ({ name: e.name, sets: e.sets, reps: String(e.reps), kg: kgS(e.kg), c: e.c || '' })) : [], edit: false };
   OWN.part = ''; OWN.pick = -1;
   const lv = LIVE && !OWN.edit;                                  // trener: nowa jednostka w planie klienta (bieżący blok)
   openSheet(`<h2 id="sheet-t">${OWN.edit ? 'Dodaj ćwiczenie' : lv ? 'Nowa jednostka: ' + esc(NAME) : 'Własny trening'}</h2>
     <p class="sub">${OWN.edit ? 'Dopisz ćwiczenia do tego treningu.' : lv ? 'Trafi do planu jako Twoja jednostka (bieżący blok), od razu do prowadzenia.' : 'Poza planem trenera. Trener zobaczy go w arkuszu.'}</p>
     ${OWN.edit ? '' : `<label class="fl">Dzień<input type="date" id="ow-date" value="${OWN.date}"></label>
-    <label class="fl">Tytuł (opcjonalnie)<input id="ow-title" maxlength="40" placeholder="np. Ramiona" value=""></label>`}
+    <label class="fl">Tytuł (opcjonalnie)<input id="ow-title" maxlength="40" placeholder="np. Ramiona" value="${esc(OWN.title)}"></label>`}
     <label class="fl">Szukaj ćwiczenia<input id="ow-q" autocomplete="off" placeholder="np. curl, przysiad, plank"></label>
     <div id="ow-parts" class="ow-parts" role="group" aria-label="Partia mięśniowa"></div>
     <div id="ow-res" class="ow-res"></div>
@@ -3146,7 +3191,8 @@ function renderTrening(){
         ${open ? '<button type="button" class="opt" id="cut"><i aria-hidden="true">⏱</i>Skróć trening<small>gdy brakuje czasu</small></button>' : ''}
         ${fx ? '' : '<button type="button" class="opt" id="fold-all"><i aria-hidden="true">▴</i>Zwiń zrobione</button>'}
         ${calOk(unitList().find(x => x.week === cur.week && x.day === cur.day)) ? `<button type="button" class="opt" id="u-cal"><i aria-hidden="true">${CAL_SVG}</i>Dodaj do kalendarza<small>Google, iPhone</small></button>` : ''}
-        ${LIVE ? '<button type="button" class="opt" id="u-new"><i aria-hidden="true">＋</i>Nowa jednostka<small>w planie, od razu do prowadzenia</small></button>' : ''}
+        ${LIVE ? '<button type="button" class="opt" id="u-new"><i aria-hidden="true">＋</i>Nowa jednostka<small>jak ostatnio, z szablonu albo pusta</small></button>' : ''}
+        ${LIVE && exs.length && !exs[0].own ? '<button type="button" class="opt" id="u-tpl"><i aria-hidden="true">⧉</i>Zapisz jako szablon<small>ćwiczenia, serie, powt. (bez kg)</small></button>' : ''}
         ${LIVE ? `<a class="opt" id="u-exit" href="${esc($('#live-back').href)}"><i aria-hidden="true">✕</i>Wyjdź z prowadzenia<small>wracasz do panelu, zapisy zostają</small></a>` : ''}
         <button type="button" class="opt" id="fx-sw"><i aria-hidden="true">${fx ? '☰' : '▣'}</i>${fx ? 'Cała lista' : 'Tryb skupienia'}<small>${fx ? 'wszystkie ćwiczenia' : 'jedno ćwiczenie na ekranie'}</small></button>
         ${open && unitEntries().length ? '<button type="button" class="opt warnopt" id="u-reset"><i aria-hidden="true">↺</i>Wyczyść trening<small>od zera</small></button>' : ''}
@@ -3158,7 +3204,8 @@ function renderTrening(){
     const uc = $('#u-cal'); if (uc) uc.onclick = () => { const l = unitList(), u = l.find(x => x.week === cur.week && x.day === cur.day), m = mondayOf(u.date);
       openCal(u, l.filter(x => calOk(x) && x.date >= m && x.date <= addDays(m, 6))); };
     const ur = $('#u-reset'); if (ur) ur.onclick = () => openReset(s0);
-    const un = $('#u-new'); if (un) un.onclick = () => { closeSheet(); openOwn(null); };
+    const un = $('#u-new'); if (un) un.onclick = () => openNoPlan(false);
+    const ut = $('#u-tpl'); if (ut) ut.onclick = () => openTplSave(s0);
   };
 }
 function rxPro(ex){

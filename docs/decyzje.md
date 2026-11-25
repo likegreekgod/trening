@@ -12,6 +12,12 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Taper (stała `TAPER`, Roman, „The Training of the Weightlifter”, s. 109–110): R ≥ 100% najpóźniej 7 dni przed startem, ≥ 95% 6, ≥ 90% 5; P: 9 / 7 / 5. Seria bliżej niż limit = 🔴 „taper: P 100% na 6 dni przed startem (limit 9) · plan 06.12”. Sprawdzane tylko przy starcie w ciągu 28 dni (`TAPER_DNI`): Plan po `procent` i Log po rzeczywistym %1RM (serie robocze, także spalone). Dzień startu i późniejsze pomijane. Wynik: kolumna `sygnaly` wiersza bieżącego tygodnia w Podsumowanie_OLY (bez treningu w tym tygodniu skrypt dopisuje sam wiersz) i ostrzeżenie w zakładce Import przy wczytaniu planu (import idzie dalej). Taper nie zmienia statusu w Podsumowaniu ani Przeglądu.
 - Pominięte, bo już było: osobna kolumna serii blisko upadku i progi ACWR / e1RM (v99, 24.11).
 
+## 2026-11-23 · Trening bez planu i szablony jednostek (v101, punkty 17 i 3b przeglądu v80)
+
+- Okno „Trening bez planu” pokazuje się samo tylko przy wejściu „Prowadź” bez wskazanej jednostki (`?prowadz=` bez `&j=`), gdy klient nie ma dziś jednostki planu (data albo dzień zrobienia); poza tym z „⋯ → Nowa jednostka”. Każda opcja kończy w kreatorze (`openOwn`), żeby trener poprawił listę przed zapisem; zapis jak dotąd `addOwnUnit` z dniem T<n> (`zrodlo` = trener).
+- „Jak ostatnio” (lib `likeLast`): ostatnia jednostka z zaliczoną serią roboczą, bez własnych treningów klienta; serie = liczba zrobionych, kg = najcięższa zaliczona (bez rozgrzewki i nieudanych), powt. z planu.
+- Szablony: zakładka Szablony (`SZ_HEADERS`: szablon, nr, cwiczenie, serie, powt, obwod, zapisano), bez kg i bez imion klientów, wspólne dla wszystkich klientów, najwyżej 30 (`SZ_MAX`) w aplikacji. `saveTemplate` tylko w `LIVE_FNS` (klient nie zapisze ani nie odczyta), `getData` w trybie trenera zwraca `templates`. kg w kreatorze z historii klienta (lib `histKg`: najcięższa zaliczona seria z ostatniego treningu z tym ćwiczeniem). Usuwanie szablonu: w arkuszu (wiersze z tą nazwą) albo `saveTemplate({name, del: true})`; bez przycisku, bo rzadkie.
+
 ## 2026-11-24 · Metodyka obliczeń: progi zgodne z dokładnością danych (v99)
 
 - Na podstawie przeglądu metodyki z badaniami (Damian zaakceptował 5 poprawek 24.11).

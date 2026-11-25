@@ -1581,7 +1581,7 @@ test('Prowadź trening: doPost z biletem trenera i klient_id woła API klienta w
     assert.match(post({ fn: 'liveNote', key: 'kaaaaaaaaaa1' }).error, /Nieznana funkcja/);   // notatki trenera nie ma w API klienta
   } finally { Object.assign(C, saved); C.LIVE_ = false; }
   assert.equal(saved.API_FNS.liveNote, undefined);
-  for (const k of Object.keys(C.LIVE_FNS)) { assert.equal(C.TR_FNS[k], undefined, k); if (k !== 'liveNote') assert.ok(C.API_FNS[k], k); }
+  for (const k of Object.keys(C.LIVE_FNS)) { assert.equal(C.TR_FNS[k], undefined, k); if (k !== 'liveNote' && k !== 'saveTemplate') assert.ok(C.API_FNS[k], k); }
   assert.equal(C.LOG_HEADERS[C.LOG_HEADERS.length - 1], 'notatka_trenera');       // nowe kolumny na końcu
   assert.equal(C.SES_HEADERS[C.SES_HEADERS.length - 1], 'prowadzil');
   try { C.LIVE_ = false; assert.throws(() => C.liveNote('k', {}), /Brak dostępu/); } finally { C.LIVE_ = false; }
@@ -1984,4 +1984,18 @@ test('taper w Podsumowanie_OLY (wiersz bieżącego tygodnia) i w imporcie planu'
   assert.deepEqual(Array.from(C.taperImport_(plan, kl, today)), ['ola: taper: P 100% na 7 dni przed startem (limit 9) · plan 05.12']);
   assert.equal(C.taperImport_(plan, [{ klient_id: 'ola' }], today).length, 0);
   assert.equal(C.taperImport_(plan, kl, '2026-10-01').length, 0);
+});
+
+test('tplRows_ / tplList_: szablony jednostek trenera (bez kg i imion klientów)', () => {
+  const r = plain(C.tplRows_({ name: '  Full  body A ', ex: [{ name: 'Bench', sets: '4', reps: 8 }, { name: 'Plank', sets: 2, reps: '30 s', circuit: 'a' }, { name: '' }] }, '2026-11-23T10:00:00.000Z'));
+  assert.deepEqual(r, { name: 'Full body A', rows: [['Full body A', 1, 'Bench', 4, '8', '', '2026-11-23T10:00:00.000Z'], ['Full body A', 2, 'Plank', 2, '30 s', 'A', '2026-11-23T10:00:00.000Z']] });
+  assert.match(C.tplRows_({ name: '', ex: [{ name: 'x', sets: 1, reps: 1 }] }).error, /Nazwa/);
+  assert.match(C.tplRows_({ name: 'A', ex: [] }).error, /bez ćwiczeń/);
+  assert.match(C.tplRows_({ name: 'A', ex: [{ name: 'x', sets: 0, reps: 5 }] }).error, /Serie/);
+  const H = C.SZ_HEADERS, row = a => Object.fromEntries(H.map((h, i) => [h, a[i]]));
+  assert.deepEqual(plain(C.tplList_([row(['Rozruch', 2, 'Plank', 2, '30 s', '', '']), row(['Rozruch', 1, 'Goblet Squat', 3, '10', '', '']), row(['Full body A', 1, 'Bench', 4, '8', '', '']), row(['', 1, 'x', 1, '1', '', ''])])), [
+    { name: 'Full body A', ex: [{ name: 'Bench', sets: 4, reps: '8', circuit: '' }] },
+    { name: 'Rozruch', ex: [{ name: 'Goblet Squat', sets: 3, reps: '10', circuit: '' }, { name: 'Plank', sets: 2, reps: '30 s', circuit: '' }] }]);
+  assert.ok(C.LIVE_FNS.saveTemplate && !C.API_FNS.saveTemplate && !C.TR_FNS.saveTemplate);
+  try { C.LIVE_ = false; assert.throws(() => C.saveTemplate('k', {}), /Brak dostępu/); } finally { C.LIVE_ = false; }
 });
