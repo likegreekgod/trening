@@ -216,7 +216,7 @@ function clientData_(client, t0) {
       extra: ix < 0 || r[ix] === '' || r[ix] === null ? null : (Number(r[ix]) || 0),
       drop: idr < 0 ? 0 : (Number(r[idr]) || 0),
       group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
-      swaps: own.length ? own : dx.swaps, infos: dx.infos, parts: dx.parts, own: src(r) === 'klient', added: src(r) === 'dodane', coach: src(r) === 'trener',
+      swaps: own.length ? own : dx.swaps, infos: dx.infos, fx: dx.fx || [], parts: dx.parts, own: src(r) === 'klient', added: src(r) === 'dodane', coach: src(r) === 'trener',
       mode: opt(r, 'tryb').toUpperCase(), cut: Number(opt(r, 'ciecie')) || null, setsMin: opt(r, 'serie_min') === '' ? null : Number(opt(r, 'serie_min')),
       circuit: circuit_(opt(r, 'obwod')), unote: opt(r, 'uwagi_jedn')
     }; });
@@ -1836,7 +1836,7 @@ function exFind_(ix, name) {
   return ix.k[k] || ix.k[b] || ix.b[b] || ix.t[exTok_(name)] || (/1-1\/4/.test(b) ? exFind_(ix, b.replace(/1-1\/4/g, ' ')) : null);
 }
 
-/** Czysta funkcja: {found, infos: [{n, u}], parts, swaps, group} dla nazwy z planu; kompleks „A + B” składa się z części. */
+/** Czysta funkcja: {found, infos: [{n, u}], parts, swaps, group, fx: [nazwy bez filmu]} dla nazwy z planu; kompleks „A + B” składa się z części. */
 function exInfo_(ix, name) {
   const whole = exFind_(ix, name), infos = [], parts = [];
   const comps = whole ? [whole] : exStr_(name).split(/\s\+\s/).map(p => exFind_(ix, p)).filter(Boolean);
@@ -1844,7 +1844,9 @@ function exInfo_(ix, name) {
     if (e.info && !infos.some(i => i.u === e.info)) infos.push({ n: e.name, u: e.info });
     e.parts.forEach(p => { if (parts.indexOf(p) < 0) parts.push(p); });
   });
-  return { found: comps.length > 0, infos: infos.slice(0, 4), parts: parts, swaps: whole ? whole.swaps : [], group: whole ? whole.group : '' };
+  // fx: części bez filmu → nazwy z bazy, po których aplikacja szuka zdjęć i opisu z free-exercise-db (web/cw/opisy.json)
+  const fx = comps.filter(e => !e.info).map(e => e.name).filter((n, i, a) => a.indexOf(n) === i);
+  return { found: comps.length > 0, infos: infos.slice(0, 4), parts: parts, swaps: whole ? whole.swaps : [], group: whole ? whole.group : '', fx: fx.slice(0, 4) };
 }
 
 /** Czysta funkcja: nazwy ćwiczeń z Planu, których nie da się dopasować do bazy (do dopisania albo aliasu), alfabetycznie. */
