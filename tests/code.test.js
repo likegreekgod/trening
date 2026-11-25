@@ -2015,3 +2015,19 @@ test('trProwadzone_: treningi prowadzone przez trenera w miesiącu, na klienta (
   assert.deepEqual(plain(C.trProwadzone_([], kl, [], '', '2026-11-23')), { mies: '2026-11', months: ['2026-11'], clients: [], n: 0, min: 0 });
   assert.ok(C.TR_FNS.trProwadzone);
 });
+
+test('mniej konfliktów: VERSION w sw.js nadaje publikacja, listy funkcji API po jednej w linii', () => {
+  const fs = require('fs'), path = require('path'), root = path.join(__dirname, '..');
+  const sw = fs.readFileSync(path.join(root, 'web', 'sw.js'), 'utf8');
+  assert.match(sw, /^const VERSION = 'dev';$/m, "w repo VERSION = 'dev' (pages.yml podmienia go przy publikacji)");
+  const yml = fs.readFileSync(path.join(root, '.github', 'workflows', 'pages.yml'), 'utf8');
+  assert.match(yml, /sed -i "s\/\^const VERSION = 'dev';\//, 'publikacja podmienia VERSION');
+  [['Code.gs', 'API_FNS'], ['Code.gs', 'LIVE_FNS'], ['Trener.gs', 'TR_FNS']].forEach(([f, n]) => {
+    const src = fs.readFileSync(path.join(root, 'apps-script', f), 'utf8');
+    const body = src.match(new RegExp('const ' + n + ' = \\{[^\\n]*\\n([\\s\\S]*?)\\n\\};'))[1].split('\n').map(l => l.trim());
+    assert.ok(body.every(l => /^\w+,$/.test(l)), n + ': jedna nazwa w linii');
+    const names = body.map(l => l.slice(0, -1));
+    assert.deepEqual(names, names.slice().sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())), n + ': alfabetycznie');
+    assert.equal(names.length, Object.keys(C[n]).length);
+  });
+});

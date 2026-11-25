@@ -20,6 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Wersja aplikacji (VERSION w sw.js)
+        run: |
+          grep -q "^const VERSION = 'dev';" web/sw.js || { echo "web/sw.js: brak const VERSION = 'dev';"; exit 1; }
+          sed -i "s/^const VERSION = 'dev';/const VERSION = 'v${{ github.run_number }}-${GITHUB_SHA::7}';/" web/sw.js
+          grep "^const VERSION" web/sw.js
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web

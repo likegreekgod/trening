@@ -12,8 +12,36 @@
  * Klienci: trKlienci (lista z ustawieniami i linkiem), trKlientUstaw (flagi z zakładki Klienci), trKlientNowy (nowy klient), trKlientLink (nowy klucz = nowy link).
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
-const TR_FNS = { trPakiet, trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
-  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj, trDysk, trKopia, trImport, trNastepna, trProwadzone };
+const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y dopisują w różnych miejscach
+  trAI,
+  trBlok,
+  trBlokPlan,
+  trBlokSzkic,
+  trBlokWczytaj,
+  trConfig,
+  trDysk,
+  trFilm,
+  trImport,
+  trKlienci,
+  trKlient,
+  trKlientLink,
+  trKlientNowy,
+  trKlientUstaw,
+  trKomentarz,
+  trKomentarzFilm,
+  trKopia,
+  trMail,
+  trMailProba,
+  trMailUstaw,
+  trNastepna,
+  trPakiet,
+  trPlan,
+  trProwadzone,
+  trPrzelicz,
+  trPulpit,
+  trSzkic,
+  trUstawAI,
+};
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni

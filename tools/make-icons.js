@@ -3,7 +3,7 @@
 // Kolory marki są brane z tokenów --intro-* w web/index.html. Litery to kontury czcionki marki (Big Shoulders Display 800, licencja OFL)
 // zapisane w tools/icon-glyphs.json (tworzy je tools/icon-glyphs.py), bo plik ikony nie może wczytać czcionki z web/fonts/.
 //   node tools/make-icons.js [katalog]    zapisuje wszystkie pliki (domyślnie do web/icons/); PNG rysuje przeglądarka z Playwright
-// Po zmianie ikon podbij VERSION w web/sw.js. Test „Ikona …” w tests/ui.test.js pilnuje, żeby pliki w web/icons/ były tym, co rysuje to narzędzie.
+// VERSION w web/sw.js nadaje publikacja (pages.yml). Test „Ikona …” w tests/ui.test.js pilnuje, żeby pliki w web/icons/ były tym, co rysuje to narzędzie.
 const fs = require('fs'), path = require('path');
 const WEB = path.join(__dirname, '..', 'web');
 const FONT = JSON.parse(fs.readFileSync(path.join(__dirname, 'icon-glyphs.json'), 'utf8'));

@@ -1,6 +1,7 @@
 // Service worker: pliki aplikacji w pamięci telefonu → start bez sieci.
-// Zmień VERSION przy każdej publikacji, żeby telefony pobrały nową wersję.
-const VERSION = 'v102';
+// VERSION nadaje publikacja (.github/workflows/pages.yml): „dev” zamienia na v<numer publikacji>-<commit>,
+// więc każda publikacja ma nową pamięć i telefony pobierają nową wersję. Nie zmieniaj ręcznie.
+const VERSION = 'dev';
 const CACHE = 'trening-' + VERSION;
 const SHELL = ['./', 'index.html', 'config.js', 'lib.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon.svg', 'icons/favicon-32.png',
   'icons/apple-touch-icon.png', 'icons/icon-maskable-192.png', 'icons/icon-maskable-512.png', 'icons/icon-mono.svg',
