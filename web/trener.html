@@ -84,6 +84,8 @@
   .bnav a[aria-current="page"] span{background:var(--accent);color:var(--on-accent)}
   .bnav em{position:absolute;top:1px;left:calc(50% + 10px);border:2px solid var(--bar)}
   .mo{padding:4px 16px}
+  .pw-f{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:12px}.pw-f label{display:grid;gap:4px;font:600 12px var(--f-body);color:var(--muted)}.pw-f select{min-height:44px;font:600 15px var(--f-body)}
+  .pw-d{display:flex;flex-wrap:wrap;gap:4px 10px}.pw-d span{white-space:nowrap}
   .mo a,.mo button{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 2px;border:0;border-top:1px solid var(--line);background:none;font:600 15px var(--f-body);color:var(--ink);text-decoration:none;text-align:left}
   .mo > :first-child{border-top:0}
   .mo em{margin-left:auto}.mo small{margin-left:auto;font:500 12.5px var(--f-mono);color:var(--muted)}
@@ -430,6 +432,7 @@
     <nav id="rail-kl" aria-label="Klienci"></nav>
     <div class="ft">
       <a href="./" id="mine"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3M17 12h3M7 8v8M17 8v8M7 12h10"/></svg> Mój trening</a>
+      <a id="prow" href="#prowadzone" data-v="prowadzone"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg> Prowadzone</a>
       <a id="set" href="#ustawienia" data-v="ustawienia"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg> Ustawienia</a>
       <div class="sy"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a8 8 0 00-14-2M5 16a8 8 0 0014 2M19 4v4h-4M5 20v-4h4"/></svg><span id="at"></span> · <button id="recalc" type="button">przelicz</button></div>
       <button class="lnk" id="logout" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 0 00-2 2v10a2 2 0 002 2h4M15 8l4 4-4 4M19 12H9"/></svg> Wyloguj</button>

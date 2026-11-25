@@ -12,6 +12,11 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Taper (stała `TAPER`, Roman, „The Training of the Weightlifter”, s. 109–110): R ≥ 100% najpóźniej 7 dni przed startem, ≥ 95% 6, ≥ 90% 5; P: 9 / 7 / 5. Seria bliżej niż limit = 🔴 „taper: P 100% na 6 dni przed startem (limit 9) · plan 06.12”. Sprawdzane tylko przy starcie w ciągu 28 dni (`TAPER_DNI`): Plan po `procent` i Log po rzeczywistym %1RM (serie robocze, także spalone). Dzień startu i późniejsze pomijane. Wynik: kolumna `sygnaly` wiersza bieżącego tygodnia w Podsumowanie_OLY (bez treningu w tym tygodniu skrypt dopisuje sam wiersz) i ostrzeżenie w zakładce Import przy wczytaniu planu (import idzie dalej). Taper nie zmienia statusu w Podsumowaniu ani Przeglądu.
 - Pominięte, bo już było: osobna kolumna serii blisko upadku i progi ACWR / e1RM (v99, 24.11).
 
+## 2026-11-23 · Lista prowadzonych treningów (v102, punkt 16 przeglądu v80)
+
+- Źródło: Sesje z `prowadzil` = trener (dopisuje `logSession` w trybie „Prowadź”), dzień = `start` w strefie skryptu, inaczej `data`; czas = `czas_min`. Trening przerwany bez „Zakończ” się nie liczy (nie ma wiersza w Sesjach). Czysta `trProwadzone_` (test), akcja `trProwadzone(mies)` w TR_FNS; lista miesięcy = miesiące z prowadzonymi treningami + bieżący.
+- CSV składa panel (bez zapisu na Dysku): średnik i BOM, żeby polski Excel otwierał go bez importu; nazwa `prowadzone-RRRR-MM.csv`. W pliku imiona klientów (dane osobowe): plik zostaje u trenera.
+
 ## 2026-11-23 · Trening bez planu i szablony jednostek (v101, punkty 17 i 3b przeglądu v80)
 
 - Okno „Trening bez planu” pokazuje się samo tylko przy wejściu „Prowadź” bez wskazanej jednostki (`?prowadz=` bez `&j=`), gdy klient nie ma dziś jednostki planu (data albo dzień zrobienia); poza tym z „⋯ → Nowa jednostka”. Każda opcja kończy w kreatorze (`openOwn`), żeby trener poprawił listę przed zapisem; zapis jak dotąd `addOwnUnit` z dniem T<n> (`zrodlo` = trener).
