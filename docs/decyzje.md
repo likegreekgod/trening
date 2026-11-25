@@ -2,6 +2,16 @@
 
 Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
 
+## 2026-11-25 · Podsumowanie: granice stref, NL prób, ciężar ponad plan, K-value i kontrola taperu
+
+- Specyfikacja Damiana (25.11), tylko arkusz (`apps-script/`), bez zmian w aplikacji klienta.
+- Granice %1RM z zapasem na zaokrąglenie (`REL_EPS`): seria na dokładnie 90% wpada do `NL>90` (teraz ≥ 90%) i do strefy 81–90; to samo na granicach 60 / 70 / 80 / 100% (`zoneIx_`), przy 85% (skuteczność) i w pasie VBT 80–90%.
+- Podsumowanie_OLY, nowe kolumny na końcu: `NL_prob_R`, `NL_prob_P` (zaliczone + spalone; spalona bez wpisanych powtórzeń liczy się powtórzeniami z planu; dotychczasowe NL bez zmian), `K_value` (średni ciężar zaliczonych powtórzeń R, P, CR, CP, PS przy ≥ 60% ÷ (max_rwanie + max_podrzut) × 100), `dni_do_startu`, `ost_R_100`, `ost_P_100`.
+- Podsumowanie, nowe kolumny na końcu: `ponad_plan_%`, `ponad_plan_max` („+X kg (ćwiczenie)”). Liczone serie robocze z liczbowym kg w planie, bez rozgrzewki, drop setów, własnych / dodanych ćwiczeń i serii po zamianie ćwiczenia (plan dotyczy innego ćwiczenia). Próg: kg > plan + 0,01. 🟠 „ciężar ponad plan”, gdy choć jedna seria rwania / podrzutu albo ≥ 10% serii; flaga dla trenera, nie błąd (jak każdy 🟠 może razem z 🔴 dać status „za dużo”).
+- Klienci: nowe kolumny Q `max_rwanie`, R `max_podrzut` (kg), S `start` (RRRR-MM-DD, tekst; zawody dwudniowe = pierwszy dzień). Nagłówki dopisuje skrypt (`klSheet_`, też przy podsumowaniu); wartości wpisuje trener w arkuszu, panel ich jeszcze nie edytuje.
+- Taper (stała `TAPER`, Roman, „The Training of the Weightlifter”, s. 109–110): R ≥ 100% najpóźniej 7 dni przed startem, ≥ 95% 6, ≥ 90% 5; P: 9 / 7 / 5. Seria bliżej niż limit = 🔴 „taper: P 100% na 6 dni przed startem (limit 9) · plan 06.12”. Sprawdzane tylko przy starcie w ciągu 28 dni (`TAPER_DNI`): Plan po `procent` i Log po rzeczywistym %1RM (serie robocze, także spalone). Dzień startu i późniejsze pomijane. Wynik: kolumna `sygnaly` wiersza bieżącego tygodnia w Podsumowanie_OLY (bez treningu w tym tygodniu skrypt dopisuje sam wiersz) i ostrzeżenie w zakładce Import przy wczytaniu planu (import idzie dalej). Taper nie zmienia statusu w Podsumowaniu ani Przeglądu.
+- Pominięte, bo już było: osobna kolumna serii blisko upadku i progi ACWR / e1RM (v99, 24.11).
+
 ## 2026-11-24 · Metodyka obliczeń: progi zgodne z dokładnością danych (v99)
 
 - Na podstawie przeglądu metodyki z badaniami (Damian zaakceptował 5 poprawek 24.11).
