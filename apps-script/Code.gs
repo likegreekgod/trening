@@ -61,8 +61,28 @@ function oldLinkText_(pwa) {
 /* ---------- API dla aplikacji na GitHub Pages ----------
  * POST (Content-Type text/plain, bez preflight CORS), body: {fn, key, args:[…]} → {ok:true, result} | {ok:false, error}
  */
-const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, saveDyspozycja, przesunJednostke, addOwnUnit, getExNames, logError,
-  logNote, logReadyVideo, editPlan, saveStan, deleteStan, replyNote, filmPart };
+const API_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y dopisują w różnych miejscach
+  addOwnUnit,
+  deleteSet,
+  deleteStan,
+  editPlan,
+  filmPart,
+  getData,
+  getExNames,
+  logError,
+  logNote,
+  logReadyVideo,
+  logSession,
+  logSet,
+  logVideo,
+  przesunJednostke,
+  replyNote,
+  saveDyspozycja,
+  saveStan,
+  startUpload,
+  uploadChunk,
+  uploadStatus,
+};
 /*
  * Trening prowadzony przez trenera („▶ Prowadź” w panelu): aplikacja klienta otwarta z ?prowadz=<klient_id> wysyła
  * {fn, token (bilet Google trenera), as: klient_id, args} zamiast klucza. doPost sprawdza bilet (trAuth_), bierze klucz
@@ -72,8 +92,24 @@ const API_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChu
  * ze zmianami w jednostce, logSession zapisuje Sesje.prowadzil = „trener”, editPlan / addOwnUnit dopisują ćwiczenia
  * i jednostki trenera (Plan.zrodlo = „trener”, liczą się do planu jak zwykłe).
  */
-const LIVE_FNS = { getData, logSet, logSession, deleteSet, startUpload, uploadChunk, uploadStatus, logVideo, przesunJednostke, addOwnUnit, getExNames, logError,
-  logNote, editPlan, liveNote, saveTemplate };
+const LIVE_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y dopisują w różnych miejscach
+  addOwnUnit,
+  deleteSet,
+  editPlan,
+  getData,
+  getExNames,
+  liveNote,
+  logError,
+  logNote,
+  logSession,
+  logSet,
+  logVideo,
+  przesunJednostke,
+  saveTemplate,
+  startUpload,
+  uploadChunk,
+  uploadStatus,
+};
 var LIVE_ = false;   // var: widoczne w testach (piaskownica vm)
 
 function doPost(e) {

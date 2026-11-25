@@ -9,14 +9,17 @@ Stan na 2026-11-23, `main` = v80 (scalone PR #76: panel trenera PR 1–2, #77: m
 - Repo: `C:\Users\dt\Desktop\trening-repo`. Sesję Claude Code otwieraj w tym folderze, wtedy `CLAUDE.md` wczytuje się sam.
 - Zmiana = gałąź → `npm test` (wszystko zielone) → commit i push gałęzi (kontener sesji jest tymczasowy; wysyłanie gałęzi bez pytania Damian potwierdził 13.11). Brak `gh`; stan sprawdzaj przez publiczne API GitHuba.
 - **PR (link `compare/main...gałąź?expand=1&title=…&body=…`) dopiero, gdy wszystko jest ustalone i Damian wyraźnie pozwoli** (ustalenie 13.11). Do tego czasu pokazuj zrzuty i opis, poprawki dokładaj na tę samą gałąź. Scala sam i pisze „ok”.
+- **Wpis o zrobionym zadaniu i ustalenia: osobny plik w `docs/zmiany/`** (od 25.11, `docs/zmiany/README.md`), nie na górze tego pliku ani `decyzje.md`, żeby równoległe PR-y nie miały konfliktów.
 - **Po zakończeniu zadania od razu oznacz je w plikach md jako zrobione** (ten plik, tabela „Stan” w planie, `decyzje.md` przy nowym ustaleniu), w tym samym commicie co kod, bez czekania na scalenie.
 - **Przy testach tłumacz Damianowi prostym językiem**: co test sprawdza, jak to robi i dlaczego, oraz co znaczył każdy błąd po drodze i jak został naprawiony. Chce rozumieć, co dzieje się w kodzie.
-- Scalenie `web/**` publikuje aplikację (GitHub Pages; podbij `VERSION` w `web/sw.js`), scalenie `apps-script/**` wdraża skrypt (Action z clasp). `clasp push` z komputera jest zablokowany.
+- Scalenie `web/**` publikuje aplikację (GitHub Pages; `VERSION` w `web/sw.js` nadaje publikacja, w repo zostaje `'dev'`), scalenie `apps-script/**` wdraża skrypt (Action z clasp). `clasp push` z komputera jest zablokowany.
 - Zmiany wyglądu: najpierw szkic do akceptacji, potem kod. Po każdym zadaniu odpowiedź kończy się listą zadań.
 - Pomiar ładowania: `getData` zwraca `ms` z czasami etapów (16.10: skrypt 2,0–2,8 s, całość 3,3–4,8 s).
 - Skill trenera dla claude.ai leży poza repo (`Desktop\hgvtjv\skill-aplikacja-treningowa-klienta`, zawiera identyfikatory arkusza). Po zmianie SKILL.md przebuduj ZIP.
 
 ## Ostatnio zrobione
+
+Od 25.11 nowe wpisy są w `docs/zmiany/` (plik na PR, najnowsze = nazwy od końca alfabetu). Niżej starsze.
 
 - 25.11 (`apps-script/`, bez zmian w `web/`): poprawki liczenia Podsumowania wg specyfikacji Damiana: seria na dokładnie 90% w `NL>90` i właściwej strefie, NL prób (`NL_prob_R/P`), ciężar ponad plan (`ponad_plan_%`, `ponad_plan_max`, 🟠), K-value, data startu w Klientach (`start`, `max_rwanie`, `max_podrzut`) i kontrola taperu (🔴 w Podsumowanie_OLY, ostrzeżenie w Import). Szczegóły w `decyzje.md` 25.11.
 - 23.11 (v102 + `apps-script/`, PR 5 z planu reszty przeglądu v80, punkt 16): panel → „Prowadzone” (komputer: w menu po lewej nad Ustawieniami; telefon: Więcej → Prowadzone treningi). Wybór miesiąca, na górze suma („3 treningi · 2 h 40 min · 2 klientów”), tabela: klient, liczba treningów, czas, daty z minutami; „Pobierz CSV” (klient; data; tydzień; jednostka; tytuł; minuty + wiersz RAZEM, średniki, otwiera się w Excelu po polsku). Liczą się treningi zakończone w trybie „Prowadź” (Sesje: prowadził = trener). Tylko odczyt, bez zmian w arkuszu.

@@ -1,6 +1,6 @@
 # Decyzje projektowe
 
-Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Nowe ustalenia dopisuj na górze, z datą.
+Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych zdrowotnych, adresów e-mail ani identyfikatorów arkusza i folderów Drive. Od 25.11 nowe ustalenia idą do osobnego pliku na PR w `docs/zmiany/` (sekcja „Ustalenia”); tutaj zostają starsze wpisy i „Odrzucone i dlaczego”.
 
 ## 2026-11-25 · Podsumowanie: granice stref, NL prób, ciężar ponad plan, K-value i kontrola taperu
 
