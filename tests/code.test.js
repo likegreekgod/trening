@@ -808,7 +808,7 @@ test('computeSummary_: pominięte opcjonalne nie obniżają wykonania, komentarz
   assert.equal(ex('Face Pull')[X.indexOf('pominiete')], '1× bez powodu');
   assert.equal(ex('Plank')[X.indexOf('pominiete')], '1× brak czasu');
   assert.equal(ex('Plank')[X.indexOf('serie')], 0);
-  assert.equal(X[X.length - 1], 'pominiete'); assert.equal(H[H.length - 2], 'opcjonalne'); assert.equal(H[H.length - 1], 'blisko_upadku');
+  assert.equal(X[X.length - 1], 'pominiete'); assert.deepEqual(H.slice(-4), ['opcjonalne', 'blisko_upadku', 'ponad_plan_%', 'ponad_plan_max']);
 });
 
 test('computeOverview_: pominięte ćwiczenie główne lub korekcyjne = sygnał, opcjonalne nie', () => {
@@ -1882,7 +1882,108 @@ test('computeSummary_: blisko_upadku = RPE ≥ 9 albo FAIL, serie twarde bez zmi
   const row = C.computeSummary_(plan, log, [], []).rows[0], H = C.SUM_HEADERS;
   assert.equal(row[H.indexOf('serie_twarde')], 5);
   assert.equal(row[H.indexOf('blisko_upadku')], 3);
-  assert.equal(H[H.length - 1], 'blisko_upadku');                                  // nowa kolumna na końcu
+  assert.equal(H[H.indexOf('blisko_upadku') + 1], 'ponad_plan_%');                // nowe kolumny tylko na końcu
+});
+
+// --- 25.11.2026: poprawki liczenia (próg 90%, NL prób, ponad plan, K-value) i kontrola taperu ---
+const OLYW = (klient, nr, name, grupa, pct, kg, sets, extra) => {
+  const plan = { klient, tydzien: 1, jednostka: 'T1', data: d(1, 0), nr, cwiczenie: name, prio: 'A', serie: sets.length, powt: '2', procent: pct, kg, grupa };
+  const log = sets.map((x, i) => Object.assign({ klient, tydzien: 1, jednostka: 'T1', data: d(1, 0), nr_cw: nr, cwiczenie: name, seria: x.s || i + 1,
+    kg: x.kg === undefined ? kg : x.kg, powt: x.powt === undefined ? 2 : x.powt, rpe: '', wykonane: 'TAK', typ: x.typ || '' }, extra || {}));
+  return { plan, log };
+};
+
+test('zoneIx_ i nl90: seria dokładnie na 90% (i na granicach stref) bez błędu zaokrąglenia', () => {
+  assert.deepEqual([0.6, 0.6000000001, 0.7, 0.8, 0.9, 0.9000000001, 0.8999999999, 1, 1.0000000001, 1.01].map(C.zoneIx_), [0, 0, 1, 2, 3, 3, 3, 4, 4, 5]);
+  const a = OLYW('ola', 1, 'Rwanie', 'R', 0.9, 90, [{}, {}]);                     // 90 kg ÷ (90 / 0,9) = 0,9 ± ε
+  const r = C.computeSummary_([a.plan], a.log, [], []), O = C.OLY_HEADERS;
+  assert.equal(r.olyRows[0][O.indexOf('NL>90')], 4);
+  assert.equal(r.olyRows[0][O.indexOf('z81-90')], 4);
+});
+
+test('NL_prob: spalona dwójka w R nie zmienia NL_R, NL_prob_R +2 (też bez wpisanych powtórzeń)', () => {
+  const a = OLYW('ola', 1, 'Rwanie', 'R', 0.8, 80, [{}, {}, { typ: 'FAIL' }]);
+  const b = OLYW('ola', 2, 'Podrzut', 'P', 0.8, 100, [{}, { typ: 'FAIL', powt: '' }]);
+  const r = C.computeSummary_([a.plan, b.plan], a.log.concat(b.log), [], []), O = C.OLY_HEADERS, row = r.olyRows[0];
+  assert.equal(row[O.indexOf('NL_R')], 4);
+  assert.equal(row[O.indexOf('NL_prob_R')], 6);
+  assert.equal(row[O.indexOf('NL_P')], 2);
+  assert.equal(row[O.indexOf('NL_prob_P')], 4);                                  // spalona bez powt. = powt. z planu
+  assert.equal(O.indexOf('NL_prob_R'), O.indexOf('sygnaly') + 1);                 // nowe kolumny na końcu
+});
+
+test('ponad plan: 102,5 przy 100 kg = ponad plan; BW, rozgrzewka, drop set i zamiana pominięte; 🟠 przy ≥ 10% albo boju', () => {
+  const P = (nr, name, kg, serie) => ({ klient: 'ola', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr, cwiczenie: name, prio: 'A', serie, powt: '5', kg });
+  const L = (nr, name, s, kg, x) => Object.assign({ klient: 'ola', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr_cw: nr, cwiczenie: name, seria: s, kg, powt: 5, rpe: 8, wykonane: 'TAK', typ: '' }, x || {});
+  const plan = [P(1, 'Przysiad', 100, 4), P(2, 'Pompki', 'BW', 3), P(3, 'Wiosłowanie', 60, 6)];
+  const log = [L(1, 'Przysiad', 1, 102.5), L(1, 'Przysiad', 2, 100), L(1, 'Przysiad', 3, 100), L(1, 'Przysiad', 4, 100),
+    L(1, 'Przysiad', 'R1', 120), L(1, 'Przysiad', 'D1', 110, { typ: 'DROP' }), L(2, 'Pompki', 1, 10), L(2, 'Pompki', 2, 10),
+    L(3, 'Hantle', 1, 80, { zamiana: 'Wiosłowanie → Hantle | sprzęt' })].concat([1, 2, 3, 4, 5, 6].map(s => L(3, 'Wiosłowanie', s + 1, 60)));
+  const H = C.SUM_HEADERS, row = C.computeSummary_(plan, log, [], []).rows[0];
+  assert.equal(row[H.indexOf('ponad_plan_%')], 10);                              // 1 z 10 serii (4 przysiad + 6 wiosłowanie)
+  assert.equal(row[H.indexOf('ponad_plan_max')], '+2,5 kg (Przysiad)');
+  assert.match(row[H.indexOf('powody')], /ciężar ponad plan: 1 z 10 serii/);
+  // 1 z 11 (< 10%) bez bojów: bez sygnału; jedna seria rwania ponad plan: sygnał
+  const plan2 = [plan[0], plan[1], P(3, 'Wiosłowanie', 60, 7)], log2 = log.concat([L(3, 'Wiosłowanie', 8, 60)]);
+  const r2 = C.computeSummary_(plan2, log2, [], []).rows[0];
+  assert.equal(r2[H.indexOf('ponad_plan_%')], 9.1);
+  assert.doesNotMatch(r2[H.indexOf('powody')], /ponad plan/);
+  const a = OLYW('ola', 1, 'Rwanie', 'R', 0.8, 80, [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { kg: 82.5 }]);
+  const r3 = C.computeSummary_([a.plan], a.log, [], []).rows[0];
+  assert.match(r3[H.indexOf('powody')], /ciężar ponad plan: 1 z 12 serii \(także boje\)/);
+});
+
+test('K-value: średni ciężar zaliczonych powt. ≥ 60% ÷ (max rwanie + max podrzut); bez maksów puste', () => {
+  const a = OLYW('ola', 1, 'Rwanie', 'R', 0.8, 80, [{}, { typ: 'FAIL' }]);       // 2 powt. × 80 (spalona poza)
+  const b = OLYW('ola', 2, 'Przysiad przedni', 'PS', 0.8, 120, [{}]);             // 2 × 120
+  const c = OLYW('ola', 3, 'Rwanie z zawisu', 'R', 0.5, 50, [{}]);                // 50% poza K-value
+  const plan = [a.plan, b.plan, c.plan], log = a.log.concat(b.log, c.log), O = C.OLY_HEADERS;
+  const r = C.computeSummary_(plan, log, [], [{ klient_id: 'ola', max_rwanie: 100, max_podrzut: '125' }]);
+  assert.equal(r.olyRows[0][O.indexOf('K_value')], 44.4);                         // 100 / 225 × 100
+  const e = C.computeSummary_(plan, log, [], [{ klient_id: 'ola' }]).olyRows[0];
+  for (const h of ['K_value', 'dni_do_startu', 'ost_R_100', 'ost_P_100']) assert.equal(e[O.indexOf(h)], '', h);
+  assert.doesNotMatch(e[O.indexOf('sygnaly')], /taper/);
+});
+
+test('taperCheck_: limity Romana (P 100% ≥ 9 dni, R 100% ≥ 7 dni przed startem)', () => {
+  const T = (grp, day, rel) => C.taperCheck_([{ grp, rel: rel || 1, day, src: 'plan' }], '2026-12-12');
+  assert.equal(T('P', '2026-12-05').length, 1);
+  assert.equal(T('P', '2026-12-05')[0].text, 'taper: P 100% na 7 dni przed startem (limit 9) · plan 05.12');
+  assert.equal(T('P', '2026-12-03').length, 0);
+  assert.equal(T('R', '2026-12-05').length, 0);
+  assert.match(T('R', '2026-12-06')[0].text, /R 100% na 6 dni przed startem \(limit 7\)/);
+  assert.match(T('P', '2026-12-06', 0.95)[0].text, /P 95% na 6 dni .*limit 7/);
+  assert.equal(T('P', '2026-12-07', 0.9).length, 0);                             // 90%: limit 5, 5 dni = w porządku
+  assert.equal(T('P', '2026-12-08', 0.9).length, 1);                             // 4 dni
+  assert.match(T('R', '2026-12-11')[0].text, /na 1 dzień przed/);
+  assert.equal(T('P', '2026-12-11', 0.85).length, 0);                            // poniżej 90% bez limitu
+  assert.equal(T('P', '2026-12-12').length + T('P', '2026-12-13').length, 0);    // dzień startu i później pomijane
+  assert.equal(C.taperCheck_([{ grp: 'P', rel: 1, day: '2026-12-05' }], '').length, 0);
+});
+
+test('taper w Podsumowanie_OLY (wiersz bieżącego tygodnia) i w imporcie planu', () => {
+  const kl = [{ klient_id: 'ola', start: '2026-12-12' }], O = C.OLY_HEADERS, today = '2026-11-30';
+  const P = (data, name, grupa, pct, kg, j) => ({ klient: 'ola', tydzien: 9, jednostka: j, data, nr: 1, cwiczenie: name, prio: 'A', serie: 1, powt: '1', procent: pct, kg, grupa });
+  const plan = [P('2026-11-30', 'Rwanie', 'R', 1, 100, 'T1'), P('2026-12-05', 'Podrzut', 'P', 1, 125, 'T2'), P('2026-12-03', 'Podrzut', 'P', 1, 125, 'T3')];
+  const log = [{ klient: 'ola', tydzien: 9, jednostka: 'T1', data: '2026-11-30', nr_cw: 1, cwiczenie: 'Rwanie', seria: 1, kg: 100, powt: 1, rpe: '', wykonane: 'TAK', typ: '' }];
+  const r = C.computeSummary_(plan, log, [], kl, { today });
+  const row = r.olyRows.find(x => x[1] === '2026-11-30');
+  assert.match(row[O.indexOf('sygnaly')], /^🔴 taper: P 100% na 7 dni przed startem \(limit 9\) · plan 05\.12$/);
+  assert.equal(row[O.indexOf('dni_do_startu')], 12);
+  assert.equal(row[O.indexOf('ost_R_100')], '2026-11-30');
+  assert.equal(row[O.indexOf('ost_P_100')], '');
+  // start za > 28 dni: bez sprawdzania
+  assert.doesNotMatch(C.computeSummary_(plan, log, [], kl, { today: '2026-11-01' }).olyRows[0][O.indexOf('sygnaly')], /taper/);
+  // bez treningu w tym tygodniu: osobny wiersz bieżącego tygodnia
+  const r2 = C.computeSummary_(plan, [], [], kl, { today });
+  assert.equal(r2.olyRows.length, 1);
+  assert.equal(r2.olyRows[0][1], '2026-11-30');
+  assert.match(r2.olyRows[0][O.indexOf('sygnaly')], /taper: P 100%/);
+  assert.equal(r2.olyRows[0].length, O.length);
+  // import: ostrzeżenie (nie błąd)
+  assert.deepEqual(Array.from(C.taperImport_(plan, kl, today)), ['ola: taper: P 100% na 7 dni przed startem (limit 9) · plan 05.12']);
+  assert.equal(C.taperImport_(plan, [{ klient_id: 'ola' }], today).length, 0);
+  assert.equal(C.taperImport_(plan, kl, '2026-10-01').length, 0);
 });
 
 test('tplRows_ / tplList_: szablony jednostek trenera (bez kg i imion klientów)', () => {

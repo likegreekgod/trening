@@ -993,10 +993,26 @@ function go(e){e.preventDefault();var f=e.target,b=document.getElementById('b'),
 const e1rm_ = (kg, reps, rpe) => { const n = reps + (10 - rpe); return n <= 1 ? kg : kg * (1 + n / 30); };
 const SUM_HEADERS = ['klient', 'tydzien_od', 'tyg_planu', 'jednostki', 'wykonanie_%', 'serie_rob', 'serie_twarde', 'tonaz_kg',
   'NL_%', 'sr_int_%', 'fail_%', 'dod+drop', 'sRPE_TL_AU', 'ACWR', 'monotonia', 'strain', 'e1RM_zm_%', 'RPE_vs_plan',
-  'samopocz_sr', 'samopocz_min', 'bol_max', 'status', 'powody', 'opcjonalne', 'blisko_upadku'];
+  'samopocz_sr', 'samopocz_min', 'bol_max', 'status', 'powody', 'opcjonalne', 'blisko_upadku', 'ponad_plan_%', 'ponad_plan_max'];
 const OLY_HEADERS = ['klient', 'tydzien_od', 'masters', 'NL_R', 'NL_P', 'NL_CR', 'NL_CP', 'NL_PS', 'NL_I', 'NL_razem', 'spec_%',
   'int_R_%', 'int_P_%', 'int_CR_%', 'int_CP_%', 'int_PS_%', 'z≤60', 'z61-70', 'z71-80', 'z81-90', 'z91-100', 'z>100', 'z>80_%', 'NL>90',
-  'max_R', 'max_P', 'skut_≥85_%', 'spal_<85_%', 'VBT_80-90_zm_ms', 'sygnaly'];
+  'max_R', 'max_P', 'skut_≥85_%', 'spal_<85_%', 'VBT_80-90_zm_ms', 'sygnaly', 'NL_prob_R', 'NL_prob_P', 'K_value',
+  'dni_do_startu', 'ost_R_100', 'ost_P_100'];
+/** Zapas na błąd zaokrąglenia przy %1RM: 90 kg przy planie 90% ze 100 kg daje rel 0,8999999… albo 0,9000000…1 (25.11.2026). */
+const REL_EPS = 1e-9;
+/** Ciężar ponad plan: seria liczy się, gdy kg wykonane > kg z planu + PONAD_PLAN_KG; 🟠 przy ≥ PONAD_PLAN_PCT % serii
+ *  albo przy choć jednej serii rwania / podrzutu (R, P). Ustalenie Damiana 25.11.2026, flaga dla trenera, nie błąd. */
+const PONAD_PLAN_KG = 0.01, PONAD_PLAN_PCT = 10;
+/** K-value: średni ciężar zaliczonych powtórzeń R, P, CR, CP, PS przy ≥ K_REL_MIN 1RM ÷ (max rwanie + max podrzut) × 100
+ *  (wskaźnik szkoły radzieckiej / Miedwiediew; ustalenie Damiana 25.11.2026). */
+const K_GROUPS = ['R', 'P', 'CR', 'CP', 'PS'], K_REL_MIN = 0.6;
+/**
+ * Taper przed startem: najmniejsza liczba dni od serii w danej strefie do startu (Klienci „start”, pierwszy dzień zawodów).
+ * Źródło: R. A. Roman, „The Training of the Weightlifter”, s. 109–110. [próg %1RM, dni]; seria bliżej niż limit = 🔴.
+ * Sprawdzane tylko u klienta ze startem w ciągu TAPER_DNI dni (Podsumowanie_OLY i import planu).
+ */
+const TAPER = { R: [[1.00, 7], [0.95, 6], [0.90, 5]], P: [[1.00, 9], [0.95, 7], [0.90, 5]] };
+const TAPER_DNI = 28;
 const GROUPS = ['R', 'P', 'CR', 'CP', 'PS', 'I'];
 const SUMX_HEADERS = ['klient', 'tydzien_od', 'cwiczenie', 'serie', 'tonaz_kg', 'e1RM_max', 'NL', 'sr_int_%', 'RPE_sr', 'fail',
   'uwagi_klienta', 'pominiete'];
@@ -1163,8 +1179,9 @@ function instalujWyzwalacze() {
 function podsumowanie(e) {
   const localDay = t => Utilities.formatDate(new Date(t), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const plan = tableOf_('Plan'), log = tableOf_('Log'), ses = tableOf_('Sesje');
+  try { klSheet_(); } catch (err) { Logger.log('Klienci: ' + err); }   // nagłówki max_rwanie, max_podrzut, start
   const klienci = tableOf_('Klienci'), dys = tableOf_('Dyspozycja');
-  const res = computeSummary_(plan, log, ses, klienci, { localDay });
+  const res = computeSummary_(plan, log, ses, klienci, { localDay, today: today_() });
   const bl = computeBlocks_(plan, log, ses, dys, res.rows, { localDay });
   const ov = computeOverview_(plan, log, ses, klienci, dys, res.rows, { today: today_(), localDay, errs: tableOf_('Błędy') });
   writeTable_('Przegląd', PRZ_HEADERS, ov, (sh, n) => {
@@ -1230,7 +1247,8 @@ function groupOf_(g, name) {
   if (/przysiad|squat/.test(n)) return 'PS';
   return 'I';
 }
-const zoneIx_ = rel => { const p = rel * 100; return p <= 60 ? 0 : p <= 70 ? 1 : p <= 80 ? 2 : p <= 90 ? 3 : p <= 100 ? 4 : 5; };
+/** Strefa %1RM: ≤60, 61–70, 71–80, 81–90, 91–100, >100. Granica należy do niższej strefy, z zapasem REL_EPS na zaokrąglenie. */
+const zoneIx_ = rel => { const L = [0.6, 0.7, 0.8, 0.9, 1]; for (let i = 0; i < L.length; i++) if (rel <= L[i] + REL_EPS) return i; return 5; };
 const avg_ = a => a.length ? a.reduce((s2, v) => s2 + v, 0) / a.length : NaN;
 
 function weekOf_(d) {
@@ -1265,9 +1283,76 @@ function skips_(log) {
 }
 const optB_ = r => String(r && r.prio || '').trim().toUpperCase() === 'B';
 
+/* ---------- taper przed startem (Klienci „start”, stała TAPER) ---------- */
+/** Dzień 'RRRR-MM-DD' z tekstu albo komórki-daty; inaczej ''. */
+const dayStr_ = v => {
+  if (v instanceof Date) return isNaN(v) ? '' : iso_(day_(v));
+  const t = String(v === undefined || v === null ? '' : v).trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : '';
+};
+const daysBetween_ = (a, b) => Math.round((day_(b) - day_(a)) / 864e5);
+/** Czysta: klient → data startu dla klientów ze startem w ciągu TAPER_DNI dni od today (start dziś też). */
+function taperStarts_(klienci, today) {
+  const out = {};
+  (klienci || []).forEach(k => {
+    const c = String(k.klient_id || '').trim().toLowerCase(), st = dayStr_(k.start);
+    if (!c || !st || !today) return;
+    const n = daysBetween_(today, st);
+    if (n >= 0 && n <= TAPER_DNI) out[c] = st;
+  });
+  return out;
+}
+/** Czysta: wiersze Planu grup R i P z procentem i datą → [{grp, rel, day, src: 'plan'}] (bez usuniętych przez klienta). */
+function taperPlanItems_(rows) {
+  const out = [];
+  (rows || []).forEach(r => {
+    if (removed_(r)) return;
+    const grp = groupOf_(r.grupa, r.cwiczenie), rel = n_(r.procent), day = dayStr_(r.data);
+    if ((grp === 'R' || grp === 'P') && rel > 0 && day) out.push({ grp, rel, day, src: 'plan' });
+  });
+  return out;
+}
+/**
+ * Czysta: serie [{grp, rel, day, src}] → naruszenia taperu przed startem `start` [{day, text}], od najwcześniejszej.
+ * Seria w strefie ≥ próg z TAPER bliżej startu niż limit (dni < limit) = 🔴. Dzień startu i później pomijane.
+ * Ta sama strefa i dzień z planu i z wykonania liczą się raz (pierwsze wygrywa: podawaj najpierw wykonanie).
+ */
+function taperCheck_(items, start) {
+  const out = [], seen = {};
+  if (!dayStr_(start)) return out;
+  (items || []).forEach(x => {
+    const L = TAPER[x.grp], day = dayStr_(x.day);
+    if (!L || !(x.rel > 0) || !day) return;
+    const n = daysBetween_(day, start);
+    if (n <= 0) return;
+    const lim = L.find(z => x.rel >= z[0] - REL_EPS);
+    if (!lim || n >= lim[1]) return;
+    const pct = Math.round(100 * x.rel), k = x.grp + '|' + pct + '|' + day;
+    if (seen[k]) return; seen[k] = 1;
+    out.push({ day, text: 'taper: ' + x.grp + ' ' + pct + '% na ' + n + (n === 1 ? ' dzień' : ' dni') + ' przed startem (limit ' + lim[1] + ') · ' +
+      (x.src || 'plan') + ' ' + day.slice(8, 10) + '.' + day.slice(5, 7) });
+  });
+  return out.sort((a, b) => a.day.localeCompare(b.day));
+}
+/** Czysta: ostrzeżenia taperu dla wierszy planu z pliku (import): ['klient: taper: …'] — tylko klienci ze startem w ciągu TAPER_DNI dni. */
+function taperImport_(rows, klienci, today) {
+  const st = taperStarts_(klienci, today), by = {}, out = [];
+  (rows || []).forEach(r => { const c = String(r.klient || '').trim().toLowerCase(); if (st[c]) (by[c] = by[c] || []).push(r); });
+  Object.keys(by).sort().forEach(c => taperCheck_(taperPlanItems_(by[c]), st[c]).forEach(m => out.push(c + ': ' + m.text)));
+  return out;
+}
+
 function computeSummary_(plan, log, ses, klienci, opts) {
-  const P = {}, B = {}, D = {}, M = {}, SD = {}, SK = skips_(log);
-  (klienci || []).forEach(k => { M[String(k.klient_id).toLowerCase()] = String(k.masters || '').trim().toUpperCase() === 'TAK'; });
+  const P = {}, B = {}, D = {}, M = {}, SD = {}, SK = skips_(log), KM = {}, ST = {};
+  const today = (opts && opts.today) || new Date().toISOString().slice(0, 10), wkNow = weekOf_(today);
+  (klienci || []).forEach(k => {
+    const c = String(k.klient_id).toLowerCase();
+    M[c] = String(k.masters || '').trim().toUpperCase() === 'TAK';
+    const mr = n_(k.max_rwanie), mp = n_(k.max_podrzut);
+    if (mr > 0 && mp > 0) KM[c] = mr + mp;                                  // K-value tylko przy obu maksach
+    const st = dayStr_(k.start); if (st) ST[c] = st;
+  });
+  const TS = taperStarts_(klienci, today), TI = {}, L100 = {};             // taper: serie z Logu; daty zaliczonych ≥ 100% (R, P)
   const g0 = () => ({ R: 0, P: 0, CR: 0, CP: 0, PS: 0, I: 0 });
   const key = (...a) => a.map(String).join('|');
   plan.forEach(r => { P[key(String(r.klient).toLowerCase(), r.tydzien, r.jednostka, r.nr)] = r; });
@@ -1277,8 +1362,8 @@ function computeSummary_(plan, log, ses, klienci, opts) {
   const AD = unitDates_(ses, opts && opts.localDay);
   const acc = (c, w) => B[c + '|' + w] || (B[c + '|' + w] = { c, w, planW: {}, sess: 0, planned: 0, planTon: 0, donePlanned: 0, work: 0, hard: 0, near: 0,
     ton: 0, nl: 0, intSum: 0, fail: 0, addDrop: 0, e1: {}, rpeDiff: [], feel: [], pain: NaN, srpe: 0, srpeN: 0, ex: {},
-    strWork: 0, strFail: 0, olyAny: false, optPlan: 0, optDone: {},
-    o: { nl: g0(), int: g0(), intN: g0(), zones: [0, 0, 0, 0, 0, 0], nl90: 0, maxKg: { R: 0, P: 0 }, maxName: { R: '', P: '' }, maxRel: { R: 0, P: 0 },
+    strWork: 0, strFail: 0, olyAny: false, optPlan: 0, optDone: {}, ppN: 0, ppOver: 0, ppLift: false, ppMax: 0, ppName: '',
+    o: { nl: g0(), int: g0(), intN: g0(), zones: [0, 0, 0, 0, 0, 0], nl90: 0, nlTry: { R: 0, P: 0 }, kSum: 0, kN: 0, maxKg: { R: 0, P: 0 }, maxName: { R: '', P: '' }, maxRel: { R: 0, P: 0 },
          hiSets: 0, hiMade: 0, loSets: 0, loMiss: 0 } });
 
   plan.forEach(r => {
@@ -1331,18 +1416,34 @@ function computeSummary_(plan, log, ses, klienci, opts) {
       o.nl[grp] += reps;
       if (rel > 0) {
         o.int[grp] += reps * rel; o.intN[grp] += reps;
-        if (grp !== 'I') { o.zones[zoneIx_(rel)] += reps; if (rel > 0.9) o.nl90 += reps; }
+        if (grp !== 'I') { o.zones[zoneIx_(rel)] += reps; if (rel >= 0.9 - REL_EPS) o.nl90 += reps; }
+        if (K_GROUPS.indexOf(grp) >= 0 && kg > 0 && rel >= K_REL_MIN - REL_EPS) { o.kSum += kg * reps; o.kN += reps; }
       }
     }
+    // NL prób (R, P): zaliczone + spalone; spalona bez wpisanych powtórzeń liczy się powtórzeniami z planu
+    if (lift) o.nlTry[grp] += reps > 0 ? reps : fail ? repsOf_(pr.powt) : 0;
+    // ciężar ponad plan: serie robocze (bez rozgrzewki i drop setów), liczbowe kg w planie, bez zamiany ćwiczenia
+    if (/^\d+$/.test(s) && +s > 0 && !drop && !offPlan_(pr) && blank_(l.zamiana) && /^\s*\d+(?:[.,]\d+)?\s*$/.test(String(pr.kg === undefined || pr.kg === null ? '' : pr.kg)) && pkg > 0 && kg > 0) {
+      a.ppN++;
+      if (kg > pkg + PONAD_PLAN_KG) {
+        a.ppOver++; if (lift) a.ppLift = true;
+        if (kg - pkg > a.ppMax) { a.ppMax = kg - pkg; a.ppName = name; }
+      }
+    }
+    if (lift && rel > 0 && !drop) {                                          // taper: serie robocze rwania i podrzutu
+      const dd = dayStr_(AD[key(c, l.tydzien, l.jednostka)] || l.data);
+      if (TS[c]) (TI[c] = TI[c] || []).push({ grp, rel, day: dd, src: 'wykonane' });
+      if (!fail && rel >= 1 - REL_EPS && dd) ((L100[c] = L100[c] || { R: [], P: [] })[grp]).push(dd);
+    }
     if (lift && rel > 0) {
-      if (rel >= 0.85) { o.hiSets++; if (!fail) o.hiMade++; } else { o.loSets++; if (fail) o.loMiss++; }
+      if (rel >= 0.85 - REL_EPS) { o.hiSets++; if (!fail) o.hiMade++; } else { o.loSets++; if (fail) o.loMiss++; }
     }
     if (lift && !fail && kg > 0) {
       if (kg > o.maxKg[grp]) { o.maxKg[grp] = kg; o.maxName[grp] = name; }
       if (rel > o.maxRel[grp]) o.maxRel[grp] = rel;
     }
     const vb = n_(l.vbt_ms);
-    if (!fail && vb > 0 && rel >= 0.8 && rel <= 0.9) x.v80.push(vb);
+    if (!fail && vb > 0 && rel >= 0.8 - REL_EPS && rel <= 0.9 + REL_EPS) x.v80.push(vb);
     if (rpe >= 5) x.rpe.push(rpe);
     if (!fail && !lift && rpe >= 5 && kg > 0 && reps > 0) {                  // e1RM tylko poza rwaniem i podrzutem
       const e = e1rm_(kg, reps, rpe);
@@ -1371,8 +1472,20 @@ function computeSummary_(plan, log, ses, klienci, opts) {
   const rows = [], exRows = [], olyRows = [];
   const byClient = {};
   Object.values(B).forEach(a => (byClient[a.c] || (byClient[a.c] = [])).push(a));
+  // klienci ze startem w ciągu TAPER_DNI dni, ale bez żadnego tygodnia w danych, też dostają wiersz taperu
+  Object.keys(TS).forEach(c => { if (!byClient[c]) byClient[c] = []; });
   Object.keys(byClient).sort().forEach(c => {
     const weeks = byClient[c].filter(a => a.work || a.sess).sort((x, y) => x.w.localeCompare(y.w));
+    // taper: najpierw wykonanie, potem plan (ten sam dzień i strefa raz); wynik w wierszu bieżącego tygodnia
+    const taper = TS[c] ? taperCheck_((TI[c] || []).concat(taperPlanItems_(plan.filter(r => String(r.klient).toLowerCase() === c))), TS[c]).map(m => '🔴 ' + m.text) : [];
+    const last100 = (g, w) => { const e = iso_(new Date(day_(w).getTime() + 6 * 864e5)); return ((L100[c] || {})[g] || []).filter(d => d <= e).sort().pop() || ''; };
+    const olyTail = (w, o) => {
+      const now = w === wkNow, dLeft = now && ST[c] ? daysBetween_(today, ST[c]) : NaN;
+      return [o ? o.nlTry.R || '' : '', o ? o.nlTry.P || '' : '',
+        o && o.kN && KM[c] ? r1_(100 * (o.kSum / o.kN) / KM[c]) : '',
+        dLeft >= 0 ? dLeft : '', last100('R', w), last100('P', w)];
+    };
+    let nowRow = false;
     weeks.forEach((a, i) => {
       // monotonia z 7 dni tygodnia (dni bez treningu = 0)
       const dl = D[c] || {}, daily = [];
@@ -1430,6 +1543,8 @@ function computeSummary_(plan, log, ses, klienci, opts) {
         if (nl90jump) OS.push('O', 'NL > 90% +' + Math.round(100 * (o.nl90 / nl90prev - 1)) + '%');
         for (let k = 0; k < OS.length; k += 2) (OS[k] === 'R' ? R : O).push(OS[k + 1]);
       }
+      const ppPct = a.ppN ? 100 * a.ppOver / a.ppN : NaN;
+      if (a.ppOver && (a.ppLift || ppPct >= PONAD_PLAN_PCT)) O.push('ciężar ponad plan: ' + a.ppOver + ' z ' + a.ppN + ' serii' + (a.ppLift ? ' (także boje)' : ''));
       if (e1chg <= -8) R.push('e1RM −8% lub więcej');
       else if (e1chg <= -5 && prevE1 <= -5) R.push('e1RM −5% drugi tydzień');
       else if (e1chg <= -5) O.push('e1RM −5% lub więcej');
@@ -1451,16 +1566,18 @@ function computeSummary_(plan, log, ses, klienci, opts) {
         a.srpeN ? Math.round(a.srpe) : '', r2_(acwr), r2_(mono), isFinite(mono) ? Math.round(a.srpe * mono) : '', r1_(e1chg), r2_(rpeVs),
         r1_(feelAvg), a.feel.length ? Math.min(...a.feel) : '', isNaN(a.pain) ? '' : a.pain, status,
         (planLight ? ['tydzień lżejszy z planu'] : []).concat(R, O, L).join('; '),
-        a.optPlan ? Object.keys(a.optDone).length + '/' + a.optPlan : '', a.work ? a.near : '']);
+        a.optPlan ? Object.keys(a.optDone).length + '/' + a.optPlan : '', a.work ? a.near : '',
+        a.ppN ? r1_(ppPct) : '', a.ppOver ? '+' + String(Math.round(a.ppMax * 100) / 100).replace('.', ',') + ' kg (' + a.ppName + ')' : '']);
       if (a.olyAny) {
         const nlAll = GROUPS.reduce((s2, g) => s2 + o.nl[g], 0), spec = nlAll - o.nl.I, zAll = o.zones.reduce((s2, v) => s2 + v, 0);
         const mx = g => o.maxKg[g] ? o.maxKg[g] + ' kg' + (o.maxRel[g] ? ' · ' + Math.round(100 * o.maxRel[g]) + '%' : '') + ' (' + o.maxName[g] + ')' : '';
-        const sig = []; for (let k = 0; k < OS.length; k += 2) sig.push(OS[k + 1]);
+        const sig = a.w === wkNow ? taper.slice() : []; for (let k = 0; k < OS.length; k += 2) sig.push(OS[k + 1]);
+        if (a.w === wkNow) nowRow = true;
         olyRows.push([c, a.w, M[c] ? 'TAK' : ''].concat(GROUPS.map(g => o.nl[g] || ''), [nlAll, nlAll ? Math.round(100 * spec / nlAll) : ''],
           ['R', 'P', 'CR', 'CP', 'PS'].map(g => o.intN[g] ? r1_(100 * o.int[g] / o.intN[g]) : ''),
           o.zones.map(z => z || ''), [zAll ? Math.round(100 * (o.zones[3] + o.zones[4] + o.zones[5]) / zAll) : '', o.nl90 || '',
           mx('R'), mx('P'), o.hiSets ? Math.round(100 * o.hiMade / o.hiSets) : '', isFinite(missPct) ? r1_(missPct) : '',
-          isFinite(vbtChg) ? r2_(vbtChg) : '', sig.join('; ')]));
+          isFinite(vbtChg) ? r2_(vbtChg) : '', sig.join('; ')], olyTail(a.w, o)));
       }
       Object.keys(a.ex).sort().forEach(k => {
         const x = a.ex[k];
@@ -1470,6 +1587,13 @@ function computeSummary_(plan, log, ses, klienci, opts) {
           x.skip.length ? x.skip.length + '× ' + Object.keys(why).map(t => why[t] > 1 ? t + ' (' + why[t] + ')' : t).join(', ') : '']);
       });
     });
+    // start w ciągu TAPER_DNI dni, a w tym tygodniu jeszcze nic z bojów: osobny wiersz bieżącego tygodnia z taperem
+    if (TS[c] && !nowRow) {
+      const row = OLY_HEADERS.map(() => '');
+      row[0] = c; row[1] = wkNow; row[2] = M[c] ? 'TAK' : ''; row[OLY_HEADERS.indexOf('sygnaly')] = taper.join('; ');
+      olyTail(wkNow, null).forEach((v, k) => { row[OLY_HEADERS.length - 6 + k] = v; });
+      olyRows.push(row);
+    }
   });
   return { rows, exRows, olyRows };
 }
@@ -2381,6 +2505,8 @@ function importPlanFile_(f, dir) {
     importLog_(f.getName(), 'BŁĄD', 0, m.clients.join(', '), m.errors.slice(0, 10).join(' | '));
     return { ok: false, status: 'BŁĄD', msg: m.errors.slice(0, 10).join(' | ') };
   }
+  // taper przed startem (Klienci „start”): ostrzeżenie w Import, import idzie dalej
+  try { m.warnings = taperImport_(rows, tableOf_('Klienci'), today_()).concat(m.warnings); } catch (e) { Logger.log('taper: ' + e); }
   writePlanRows_(m.rows);
   f.moveTo(ok);
   const msg = m.removed.map(g => g.text).concat(m.notes, m.warnings.slice(0, 10)).join(' | ');
