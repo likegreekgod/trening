@@ -9,3 +9,7 @@
 
 - Polskie nazwy to aliasy, angielska nazwa z bazy zostaje główna (filmy Catalyst, dopasowanie starych planów, `CW_SCALONE`). Jedna polska nazwa = jedno ćwiczenie: test pilnuje, żeby żadna nazwa ani alias nie powtarzały się w całej bazie (także z free-exercise-db), więc nazwy pokrywające się z angielską albo z innym ćwiczeniem pominięte (np. „Butterfly”, „Spider Curl” to osobne wiersze).
 - Boje: Snatch = rwanie, Clean = zarzut, Jerk = wybicie, Clean & Jerk = podrzut; Power = siłowe, Hang = z zawisu, Block = z bloków, Riser = z podwyższenia, Power Position = pozycja mocy. Mikrowarianty (floating, stage, segment pull na podwyższeniu itp.) bez polskiej nazwy.
+
+## Przy okazji: publikacja na GitHub Pages
+
+- Dwie publikacje z rzędu (po #131 i #132) padły na „No artifacts named github-pages”: paczka wysłana, a krok publikacji tuż po niej jej nie widział (ponowienie przechodziło). `pages.yml` ma teraz dwa zadania, `build` i `deploy` (jak wzorzec GitHuba), więc publikacja zaczyna się dopiero po zamknięciu zadania z paczką.
