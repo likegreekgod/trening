@@ -69,7 +69,7 @@ function route(){
   document.querySelectorAll('#nav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === sec ? 'page' : 'false'));
   $('#set').setAttribute('aria-current', v === 'ustawienia' ? 'page' : 'false');
   $('#prow').setAttribute('aria-current', v === 'prowadzone' ? 'page' : 'false');
-  document.querySelectorAll('#bnav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === (['wiecej', 'bloki', 'ustawienia', 'prowadzone'].includes(v) ? 'wiecej' : sec) ? 'page' : 'false'));
+  document.querySelectorAll('#bnav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === (['wiecej', 'bloki', 'ustawienia', 'prowadzone', 'cwiczenia'].includes(v) ? 'wiecej' : sec) ? 'page' : 'false'));
   const nv = PUL.videos.filter(x => !x.kom).length || '';
   $('#n-filmy').textContent = nv; $('#n-filmy-m').textContent = nv;
   $('#n-bloki').textContent = PUL.blocks.length || '';
@@ -85,6 +85,7 @@ function route(){
   if (v === 'klienci') return renderKlienci(decodeURIComponent(h[1] || ''));
   if (v === 'wiecej') return renderWiecej();
   if (v === 'prowadzone') return renderProwadzone(decodeURIComponent(h[1] || ''));
+  if (v === 'cwiczenia') return renderCwiczenia();
   renderDzis();
 }
 /** lista klientów w menu po lewej (komputer): kropka = najpilniejszy sygnał, alfabetycznie */
@@ -224,6 +225,7 @@ function renderWiecej(){
   $('#main').innerHTML = head('Panel trenera', 'Więcej') + '<div class="pg"><div class="card mo">' +
     '<a href="#bloki">' + ic('bloki') + 'Bloki do zamknięcia<em>' + (PUL.blocks.length || '') + '</em></a>' +
     '<a href="#prowadzone">' + ic('prow') + 'Prowadzone treningi</a>' +
+    '<a href="#cwiczenia">' + ic('cwiczenia') + 'Ćwiczenia bez filmu</a>' +
     '<a href="#ustawienia">' + ic('set') + 'Ustawienia</a>' +
     '<a href="./">' + ic('mine') + 'Mój trening ›</a>' +
     '<button type="button" id="recalc-w">' + $('#recalc-m svg').outerHTML + 'Przelicz dane teraz<small>' + esc($('#at').textContent) + '</small></button>' +
@@ -531,6 +533,69 @@ async function renderProwadzone(mies){
     a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.map(l => l.map(q).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     a.download = 'prowadzone-' + r.mies + '.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   };
+}
+
+/* ---------- Ćwiczenia (punkt 7 przeglądu v80): ćwiczenia z planów bez filmu „Jak wykonać”, link trenera, martwe linki (apps-script/Instruktaz.gs) ---------- */
+let CW = null, CWD = {}, CWM = { busy: '', ok: {}, err: {}, chk: false, chkErr: '' }, CWQ = '';   // lista, szkice linków, stan zapisu; tylko w pamięci strony
+const cwOkUrl = u => /^https?:\/\/[^\s"<>]+$/i.test(u) && u.length <= 500;
+async function renderCwiczenia(){
+  if (!CW) { $('#main').innerHTML = head('Panel trenera', 'Ćwiczenia') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
+    try { CW = await guard(api('trCwiczenia')); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ćwiczenia') + errBox(e); return; }
+    if (!location.hash.startsWith('#cwiczenia')) return; }
+  cwDraw();
+}
+function cwRow(x, k, dead){
+  const d = CWD[k] !== undefined ? CWD[k] : '', bad = d.trim() && !cwOkUrl(d.trim()), busy = CWM.busy === k;
+  const meta = dead ? (dead.why === 'brak' ? 'Film usunięty albo zły adres' : 'Film prywatny albo bez dostępu') + (x.n ? ' · ' + x.n + ' ' + plN(x.n, 'wiersz', 'wiersze', 'wierszy') + ' planu' : '')
+    : x.clients + ' ' + plN(x.clients, 'klient', 'klientów', 'klientów') + ' · ' + x.n + ' ' + plN(x.n, 'wiersz', 'wiersze', 'wierszy') + ' planu' + (x.last ? ' · ostatnio ' + dowDm(x.last) : '');
+  return '<li class="cwr" data-cwk="' + esc(k) + '"><div class="cwn"><b>' + esc(x.name) + '</b>' + (x.inBase === false ? '<span class="pill">nowe w bazie</span>' : '') +
+    '<small>' + esc(meta) + (x.as && x.as.length ? ' · w planie: ' + esc(x.as.join(', ')) : '') + '</small>' +
+    (dead ? '<a class="lnk" href="' + esc(x.url) + '" target="_blank" rel="noopener">' + esc(x.url) + '</a>' : '') + '</div>' +
+    (x.done ? '' : '<div class="cwf"><input type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://youtu.be/…" aria-label="Link do filmu: ' + esc(x.name) + '" data-cwu="' + esc(k) + '" value="' + esc(d) + '"' + (bad ? ' aria-invalid="true"' : '') + '>' +
+    '<button class="b" type="button" data-cws="' + esc(k) + '"' + (busy || !d.trim() || bad ? ' disabled' : '') + '>' + (busy ? 'Zapisuję…' : 'Zapisz') + '</button></div>') +
+    (CWM.ok[k] ? '<p class="saved" role="status">' + esc(CWM.ok[k]) + '</p>' : '') + (CWM.err[k] ? '<p class="err" role="alert">' + esc(CWM.err[k]) + '</p>' : '') +
+    '<p class="err" data-cwbad="' + esc(k) + '"' + (bad ? '' : ' hidden') + '>Link musi zaczynać się od https://</p></li>';
+}
+function cwDraw(){
+  const r = CW, q = CWQ.trim().toLowerCase(), fit = x => !q || (x.name + ' ' + (x.as || []).join(' ')).toLowerCase().includes(q);
+  const miss = r.missing.filter(fit), dead = r.dead.filter(fit), nm = r.missing.filter(x => !x.done).length, nd = r.dead.filter(x => !x.done).length;
+  const at = r.at ? dowDm(r.at.slice(0, 10)) + ', ' + new Date(r.at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '';
+  const chk = '<div class="fr"><div><b>Kontrola linków</b><small>' + (at ? 'Sprawdzone ' + esc(at) + ', ' + r.checked + ' ' + plN(r.checked, 'link', 'linki', 'linków') + '.' : 'Linki nie były jeszcze sprawdzane.') +
+    (r.trigger === false ? ' Cotygodniowe sprawdzanie wyłączone.' : ' Samo sprawdza co poniedziałek ok. 4:00.') + '</small></div>' +
+    '<button class="b" type="button" id="cw-chk"' + (CWM.chk ? ' disabled' : '') + '>' + (CWM.chk ? 'Sprawdzam… (do 2 min)' : 'Sprawdź teraz') + '</button></div>' +
+    (CWM.chkErr ? '<p class="err" role="alert">' + esc(CWM.chkErr) + '</p>' : '');
+  $('#main').innerHTML = head('Filmy „Jak wykonać” do ćwiczeń z planów', 'Ćwiczenia') + '<div class="pg"><div class="stack" style="max-width:820px">' +
+    '<div class="card"><div class="pw-f"><label>Szukaj<input type="search" id="cw-q" value="' + esc(CWQ) + '" placeholder="nazwa ćwiczenia" autocomplete="off"></label></div>' +
+    '<p id="cw-sum" style="margin:0 0 4px;font-size:15px"><b>' + nm + ' ' + plN(nm, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń') + ' bez filmu</b> · ' + nd + ' ' + plN(nd, 'martwy link', 'martwe linki', 'martwych linków') + ' · ' + r.links + ' z filmem w bazie</p>' + chk + '</div>' +
+    (r.dead.length ? '<div class="card" id="cw-dead"><h2>Martwe linki</h2><ul class="cwl">' + (dead.length ? dead.map(x => cwRow(x, 'd:' + x.name, x)).join('') : '<li class="legend">Nic nie pasuje do wyszukiwania.</li>') + '</ul>' +
+      '<p class="legend">Klient widzi przy tych ćwiczeniach link, który nie działa. Wklej nowy albo popraw adres w zakładce Ćwiczenia w arkuszu.</p></div>' : '') +
+    '<div class="card" id="cw-miss"><h2>Bez filmu</h2>' + (r.missing.length ? '<ul class="cwl">' + (miss.length ? miss.map(x => cwRow(x, 'm:' + x.name)).join('') : '<li class="legend">Nic nie pasuje do wyszukiwania.</li>') + '</ul>' +
+      '<p class="legend">Ćwiczenia z planów aktywnych klientów, przy których klient nie ma Twojego filmu (części kompleksu osobno), od najczęściej używanych. Link trafia do zakładki Ćwiczenia (kolumna instruktaz); klient zobaczy go przy następnym otwarciu planu. Do czasu filmu aplikacja pokazuje zdjęcia i opis z bazy, jeśli są.</p>'
+      : '<div class="es"><b>Wszystkie ćwiczenia z planów mają film</b>Nowe nazwy pojawią się tu po wczytaniu planu.</div>') + '</div></div></div>';
+  const qi = $('#cw-q'); qi.oninput = e => { CWQ = e.target.value; const p = e.target.selectionStart; cwDraw(); const n = $('#cw-q'); n.focus(); try { n.setSelectionRange(p, p); } catch (er) {} };
+  document.querySelectorAll('[data-cwu]').forEach(i => i.oninput = () => {
+    const k = i.dataset.cwu, v = i.value.trim(); CWD[k] = i.value; delete CWM.ok[k]; delete CWM.err[k];
+    const b = document.querySelector('[data-cws="' + CSS.escape(k) + '"]'); if (b) b.disabled = !v || !cwOkUrl(v);
+    i.setAttribute('aria-invalid', v && !cwOkUrl(v) ? 'true' : 'false'); });
+  // zły link: komunikat po wyjściu z pola (bez przerysowania listy, żeby nie zgubić kliknięcia „Zapisz”)
+  document.querySelectorAll('[data-cwu]').forEach(i => i.onchange = () => { const v = i.value.trim(), e = document.querySelector('[data-cwbad="' + CSS.escape(i.dataset.cwu) + '"]'); if (e) e.hidden = !v || cwOkUrl(v); });
+  document.querySelectorAll('[data-cws]').forEach(b => b.onclick = () => cwSave(b.dataset.cws));
+  $('#cw-chk').onclick = async () => {
+    CWM.chk = true; CWM.chkErr = ''; cwDraw();
+    try { CW = await guard(api('trCwSprawdz')); } catch (e) { if (e.auth) return; CWM.chkErr = e.message; }
+    CWM.chk = false; if (location.hash.startsWith('#cwiczenia')) cwDraw();
+  };
+}
+async function cwSave(k){
+  const name = k.slice(2), url = String(CWD[k] || '').trim();
+  if (!cwOkUrl(url) || CWM.busy) return;
+  CWM.busy = k; cwDraw();
+  try { const r = await guard(api('trCwFilm', name, url));
+    const keep = k[0] === 'd' ? CW.dead.find(x => x.name === name) : CW.missing.find(x => x.name === name);   // zapisane zostaje na liście do odświeżenia
+    CW = r; if (keep) { const L = k[0] === 'd' ? CW.dead : CW.missing; if (!L.some(x => x.name === name)) L.unshift(Object.assign({}, keep, { done: true })); }
+    CWM.ok[k] = '✓ Zapisano. Klient zobaczy film przy następnym otwarciu planu.'; delete CWD[k];
+  } catch (e) { if (e.auth) { CWM.busy = ''; return; } CWM.err[k] = e.message; }
+  CWM.busy = ''; if (location.hash.startsWith('#cwiczenia')) cwDraw();
 }
 
 /* ---------- ustawienia: klucz Claude API (trAI, trUstawAI); panel widzi tylko końcówkę klucza ---------- */

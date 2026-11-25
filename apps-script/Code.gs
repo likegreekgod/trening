@@ -1242,7 +1242,8 @@ function instalujWyzwalacze() {
   mailWyzwalacz_(mailGodz_());
   komWyzwalacz_();
   kopiaWyzwalacz_();
-  Logger.log('OK: podsumowanie codziennie ~5:00, plany z „' + ROOT_FOLDER_NAME + '/_plany” co 15 min, poranny mail ~' + mailGodz_() + ':00, mail po komentarzu ~' + MAIL_KOM_GODZ + ':00, kopia arkusza w niedzielę ~3:00.');
+  linkiWyzwalacz_();
+  Logger.log('OK: podsumowanie codziennie ~5:00, plany z „' + ROOT_FOLDER_NAME + '/_plany” co 15 min, poranny mail ~' + mailGodz_() + ':00, mail po komentarzu ~' + MAIL_KOM_GODZ + ':00, kopia arkusza w niedzielę ~3:00, linki do filmów w poniedziałek ~4:00.');
 }
 
 /** e: zdarzenie wyzwalacza czasowego (wtedy idzie też alert mailowy); z menu bez argumentu. */
