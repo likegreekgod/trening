@@ -3463,3 +3463,16 @@ test('Prowadź bez planu na dziś: „Jak ostatnio”, szablon z kg z historii, 
   assert.equal(await p.$('#np'), null);
   await ctx.close();
 });
+
+test('„Ostatnio otwarta”: getData wysyła stały losowy znacznik telefonu; link z maila po komentarzu (&t=trener) otwiera zakładkę Trener', async () => {
+  const calls = []; const { ctx, p } = await page(calls, false, { data: DATA });
+  await p.goto(base + '?k=kabc&t=trener'); await p.waitForSelector('#nav [data-tab="trener"][aria-current="page"]', { state: 'attached' });
+  const g = calls.filter(c => c.fn === 'getData');
+  assert.ok(g.length >= 1); assert.match(g[0].args[0].dev, /^[0-9a-f]{12}$/);
+  const dev = await p.evaluate(() => localStorage.getItem('dev'));
+  assert.equal(g[0].args[0].dev, dev);
+  await p.reload(); await p.waitForTimeout(300);
+  assert.equal(calls.filter(c => c.fn === 'getData').pop().args[0].dev, dev);       // ten sam po ponownym otwarciu
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});

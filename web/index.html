@@ -1063,7 +1063,12 @@ function applyCfg(c){
   SWAP = c.swap === true ? 'TRENER' : c.swap === 'TRENER' || c.swap === 'DOWOLNA' ? c.swap : '';
 }
 let DATA = null, PLAN = [], LOGS = {}, SESS = {}, cur = {week: 1, day: null};
-let TAB = 'trening';   // ekran z dolnego menu: trening | dysp | plan | postep | trener
+let TAB = !LIVE && new URLSearchParams(location.search).get('t') === 'trener' ? 'trener' : 'trening';   // ekran z dolnego menu: trening | dysp | plan | postep | trener (&t=trener z maila po komentarzu)
+/** losowy znacznik telefonu do „ostatnio otwarta” w panelu trenera (bez danych o urządzeniu); trener w trybie „Prowadź” go nie wysyła */
+const DEV = (() => { try { let d = localStorage.getItem('dev');
+  if (!/^[0-9a-f]{8,16}$/.test(d || '')) { d = Array.from(crypto.getRandomValues(new Uint8Array(6)), b => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem('dev', d); }
+  return d; } catch (e) { return ''; } })();
+const dataArgs = () => LIVE || !DEV ? [] : [{ dev: DEV }];
 let PT = 'tyd', PEX = '', PWK = null, PBL = null;   // zakładka, ćwiczenie, tydzień (poniedziałek; null = bieżący) i blok (null = ostatni) na ekranie Postęp
 let lastMove = null;   // ostatnie przesunięcie jednostki → propozycja „przesuń też kolejne”
 const $ = s => document.querySelector(s);
@@ -1550,7 +1555,7 @@ function load(){
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(DK) || 'null'); } catch (e) {}
   if (cached) { useData(cached); pickDefault(); render(); setSync('offline – ostatnie dane'); welMaybe(); }
-  call('getData').then(d => {
+  call('getData', ...dataArgs()).then(d => {
     try { localStorage.setItem(DK, JSON.stringify(d)); } catch (e) {}
     const keep = cached ? { w: cur.week, d: cur.day } : null;
     useData(d);
@@ -1567,7 +1572,7 @@ function load(){
 }
 /** świeże dane z serwera bez zmiany ekranu i bieżącej jednostki (najpierw wysyła kolejkę) */
 function refreshData(){
-  return flush().then(() => call('getData')).then(d => {
+  return flush().then(() => call('getData', ...dataArgs())).then(d => {
     try { localStorage.setItem(DK, JSON.stringify(d)); } catch (e) {}
     const w = cur.week, dd = cur.day;
     useData(d); cur.week = w; cur.day = dd; render(); setSync('gotowe');

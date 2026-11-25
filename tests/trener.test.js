@@ -75,10 +75,10 @@ function klient() {
   };
 }
 
-const KL1 = { scale: 'RPE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false };
+const KL1 = { scale: 'RPE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false, mailKom: false, seen: '', devs: 0 };
 const KLIENCI = [   // panel → Klienci (trKlienci): ustawienia z zakładki Klienci, dane syntetyczne
-  Object.assign({}, KL1, { id: 'ania', name: 'Ania', on: true, mode: 'PRO', swap: 'DOWOLNA', pain: true, edit: true, extra: 2, link: 'https://example.com/trening/?k=kaaaaaaaaaa1' }),
-  Object.assign({}, KL1, { id: 'bartek', name: 'Bartek', on: true, mode: 'PROSTY', swap: 'TRENER', extra: 1, link: 'https://example.com/trening/?k=kbbbbbbbbbb2' }),
+  Object.assign({}, KL1, { id: 'ania', name: 'Ania', on: true, mode: 'PRO', swap: 'DOWOLNA', pain: true, edit: true, extra: 2, seen: new Date(Date.now() - 2 * 3600e3).toISOString(), devs: 3, link: 'https://example.com/trening/?k=kaaaaaaaaaa1' }),
+  Object.assign({}, KL1, { id: 'bartek', name: 'Bartek', on: true, mode: 'PROSTY', swap: 'TRENER', extra: 1, seen: new Date(Date.now() - 26 * 3600e3).toISOString(), devs: 1, link: 'https://example.com/trening/?k=kbbbbbbbbbb2' }),
   Object.assign({}, KL1, { id: 'ewa', name: 'Ewa', on: false, mode: 'PRO', swap: 'NIE', link: 'https://example.com/trening/?k=keeeeeeeeee3' })
 ];
 const BLOK_SZKIC = {   // syntetyczny szkic AI zamknięcia bloku
@@ -873,9 +873,15 @@ test('panel: poranny mail (e-mail i przełącznik klienta, mail próbny, godzina
     assert.match(await p.textContent('#kl-form .mrow'), /Wysłano do Ciebie: Trening A/);
     if (vp) { assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390)); await shot(p, 'trener-mail-klient-telefon-ciemny.png'); }
     else await shot(p, 'trener-mail-klient-jasny.png');
-    // lista: „mail rano” w skrócie ustawień
+    // mail po komentarzu: przełącznik obok porannego, „ostatnio otwarta” w karcie linku
+    assert.match(await p.textContent('#kl-seen'), /otwarta wczoraj · 1 telefon/);
+    await p.click('[data-sw="mailKom"]'); await p.click('#kl-save'); await p.waitForFunction(() => document.querySelector('#kl-save') && document.querySelector('#kl-save').disabled && document.querySelector('#kl-save').textContent === 'Zapisz zmiany');
+    assert.equal(calls.filter(c => c.fn === 'trKlientUstaw').pop().args[1].mailKom, true);
+    // lista: „mail rano” i „mail po komentarzu” w skrócie ustawień, „otwarta …” pod imieniem, ⚠ przy 3 telefonach
     await p.goto(base + 'trener.html#klienci'); await p.waitForSelector('table.kl');
-    assert.match(await p.textContent('table.kl'), /Bartek.*mail rano/s);
+    assert.match(await p.textContent('table.kl'), /Bartek.*mail rano · mail po komentarzu/s);
+    assert.match(await p.textContent('table.kl'), /Ania.*otwarta 2 h temu · ⚠ 3 telefony/s);
+    assert.equal(await p.locator('table.kl .seen b.warn').count(), 1, 'ostrzeżenie tylko u Ani');
     // Ustawienia: godzina i wynik dzisiejszej wysyłki
     await p.goto(base + 'trener.html#ustawienia'); await p.waitForSelector('#mail-card');
     assert.match(await p.textContent('#mail-card'), /wysłano 2 maile \(Ania, Bartek\)/);

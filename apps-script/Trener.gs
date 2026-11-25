@@ -1002,9 +1002,11 @@ function trBlokWczytaj(id, rows) {
 
 /* ---------- klienci: lista, ustawienia (flagi z zakładki Klienci), nowy klient, nowy link ----------
  * Kolumny Klienci po pozycji (jak clientOf_): A klucz, B klient_id, C imie, D aktywny, E link, F bol, G tryb, H dod_serie, I masters,
- * J zamiana, K skala, L sufit_oly, M wlasne, N edycja, O email, P mail_rano (TAK = poranny mail, Mail.gs). Usuwania nie ma: „nieaktywny” zostawia historię.
+ * J zamiana, K skala, L sufit_oly, M wlasne, N edycja, O email, P mail_rano (TAK = poranny mail, Mail.gs); dalej KL_EXTRA (Q–V).
+ * Usuwania nie ma: „nieaktywny” zostawia historię.
  */
 const KL_HEAD = ['klucz', 'klient_id', 'imie', 'aktywny', 'link', 'bol', 'tryb', 'dod_serie', 'masters', 'zamiana', 'skala', 'sufit_oly', 'wlasne', 'edycja', 'email', 'mail_rano'];
+const KL_KOM = 19;                     // T mail_kom: panel zapisuje A–P i T; U „otwarta” i V „urzadzenia” pisze tylko seen_ (Code.gs)
 const KL_SUFIT_MAX = 20;               // sufit w bojach: najwyżej 20% maksa ponad plan
 
 /** Czysta: wiersz Klienci → ustawienia dla panelu; base = adres aplikacji (link liczony z klucza, bo kolumna E bywa nieaktualna). */
@@ -1012,10 +1014,15 @@ function trKlientOf_(r, base) {
   const c = clientOf_(r), up = i => String(r[i] === undefined || r[i] === null ? '' : r[i]).trim().toUpperCase();
   return { id: c.id, name: c.name, on: up(3) !== 'NIE', mode: c.simple ? 'PROSTY' : 'PRO', scale: c.scale, swap: c.swap || 'NIE',
     pain: c.pain, masters: up(8) === 'TAK', extra: c.extra, oly: Math.round(c.olyCeil * 1000) / 10, own: c.own, edit: c.edit,
-    link: base && c.key ? base + '?k=' + c.key : String(r[4] || '').trim(), email: String(r[14] === undefined || r[14] === null ? '' : r[14]).trim(), mail: up(15) === 'TAK' };
+    link: base && c.key ? base + '?k=' + c.key : String(r[4] || '').trim(), email: String(r[14] === undefined || r[14] === null ? '' : r[14]).trim(), mail: up(15) === 'TAK',
+    mailKom: up(KL_KOM) === 'TAK', seen: r[20] instanceof Date ? r[20].toISOString() : String(r[20] === undefined || r[20] === null ? '' : r[20]).trim(), devs: devsOf_(r[21]) };
+}
+/** Czysta: kolumna V „urzadzenia” → liczba telefonów z ostatnich SEEN_DNI dni (lista jest przycinana przy zapisie) */
+function devsOf_(v) {
+  try { const a = JSON.parse(String(v || '[]')); return Array.isArray(a) ? a.length : 0; } catch (e) { return 0; }
 }
 
-/** Czysta: ustawienia z panelu → {vals: {indeks kolumny: wartość}} (D, F–P) albo {error}. */
+/** Czysta: ustawienia z panelu → {vals: {indeks kolumny: wartość}} (D, F–P, T) albo {error}. */
 function trKlientVals_(f) {
   f = f || {};
   const extra = Number(f.extra), oly = Number(f.oly), swap = String(f.swap || ''), mode = String(f.mode || ''), scale = String(f.scale || '');
@@ -1027,33 +1034,37 @@ function trKlientVals_(f) {
   const email = String(f.email || '').trim();
   if (email && (!mailOk_(email) || email.length > 200)) return { error: 'E-mail klienta: to nie wygląda na adres e-mail.' };
   if (f.mail && !email) return { error: 'Poranny mail: wpisz najpierw e-mail klienta.' };
+  if (f.mailKom && !email) return { error: 'Mail po komentarzu: wpisz najpierw e-mail klienta.' };
   return { vals: { 3: f.on === false ? 'NIE' : 'TAK', 5: f.pain ? 'TAK' : '', 6: mode, 7: extra, 8: f.masters ? 'TAK' : '', 9: swap, 10: scale,
     11: Math.round(oly * 10) / 1000, 12: f.own === false ? 'NIE' : 'TAK', 13: f.edit ? 'TAK' : '',
-    14: email, 15: f.mail ? 'TAK' : '' } };
+    14: email, 15: f.mail ? 'TAK' : '', [KL_KOM]: f.mailKom ? 'TAK' : '' } };
 }
 
 /** Domyślne ustawienia nowego klienta (jak pusty wiersz w arkuszu). */
-const KL_DOMYSLNE = { on: true, mode: 'PRO', scale: 'RPE', swap: 'NIE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false };
+const KL_DOMYSLNE = { on: true, mode: 'PRO', scale: 'RPE', swap: 'NIE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false, mailKom: false };
 
 /**
- * Kolumny Klienci za P, wpisywane przez trenera w arkuszu (panel ich nie zapisuje): Q max_rwanie, R max_podrzut [kg] (K-value
+ * Kolumny Klienci za P. Q–S wpisuje trener w arkuszu (panel ich nie zapisuje): Q max_rwanie, R max_podrzut [kg] (K-value
  * w Podsumowanie_OLY), S start (RRRR-MM-DD, tekst; przy zawodach dwudniowych pierwszy dzień; kontrola taperu). 25.11.2026.
+ * T mail_kom (TAK = wieczorny mail po komentarzu, zapisuje panel), U otwarta (ostatnie otwarcie aplikacji), V urzadzenia (JSON, seen_).
  */
-const KL_EXTRA = ['max_rwanie', 'max_podrzut', 'start'];
+const KL_EXTRA = ['max_rwanie', 'max_podrzut', 'start', 'mail_kom', 'otwarta', 'urzadzenia'];
 
-/** Arkusz Klienci; brakujące nagłówki (puste komórki A1–S1) dopisuje, istniejących nie zmienia. Kolumna „start” jako tekst. */
+/** Arkusz Klienci; brakujące nagłówki (puste komórki A1–V1) dopisuje, istniejących nie zmienia. Kolumna „start” jako tekst. */
 function klSheet_() {
   const sh = sheet_('Klienci', KL_HEAD.slice(0, 9)), all = KL_HEAD.concat(KL_EXTRA);
   const h = sh.getRange(1, 1, 1, all.length).getValues()[0];
   if (h.some((x, i) => String(x).trim() === '')) {
-    if (String(h[all.length - 1]).trim() === '') sh.getRange(1, all.length, Math.max(sh.getMaxRows(), 2), 1).setNumberFormat('@');
+    const si = all.indexOf('start');
+    if (String(h[si]).trim() === '') sh.getRange(1, si + 1, Math.max(sh.getMaxRows(), 2), 1).setNumberFormat('@');
     sh.getRange(1, 1, 1, all.length).setValues(plainRows_([h.map((x, i) => String(x).trim() === '' ? all[i] : x)]));
   }
   return sh;
 }
 function klRows_(sh) {
   const n = sh.getLastRow() - 1;
-  return n > 0 ? sh.getRange(2, 1, n, KL_HEAD.length).getValues() : [];
+  const w = KL_HEAD.length + KL_EXTRA.length, mc = sh.getMaxColumns ? sh.getMaxColumns() : w;
+  return n > 0 ? sh.getRange(2, 1, n, Math.min(w, mc)).getValues() : [];
 }
 
 /** Lista wszystkich klientów (też nieaktywnych) z ustawieniami i linkiem. */
@@ -1077,7 +1088,9 @@ function trKlientUstaw(id, f) {
     Object.keys(v.vals).forEach(k => { r[k] = v.vals[k]; });
     if (base) r[4] = base + '?k=' + String(r[0]).trim();
     sh.getRange(i + 2, 15).setNumberFormat('@');                  // e-mail jako tekst
-    sh.getRange(i + 2, 4, 1, KL_HEAD.length - 3).setValues(plainRows_([r.slice(3)]));
+    sh.getRange(i + 2, 4, 1, KL_HEAD.length - 3).setValues(plainRows_([r.slice(3, KL_HEAD.length)]));
+    sh.getRange(i + 2, KL_KOM + 1).setValues(plainRows_([[v.vals[KL_KOM]]]));
+    if (v.vals[KL_KOM] === 'TAK' && !ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'wieczornyMail')) komWyzwalacz_();
     return trKlientOf_(r, base);
   } finally { lock.releaseLock(); }
 }
@@ -1094,7 +1107,7 @@ function trKlientNowy(f) {
     const sh = klSheet_(), ids = klRows_(sh).map(r => r[1]);
     const res = buildClientRow_({ imie: f.imie, id: f.id }, ids, newKey_());
     if (res.error) throw new Error(res.error);
-    const r = res.row.slice(); while (r.length < KL_HEAD.length) r.push('');
+    const r = res.row.slice(); while (r.length <= KL_KOM) r.push('');
     Object.keys(v.vals).forEach(k => { r[k] = v.vals[k]; });
     const base = linkBase_();
     if (base) r[4] = base + '?k=' + r[0];

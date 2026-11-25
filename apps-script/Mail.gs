@@ -159,3 +159,105 @@ function porannyMail() {
   props.setProperty('MAIL_DZIEN', JSON.stringify({ day: today, at: at, names: sent }));
   Logger.log('Poranny mail: ' + sent.length + ' (' + sent.join(', ') + ')');
 }
+
+/* ---------- wieczorny mail „Trener skomentował Twój trening” (punkt 12 przeglądu v80, 23.11.2026) ----------
+ * Klient z Klienci T „mail_kom” = TAK i adresem w O dostaje ok. 20:00 (MAIL_KOM_GODZ) jeden mail, gdy od poprzedniego wieczoru
+ * pojawił się nowy komentarz trenera do jego treningu: Log komentarz_trenera / komentarz_dysk albo Sesje komentarz_trenera,
+ * w jednostkach z ostatnich MAIL_KOM_DNI dni. „Nowy” = jego skrót nie jest we właściwości MKS_<klient> (skróty komentarzy z okna,
+ * zapisywane po każdym wieczorze). Pierwszy wieczór po włączeniu: za nowe liczą się tylko komentarze do treningów z wczoraj i dziś.
+ * W mailu: trening, dzień i pierwsze zdanie komentarza; przycisk otwiera zakładkę Trener (link z kluczem, tylko do klienta).
+ * Czyste funkcje (z testami): komHash_, komPierwsze_, komNowe_, komMail_.
+ */
+const MAIL_KOM_GODZ = 20;
+const MAIL_KOM_DNI = 14;
+
+/** Czysta: krótki skrót tekstu (djb2, base36) do zapamiętania „ten komentarz już był w mailu”. */
+function komHash_(s) {
+  let h = 5381; s = String(s); for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+/** Czysta: pierwsze zdanie komentarza (bez znaczników czasu „1:05”), najwyżej 160 znaków. */
+function komPierwsze_(t) {
+  const s = String(t || '').replace(/^\s*\d{1,2}:\d{2}\s*/gm, '').replace(/\s+/g, ' ').trim();
+  const m = /^(.+?[.!?])(\s|$)/.exec(s), f = m ? m[1] : s;
+  return f.length > 160 ? f.slice(0, 157).replace(/\s+\S*$/, '') + '…' : f;
+}
+
+/**
+ * Czysta: klienci (wiersze A…V), Log, Sesje, Plan (obiekty), prev = {klient: [skróty] | undefined}, today, dayOf
+ * → {send: [{c, key, email, units: [{title, day, items: [tekst]}]}], sig: {klient: [skróty]}}
+ */
+function komNowe_(klienci, log, ses, plan, prev, today, dayOf) {
+  dayOf = dayOf || (v => String(v === undefined || v === null ? '' : v).slice(0, 10));
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase(), txt = v => String(v === undefined || v === null ? '' : v).trim();
+  const from = new Date(Date.parse(today + 'T12:00:00Z') - MAIL_KOM_DNI * 864e5).toISOString().slice(0, 10);
+  const yest = new Date(Date.parse(today + 'T12:00:00Z') - 864e5).toISOString().slice(0, 10);
+  const T = {}; (plan || []).forEach(r => { const k = [lc(r.klient), r.tydzien, txt(r.jednostka)].join('|'); if (!T[k] && txt(r.tytul)) T[k] = txt(r.tytul); });
+  const D = {}; (ses || []).forEach(s => { const k = [lc(s.klient), s.tydzien, txt(s.jednostka)].join('|'), d = s.start ? dayOf(s.start) : dayOf(s.data); if (/^\d{4}-\d{2}-\d{2}$/.test(d)) D[k] = d; });
+  const C = {};   // klient → [{u, day, kind, text}]
+  const put = (id, u, day, kind, text) => { if (!text || !(day >= from && day <= today)) return; (C[id] = C[id] || []).push({ u, day, h: komHash_(kind + '|' + u + '|' + text), text }); };
+  (log || []).forEach(l => { const id = lc(l.klient), u = [id, l.tydzien, txt(l.jednostka)].join('|'), day = D[u] || dayOf(l.data) || dayOf(l.zapisano);
+    put(id, u, day, 'L', txt(l.komentarz_trenera)); put(id, u, day, 'D', txt(l.komentarz_dysk)); });
+  (ses || []).forEach(s => { const id = lc(s.klient), u = [id, s.tydzien, txt(s.jednostka)].join('|'); put(id, u, D[u] || dayOf(s.data), 'S', txt(s.komentarz_trenera)); });
+  const send = [], sig = {};
+  (klienci || []).forEach(r => {
+    const c = clientOf_(r), cell = i => String(r[i] === undefined || r[i] === null ? '' : r[i]).trim(), email = cell(14);
+    if (!c.id || !c.key || cell(3).toUpperCase() === 'NIE' || cell(19).toUpperCase() !== 'TAK' || !mailOk_(email)) return;
+    const all = C[c.id] || [], seen = prev && prev[c.id], fresh = {}, U = {}, order = [];
+    sig[c.id] = [...new Set(all.map(x => x.h))];
+    all.forEach(x => {
+      if (seen ? seen.indexOf(x.h) >= 0 : x.day < yest) return;
+      if (fresh[x.h]) return; fresh[x.h] = 1;
+      if (!U[x.u]) { U[x.u] = { title: T[x.u] || x.u.split('|')[2], day: x.day, items: [] }; order.push(x.u); }
+      const f = komPierwsze_(x.text); if (U[x.u].items.indexOf(f) < 0) U[x.u].items.push(f);
+    });
+    if (order.length) send.push({ c: c, key: c.key, email: email, units: order.map(k => U[k]).sort((a, b) => b.day.localeCompare(a.day)) });
+  });
+  return { send: send, sig: sig };
+}
+
+/** Czysta: treść maila (HTML + tekst). o = {url} */
+function komMail_(c, units, o) {
+  o = o || {};
+  const C = MAIL_C, e = mailEsc_, n = units.reduce((a, u) => a + u.items.length, 0);
+  const unitHtml = u => '<div style="font:700 13px Arial,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:' + C.muted + '">' + e(plDay_(u.day)) + '</div>' +
+    '<div style="font:800 20px/1.2 Arial,sans-serif;color:' + C.ink + ';margin-top:2px">' + e(u.title) + '</div>' +
+    u.items.map(t => '<div style="margin:10px 0 0;padding:10px 12px;border-left:4px solid ' + C.acc + ';background:' + C.bg + ';border-radius:6px;font:15px/1.4 Arial,sans-serif;color:' + C.ink + '">' + e(t) + '</div>').join('');
+  const html = '<div style="background:' + C.bg + ';padding:16px 10px">' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;border-collapse:collapse">' +
+    '<tr><td style="background:' + C.brand + ';border-radius:12px 12px 0 0;padding:14px 18px;font:800 15px Arial,sans-serif;letter-spacing:.14em;color:#f3f1e8">SIŁA <span style="color:' + C.acc + '">Z</span> RUCHU</td></tr>' +
+    '<tr><td style="background:' + C.card + ';border-radius:0 0 12px 12px;padding:18px 18px 20px">' +
+    '<div style="font:15px Arial,sans-serif;color:' + C.ink + ';margin-bottom:14px">Cześć ' + e(c.name) + '! Trener ' + (n === 1 ? 'napisał komentarz' : 'napisał komentarze') + ' do Twojego treningu.</div>' +
+    units.map(unitHtml).join('<div style="height:18px"></div>') +
+    (o.url ? '<div style="text-align:center;margin:20px 0 6px"><a href="' + e(o.url) + '" style="display:inline-block;background:' + C.acc + ';color:' + C.brand + ';text-decoration:none;font:700 16px Arial,sans-serif;padding:14px 28px;border-radius:10px">Przeczytaj w aplikacji</a></div>' : '') +
+    '<div style="font:13px/1.4 Arial,sans-serif;color:' + C.muted + ';text-align:center">W aplikacji zobaczysz cały komentarz i możesz odpowiedzieć.</div>' +
+    '</td></tr>' +
+    '<tr><td style="padding:14px 8px 0;font:12px/1.45 Arial,sans-serif;color:' + C.muted + ';text-align:center">Przycisk otwiera Twoją aplikację: nie przesyłaj tego maila dalej.<br>Nie chcesz tych maili? Odpisz na tę wiadomość.</td></tr>' +
+    '</table></div>';
+  const body = 'Cześć ' + c.name + '! Trener ' + (n === 1 ? 'napisał komentarz' : 'napisał komentarze') + ' do Twojego treningu.\n' +
+    units.map(u => '\n' + plDay_(u.day) + ' · ' + u.title + '\n' + u.items.map(t => '— ' + t).join('\n')).join('\n') +
+    (o.url ? '\n\nPrzeczytaj w aplikacji: ' + o.url : '') + '\n\nLink otwiera Twoją aplikację: nie przesyłaj tego maila dalej. Nie chcesz tych maili? Odpisz na tę wiadomość.';
+  return { subject: 'Trener skomentował Twój trening' + (units.length === 1 ? ': ' + units[0].title : ''), html: html, body: body };
+}
+
+function komWyzwalacz_() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'wieczornyMail').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('wieczornyMail').timeBased().everyDays(1).atHour(MAIL_KOM_GODZ).nearMinute(0).create();
+}
+
+/** Wyzwalacz dzienny ok. 20:00 (menu Trening → Zainstaluj wyzwalacze albo włączenie „Mail po komentarzu” w panelu). */
+function wieczornyMail() {
+  const props = PropertiesService.getScriptProperties(), today = today_(), dayOf = mailDayOf_(), klienci = klRows_(klSheet_());
+  const prev = {}; klienci.forEach(r => { const id = String(r[1]).trim().toLowerCase(), v = props.getProperty('MKS_' + id); if (id && v) try { prev[id] = JSON.parse(v); } catch (e) {} });
+  const res = komNowe_(klienci, pgTable_('Log', ['klient', 'tydzien', 'jednostka', 'data', 'zapisano', 'komentarz_trenera', 'komentarz_dysk']),
+    pgTable_('Sesje', ['klient', 'tydzien', 'jednostka', 'data', 'start', 'komentarz_trenera']), pgTable_('Plan', ['klient', 'tydzien', 'jednostka', 'tytul']), prev, today, dayOf);
+  const base = linkBase_(), sent = [];
+  res.send.forEach(x => {
+    try { mailSend_(x.email, komMail_(x.c, x.units, { url: base ? base + '?k=' + x.key + '&t=trener' : '' })); sent.push(x.c.name); }
+    catch (e) { if (prev[x.c.id]) res.sig[x.c.id] = prev[x.c.id]; else delete res.sig[x.c.id];   // nie zapamiętujemy: spróbujemy jutro
+      try { sheet_('Błędy', ERR_HEADERS).appendRow(plainRow_([new Date(), x.c.id, 'mail', ('mail po komentarzu: ' + e).slice(0, 400), '', 'wieczornyMail'])); } catch (e2) { Logger.log('mail: ' + e); } }
+  });
+  Object.keys(res.sig).forEach(id => props.setProperty('MKS_' + id, JSON.stringify(res.sig[id]).slice(0, 8000)));
+  props.setProperty('MAIL_KOM_DZIEN', JSON.stringify({ day: today, at: new Date().toISOString(), names: sent }));
+  Logger.log('Mail po komentarzu: ' + sent.length + ' (' + sent.join(', ') + ')');
+}

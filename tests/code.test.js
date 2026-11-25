@@ -266,13 +266,13 @@ test('trKlientOf_ i trKlientVals_: klienci w panelu trenera (ustawienia ↔ wier
   const row = ['kabc', 'Ania', 'Ania', '', 'stary-link', 'tak', 'PROSTY', 2, 'TAK', 'TAK', 'RIR', 0.075, '', 'TAK'];
   const k = C.trKlientOf_(row, 'https://x.github.io/trening/');
   assert.deepEqual(JSON.parse(JSON.stringify(k)), { id: 'ania', name: 'Ania', on: true, mode: 'PROSTY', scale: 'RIR', swap: 'TRENER', pain: true, masters: true,
-    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc', email: '', mail: false });
+    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc', email: '', mail: false, mailKom: false, seen: '', devs: 0 });
   // pusty wiersz = wartości domyślne; bez adresu aplikacji link z kolumny E
   const d = C.trKlientOf_(['k1', 'bo', 'Bo', 'NIE', 'link-E'], '');
   assert.equal(d.on, false); assert.equal(d.mode, 'PRO'); assert.equal(d.swap, 'NIE'); assert.equal(d.oly, 5); assert.equal(d.own, true); assert.equal(d.link, 'link-E');
   // panel → kolumny D, F–N
   const v = C.trKlientVals_({ on: false, mode: 'PRO', scale: 'RPE', swap: 'DOWOLNA', pain: true, masters: false, extra: 3, oly: 7.5, own: false, edit: true });
-  assert.deepEqual(JSON.parse(JSON.stringify(v.vals)), { 3: 'NIE', 5: 'TAK', 6: 'PRO', 7: 3, 8: '', 9: 'DOWOLNA', 10: 'RPE', 11: 0.075, 12: 'NIE', 13: 'TAK', 14: '', 15: '' });
+  assert.deepEqual(JSON.parse(JSON.stringify(v.vals)), { 3: 'NIE', 5: 'TAK', 6: 'PRO', 7: 3, 8: '', 9: 'DOWOLNA', 10: 'RPE', 11: 0.075, 12: 'NIE', 13: 'TAK', 14: '', 15: '', 19: '' });
   // zapis i odczyt dają to samo (np. sufit 7,5% → 0,075 → 7,5)
   const r2 = ['k', 'x', 'X']; Object.keys(v.vals).forEach(i => { r2[i] = v.vals[i]; });
   const back = C.trKlientOf_(r2, '');
@@ -2030,4 +2030,49 @@ test('mniej konfliktów: VERSION w sw.js nadaje publikacja, listy funkcji API po
     assert.deepEqual(names, names.slice().sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())), n + ': alfabetycznie');
     assert.equal(names.length, Object.keys(C[n]).length);
   });
+});
+
+test('wieczorny mail po komentarzu (komNowe_, komMail_, komPierwsze_) i „ostatnio otwarta” (seenUpd_, devsOf_, kolumny T–V)', () => {
+  const kl = (key, id, name, email, kom, on) => { const r = [key, id, name, on || '', '', '', '', '', '', '', '', '', '', '', email, '', '', '', '', kom]; return r; };
+  const klienci = [kl('kaaaaaaaaaa1', 'ania', 'Ania', 'ania@example.com', 'TAK'), kl('kbbbbbbbbbb2', 'bartek', 'Bartek', 'b@example.com', ''), kl('kcccccccccc3', 'ewa', 'Ewa', '', 'TAK')];
+  const today = '2026-11-23';
+  const log = [{ klient: 'ania', tydzien: 12, jednostka: 'T1', data: '2026-11-22', komentarz_trenera: '0:12 Kolana na zewnątrz. Reszta super!', komentarz_dysk: '' },
+    { klient: 'ania', tydzien: 12, jednostka: 'T1', data: '2026-11-22', komentarz_trenera: '0:12 Kolana na zewnątrz. Reszta super!', komentarz_dysk: '' },   // ta sama treść w drugiej serii
+    { klient: 'ania', tydzien: 10, jednostka: 'T1', data: '2026-11-12', komentarz_trenera: 'Stary komentarz.', komentarz_dysk: '' },
+    { klient: 'ania', tydzien: 1, jednostka: 'T1', data: '2026-09-01', komentarz_trenera: 'Bardzo stary.', komentarz_dysk: '' },
+    { klient: 'bartek', tydzien: 3, jednostka: 'T1', data: '2026-11-22', komentarz_trenera: 'Bez maila (wyłączony).', komentarz_dysk: '' }];
+  const ses = [{ klient: 'ania', tydzien: 12, jednostka: 'T2', data: '2026-11-23', start: '2026-11-23T07:00:00.000Z', komentarz_trenera: 'Dobra sesja' }];
+  const plan = [{ klient: 'ania', tydzien: 12, jednostka: 'T1', tytul: 'Dół' }, { klient: 'ania', tydzien: 12, jednostka: 'T2', tytul: 'Góra' }];
+  // pierwszy wieczór: tylko komentarze do treningów z wczoraj i dziś; ewa bez adresu, bartek wyłączony
+  const r1 = plain(C.komNowe_(klienci, log, ses, plan, {}, today, v => String(v).slice(0, 10)));
+  assert.deepEqual(r1.send.map(x => [x.c.id, x.email, x.units.map(u => [u.title, u.day, u.items])]), [['ania', 'ania@example.com', [['Góra', '2026-11-23', ['Dobra sesja']], ['Dół', '2026-11-22', ['Kolana na zewnątrz.']]]]]);
+  assert.deepEqual(Object.keys(r1.sig), ['ania']);
+  assert.equal(r1.sig.ania.length, 3);                                      // stary (12.11) też zapamiętany, bardzo stary poza oknem
+  // następny wieczór bez nowych: nic; nowy komentarz: tylko on
+  assert.deepEqual(plain(C.komNowe_(klienci, log, ses, plan, r1.sig, today)).send, []);
+  const log2 = log.concat([{ klient: 'ania', tydzien: 10, jednostka: 'T1', data: '2026-11-12', komentarz_trenera: 'Dopisek do starego treningu', komentarz_dysk: '' }]);
+  const r2 = plain(C.komNowe_(klienci, log2, ses, plan, r1.sig, today));
+  assert.deepEqual(r2.send[0].units.map(u => [u.title, u.items]), [['T1', ['Dopisek do starego treningu']]]);
+  assert.equal(C.komPierwsze_('1:05 Biodra wyżej! Potem łokcie.'), 'Biodra wyżej!');
+  assert.ok(C.komPierwsze_('x'.repeat(300)).length <= 160);
+  const m = C.komMail_({ name: 'Ania' }, r1.send[0].units, { url: 'https://x.test/?k=kaaaaaaaaaa1&t=trener' });
+  assert.equal(m.subject, 'Trener skomentował Twój trening');
+  assert.match(m.html, /Przeczytaj w aplikacji/); assert.match(m.html, /t=trener/); assert.match(m.body, /niedziela 22\.11 · Dół\n— Kolana na zewnątrz\./);
+  assert.equal(C.komMail_({ name: 'A' }, [r1.send[0].units[1]], {}).subject, 'Trener skomentował Twój trening: Dół');
+  assert.equal(C.komMail_({ name: '<b>' }, r1.send[0].units).html.indexOf('<b>!'), -1);       // imię uciekane w HTML
+  // ostatnio otwarta: lista urządzeń
+  const s1 = C.seenUpd_('', 'abcd1234', '2026-11-23T10:00:00.000Z');
+  assert.deepEqual(JSON.parse(s1), [['abcd1234', '2026-11-23T10:00:00.000Z']]);
+  const s2 = C.seenUpd_(JSON.stringify([['ffff0000', '2026-08-01T10:00:00.000Z'], ['abcd1234', '2026-11-20T10:00:00.000Z'], ['eeee1111', '2026-11-21T10:00:00.000Z']]), 'abcd1234', '2026-11-23T10:00:00.000Z');
+  assert.deepEqual(JSON.parse(s2), [['abcd1234', '2026-11-23T10:00:00.000Z'], ['eeee1111', '2026-11-21T10:00:00.000Z']]);   // starsze niż 60 dni odpadają
+  assert.equal(C.seenUpd_('zepsute', 'a1b2c3d4', '2026-11-23T10:00:00.000Z').length > 0, true);
+  assert.equal(C.devsOf_(s2), 2); assert.equal(C.devsOf_(''), 0); assert.equal(C.devsOf_('x'), 0);
+  const k = C.trKlientOf_(['k', 'a', 'A', '', '', '', '', '', '', '', '', '', '', '', 'a@b.pl', '', 100, 120, '2027-01-10', 'TAK', '2026-11-23T10:00:00.000Z', s2], '');
+  assert.deepEqual([k.mailKom, k.seen, k.devs], [true, '2026-11-23T10:00:00.000Z', 2]);
+  assert.equal(C.trKlientVals_(Object.assign({}, C.KL_DOMYSLNE, { email: 'a@b.pl', mailKom: true })).vals[19], 'TAK');
+  assert.match(C.trKlientVals_(Object.assign({}, C.KL_DOMYSLNE, { mailKom: true })).error, /Mail po komentarzu/);
+  assert.deepEqual(C.KL_HEAD.concat(C.KL_EXTRA).slice(15), ['mail_rano', 'max_rwanie', 'max_podrzut', 'start', 'mail_kom', 'otwarta', 'urzadzenia']);
+  // „Sprawdź arkusz”: mail po komentarzu bez wyzwalacza = błąd
+  const dg = C.diagnose_({ pwaUrl: 'x', triggers: ['podsumowanie', 'wczytajPlany', 'kopiaArkusza'], klienci: [{ klucz: 'kaaaaaaaaaa1', klient_id: 'ania', imie: 'Ania', aktywny: 'TAK', mail_kom: 'TAK', email: 'a@b.pl' }], plan: [], log: [] });
+  assert.ok(dg.some(x => /wieczornyMail/.test(x[1])), JSON.stringify(dg));
 });
