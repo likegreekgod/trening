@@ -33,6 +33,12 @@ Repozytorium jest publiczne, dlatego w tym pliku nie ma imion klientów, danych 
 - Dopasowanie nazw: sprzęt z nawiasu przed nazwą („Bench Press (Dumbbell)” → „Dumbbell Bench Press”); sama nazwa bez nawiasu tylko dla sztangi, maszyny, wyciągu, masy ciała i TRX, bo w bazie „Bench Press” to sztanga i hantle pomieszałyby rekordy. Niedopasowane zostają pod nazwą z pliku; trener dopisuje alias i wczytuje plik ponownie.
 - API dla agenta klienta (na później): osobny, odwoływalny klucz API klienta (nie loginy ani hasła), tylko odczyt planu i historii + dodanie własnego treningu, dzienny limit zapytań (wspólne limity Google dla wszystkich klientów).
 
+## 2026-11-23 · „Zaplanuj następną” po prowadzonym treningu (v100, punkt 3c przeglądu v80)
+
+- Okno tylko w trybie trenera, po pierwszym „Zakończ i zapisz” jednostki (nie po poprawce zapisanej), z siecią; potem „Trening zrobiony”. Własny trening klienta i jednostka w tyg. + 1 już zrobiona = bez okna.
+- Propozycja (lib `nextUnit`): A i B z liczbą kg, co najmniej jedna seria robocza, wszystkie 🟢 (RPE ≤ 7,5, bez nieudanej) → najcięższa dzisiejsza + 2,5 kg (w dół do 2,5). Inaczej kg z planu. Plan z wyższym ciężarem niż propozycja zostaje (nie obniżamy progresji trenera). K, na czas i kg słowem bez zmian. Serie, powt. i RPE z jednostki w tyg. + 1, jeśli jest, inaczej z dzisiejszej.
+- Zapis `trNastepna` (TR_FNS, czysta `trNextUnit_`): jednostka w tyg. + 1 jest → `trPlanEdit_` (ćwiczenie po nazwie, ćwiczeń spoza tamtej jednostki nie dopisuje); nie ma → kopia dzisiejszej (wszystkie kolumny, bez `dodane` i usuniętych), `zrodlo` = trener, data + 7 dni (bez daty w planie = data z telefonu). Import pliku z tym blokiem nadpisuje ją jak inne zmiany trenera.
+
 ## 2026-11-23 · Pakiet treningów personalnych: księga wpisów, zdejmowanie przy „Prowadź”
 
 - Zakładka Pakiety to księga, nie licznik: zakup (+n, data, ważność, cena, przeniesione), trening (−1 z sesji „Prowadź”, id = klient|s|tydzień|jednostka), korekta (±1 z panelu). Zostało = (zakup + przeniesione) − wpisy po ostatnim zakupie. W razie sporu z klientem jest data każdego wejścia.

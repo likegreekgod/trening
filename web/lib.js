@@ -80,6 +80,29 @@
   };
   /** podpis światła: przy skali RIR (PRO) liczba RIR na początku zamiast „zapas …” (23.11.2026); zapis bez zmian */
   L.EFF_RIR = { L: 'RIR ≥ 3 · szybko, czysto', S: 'RIR 2 · wolniej albo z poprawką', W: 'RIR 0–1 · walka', X: 'Seria nie wyszła' };
+  /**
+   * „Zaplanuj następną” (prowadzony trening, punkt 3c przeglądu v80, 23.11.2026): ta sama jednostka w następnym tygodniu.
+   * src = ćwiczenia dzisiejszej jednostki z planu [{order, name, sets, reps, kg, rpe, prio}], done = {order: [{kg, rpe, fail}]} (serie robocze
+   * i dodatkowe zapisane dziś, bez rozgrzewki i drop setów), target = ta jednostka w tyg. + 1, jeśli już jest w planie (te same pola) albo null.
+   * Same 🟢 (każda seria ≤ RPE 7,5, bez nieudanej) w A i B z liczbą kg → najcięższa dzisiejsza + 2,5 kg (w dół do 2,5); inaczej kg z planu.
+   * Plan z wyższym ciężarem niż propozycja zostaje. K, ćwiczenia na czas i kg słowem (BW, guma) bez zmian.
+   * → [{order, torder, name, sets, reps, rpe, kg, was, today, lights, up}]
+   */
+  L.nextUnit = (src, done, target) => {
+    const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase(), num = v => typeof v === 'number' ? v : NaN;
+    return (src || []).map(e => {
+      const t = target ? target.find(x => lc(x.name) === lc(e.name)) || target.find(x => x.order === e.order && !(src || []).some(y => lc(y.name) === lc(x.name))) || null : null;
+      const sets = (done && done[e.order]) || [], lights = sets.map(x => L.lightOf(x.rpe, x.fail ? 'FAIL' : ''));
+      const kgs = sets.filter(x => !x.fail && typeof x.kg === 'number' && x.kg > 0).map(x => x.kg), today = kgs.length ? Math.max(...kgs) : NaN;
+      const base = t ? t : e, planKg = base.kg;
+      const up = /^[AB]$/.test(e.prio || '') && lights.length > 0 && lights.every(q => q === 'L') && isFinite(today) && !L.timeUnit(e.reps)
+        && (typeof planKg === 'number' || planKg === '' || planKg === null || planKg === undefined);
+      const prop = up ? L.floor25(today + 2.5) : NaN;
+      const kg = up && !(num(planKg) >= prop) ? prop : planKg;
+      return { order: e.order, torder: t ? t.order : null, name: e.name, sets: base.sets, reps: base.reps, rpe: base.rpe === undefined ? null : base.rpe,
+        kg: kg === undefined ? '' : kg, was: planKg === undefined ? '' : planKg, today, lights, up: up && kg === prop && kg !== planKg };
+    });
+  };
   L.effHint = (q, rir) => (rir && L.EFF_RIR[q]) || (L.EFF[q] ? L.EFF[q].hint : '');
   L.effFine = (q, wide) => wide && q === 'L' ? [5, 5.5, 6, 6.5, 7, 7.5] : L.EFF_FINE[q] || [];
   /** RPE (i typ) → światło: ≤ 7,5 Lekko, 8–8,5 Średnio, ≥ 9 Ciężko, FAIL Nieudana; puste = '' (także stare wpisy) */

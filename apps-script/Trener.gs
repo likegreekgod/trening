@@ -13,7 +13,7 @@
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
 const TR_FNS = { trPakiet, trConfig, trPulpit, trKlient, trPrzelicz, trKomentarz, trSzkic, trAI, trUstawAI, trFilm, trKomentarzFilm, trBlok, trBlokSzkic,
-  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj, trDysk, trKopia, trImport };
+  trKlienci, trKlientUstaw, trKlientNowy, trKlientLink, trMail, trMailUstaw, trMailProba, trPlan, trBlokPlan, trBlokWczytaj, trDysk, trKopia, trImport, trNastepna };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
 const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
@@ -1185,13 +1185,79 @@ function trPlan(id, e) {
   try {
     const res = trPlanEdit_(tableOf_('Plan'), pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', DONE_LOG_COLS), id, e);
     if (res.error) throw new Error(res.error);
-    if (res.set.length) {
-      const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
-      const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
-      PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(plain_(k)); h.push(k); } });
-      planTextCols_();
-      res.set.forEach(([i, o]) => Object.keys(o).forEach(k => sh.getRange(i + 2, h.indexOf(k) + 1).setValue(plain_(o[k]))));
-    }
+    trPlanSet_(res.set);
     return { n: res.n, weeks: res.weeks, rows: res.rows };
+  } finally { lock.releaseLock(); }
+}
+
+/** zmiany komórek Planu z trPlanEdit_ ([[indeks wiersza od 0, {kolumna: wartość}]]) do arkusza */
+function trPlanSet_(set) {
+  if (!set.length) return;
+  const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
+  const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
+  PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(plain_(k)); h.push(k); } });
+  planTextCols_();
+  set.forEach(([i, o]) => Object.keys(o).forEach(k => sh.getRange(i + 2, h.indexOf(k) + 1).setValue(plain_(o[k]))));
+}
+
+/* ---------- „Zaplanuj następną” (prowadzony trening, punkt 3c przeglądu v80, 23.11.2026) ----------
+ * Po „Zakończ” w trybie „Prowadź” aplikacja proponuje tę samą jednostkę w tyg. + 1 (kg z dzisiejszych świateł, lib nextUnit).
+ * Jest już w planie → zmiana jak „✎ zmień plan” (trPlanEdit_, tylko niezrobiona). Nie ma → nowa jednostka trenera: kopia dzisiejszej
+ * (wszystkie kolumny planu, bez ćwiczeń dodanych / usuniętych przez klienta), tydzień + 1, data + 7 dni, Plan.zrodlo = trener.
+ */
+const TR_NEXT_F = { sets: 'serie', reps: 'powt', kg: 'kg', rpe: 'rpe_max' };
+
+/** Czysta funkcja: u = {week, day, ex: [{order (dzisiejszy nr), sets?, reps?, kg?, rpe?}]} → {error} | {mode: 'edit', week, edit} | {mode: 'new', week, rows} */
+function trNextUnit_(plan, clientId, u) {
+  u = u || {};
+  const week = Number(u.week), day = String(u.day === undefined || u.day === null ? '' : u.day).trim(), lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  const mine = (plan || []).filter(r => lc(r.klient) === clientId && String(r.jednostka).trim() === day);
+  const src = mine.filter(r => Number(r.tydzien) === week && !removed_(r) && zr_(r) !== 'dodane').sort((a, b) => Number(a.nr) - Number(b.nr));
+  if (!(week >= 1) || !day || !src.length) return { error: 'Nie ma takiej jednostki w planie.' };
+  if (src.some(own_)) return { error: 'To własny trening klienta – nie planuje się go dalej.' };
+  const next = week + 1, target = mine.filter(r => Number(r.tydzien) === next && !removed_(r));
+  if (target.some(own_)) return { error: 'W tyg. ' + next + ' ta jednostka to własny trening klienta.' };
+  const ex = [].concat(u.ex || []);
+  if (target.length) {
+    const out = [];
+    for (const ch of ex) {
+      const s = src.find(r => Number(r.nr) === Number(ch.order)); if (!s) return { error: 'Nie ma takiego ćwiczenia w jednostce (nr ' + ch.order + ').' };
+      const t = target.find(r => lc(r.cwiczenie) === lc(s.cwiczenie)) || target.find(r => Number(r.nr) === Number(s.nr) && !src.some(x => lc(x.cwiczenie) === lc(r.cwiczenie)));
+      if (!t) continue;                                         // ćwiczenia nie ma w tamtym tygodniu: nie dopisujemy
+      const o = { order: Number(t.nr) }; Object.keys(TR_NEXT_F).forEach(f => { if (f in ch) o[f] = ch[f]; }); out.push(o);
+    }
+    return { mode: 'edit', week: next, edit: { week: next, day: day, ex: out } };
+  }
+  const d = String(src[0].data || '').trim(), date = /^\d{4}-\d{2}-\d{2}$/.test(String(u.date || '')) ? String(u.date)
+    : /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(Date.parse(d + 'T12:00:00Z') + 7 * 864e5).toISOString().slice(0, 10) : '';
+  const rows = [];
+  for (const s of src) {
+    const r = {}; PLAN_HEADERS.forEach(k => { const v = s[k]; r[k] = v === undefined || v === null || v instanceof Date ? '' : v; });
+    Object.assign(r, { tydzien: next, data: date, zrodlo: 'trener' });
+    const ch = ex.find(x => Number(x.order) === Number(s.nr));
+    if (ch) for (const f of Object.keys(TR_NEXT_F)) {
+      if (!(f in ch)) continue;
+      const val = trPlanVal_(f, ch[f]); if (val.error) return { error: s.cwiczenie + ': ' + val.error };
+      r[TR_NEXT_F[f]] = val.v;
+    }
+    rows.push(r);
+  }
+  return { mode: 'new', week: next, rows: rows };
+}
+
+/** Prowadzony trening → „Zapisz w planie”: zmiana jednostki w tyg. + 1 albo nowa jednostka trenera. */
+function trNastepna(id, u) {
+  id = String(id || '').trim().toLowerCase();
+  trRow_(id);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const plan = tableOf_('Plan'), res = trNextUnit_(plan, id, u);
+    if (res.error) throw new Error(res.error);
+    if (res.mode === 'new') { ownWrite_(id, res.week, String(u.day).trim(), res.rows); return { mode: 'new', week: res.week, n: res.rows.length }; }
+    const e = trPlanEdit_(plan, pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', DONE_LOG_COLS), id, res.edit);
+    if (e.error) throw new Error(e.error);
+    trPlanSet_(e.set);
+    return { mode: 'edit', week: res.week, n: e.n };
   } finally { lock.releaseLock(); }
 }

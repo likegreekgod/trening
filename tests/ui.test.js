@@ -3369,3 +3369,47 @@ test('Pakiet treningów: „Zdejmij 1 trening z pakietu” w podsumowaniu prowad
     await ctx.close();
   }
 });
+
+test('Prowadź → „Zaplanuj następną”: po zakończeniu ta sama jednostka w tyg. + 1, +2,5 kg po samych 🟢, poprawka, zapis w planie', async () => {
+  const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  const ex = (week, date, order, name, prio, kg) => ({ week, day: 'T1', title: 'Nogi', date, order, name, prio, sets: 3, reps: '5', pct: null, kg, rpe: 8, note: '', extra: 1, drop: 0, block: 'B2' });
+  const lg = (o, name, s, kg, rpe) => ({ id: 'ania|13|T1|' + o + '|' + s, tydzien: 13, jednostka: 'T1', data: day(0), nr_cw: o, cwiczenie: name, seria: s, kg, powt: 5, rpe, wykonane: 'TAK', typ: '', zapisano: day(0) + 'T17:00:00.000Z', notatka_trenera: '', komentarz_trenera: '' });
+  const LD = { cfg: { name: 'Ania', pain: true, simple: false, extra: 1, swap: 'DOWOLNA', scale: 'RPE', edit: true, own: true, live: true },
+    plan: [ex(13, day(0), 1, 'Przysiad tylny', 'A', 85), ex(13, day(0), 2, 'Martwy ciąg rumuński', 'B', 70), ex(13, day(0), 3, 'Dead bug', 'K', 'BW')],
+    logs: [1, 2, 3].map(s => lg(1, 'Przysiad tylny', s, 85, 7)).concat([lg(2, 'Martwy ciąg rumuński', 1, 70, 7), lg(2, 'Martwy ciąg rumuński', 2, 70, 9)]), sessions: [] };
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const JWT = b64({ alg: 'none' }) + '.' + b64({ exp: Math.floor(Date.now() / 1000) + 3600, email: 't@example.com' }) + '.sig';
+  for (const scheme of ['light', 'dark']) {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: LD, scheme, api: b => b.fn === 'trNastepna' ? { mode: 'new', week: 14, n: 3 } : null });
+    await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); } catch (e) {} }, JWT);
+    await p.goto(base + '?prowadz=ania&j=13%7CT1'); await p.waitForSelector('.set[data-o="1"]', { state: 'attached' });
+    await p.evaluate(() => document.querySelector('#saveSess').click());
+    await p.waitForSelector('#sheet .nu');
+    assert.match(await p.textContent('#sheet-t'), /Zaplanuj następną/);
+    assert.match(await p.textContent('#sheet .sub'), /tydz\. 14/);
+    assert.deepEqual(await p.$$eval('#sheet .nu', a => a.map(x => [x.querySelector('b').textContent, x.querySelector('.ch').textContent, x.querySelector('small').textContent])), [
+      ['Przysiad tylny', '+2,5', '3×5 · 85 → 87,5 kg · RPE 8 · dziś same 🟢'],
+      ['Martwy ciąg rumuński', '=', '3×5 · 70 kg · RPE 8 · dziś 🟢 🔴'],
+      ['Dead bug', '=', '3×5 · BW · RPE 8']]);
+    assert.match(await p.textContent('#sheet'), /jeszcze nie ma: dopiszę ją do planu/);
+    await p.click('#sheet .nu[data-nu="1"] > button'); await p.fill('#sheet .nu[data-nu="1"] input[data-f="kg"]', '72,5'); await p.fill('#sheet .nu[data-nu="1"] input[data-f="sets"]', '4');
+    await p.press('#sheet .nu[data-nu="1"] input[data-f="sets"]', 'Tab');
+    assert.equal(await p.textContent('#sheet .nu[data-nu="1"] .ch'), '+2,5');                     // różnica po poprawce
+    assert.match(await p.textContent('#sheet .nu[data-nu="1"] small'), /^4×5 · 72,5 kg/);
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `zaplanuj-nastepna-${scheme}.png`) }); }
+    assert.ok((await p.$$eval('#sheet .nu > button, #sheet .btn, #sheet .nu input', a => a.map(x => x.getBoundingClientRect().height))).every(h => h >= 44));   // cele dotyku
+    await p.click('#nu-ok'); await p.waitForSelector('#sheet .dn-t');            // potem zwykłe „Trening zrobiony”
+    const nx = calls.find(c => c.fn === 'trNastepna');
+    assert.equal(nx.args[0], 'ania');
+    assert.deepEqual(nx.args[1], { week: 13, day: 'T1', date: day(7), ex: [{ order: 1, sets: '3', reps: '5', kg: '87,5', rpe: '8' }, { order: 2, sets: '4', reps: '5', kg: '72,5', rpe: '8' }, { order: 3, sets: '3', reps: '5', kg: 'BW', rpe: '8' }] });
+    assert.equal(calls.findIndex(c => c.fn === 'logSession') < calls.findIndex(c => c.fn === 'trNastepna'), true);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+  // klient (bez trybu trenera) tego okna nie widzi
+  const calls = []; const { ctx, p } = await page(calls, false, { data: Object.assign({}, LD, { cfg: Object.assign({}, LD.cfg, { live: false }) }) });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]', { state: 'attached' });
+  await p.evaluate(() => document.querySelector('#saveSess').click()); await p.waitForSelector('#sheet .dn-t');
+  assert.equal(await p.$('#sheet .nu'), null);
+  await ctx.close();
+});

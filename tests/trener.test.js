@@ -829,6 +829,7 @@ test('panel: poranny mail (e-mail i przełącznik klienta, mail próbny, godzina
     assert.equal(await p.isDisabled('#kl-mailtest'), true, 'bez adresu nie ma mail próbnego');
     // włączenie bez adresu: błąd z serwera (atrapa przepuszcza), więc najpierw adres
     await p.fill('#kl-email', ' bartek@example.com ');
+    await p.waitForFunction(() => !document.querySelector('#kl-save').disabled, null, { timeout: 3000 }).catch(() => {});   // pod obciążeniem zdarzenie input dociera chwilę później
     assert.equal(await p.isDisabled('#kl-save'), false, 'wpisany adres = jest co zapisać');
     await p.click('[data-sw="mail"]');
     assert.equal(await p.inputValue('#kl-email'), 'bartek@example.com', 'adres zostaje po przerysowaniu');
