@@ -1222,7 +1222,9 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   await p.click('#ach-real'); await p.fill('#ach-in', 'Zrobiłem 3×5 po 120'); await p.click('#ach-go'); await p.waitForFunction(() => document.querySelectorAll('#agchat .acm.a').length === 2);
   const ac = calls.filter(c => c.fn === 'trAsystent');
   assert.deepEqual(ac[0].args, ['ania', [{ role: 'user', text: 'Co mam dziś?' }], { real: false }]);
-  assert.deepEqual(ac[1].args[1].map(m => m.role), ['user', 'assistant', 'user']); assert.deepEqual(ac[1].args[2], { real: true });
+  assert.deepEqual(ac[1].args[1].map(m => m.role), ['user', 'assistant', 'user']);
+  assert.deepEqual(ac[1].args[1][1].steps.map(x => x.fn), ['plan', 'zapiszSerie'], 'akcje idą z historią');
+  assert.match(await p.textContent('#agchat .acm.a .acx'), /ok\. 0,031 USD/); assert.deepEqual(ac[1].args[2], { real: true });
   assert.equal(await p.getAttribute('[data-sw="on"]', 'aria-checked'), 'true', 'czat nie rusza formularza klienta');
   await shot(p, 'trener-asystent-czat.png');
   await p.fill('#ach-in', 'błąd'); await p.click('#ach-go'); await p.waitForSelector('#agchat .err');

@@ -98,12 +98,22 @@ function agDone_(id, d) {
   return out;
 }
 
+/** Czysta: faktyczny dzień jednostki (jak w aplikacji): start z Sesji, inaczej najpóźniejszy zapis serii, inaczej data z planu. → {„tydzień|jednostka”: dzień} */
+function agUnitDays_(d, dayOf) {
+  const day = dayOf || (v => v instanceof Date ? fmtDate_(v) : sesDay_(v)), out = {}, saved = {};
+  (d.logs || []).forEach(l => { const k = l.tydzien + '|' + l.jednostka, t = day(l.zapisano) || String(l.data || '').slice(0, 10); if (t && (!saved[k] || t > saved[k])) saved[k] = t; });
+  Object.keys(saved).forEach(k => { out[k] = saved[k]; });
+  (d.sessions || []).forEach(s => { const t = day(s.start); if (t) out[s.tydzien + '|' + s.jednostka] = t; });
+  return out;
+}
+
 /** Czysta: plan dla bota: niezrobione jednostki od tygodnia temu do today + dni, zrobione dziś, notatki trenera dla klienta. */
 function agPlan_(d, o) {
   const today = o.today, days = Math.min(Math.max(Math.round(Number(o.days)) || AG_PLAN_DNI, 1), 31), end = agAddDays_(today, days);
-  const units = agUnits_(d.plan), done = o.done || {}, swap = d.cfg && d.cfg.swap;
+  const units = agUnits_(d.plan), done = o.done || {}, swap = d.cfg && d.cfg.swap, real = agUnitDays_(d, o.dayOf);
+  const doneToday = o.doneToday || {}; Object.keys(done).forEach(k => { if (real[k] === today) doneToday[k] = 1; });
   const pick = units.filter(u => { const k = u.week + '|' + u.day, dt = u.date;
-    if (done[k]) return o.doneToday && o.doneToday[k];
+    if (done[k]) return !!doneToday[k];
     return !dt || (dt >= agAddDays_(today, -7) && dt <= end); }).slice(0, 12);
   const blocks = {}; pick.forEach(u => { if (u.block) blocks[u.block] = 1; });
   return {
@@ -112,7 +122,7 @@ function agPlan_(d, o) {
     dla_klienta: Object.keys(blocks).map(b => ({ blok: b, tekst: (d.blockNotes || {})[b] || '' })).filter(x => x.tekst),
     jednostki: pick.map(u => {
       const k = u.week + '|' + u.day;
-      return { tydzien: u.week, jednostka: u.day, tytul: u.title, data: u.date || '', blok: u.block,
+      return { tydzien: u.week, jednostka: u.day, tytul: u.title, data: (done[k] && real[k]) || u.date || '', blok: u.block,
         stan: done[k] ? 'zrobiona' : !u.date ? 'bez daty' : u.date < today ? 'zaległa' : u.date === today ? 'dziś' : 'zaplanowana',
         prowadzi_trener: u.coach, wlasna: u.own, uwagi_trenera: u.unote,
         cwiczenia: u.rows.map(r => ({ nr: r.order, nazwa: r.name, prio: r.prio, serie: r.sets, powt: r.reps,
@@ -128,9 +138,9 @@ function agHistoria_(d, o) {
   const today = o.today, days = Math.min(Math.max(Math.round(Number(o.days)) || 30, 1), AG_HIST_DNI), from = agAddDays_(today, -days);
   const title = {}; (d.plan || []).forEach(r => { title[r.week + '|' + r.day] = r.title; });
   const ses = {}; (d.sessions || []).forEach(s => { ses[s.tydzien + '|' + s.jednostka] = s; });
-  const U = {}, out = [];
+  const U = {}, out = [], real = agUnitDays_(d, o.dayOf);
   (d.logs || []).forEach(l => {
-    const dt = String(l.data || '').slice(0, 10), se = String(l.seria === undefined || l.seria === null ? '' : l.seria).trim();
+    const dt = real[l.tydzien + '|' + l.jednostka] || String(l.data || '').slice(0, 10), se = String(l.seria === undefined || l.seria === null ? '' : l.seria).trim();
     if (!dt || dt < from || dt > today || !se) return;
     const k = l.tydzien + '|' + l.jednostka;
     if (!U[k]) { const s = ses[k] || {}; U[k] = { data: dt, tydzien: Number(l.tydzien), jednostka: String(l.jednostka), tytul: title[k] || '',
@@ -584,7 +594,7 @@ function trZasadyUstaw(tekst, limity) {
 /* ---------- czat „Wypróbuj asystenta” w panelu (trAsystent): trener rozmawia jak klient ----------
  * Te same akcje i reguły co bot klienta, przez Claude API z kluczem panelu (CLAUDE_API_KEY, limit dzienny AI_LIMIT).
  * Domyślnie próba: zapisy przechodzą przez reguły, ale nic nie trafia do arkusza (agWrite_ z dry). */
-const AG_CHAT_MAX = 20, AG_CHAT_TXT = 2000, AG_CHAT_KROKI = 8, AG_CHAT_CZAS = 240000;
+const AG_CHAT_MAX = 20, AG_CHAT_TXT = 2000, AG_CHAT_KROKI = 5, AG_CHAT_CZAS = 240000;
 // Akcje dla modelu: te same nazwy, opisy i pola co lib AG_READ + AG_WRITE (test pilnuje zgodności)
 const AG_TOOLS = [
   ['zasady', 'Zasady trenera, ograniczenia tego klienta i limity. Pobierz na początku rozmowy.', {}],
@@ -618,12 +628,14 @@ function agChatSystem_(o) {
   return [
     'Jesteś asystentem treningowym klienta w aplikacji trenera Damiana (Siła z Ruchu). Mówisz jak trener: krótko, po polsku, konkretnie. Dziś jest ' + o.today + '.',
     'To rozmowa próbna: trener pisze jako klient i sprawdza, jak się zachowasz. Odpowiadaj dokładnie tak, jak odpowiedziałbyś klientowi.',
-    o.real ? 'Zapisy są prawdziwe: trafiają do arkusza trenera.' : 'Akcje zapisu (zapiszSerie, zapiszTrening, zaproponuj, zglos) działają w trybie próby: serwer sprawdza je regułami, ale nic nie zapisuje. Mów o nich tak, jak gdyby się udały albo jak odmówił serwer.',
+    o.real ? 'Zapisy są prawdziwe: trafiają do arkusza trenera.' : 'Akcje zapisu (zapiszSerie, zapiszTrening, zaproponuj, zglos) działają w trybie próby: serwer sprawdza je regułami, ale nic nie zapisuje i trener nic nie dostaje. Gdy akcja przeszła, dopisz „(próba: nie zapisano)”, np. „Zgłosiłbym to trenerowi (próba: nie zapisano)”; gdy serwer odmówił, podaj powód.',
     'Zasady trenera i ograniczenia klienta masz poniżej. Plan sprawdzaj akcją „plan”, ciężar na dziś akcją „ciezarNaDzis” (nie licz go sam).',
     'Planu nie zmieniasz: zmiany idą przez „zaproponuj” i czekają na trenera. Ból, czerwone flagi i sprawy, o których decyduje trener, zgłaszasz akcją „zglos”.',
     'Każdą serię oceniaj światłem (zielone / żółte / czerwone / nieudana). Bez oceny zapytaj klienta, nie zgaduj.',
     'Gdy serwer odmówi, powiedz klientowi powód (numer reguły) i nie próbuj obejść go inną akcją.',
     'Nie diagnozujesz i nie leczysz. Przy czerwonej fladze: przerwij trening, zgłoś („zglos”, temat czerwona_flaga) i odeślij do specjalisty.',
+    'Zgłoszenie („zglos”) robisz najwyżej raz na sprawę: jedno wywołanie z całym opisem. Nie zgłaszasz ponownie tego, co już zgłosiłeś w tej rozmowie (patrz „Wykonane akcje” w Twoich wcześniejszych odpowiedziach), i nie zgłaszasz zwykłych informacji o treningu.',
+    'Odpowiadaj krótko: najwyżej 4 zdania, bez powtarzania zasad. Wywołuj tylko akcje potrzebne do odpowiedzi.',
     '',
     '## Zasady trenera',
     String(o.zasady || '').trim() || '(Trener nie wkleił jeszcze zasad. Trzymaj się powyższych reguł i planu.)',
@@ -636,7 +648,9 @@ function agChatSystem_(o) {
 /** Czysta: historia czatu z panelu [{role, text}] → messages albo {error}. Zaczyna i kończy się klientem, role na zmianę. */
 function agChatMsgs_(list) {
   if (!Array.isArray(list) || !list.length) return { error: 'Napisz wiadomość.' };
-  const m = list.slice(-AG_CHAT_MAX).map(x => ({ role: x && x.role === 'assistant' ? 'assistant' : 'user', content: String(x && x.text || '').replace(/\r\n/g, '\n').trim().slice(0, AG_CHAT_TXT) }))
+  const acts = x => x && x.role === 'assistant' && Array.isArray(x.steps) && x.steps.length   // co asystent już zrobił (np. zgłoszenie): bez tego zgłasza to samo przy każdej wiadomości
+    ? '\n\n(Wykonane akcje: ' + x.steps.slice(0, 10).map(s => agTxt_(s && s.fn, 20) + (s && s.ok ? ' ✓' : ' ✕')).join(', ') + ')' : '';
+  const m = list.slice(-AG_CHAT_MAX).map(x => ({ role: x && x.role === 'assistant' ? 'assistant' : 'user', content: (String(x && x.text || '').replace(/\r\n/g, '\n').trim().slice(0, AG_CHAT_TXT) + acts(x)).trim() }))
     .filter(x => x.content);
   while (m.length && m[0].role !== 'user') m.shift();
   if (!m.length || m[m.length - 1].role !== 'user') return { error: 'Napisz wiadomość.' };
@@ -698,17 +712,19 @@ function trAsystent(id, msgs, opt) {
   if (m.error) throw new Error(m.error);
   const real = !!(opt && opt.real), pre = aiPre_(), x = agCtx_(row), z = agZasady_(), t0 = Date.now();
   const req = { model: AI_MODEL, max_tokens: 4000, system: agChatSystem_({ zasady: z.tekst, ogr: x.ogr, today: x.today, real: real }), tools: agTools_(),
-    messages: m.msgs, output_config: { effort: 'low' }, fallbacks: 'default' };
+    messages: m.msgs, output_config: { effort: 'low' }, fallbacks: 'default', cache_control: { type: 'ephemeral' } };   // zasady i narzędzia z pamięci podręcznej w kolejnych krokach (ok. 10% ceny)
+  let zgl = 0;
   const out = agChatLoop_(req, r => {
     if (Date.now() - t0 > AG_CHAT_CZAS) throw new Error('Asystent pracował za długo (limit czasu skryptu Google). Zadaj prostsze pytanie.');
     return aiFetch_(pre.key, r);
   }, (fn, a) => {
+    if (fn === 'zglos' && ++zgl > 1) return agErr_('Zgłoszenie już poszło w tej odpowiedzi: jedno na sprawę.');
     const r = agChatTool_(fn, x, a, z.limity, real);
     if (real && (AG_WRITE[fn] || AG_PROP[fn] || fn === 'zglos')) agLog_(id, 'czat:' + fn, !(r && r.error), r && r.error || '');
     return r;
   }, AG_CHAT_KROKI);
   const cost = Math.round(out.usage.reduce((s, u) => s + aiCost_(out.model, u), 0) * 10000) / 10000;
-  const tok = out.usage.reduce((s, u) => ({ input_tokens: s.input_tokens + (Number(u.input_tokens) || 0), output_tokens: s.output_tokens + (Number(u.output_tokens) || 0) }), { input_tokens: 0, output_tokens: 0 });
+  const tok = out.usage.reduce((s, u) => ({ input_tokens: s.input_tokens + (Number(u.input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0), output_tokens: s.output_tokens + (Number(u.output_tokens) || 0) }), { input_tokens: 0, output_tokens: 0 });
   const n = aiNote_(pre, ['asystent' + (real ? '' : ' (próba)'), id, '', ''], out.model, tok, cost);
   const text = out.refusal ? 'Asystent odmówił odpowiedzi na to pytanie (filtr bezpieczeństwa Claude).' : out.cut ? 'Asystent zrobił ' + out.steps.length + ' kroków i nie skończył. Zadaj prostsze pytanie.' : out.text || '(pusta odpowiedź)';
   return { text: text, steps: out.steps, cost: cost, n: n, limit: pre.limit, real: real };
