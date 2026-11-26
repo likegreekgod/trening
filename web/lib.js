@@ -1569,6 +1569,49 @@
   L.importDay = d => /^H\d{6}[a-h]?$/.test(String(d || ''));
   L.dayLabel = (day, title) => L.importDay(day) ? (String(title || '').split(' · ')[0].trim() || 'Import') : String(day === undefined || day === null ? '' : day);
 
+  /* ---------- Agent AI klienta (panel → ustawienia klienta; Agent.gs): opis API dla bota ---------- */
+  L.AG_READ = [
+    ['zasady', 'Zasady trenera, ograniczenia tego klienta i limity. Pobierz na początku rozmowy.', {}],
+    ['plan', 'Plan na najbliższe dni: jednostki, ćwiczenia, serie, kg, RPE max, notatki trenera dla klienta.', { dni: ['integer', 'Ile dni do przodu (1–31, domyślnie 14)'] }],
+    ['historia', 'Zapisane serie z ostatnich dni (bez bólu i dyspozycji).', { dni: ['integer', 'Ile dni wstecz (1–90, domyślnie 30)'] }],
+    ['ciezarNaDzis', 'Ciężar i sufit na dziś wg zasad trenera (reguła 1.9, sufit w bojach). Nie licz ciężaru sam.', { tydzien: ['integer', 'Tydzień z planu (puste = najbliższa jednostka)'], jednostka: ['string', 'Jednostka z planu'] }],
+    ['cwiczenia', 'Szukaj ćwiczenia w bazie trenera (nazwy do zapisu i propozycji).', { q: ['string', 'Nazwa albo jej część'] }]
+  ];
+  L.AG_WRITE = [
+    ['zapiszSerie', 'Zapisz jedną serię ćwiczenia z planu.', { tydzien: ['integer'], jednostka: ['string'], nr: ['integer', 'Numer ćwiczenia z planu'], seria: ['string', '1, 2… robocze, R1… rozgrzewka, D1… drop set'],
+      kg: ['number'], powt: ['integer', 'Powtórzenia (sekundy przy ćwiczeniu na czas)'], swiatlo: ['string', 'zielone / żółte / czerwone / nieudana albo RPE 5–10; puste = bez oceny'] }, ['tydzien', 'jednostka', 'nr', 'seria']],
+    ['zapiszTrening', 'Zapisz własny trening klienta poza planem (dziś albo do 7 dni wstecz, ćwiczenia tylko z bazy).', { data: ['string', 'RRRR-MM-DD'], tytul: ['string'], rpe_sesji: ['number'], czas_min: ['integer'], uwagi: ['string'],
+      cwiczenia: ['array', 'Lista {nazwa, serie: [{kg, powt, swiatlo}]}'] }, ['cwiczenia']],
+    ['zaproponuj', 'Propozycja zmiany planu do akceptacji trenera. Do decyzji plan zostaje bez zmian.', { typ: ['string', 'zamiana / ciezar / serie / trening'], tydzien: ['integer'], jednostka: ['string'], nr: ['integer'],
+      na: ['string', 'Zamiennik (typ zamiana)'], kg: ['number', 'Nowy ciężar (typ ciezar)'], serie: ['integer', 'Nowa liczba serii (typ serie)'], data: ['string', 'Dzień dodatkowego treningu (typ trening)'], opis: ['string'], powod: ['string', 'Powód od klienta'] }, ['typ', 'powod']],
+    ['zglos', 'Zgłoszenie do trenera (ból, czerwona flaga, pytanie o plan, dietę, cel…).', { temat: ['string', 'czerwona_flaga / bol / plan / ciezar / status / fail / pominiete / dieta / cel / zawody / inne'], opis: ['string'],
+      miejsce: ['string', 'Przy bólu: miejsce'], strona: ['string', 'L / P'], ocena: ['integer', 'Przy bólu: 0–10'] }, ['temat', 'opis']]
+  ];
+  /** Czysta: OpenAPI 3.1 dla bota klienta. Klucz idzie w adresie (?api=…), bo Apps Script nie czyta nagłówków. */
+  L.agOpenApi = url => {
+    const sch = (t, d) => Object.assign(t === 'array' ? { type: 'array', items: { type: 'object' } } : { type: t }, d ? { description: d } : {});
+    const res = { 200: { description: '{ok: true, result} albo {ok: false, error}: błąd mówi, którą regułę trenera złamano.', content: { 'application/json': { schema: { type: 'object' } } } } };
+    const paths = {};
+    L.AG_READ.forEach(([n, d, p]) => { paths['/' + n] = { get: { operationId: n, summary: d, parameters: Object.keys(p).map(k => ({ name: k, in: 'query', required: false, schema: sch(p[k][0], p[k][1]) })), responses: res } }; });
+    L.AG_WRITE.forEach(([n, d, p, req]) => { const props = {}; Object.keys(p).forEach(k => { props[k] = sch(p[k][0], p[k][1]); });
+      paths['/' + n] = { post: { operationId: n, summary: d, requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: req, properties: props } } } }, responses: res } }; });
+    return { openapi: '3.1.0', info: { title: 'Siła z Ruchu: API dla asystenta AI klienta', version: '1',
+      description: 'Plan i zapis treningu u trenera. Zasady trenera pobierz akcją zasady. Ciężary i zmiany planu pilnuje serwer.' },
+      servers: [{ url: String(url || '').replace(/\/+$/, '') }], security: [{ klucz: [] }],
+      components: { securitySchemes: { klucz: { type: 'apiKey', in: 'query', name: 'api' } } }, paths: paths };
+  };
+  /** Czysta: instrukcja dla bota (do wklejenia w ustawienia bota klienta); bez klucza, klucz klient wpisuje osobno. */
+  L.agInstrukcja = (url, name) => [
+    'Jesteś asystentem treningowym w aplikacji trenera Damiana (Siła z Ruchu)' + (name ? '. Klient: ' + name : '') + '. Mówisz jak trener: krótko, po polsku, konkretnie.',
+    'Dostęp: POST ' + String(url || '') + '?api=KLUCZ z treścią {"fn": "<akcja>", "args": [{…}]} (albo /exec/<akcja>?api=KLUCZ). Odpowiedź: {ok, result} albo {ok: false, error}.',
+    'Na początku każdej rozmowy wywołaj „zasady” i trzymaj się ich. Plan sprawdzaj akcją „plan”, ciężar na dziś akcją „ciezarNaDzis” (nie licz go sam).',
+    'Akcje: ' + L.AG_READ.concat(L.AG_WRITE).map(a => a[0]).join(', ') + '.',
+    'Planu nie zmieniasz: zmiany idą przez „zaproponuj” i czekają na trenera. Ból, czerwone flagi i sprawy, o których decyduje trener, zgłaszasz akcją „zglos”.',
+    'Każdą serię oceniaj światłem (zielone / żółte / czerwone / nieudana). Bez oceny zapytaj klienta, nie zgaduj.',
+    'Gdy serwer odmówi, powiedz klientowi powód (numer reguły) i nie próbuj obejść go inną akcją.',
+    'Nie diagnozujesz i nie leczysz. Przy czerwonej fladze: przerwij trening, zgłoś („zglos”, temat czerwona_flaga) i odeślij do specjalisty.'
+  ].join('\n');
+
   root.TL = L;
   if (typeof module !== 'undefined' && module.exports) module.exports = L;
 })(typeof window !== 'undefined' ? window : globalThis);

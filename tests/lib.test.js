@@ -1132,3 +1132,18 @@ test('likeLast / histKg / tplUnit: trening bez planu – „Jak ostatnio” i sz
   assert.deepEqual(L.tplUnit({ name: 'Full body A', ex: [{ name: 'Bench', sets: 4, reps: 8 }, { name: 'Plank', sets: 2, reps: '30 s', circuit: 'A' }] }, logs),
     { title: 'Full body A', list: [{ name: 'Bench', sets: 4, reps: '8', kg: 60, c: '' }, { name: 'Plank', sets: 2, reps: '30 s', kg: '', c: 'A' }] });
 });
+
+test('agOpenApi / agInstrukcja: opis API dla bota klienta (te same akcje co serwer)', () => {
+  const C = require('./load-code')();
+  const o = L.agOpenApi('https://script.google.com/macros/s/X/exec/');
+  assert.equal(o.openapi, '3.1.0');
+  assert.equal(o.servers[0].url, 'https://script.google.com/macros/s/X/exec');
+  assert.deepEqual(o.components.securitySchemes.klucz, { type: 'apiKey', in: 'query', name: 'api' });
+  assert.deepEqual(Object.keys(o.paths).map(p => p.slice(1)).sort(), Object.keys(C.AGENT_FNS).sort());     // każda akcja serwera opisana
+  assert.ok(o.paths['/plan'].get && o.paths['/zapiszSerie'].post);
+  Object.keys(C.AGENT_FNS).forEach(k => assert.equal(!!C.AGENT_FNS[k], !!o.paths['/' + k].get, k));          // GET tylko dla odczytu
+  assert.deepEqual(o.paths['/zglos'].post.requestBody.content['application/json'].schema.required, ['temat', 'opis']);
+  const t = L.agInstrukcja('https://x/exec', 'Marcin');
+  assert.match(t, /Klient: Marcin/); assert.match(t, /zaproponuj/); assert.match(t, /\?api=KLUCZ/);
+  assert.ok(!/sz_[0-9a-f]{8}/.test(t));                                                                   // bez klucza
+});
