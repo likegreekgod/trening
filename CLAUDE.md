@@ -212,7 +212,7 @@ Konwencje Damiana:
   - zapisy bez sieci trafiają do kolejki `q_<klucz>` i wysyłają się po powrocie połączenia; `useData` nakłada niewysłane zapisy z kolejki (serie, przesunięcia dat) na dane z serwera;
   - `sw.js` trzyma pliki aplikacji w pamięci telefonu.
 - Dostępność:
-  - bez `maximum-scale`;
+  - bez powiększania dwoma palcami (26.11, prośba Damiana: przypadkowe powiększenie w trakcie treningu): viewport `maximum-scale=1, user-scalable=no`, `html{touch-action:pan-x pan-y}` i `gesturestart` w `app.js` / `trener.js` (iPhone); własne powiększanie tylko na zdarzeniach pointer z `touch-action:none` (odtwarzacz w panelu);
   - cele dotyku ≥ 44 px;
   - kolory tylko przez zmienne w `:root`;
   - jasny motyw przez `prefers-color-scheme`; `<meta name="color-scheme" content="light dark">` zostaje, bo bez niego Samsung / Chrome przyciemniają jasny motyw po swojemu.

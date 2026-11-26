@@ -314,6 +314,9 @@ function emTick(){
 }
 setInterval(emTick, 250);
 function emClose(){ const fs = $('#emfs'); if (fs) fs.remove(); EMFS = null; document.body.classList.remove('emfs-on'); }
+// Bez powiększania dwoma palcami (26.11): Safari na iPhonie ignoruje user-scalable=no, a gest zatrzymuje dopiero gesturestart / gesturechange (tylko iOS).
+// Własne powiększanie (np. odtwarzacz w panelu) działa na zdarzeniach pointer, więc tego nie dotyczy.
+['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && EMFS && $('#sheet').hidden) emClose(); });
 function bindEmom(ex, s0, h){
   const box = emBox(ex.order); if (!box) return;

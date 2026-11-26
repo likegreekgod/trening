@@ -101,6 +101,9 @@ function meInit(){
     return (n.length ? n.slice(0, 2).map(x => x[0]).join('') : String(q.email || '?')[0]).toUpperCase(); } catch (e) { return '?'; }
 }
 window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
+// Bez powiększania dwoma palcami (26.11): Safari na iPhonie ignoruje user-scalable=no, a gest zatrzymuje dopiero gesturestart / gesturechange (tylko iOS).
+// Własne powiększanie (np. odtwarzacz w panelu) działa na zdarzeniach pointer, więc tego nie dotyczy.
+['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
 document.addEventListener('click', e => {
   const r = e.target.closest('tr.row[data-k]'); if (r && !e.target.closest('a,button')) location.hash = '#k/' + encodeURIComponent(r.dataset.k);
   if (e.target.closest('[data-retry]')) start();

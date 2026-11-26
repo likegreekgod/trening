@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Trening – panel trenera</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex, nofollow">
 <!-- Blokada obcych skryptów: działa tylko kod z tej strony (trener.js, lib.js, config.js) i logowanie Google; dane i bilety mogą iść tylko do Google. Nowy adres zewnętrzny = dopisz go tutaj. -->
@@ -43,6 +43,9 @@
   }
   /* ---------- panel trenera: układ na komputer (lista po lewej, treść), na telefonie w jednej kolumnie ---------- */
   *{box-sizing:border-box}
+  /* bez powiększania dwoma palcami i podwójnym dotknięciem (26.11, prośba Damiana): przypadkowe powiększenie w trakcie treningu.
+     Android: user-scalable=no w viewport (wyłącza je ustawienie „Wymuś powiększanie” w Chrome); iPhone ignoruje viewport, więc touch-action tutaj i gesturestart w JS. */
+  html{touch-action:pan-x pan-y}
   [hidden]{display:none!important}
   body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 var(--f-body)}
   button,input,select,textarea{font:inherit;color:inherit}
