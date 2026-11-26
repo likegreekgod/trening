@@ -811,6 +811,7 @@ async function renderKlienci(sub){
     if (!location.hash.startsWith('#klienci')) return; }
   if (sub === 'nowy') return renderNowyKlient();
   if (sub) return renderKlientUst(sub);
+  const gone = KLM.gone ? KLM.ok : '';                                 // komunikat po usunięciu danych klienta (RODO)
   NK = null; KLD = {}; KLM = { ok: '', err: '', busy: false, rekey: '' };
   const on = KL.filter(k => k.on).length, off = KL.length - on;
   const rows = KL.slice().sort((a, b) => (b.on - a.on) || a.name.localeCompare(b.name, 'pl')).map(k => {
@@ -822,7 +823,7 @@ async function renderKlienci(sub){
       '<td class="nw"><span class="lk">' + (k.on ? cpBtn(k) : '') + '<a class="cp" href="#klienci/' + encodeURIComponent(k.id) + '">Ustawienia ›</a></span></td></tr>';
   }).join('');
   $('#main').innerHTML = head(on + ' ' + (on === 1 ? 'aktywny' : 'aktywnych') + (off ? ' · ' + off + ' ' + (off === 1 ? 'nieaktywny' : 'nieaktywnych') : ''), 'Klienci', '<a class="b p" ' + klLink + ' href="#klienci/nowy">+ Nowy klient</a>') +
-    '<div class="pg"><div class="card">' + (rows ? '<div class="tw"><table class="kl"><thead><tr><th>Klient</th><th>Ustawienia</th><th class="hide-m">Ostatni trening</th><th class="hide-m">Koniec planu</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="pg">' + (gone ? '<div class="card"><p class="saved" role="status" id="kl-gone" style="margin:0">' + esc(gone) + '</p></div>' : '') + '<div class="card">' + (rows ? '<div class="tw"><table class="kl"><thead><tr><th>Klient</th><th>Ustawienia</th><th class="hide-m">Ostatni trening</th><th class="hide-m">Koniec planu</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<p class="legend">Imię otwiera kartę klienta (plan, sesje, bloki). „Kopiuj link” kopiuje link do aplikacji tej osoby, gotowy do wklejenia w SMS albo WhatsApp. Nieaktywny klient nie wejdzie do aplikacji, ale jego dane zostają.</p>'
       : '<div class="es"><b>Nie ma jeszcze klientów</b>Dodaj pierwszego przyciskiem „+ Nowy klient”.</div>') + '</div></div>';
   klBind();
@@ -879,7 +880,7 @@ function renderKlientUst(id){
       : '<p class="muted">Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL.</p>') +
     '<div class="sec" style="border:0">Nowy link</div><p class="legend" style="font-size:13px">Gdy link trafił do niewłaściwej osoby. Stary link przestaje działać, a klient musi dostać nowy. Treningi i historia zostają.</p>' +
     '<button class="cp danger" type="button" id="kl-rekey"' + dis + '>' + (m.busy === 'rekey' ? 'Generuję…' : m.rekey === id ? 'Na pewno? Stary link przestanie działać' : 'Wygeneruj nowy link') + '</button></div>' +
-    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>' + importCard(k) + agentCard(k);
+    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>' + importCard(k) + agentCard(k) + rodoCard(k);
   $('#main').innerHTML = head('<a href="#klienci" style="color:inherit">Klienci</a> › ustawienia', k.name, '<a class="b" ' + klLink + ' href="#k/' + encodeURIComponent(id) + '">Karta klienta ›</a>') +
     '<div class="pg"><div class="kgrid"><div class="card" id="kl-form">' + f + '</div><div class="stack">' + side + '</div></div></div>';
   const re = () => { KLM = { ok: '', err: '', busy: false, rekey: '' }; renderKlientUst(id); };
@@ -905,6 +906,7 @@ function renderKlientUst(id){
     catch (e) { KLM = { ok: '', err: e.auth ? '' : e.message, busy: false, rekey: '' }; }
     if (location.hash.startsWith('#klienci/')) renderKlientUst(id);
   };
+  rodoBind(k);
   $('#kl-rekey').onclick = async () => {
     if (KLM.rekey !== id) { KLM = { ok: '', err: '', busy: false, rekey: id }; renderKlientUst(id); return; }
     KLM = { ok: '', err: '', busy: 'rekey', rekey: '' }; renderKlientUst(id);
@@ -986,6 +988,49 @@ function importBind(k, re){
     catch (e) { set({ busy: '', err: e.auth ? '' : e.message }); }
   };
   if (!HV || HV.id !== k.id) { HV = { id: k.id, srv: {} }; guard(api('trImport', k.id, { mode: 'stan' })).then(r => { if (HV.id === k.id && !HV.P) set({ srv: Object.assign({}, HV.srv, r) }); }).catch(() => {}); }
+}
+/* ---------- RODO (punkt 11 przeglądu v80): pobranie i usunięcie danych klienta (apps-script/Rodo.gs); stan tylko w pamięci strony ---------- */
+let RD = { id: '', busy: '', ok: '', err: '', open: false, name: '' };
+function rodoCard(k){
+  const r = RD.id === k.id ? RD : { busy: '', ok: '', err: '', open: false, name: '' }, match = r.name.trim().toLowerCase() === k.name.trim().toLowerCase();
+  return '<div class="card" id="rodo-card"><h2>Dane klienta (RODO)</h2>' +
+    '<p class="legend" style="font-size:13px;margin-top:0">Na prośbę klienta: kopia jego danych w pliku ZIP (CSV z każdej zakładki arkusza i lista filmów) albo usunięcie wszystkiego.</p>' +
+    '<div class="row2"><button class="b" type="button" id="rodo-dl"' + (r.busy ? ' disabled' : '') + '>' + (r.busy === 'dl' ? 'Przygotowuję plik…' : 'Pobierz dane (ZIP)') + '</button>' +
+    (r.open ? '' : '<button class="cp danger" type="button" id="rodo-del"' + (r.busy ? ' disabled' : '') + '>Usuń dane klienta…</button>') + '</div>' +
+    (r.open ? '<div class="rodo-x" role="group" aria-labelledby="rodo-h"><b id="rodo-h">Usunąć wszystkie dane: ' + esc(k.name) + '?</b>' +
+      '<p class="legend" style="font-size:13px">Znikną jego wiersze ze wszystkich zakładek arkusza (plan, serie, sesje, dyspozycja, ból, pomiary, podsumowania), wiersz w Klientach (link przestanie działać) i folder z filmami (do kosza Dysku, 30 dni). Nie da się tego cofnąć w panelu. Najpierw pobierz dane, jeśli klient o nie prosi. Cotygodniowe kopie arkusza zostają do ich wymiany (8 tygodni).</p>' +
+      '<label class="lab" for="rodo-name">Wpisz imię klienta: ' + esc(k.name) + '</label><input class="inp" id="rodo-name" autocomplete="off" spellcheck="false" value="' + esc(r.name) + '"' + (r.busy ? ' disabled' : '') + '>' +
+      '<div class="row2" style="margin-top:10px"><button class="cp danger" type="button" id="rodo-go"' + (match && !r.busy ? '' : ' disabled') + '>' + (r.busy === 'del' ? 'Usuwam…' : 'Usuń na zawsze') + '</button><button class="b" type="button" id="rodo-no"' + (r.busy ? ' disabled' : '') + '>Anuluj</button></div></div>' : '') +
+    (r.ok ? '<p class="saved" role="status">' + esc(r.ok) + '</p>' : '') + (r.err ? '<p class="err" role="alert">' + esc(r.err) + '</p>' : '') + '</div>';
+}
+function rodoBind(k){
+  const id = k.id, re = () => { if (location.hash.startsWith('#klienci/')) renderKlientUst(id); };
+  if (RD.id !== id) RD = { id, busy: '', ok: '', err: '', open: false, name: '' };
+  $('#rodo-dl').onclick = async () => {
+    Object.assign(RD, { busy: 'dl', ok: '', err: '' }); re();
+    try { const r = await guard(api('trKlientEksport', id)), bin = atob(r.b64), u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([u8], { type: 'application/zip' })); a.download = r.name;
+      document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      const n = Object.keys(r.tabs).reduce((x, t) => x + r.tabs[t], 0);
+      Object.assign(RD, { busy: '', ok: '✓ Pobrano ' + r.name + ': ' + n + ' ' + plN(n, 'wiersz', 'wiersze', 'wierszy') + ' z ' + Object.keys(r.tabs).length + ' ' + plN(Object.keys(r.tabs).length, 'zakładki', 'zakładek', 'zakładek') + ', ' + r.films + ' ' + plN(r.films, 'film', 'filmy', 'filmów') + ' na liście.' }); }
+    catch (e) { Object.assign(RD, { busy: '', err: e.auth ? '' : e.message }); }
+    re();
+  };
+  const del = $('#rodo-del'); if (del) del.onclick = () => { Object.assign(RD, { open: true, ok: '', err: '', name: '' }); re(); const i = $('#rodo-name'); if (i) i.focus(); };
+  const no = $('#rodo-no'); if (no) no.onclick = () => { Object.assign(RD, { open: false, name: '' }); re(); };
+  const nm = $('#rodo-name'); if (nm) nm.oninput = () => { RD.name = nm.value; const g = $('#rodo-go'); if (g) g.disabled = nm.value.trim().toLowerCase() !== k.name.trim().toLowerCase(); };
+  const go = $('#rodo-go'); if (go) go.onclick = async () => {
+    Object.assign(RD, { busy: 'del', err: '' }); re();
+    try { const r = await guard(api('trKlientUsun', id, RD.name));
+      KL = KL.filter(x => x.id !== id); delete KLD[id]; delete CK[id];
+      RD = { id: '', busy: '', ok: '', err: '', open: false, name: '' };
+      KLM = { ok: '✓ Usunięto dane: ' + r.name + ' (' + r.rows + ' ' + plN(r.rows, 'wiersz', 'wiersze', 'wierszy') + '; filmy: ' + (r.folder === 'kosz' ? 'folder w koszu Dysku' : r.folder === 'wspólny' ? 'folder zostaje, bo ma go też inny klient o tym imieniu: usuń filmy ręcznie' : 'brak folderu') + ').', err: '', busy: false, rekey: '', gone: true };
+      PUL.clients = PUL.clients.filter(c => c.id !== id);
+      location.hash = '#klienci'; return; }
+    catch (e) { Object.assign(RD, { busy: '', err: e.auth ? '' : e.message }); }
+    re();
+  };
 }
 function renderNowyKlient(){
   const n = NK = NK || { imie: '', id: '', touched: false, mode: 'PROSTY', swap: 'TRENER', masters: false, err: '', busy: false, done: null };

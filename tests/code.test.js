@@ -2093,6 +2093,20 @@ test('trCwiczenia_: ćwiczenia z planów aktywnych klientów bez filmu (części
   assert.deepEqual(plain(C.trCwiczenia_([], [], [], [])), { missing: [], dead: [], links: 0 });
 });
 
+test('RODO (Rodo.gs): rodoCol_, rodoPick_, rodoRuns_, csvOf_, rodoFile_ – wiersze klienta z każdej zakładki, usuwanie od dołu', () => {
+  assert.equal(C.rodoCol_(['id', 'zapisano', 'klient']), 2); assert.equal(C.rodoCol_(['klucz', 'klient_id', 'imie', 'klient']), 1); assert.equal(C.rodoCol_(['cwiczenie']), -1);
+  const v = [['id', 'klient', 'x'], ['1', 'ania', 'a'], ['2', 'Ania ', 'b'], ['3', 'bartek', 'c'], ['4', 'ania', 'd'], ['5', 'aniaa', 'e']];
+  const p = plain(C.rodoPick_(v, 'ANIA'));
+  assert.deepEqual(p.idx, [0, 1, 3]); assert.deepEqual(p.rows.map(r => r[0]), ['1', '2', '4']); assert.deepEqual(p.head, ['id', 'klient', 'x']);
+  assert.deepEqual(plain(C.rodoPick_(v, '')).idx, []); assert.deepEqual(plain(C.rodoPick_([['a'], ['ania']], 'ania')).idx, [], 'bez kolumny klienta nic');
+  assert.deepEqual(plain(C.rodoRuns_([0, 1, 3, 7, 8, 9, 1])), [[9, 3], [5, 1], [2, 2]]);   // wiersze arkusza (nagłówek = 1), od dołu
+  assert.deepEqual(plain(C.rodoRuns_([])), []);
+  assert.equal(C.csvOf_([['a', 'b;c', 'd"e'], [new Date('2026-11-23T10:00:00Z'), 'x\ny', null]]), '﻿a;"b;c";"d""e"\r\n2026-11-23T10:00:00.000Z;"x\ny";');
+  assert.equal(C.rodoFile_('Podsumowanie_OLY'), 'Podsumowanie_OLY.csv'); assert.equal(C.rodoFile_('Ćwiczenia'), 'Cwiczenia.csv'); assert.equal(C.rodoFile_('Błędy'), 'Bledy.csv'); assert.equal(C.rodoFile_('Ciało'), 'Cialo.csv');
+  assert.deepEqual(plain(C.RODO_POMIN), ['klucz', 'link', 'urzadzenia', 'api_klucz']);
+  ['trKlientEksport', 'trKlientUsun'].forEach(f => { assert.ok(C.TR_FNS[f], f); assert.ok(!C.API_FNS[f] && !C.LIVE_FNS[f], f); });
+});
+
 test('cwFilm_, linkProbe_, linkStan_: zapis linku trenera do bazy i ocena odpowiedzi przy sprawdzaniu', () => {
   const rows = [{ cwiczenie: 'Back Squat' }, { cwiczenie: 'Stary', glowna: 'Back Squat' }, { cwiczenie: 'Face  Pull' }];
   assert.deepEqual(plain(C.cwFilm_(rows, 'face pull', ' https://youtu.be/x ')), { i: 2, value: 'https://youtu.be/x' });
