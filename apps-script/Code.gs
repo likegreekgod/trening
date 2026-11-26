@@ -66,6 +66,7 @@ const API_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-
   deleteSet,
   deleteStan,
   editPlan,
+  editUnit,
   filmPart,
   getData,
   getExNames,
@@ -96,6 +97,7 @@ const LIVE_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR
   addOwnUnit,
   deleteSet,
   editPlan,
+  editUnit,
   getData,
   getExNames,
   liveNote,
@@ -2168,6 +2170,97 @@ function editPlan(key, e) {
     if (res.add.length) planAppend_(sh, h, res.add);
     return { ok: true, n: res.n };
   } finally { lock.releaseLock(); }
+}
+
+/* ---------- kolejność i nazwy ćwiczeń w jednostce (26.11.2026) ----------
+ * Trener w trybie „Prowadź”: dowolna jednostka klienta; klient: tylko własny trening (zrodlo = klient).
+ * Kolejność = numery nr tych samych wierszy rozdane od nowa (te same liczby, inny porządek). Id serii w Logu zawiera nr,
+ * więc ćwiczenie z zapisanym wpisem (seria, rozgrzewka, pominięcie) stoi w miejscu; obwód musi zostać razem (sąsiedzi).
+ * Nowa nazwa: Plan.cwiczenie, a w Logu cwiczenie zapisanych serii tego ćwiczenia (bez zamiany: tam cwiczenie = zamiennik).
+ * next (tylko trener) = nowa nazwa także w kolejnych tygodniach tej jednostki w tym bloku, niezrobionych, po starej nazwie.
+ */
+const UNIT_NAME_MAX = 80;
+/**
+ * Czysta funkcja: e = {week, day, seq?: [nr w nowej kolejności], names?: [{order, name}], next?}; done = unitsDone_,
+ * logged = {nr: 1} ćwiczeń jednostki z wpisem w Logu → {error} albo {set: [[indeks wiersza Planu, {kolumna: wartość}]],
+ * logRen: [{order, name}] (wiersze Logu tej jednostki), rows: [{order (stary nr), to (nowy nr), name}], n, weeks}.
+ */
+function unitEdit_(plan, done, logged, clientId, e, trainer) {
+  e = e || {}; logged = logged || {}; done = done || {};
+  const week = Number(e.week), day = String(e.day === undefined || e.day === null ? '' : e.day).trim();
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  const mine = []; (plan || []).forEach((r, i) => { if (lc(r.klient) === clientId) mine.push({ r, i }); });
+  const cur = mine.filter(x => Number(x.r.tydzien) === week && String(x.r.jednostka).trim() === day && !removed_(x.r));
+  if (!(week >= 0) || !day || !cur.length) return { error: 'Nie ma takiej jednostki w planie.' };
+  if (!trainer && !cur.every(x => own_(x.r))) return { error: 'Kolejność i nazwy zmienisz tylko we własnym treningu.' };
+  const byNr = {}; cur.forEach(x => { byNr[Number(x.r.nr)] = x; });
+  const set = {}, rows = {}, put = (x, col, v) => { (set[x.i] = set[x.i] || {})[col] = v; };
+  const row = x => rows[x.i] = rows[x.i] || { order: Number(x.r.nr), to: Number(x.r.nr), name: String(x.r.cwiczenie).trim() };
+  let n = 0;
+  if (e.seq !== undefined && e.seq !== null) {
+    const seq = [].concat(e.seq).map(Number), slots = cur.map(x => Number(x.r.nr)).sort((a, b) => a - b);
+    if (seq.length !== slots.length || new Set(seq).size !== seq.length || seq.some(o => !byNr[o])) return { error: 'Lista ćwiczeń się zmieniła – odśwież i spróbuj jeszcze raz.' };
+    const order = seq.map(o => byNr[o]);
+    // obwód: ćwiczenia z tą samą literą dalej obok siebie
+    const seen = {}; let prev = '';
+    for (const x of order) { const c = circuit_(x.r.obwod); if (c && c !== prev && seen[c]) return { error: 'Obwód ' + c + ' musi zostać razem.' }; if (c) seen[c] = 1; prev = c; }
+    for (let k = 0; k < order.length; k++) {
+      const x = order[k], to = slots[k];
+      if (Number(x.r.nr) === to) continue;
+      if (logged[Number(x.r.nr)]) return { error: String(x.r.cwiczenie).trim() + ': ma zapisane serie, zostaje na swoim miejscu.' };
+      put(x, 'nr', to); row(x).to = to; n++;
+    }
+  }
+  const weeks = {}; let later = [];
+  if (e.next && trainer) {
+    const blok = lc(cur[0].r.blok);
+    later = mine.filter(x => Number(x.r.tydzien) > week && String(x.r.jednostka).trim() === day && lc(x.r.blok) === blok && !own_(x.r) && !removed_(x.r) && !done[doneKey_(clientId, x.r.tydzien, day)]);
+  }
+  const logRen = [];
+  for (const ch of [].concat(e.names || [])) {
+    const x = byNr[Number(ch && ch.order)];
+    if (!x) return { error: 'Nie ma takiego ćwiczenia w jednostce.' };
+    const name = String(ch.name === undefined || ch.name === null ? '' : ch.name).trim().replace(/\s+/g, ' ');
+    if (!name) return { error: 'Nazwa ćwiczenia nie może być pusta.' };
+    if (name.length > UNIT_NAME_MAX) return { error: 'Nazwa: najwyżej ' + UNIT_NAME_MAX + ' znaków.' };
+    const old = String(x.r.cwiczenie).trim();
+    if (name === old) continue;
+    put(x, 'cwiczenie', name); row(x).name = name; n++;
+    if (logged[Number(x.r.nr)]) logRen.push({ order: Number(x.r.nr), name });
+    later.filter(y => lc(y.r.cwiczenie) === lc(old)).forEach(y => { put(y, 'cwiczenie', name); weeks[Number(y.r.tydzien)] = 1; });
+  }
+  return { set: Object.keys(set).map(i => [Number(i), set[i]]), logRen, rows: Object.keys(rows).map(k => rows[k]), n, weeks: Object.keys(weeks).map(Number).sort((a, b) => a - b) };
+}
+
+/** API: kolejność i nazwy ćwiczeń jednostki (unitEdit_). Klient: własny trening; trener (tryb „Prowadź”): każda jednostka. */
+function editUnit(key, e) {
+  const client = mustClient_(key);
+  if (!LIVE_ && !client.own) throw new Error('Własne treningi są wyłączone – zapytaj trenera.');
+  e = e || {};
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const plan = tableOf_('Plan'), log = pgTable_('Log', DONE_LOG_COLS);
+    const logged = {};
+    log.forEach(l => { if (String(l.klient).trim().toLowerCase() === client.id && Number(l.tydzien) === Number(e.week) && String(l.jednostka).trim() === String(e.day).trim()) logged[Number(l.nr_cw)] = 1; });
+    const done = e.next && LIVE_ ? unitsDone_(plan, pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), log) : {};
+    const res = unitEdit_(plan, done, logged, client.id, e, LIVE_);
+    if (res.error) throw new Error(res.error);
+    if (res.set.length) trPlanSet_(res.set);
+    if (res.logRen.length) logRename_(client.id, Number(e.week), String(e.day).trim(), res.logRen);
+    return { ok: true, n: res.n, rows: res.rows, weeks: res.weeks };
+  } finally { lock.releaseLock(); }
+}
+
+/** nowa nazwa ćwiczenia w zapisanych seriach (Log.cwiczenie); serie z zamianą zostają (tam cwiczenie = zamiennik) */
+function logRename_(clientId, week, day, list) {
+  const sh = sheet_('Log', LOG_HEADERS), last = sh.getLastRow();
+  if (last < 2) return;
+  const v = sh.getRange(2, 1, last - 1, LOG_HEADERS.length).getValues(), ci = LOG_HEADERS.indexOf('cwiczenie'), zi = LOG_HEADERS.indexOf('zamiana');
+  list.forEach(x => {
+    const pre = [clientId, week, day, x.order].join('|') + '|';
+    v.forEach((r, i) => { if (String(r[0]).indexOf(pre) === 0 && !String(r[zi] === undefined || r[zi] === null ? '' : r[zi]).trim()) sh.getRange(i + 2, ci + 1).setValue(plain_(x.name)); });
+  });
 }
 
 /** Dopisuje wiersze na końcu Planu (format tekstowy dat, powtórzeń i kg ustawiony przed zapisem). */
