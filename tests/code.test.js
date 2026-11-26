@@ -2409,7 +2409,7 @@ test('czat „Wypróbuj asystenta”: narzędzia, historia, pętla akcji, instru
   assert.ok(C.agChatLoop_({ messages: [{ role: 'user', content: 'a' }] }, () => ({ stop_reason: 'refusal', content: [] }), () => ({}), 3).refusal);
   // instrukcja: zasady i ograniczenia w środku, tryb próby opisany, bez imienia
   const sp = C.agChatSystem_({ zasady: '## 1. Ciężar\nreguła 1.9', ogr: 'bez skoków', today: '2026-11-26' });
-  assert.match(sp, /reguła 1\.9/); assert.match(sp, /bez skoków/); assert.match(sp, /trybie próby/); assert.match(sp, /2026-11-26/);
+  assert.match(sp, /reguła 1\.9/); assert.match(sp, /bez skoków/); assert.match(sp, /trybie próby/); assert.match(sp, /trener nic nie dostaje/); assert.match(sp, /2026-11-26/);
   assert.match(C.agChatSystem_({ real: true }), /Zapisy są prawdziwe/);
   assert.match(C.agChatSystem_({}), /nie wkleił jeszcze zasad/);
   assert.ok(C.TR_FNS.trAsystent);
