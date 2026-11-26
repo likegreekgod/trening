@@ -1486,12 +1486,24 @@ function stickDraw(){
 }
 
 /* ---------- okno (arkusz od dołu) i kalkulator talerzy ---------- */
+/* Okno ma własny wpis w historii: „wstecz” telefonu (gest, przycisk) zamyka okno zamiast wychodzić z aplikacji
+   (w trybie „Prowadź” wychodziło do panelu trenera). SH_HIST = nasz wpis jest na wierzchu; SH_SKIP = ile zdarzeń popstate
+   z własnego history.back() (zamknięcie przyciskiem) zignorować; okno otwarte w międzyczasie dostaje wpis po tym zdarzeniu. */
+let SH_HIST = false, SH_SKIP = 0;
+function shPush(){ if (SH_HIST || SH_SKIP) return; try { history.pushState({ sh: 1 }, ''); SH_HIST = true; } catch (e) {} }
 function openSheet(html){
-  $("#sheet-in").innerHTML = html; $("#sheet").hidden = false;
+  $("#sheet-in").innerHTML = html; $("#sheet").hidden = false; shPush();
   const f = $("#sheet-in input, #sheet-in button"); if (f) f.focus();
 }
 let SHEET_ON_CLOSE = null;
-function closeSheet(){ const f = SHEET_ON_CLOSE; SHEET_ON_CLOSE = null; if (f) f(); $("#sheet").hidden = true; $("#sheet-in").innerHTML = ""; }
+function closeSheet(pop){
+  const f = SHEET_ON_CLOSE; SHEET_ON_CLOSE = null; if (f) f(); $("#sheet").hidden = true; $("#sheet-in").innerHTML = "";
+  if (SH_HIST) { SH_HIST = false; if (!pop) { SH_SKIP++; history.back(); } }
+}
+addEventListener("popstate", () => {
+  if (SH_SKIP) { SH_SKIP--; if (!$("#sheet").hidden) shPush(); return; }
+  if (!$("#sheet").hidden) closeSheet(true);
+});
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet" || e.target.closest("[data-close]")) closeSheet(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); else if (e.key === "Escape" && WEL) welClose(); });
 let BAR = 20, COLLARS = true;
