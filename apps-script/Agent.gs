@@ -584,7 +584,7 @@ function trZasadyUstaw(tekst, limity) {
 /* ---------- czat „Wypróbuj asystenta” w panelu (trAsystent): trener rozmawia jak klient ----------
  * Te same akcje i reguły co bot klienta, przez Claude API z kluczem panelu (CLAUDE_API_KEY, limit dzienny AI_LIMIT).
  * Domyślnie próba: zapisy przechodzą przez reguły, ale nic nie trafia do arkusza (agWrite_ z dry). */
-const AG_CHAT_MAX = 20, AG_CHAT_TXT = 2000, AG_CHAT_KROKI = 8, AG_CHAT_CZAS = 240000;
+const AG_CHAT_MAX = 20, AG_CHAT_TXT = 2000, AG_CHAT_KROKI = 5, AG_CHAT_CZAS = 240000;
 // Akcje dla modelu: te same nazwy, opisy i pola co lib AG_READ + AG_WRITE (test pilnuje zgodności)
 const AG_TOOLS = [
   ['zasady', 'Zasady trenera, ograniczenia tego klienta i limity. Pobierz na początku rozmowy.', {}],
@@ -624,6 +624,8 @@ function agChatSystem_(o) {
     'Każdą serię oceniaj światłem (zielone / żółte / czerwone / nieudana). Bez oceny zapytaj klienta, nie zgaduj.',
     'Gdy serwer odmówi, powiedz klientowi powód (numer reguły) i nie próbuj obejść go inną akcją.',
     'Nie diagnozujesz i nie leczysz. Przy czerwonej fladze: przerwij trening, zgłoś („zglos”, temat czerwona_flaga) i odeślij do specjalisty.',
+    'Zgłoszenie („zglos”) robisz najwyżej raz na sprawę: jedno wywołanie z całym opisem. Nie zgłaszasz ponownie tego, co już zgłosiłeś w tej rozmowie (patrz „Wykonane akcje” w Twoich wcześniejszych odpowiedziach), i nie zgłaszasz zwykłych informacji o treningu.',
+    'Odpowiadaj krótko: najwyżej 4 zdania, bez powtarzania zasad. Wywołuj tylko akcje potrzebne do odpowiedzi.',
     '',
     '## Zasady trenera',
     String(o.zasady || '').trim() || '(Trener nie wkleił jeszcze zasad. Trzymaj się powyższych reguł i planu.)',
@@ -636,7 +638,9 @@ function agChatSystem_(o) {
 /** Czysta: historia czatu z panelu [{role, text}] → messages albo {error}. Zaczyna i kończy się klientem, role na zmianę. */
 function agChatMsgs_(list) {
   if (!Array.isArray(list) || !list.length) return { error: 'Napisz wiadomość.' };
-  const m = list.slice(-AG_CHAT_MAX).map(x => ({ role: x && x.role === 'assistant' ? 'assistant' : 'user', content: String(x && x.text || '').replace(/\r\n/g, '\n').trim().slice(0, AG_CHAT_TXT) }))
+  const acts = x => x && x.role === 'assistant' && Array.isArray(x.steps) && x.steps.length   // co asystent już zrobił (np. zgłoszenie): bez tego zgłasza to samo przy każdej wiadomości
+    ? '\n\n(Wykonane akcje: ' + x.steps.slice(0, 10).map(s => agTxt_(s && s.fn, 20) + (s && s.ok ? ' ✓' : ' ✕')).join(', ') + ')' : '';
+  const m = list.slice(-AG_CHAT_MAX).map(x => ({ role: x && x.role === 'assistant' ? 'assistant' : 'user', content: (String(x && x.text || '').replace(/\r\n/g, '\n').trim().slice(0, AG_CHAT_TXT) + acts(x)).trim() }))
     .filter(x => x.content);
   while (m.length && m[0].role !== 'user') m.shift();
   if (!m.length || m[m.length - 1].role !== 'user') return { error: 'Napisz wiadomość.' };
@@ -698,17 +702,19 @@ function trAsystent(id, msgs, opt) {
   if (m.error) throw new Error(m.error);
   const real = !!(opt && opt.real), pre = aiPre_(), x = agCtx_(row), z = agZasady_(), t0 = Date.now();
   const req = { model: AI_MODEL, max_tokens: 4000, system: agChatSystem_({ zasady: z.tekst, ogr: x.ogr, today: x.today, real: real }), tools: agTools_(),
-    messages: m.msgs, output_config: { effort: 'low' }, fallbacks: 'default' };
+    messages: m.msgs, output_config: { effort: 'low' }, fallbacks: 'default', cache_control: { type: 'ephemeral' } };   // zasady i narzędzia z pamięci podręcznej w kolejnych krokach (ok. 10% ceny)
+  let zgl = 0;
   const out = agChatLoop_(req, r => {
     if (Date.now() - t0 > AG_CHAT_CZAS) throw new Error('Asystent pracował za długo (limit czasu skryptu Google). Zadaj prostsze pytanie.');
     return aiFetch_(pre.key, r);
   }, (fn, a) => {
+    if (fn === 'zglos' && ++zgl > 1) return agErr_('Zgłoszenie już poszło w tej odpowiedzi: jedno na sprawę.');
     const r = agChatTool_(fn, x, a, z.limity, real);
     if (real && (AG_WRITE[fn] || AG_PROP[fn] || fn === 'zglos')) agLog_(id, 'czat:' + fn, !(r && r.error), r && r.error || '');
     return r;
   }, AG_CHAT_KROKI);
   const cost = Math.round(out.usage.reduce((s, u) => s + aiCost_(out.model, u), 0) * 10000) / 10000;
-  const tok = out.usage.reduce((s, u) => ({ input_tokens: s.input_tokens + (Number(u.input_tokens) || 0), output_tokens: s.output_tokens + (Number(u.output_tokens) || 0) }), { input_tokens: 0, output_tokens: 0 });
+  const tok = out.usage.reduce((s, u) => ({ input_tokens: s.input_tokens + (Number(u.input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0), output_tokens: s.output_tokens + (Number(u.output_tokens) || 0) }), { input_tokens: 0, output_tokens: 0 });
   const n = aiNote_(pre, ['asystent' + (real ? '' : ' (próba)'), id, '', ''], out.model, tok, cost);
   const text = out.refusal ? 'Asystent odmówił odpowiedzi na to pytanie (filtr bezpieczeństwa Claude).' : out.cut ? 'Asystent zrobił ' + out.steps.length + ' kroków i nie skończył. Zadaj prostsze pytanie.' : out.text || '(pusta odpowiedź)';
   return { text: text, steps: out.steps, cost: cost, n: n, limit: pre.limit, real: real };

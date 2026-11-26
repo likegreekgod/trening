@@ -2382,6 +2382,10 @@ test('czat „Wypróbuj asystenta”: narzędzia, historia, pętla akcji, instru
   assert.deepEqual(m.msgs.map(x => x.role), ['user', 'assistant', 'user']);
   assert.equal(m.msgs[0].content, 'Co dziś?\n\nI jutro');
   assert.equal(m.msgs[2].content.length, C.AG_CHAT_TXT);
+  // wykonane akcje wracają do historii, żeby asystent nie zgłaszał drugi raz
+  const h = plain(C.agChatMsgs_([{ role: 'user', text: 'Boli kolano' }, { role: 'assistant', text: 'Zgłosiłem trenerowi.', steps: [{ fn: 'zglos', ok: true }, { fn: 'plan', ok: false }] }, { role: 'user', text: 'Co dalej?' }]));
+  assert.equal(h.msgs[1].content, 'Zgłosiłem trenerowi.\n\n(Wykonane akcje: zglos ✓, plan ✕)');
+  assert.match(C.agChatSystem_({}), /najwyżej raz na sprawę/);
   // pętla: akcja → wynik → odpowiedź; błąd akcji wraca jako is_error
   const sent = [];
   const replies = [

@@ -742,7 +742,7 @@ function agChatCard(k){
   const c = ACH.id === k.id ? ACH : { msgs: [], busy: false, err: '', real: false, draft: '', cost: 0 }, dis = c.busy ? ' disabled' : '';
   const steps = st => st && st.length ? '<ul class="acst">' + st.map(x => '<li class="' + (x.ok ? 'ok' : 'no') + '"><span class="mono">' + esc(x.fn) + '</span>' + (x.args ? ' <small>' + esc(x.args) + '</small>' : '') +
     (x.ok ? ' ✓' : ' ✕ ' + esc(x.info)) + '</li>').join('') + '</ul>' : '';
-  const bub = m => '<div class="acm ' + (m.role === 'user' ? 'u' : 'a') + '"><div class="acb">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' + steps(m.steps) + '</div>';
+  const bub = m => '<div class="acm ' + (m.role === 'user' ? 'u' : 'a') + '"><div class="acb">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' + steps(m.steps) + (m.cost ? '<small class="acx">ok. ' + esc(pl(Math.round(m.cost * 1000) / 1000)) + ' USD</small>' : '') + '</div>';
   return '<div class="card" id="agchat"><h2>Wypróbuj asystenta</h2>' +
     '<p class="legend" style="margin-top:0;font-size:13px;line-height:1.5">Piszesz jako ' + esc(k.name) + '. Asystent widzi plan, historię, Twoje zasady i ograniczenia tego klienta, tak jak bot klienta. Płacisz z klucza Claude API panelu (Ustawienia).</p>' +
     frH('Zapisuj naprawdę', c.real ? 'Serie, treningi, propozycje i zgłoszenia trafiają do arkusza.' : 'Wyłączone: serwer sprawdza zapisy regułami, ale nic nie zapisuje.',
@@ -766,9 +766,9 @@ function agChatBind(k, re){
     const txt = ACH.draft.trim(); if (!txt || ACH.busy) return;
     ACH.msgs.push({ role: 'user', text: txt }); ACH.draft = ''; ACH.busy = true; ACH.err = ''; re();
     try {
-      const r = await guard(api('trAsystent', id, ACH.msgs.map(m => ({ role: m.role, text: m.text })), { real: ACH.real }));
+      const r = await guard(api('trAsystent', id, ACH.msgs.map(m => ({ role: m.role, text: m.text, steps: m.steps })), { real: ACH.real }));
       if (ACH.id !== id) return;
-      ACH.msgs.push({ role: 'assistant', text: r.text, steps: r.steps || [] }); ACH.cost += Number(r.cost) || 0;
+      ACH.msgs.push({ role: 'assistant', text: r.text, steps: r.steps || [], cost: Number(r.cost) || 0 }); ACH.cost += Number(r.cost) || 0;
     } catch (e) { if (ACH.id !== id) return; ACH.msgs.pop(); ACH.draft = txt; ACH.err = e.auth ? '' : e.message; }
     ACH.busy = false; re();
   };
