@@ -39,6 +39,9 @@ const DYS_HEADERS = ['id', 'zapisano', 'klient', 'data', 'cmj1', 'cmj2', 'cmj3',
   'sen', 'stres', 'zmeczenie', 'bolesnosc', 'hooper_suma', 'vbt_test', 'werdykt', 'powody', 'cmj_wykluczone', 'film_link'];
 // Stan ciała: ból / napięcie zapisane w dowolny dzień (zakładka „Stan”, Dyspozycja w aplikacji); id = klient|data|miejsce z stroną
 const STAN_HEADERS = ['id', 'zapisano', 'klient', 'data', 'miejsce', 'strona', 'ocena', 'kontekst', 'cwiczenie', 'notatka'];
+// Ciało (punkt 15 przeglądu v80): masa i obwody, jeden wpis dziennie (id = klient|data); tylko klienci z Klienci W „cialo” = TAK
+const CIALO_HEADERS = ['id', 'zapisano', 'klient', 'data', 'masa', 'talia', 'biodra', 'klatka', 'ramie', 'udo'];
+const CIALO_ZAKRES = { masa: [25, 300], talia: [30, 250], biodra: [30, 250], klatka: [30, 250], ramie: [10, 100], udo: [20, 150] };
 const STAN_KONTEKST = ['spoczynek', 'przy rozciąganiu', 'w ćwiczeniu', 'po treningu'];
 const OCENY = ['L', 'S', 'W', 'X'];   // boje: Łatwo / Średnio / Walka / Spalone
 
@@ -63,6 +66,7 @@ function oldLinkText_(pwa) {
  */
 const API_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y dopisują w różnych miejscach
   addOwnUnit,
+  deleteCialo,
   deleteSet,
   deleteStan,
   editPlan,
@@ -78,6 +82,7 @@ const API_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-
   logVideo,
   przesunJednostke,
   replyNote,
+  saveCialo,
   saveDyspozycja,
   saveStan,
   startUpload,
@@ -228,9 +233,10 @@ function clientData_(client, t0) {
   rows.forEach(r => r.swaps.forEach(dxOf));
   fillDates_(rows, sessions, today_());
   return { cfg: { name: client.name, pain: client.pain, simple: client.simple, extra: client.extra,
-      swap: client.swap, scale: client.scale, olyCeil: client.olyCeil, own: client.own, edit: client.edit },
+      swap: client.swap, scale: client.scale, olyCeil: client.olyCeil, own: client.own, edit: client.edit, body: !!client.body },
     plan: rows, removed: removed, logs: logs, sessions: sessions,
     readiness: readRows_('Dyspozycja', DYS_HEADERS, client.id), stan: readRows_('Stan', STAN_HEADERS, client.id), blockNotes: blockNotes_(tableOf_('Bloki'), client.id),
+    cialo: client.body ? readRows_('Ciało', CIALO_HEADERS, client.id) : [],
     parts: pm, ms: Object.assign(ms, { razem: Date.now() - t0 }) };
 }
 
@@ -316,6 +322,53 @@ function deleteStan(key, e) {
   lock.waitLock(20000);
   try {
     const sh = sheet_('Stan', STAN_HEADERS);
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(id).matchEntireCell(true).findNext();
+    if (hit && hit.getRow() > 1) sh.deleteRow(hit.getRow());
+  } finally { lock.releaseLock(); }
+  return { ok: true };
+}
+
+/**
+ * Czysta funkcja: pomiar ciała z aplikacji → wiersz zakładki Ciało (CIALO_HEADERS) albo {error}.
+ * e = {date, masa, talia, biodra, klatka, ramie, udo}: kg i cm, przecinek albo kropka, puste pole pominięte; co najmniej jedno pole.
+ */
+function cialoRow_(clientId, e, savedAt, today) {
+  e = e || {};
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(e.date || '')) ? String(e.date) : today;
+  if (date > addDaysStr_(today, 1)) return { error: 'Data pomiaru w przyszłości.' };
+  const row = [clientId + '|' + date, savedAt, clientId, date];
+  let n = 0;
+  for (const k of CIALO_HEADERS.slice(4)) {
+    const raw = String(e[k] === undefined || e[k] === null ? '' : e[k]).trim().replace(',', '.');
+    if (!raw) { row.push(''); continue; }
+    const v = Number(raw), z = CIALO_ZAKRES[k];
+    if (!isFinite(v) || v < z[0] || v > z[1]) return { error: (k === 'masa' ? 'Masa ciała' : 'Obwód ' + k) + ': ' + z[0] + '–' + z[1] + (k === 'masa' ? ' kg.' : ' cm.') };
+    row.push(Math.round(v * 10) / 10); n++;
+  }
+  if (!n) return { error: 'Wpisz co najmniej jeden pomiar.' };
+  return { row: row };
+}
+const addDaysStr_ = (d, n) => { const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+
+/** Masa ciała i obwody (Postęp → Ciało): jeden wpis dziennie, ten sam dzień = nadpisanie. */
+function saveCialo(key, e) {
+  const client = mustClient_(key);
+  if (!client.body) throw new Error('Pomiary ciała są wyłączone.');
+  const r = cialoRow_(client.id, e, new Date(), today_());
+  if (r.error) throw new Error(r.error);
+  const sh = sheet_('Ciało', CIALO_HEADERS);
+  sh.getRange(1, CIALO_HEADERS.indexOf('data') + 1, sh.getMaxRows(), 1).setNumberFormat('@');   // data jako tekst
+  upsert_('Ciało', CIALO_HEADERS, r.row[0], r.row);
+  return { ok: true, id: r.row[0] };
+}
+
+/** Usunięcie pomiaru ciała z danego dnia. */
+function deleteCialo(key, date) {
+  const client = mustClient_(key), id = client.id + '|' + String(date || '');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Ciało', CIALO_HEADERS);
     const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(id).matchEntireCell(true).findNext();
     if (hit && hit.getRow() > 1) sh.deleteRow(hit.getRow());
   } finally { lock.releaseLock(); }
@@ -662,7 +715,7 @@ function clientOf_(r) {
     extra: Number(String(r[7] === undefined ? '' : r[7]).replace(',', '.')) || 0,
     swap: swapMode_(cell(9)),
     scale: cell(10) === 'RIR' ? 'RIR' : 'RPE',
-    olyCeil: olyCeil_(r[11]), own: cell(12) !== 'NIE', edit: cell(13) === 'TAK' };
+    olyCeil: olyCeil_(r[11]), own: cell(12) !== 'NIE', edit: cell(13) === 'TAK', body: cell(22) === 'TAK' };
 }
 
 /** Klienci J „zamiana”: TAK / TRENER → zamienniki z planu i bazy, DOWOLNA → cała baza i własna nazwa, inne → brak (false). */

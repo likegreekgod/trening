@@ -68,14 +68,15 @@ function klient() {
     readiness.push({ data: addDays(mon, 1), werdykt: i === 11 ? 'Uwaga' : 'OK', cmj_sr: 31 + (i % 4) * 0.5, hooper_suma: 12 + (i % 3), vbt_test: 0.92, powody: i === 11 ? 'CMJ −6%' : '' });
   });
   return {
-    cfg: { name: 'Ania', id: 'ania', active: true, masters: false, simple: false, scale: 'RPE', pain: true },
+    cfg: { name: 'Ania', id: 'ania', active: true, masters: false, simple: false, scale: 'RPE', pain: true, body: true },
     plan, logs, sessions, readiness, summary, removed: [], blockNotes: {},
+    cialo: [0, 4, 8, 11].map((i, j) => ({ data: addDays(WEEKS[i], 1), masa: [68.4, 67.9, 67.1, 66.8][j], talia: j % 2 ? '' : [76, 74.5][j / 2], biodra: '', klatka: '', ramie: '', udo: j === 3 ? 55 : '' })),
     blocks: [{ blok: 'B1', od: WEEKS[0], do: addDays(WEEKS[5], 6), tygodnie: 6, jednostki: 11, 'wykonanie_%': 92, tonaz_kg: 41250, e1RM_zm: 'Przysiad tylny +8%', najlepsze_boje: '', sRPE_sr: 720, samopocz_sr: 4, dyspozycja: 'OK', bol_max: 2, statusy: 'OK ×6', wnioski: 'Dobra adaptacja, więcej objętości na górę.', dla_klienta: 'Świetny blok, przysiad +8%.' },
       { blok: 'B2', od: WEEKS[6], do: addDays(WEEKS[11], 13), tygodnie: 6, jednostki: 11, 'wykonanie_%': 100, tonaz_kg: 30100, e1RM_zm: '', najlepsze_boje: '', sRPE_sr: 790, samopocz_sr: 4, dyspozycja: 'Uwaga ×1', bol_max: 5, statusy: 'OK ×5, za dużo ×1', wnioski: '', dla_klienta: '' }]
   };
 }
 
-const KL1 = { scale: 'RPE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false, mailKom: false, seen: '', devs: 0 };
+const KL1 = { scale: 'RPE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false, mailKom: false, seen: '', devs: 0, body: false };
 const KLIENCI = [   // panel → Klienci (trKlienci): ustawienia z zakładki Klienci, dane syntetyczne
   Object.assign({}, KL1, { id: 'ania', name: 'Ania', on: true, mode: 'PRO', swap: 'DOWOLNA', pain: true, edit: true, extra: 2, seen: new Date(Date.now() - 2 * 3600e3).toISOString(), devs: 3, link: 'https://example.com/trening/?k=kaaaaaaaaaa1' }),
   Object.assign({}, KL1, { id: 'bartek', name: 'Bartek', on: true, mode: 'PROSTY', swap: 'TRENER', extra: 1, seen: new Date(Date.now() - 26 * 3600e3).toISOString(), devs: 1, link: 'https://example.com/trening/?k=kbbbbbbbbbb2' }),
@@ -306,7 +307,7 @@ test('panel: karta klienta (przegląd, sesje, bloki, dyspozycja)', async () => {
   assert.match(await p.textContent('.sr'), /wt 17\.11 · T1 Nogi\s*55 min · RPE 8 · ból 5 kolano\s*Przysiad tylny 84×5 @7,5 ▶ · @8 · @8,5 ▶\s*Kolano po przysiadach/);
   assert.match(txt, /Wszystkie 22 ›/);
   assert.match(await p.textContent('.sg'), /Przysiad tylny\s*od 01\.09: \+27,5 kg\s*105 kg/);
-  assert.equal(await p.$$eval('svg.ch', a => a.length), 1);      // tonaż; siła jako małe wykresy w wierszach
+  assert.equal(await p.$$eval('svg.ch', a => a.length), 2);      // tonaż i masa ciała (cfg.body); siła jako małe wykresy w wierszach
   await shot(p, 'trener-klient-jasny.png');
   await p.click('.tabs a[href$="/sesje"]'); await p.waitForSelector('details.ses');
   txt = await p.textContent('#main');
@@ -388,6 +389,8 @@ test('panel: zrzuty w ciemnym motywie i na telefonie', async () => {
     await shot(p, 'trener-plan-' + sfx + '.png');
     if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Plan bez przewijania w bok na telefonie');
     await p.goto(base + 'trener.html#k/ania'); await p.waitForSelector('.kgo');
+    assert.match(await p.textContent('#k-cialo'), /Ciało · ostatni pomiar[\s\S]*Masa ciała 66,8 kg · −1,6 od [\s\S]*Talia 74,5 cm · −1,5 od[\s\S]*Udo 55 cm/);
+    assert.equal(await p.$$eval('#k-cialo svg', s => s.length), 1);
     assert.equal(await p.getAttribute('.kgo', 'href'), './?prowadz=ania');   // „▶ Prowadź trening” w karcie klienta: bez narzucania jednostki z planu
     if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'bez przewijania w bok na telefonie');
     assert.deepEqual(p.errors, []);
