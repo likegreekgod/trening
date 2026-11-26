@@ -252,6 +252,34 @@
     let j = i; while (same(j - 1)) j--;
     return e.old ? e : Object.assign({}, e, { sets: a[j].sets });
   });
+  /* ---------- kolejność ćwiczeń (kreator i „Kolejność i nazwy”, 26.11.2026) ---------- */
+  /** bloki listy: sąsiednie pozycje z tą samą literą obwodu (c) = jeden blok, reszta po jednej → [[indeksy]] */
+  L.orderBlocks = list => {
+    const out = [];
+    (list || []).forEach((e, i) => { const c = (e && e.c) || '', b = out[out.length - 1]; if (c && b && ((list[b[0]] || {}).c || '') === c) b.push(i); else out.push([i]); });
+    return out;
+  };
+  /**
+   * przesunięcie o jedno miejsce (d = −1 wyżej, +1 niżej); pozycja = {c: litera obwodu, lock: stoi w miejscu (zapisane serie)}.
+   * grp = false: ćwiczenie w obwodzie zamienia się z sąsiadem w tym obwodzie (na brzegu obwodu nie wychodzi: od tego jest „Rozłącz”),
+   *   pojedyncze przeskakuje sąsiedni blok (ćwiczenie albo cały obwód); grp = true: cały obwód z i przeskakuje sąsiedni blok.
+   * Zablokowanych nikt nie przesuwa ani nie przeskakuje. Zwraca nową tablicę (te same obiekty) albo null, gdy się nie da.
+   */
+  L.orderMove = (list, i, d, grp) => {
+    list = list || []; d = d < 0 ? -1 : 1;
+    if (!list[i]) return null;
+    const B = L.orderBlocks(list), bi = B.findIndex(b => b.indexOf(i) >= 0), lk = b => b.some(j => list[j].lock);
+    if (B[bi].length > 1 && !grp) {
+      const j = i + d;
+      if (B[bi].indexOf(j) < 0 || list[i].lock || list[j].lock) return null;
+      const out = list.slice(); out[i] = list[j]; out[j] = list[i]; return out;
+    }
+    const bj = bi + d;
+    if (!B[bj] || lk(B[bi]) || lk(B[bj])) return null;
+    const o = B.slice(); o[bi] = B[bj]; o[bj] = B[bi];
+    return [].concat(...o).map(j => list[j]);
+  };
+
   /** następna wolna nazwa własnej jednostki w tygodniu: W1, W2… */
   /** nowa jednostka trenera z prowadzonego treningu: T<n> po najwyższym numerze jednostki w tym tygodniu (dowolny przedrostek) */
   /* ---------- trening bez planu (prowadzony trening, punkt 17 przeglądu v80, 23.11.2026): „Jak ostatnio” i szablony ---------- */

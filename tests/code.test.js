@@ -2139,3 +2139,35 @@ test('wieczorny mail po komentarzu (komNowe_, komMail_, komPierwsze_) i „ostat
   const dg = C.diagnose_({ pwaUrl: 'x', triggers: ['podsumowanie', 'wczytajPlany', 'kopiaArkusza'], klienci: [{ klucz: 'kaaaaaaaaaa1', klient_id: 'ania', imie: 'Ania', aktywny: 'TAK', mail_kom: 'TAK', email: 'a@b.pl' }], plan: [], log: [] });
   assert.ok(dg.some(x => /wieczornyMail/.test(x[1])), JSON.stringify(dg));
 });
+
+test('unitEdit_: kolejność i nazwy ćwiczeń jednostki (trener: każda, klient: własny trening)', () => {
+  const R = (week, day, nr, cw, x) => Object.assign({ klient: 'ania', tydzien: week, jednostka: day, nr, cwiczenie: cw, blok: 'B1', zrodlo: '', obwod: '' }, x || {});
+  const plan = [R(1, 'T1', 1, 'Przysiad'), R(1, 'T1', 2, 'Wiosło', { obwod: 'A' }), R(1, 'T1', 3, 'Pompki', { obwod: 'A' }), R(1, 'T1', 4, 'Plnak'),
+    R(1, 'T1', 5, 'Stary', { zrodlo: 'usuniete' }), R(2, 'T1', 1, 'Przysiad'), R(2, 'T1', 4, 'plnak'), R(3, 'T1', 4, 'Plnak'),
+    R(1, 'W1', 1, 'Curl', { zrodlo: 'klient' }), R(1, 'W1', 2, 'Plank', { zrodlo: 'klient' }), Object.assign(R(1, 'T1', 1, 'Inny'), { klient: 'olek' })];
+  const E = (e, o) => plain(C.unitEdit_(plan, (o || {}).done || {}, (o || {}).logged || {}, 'ania', e, (o || {}).tr !== false));
+  // plnak na górę: przeskakuje cały obwód A i przysiad; numery 1–4 rozdane od nowa, usunięty (nr 5) bez zmian
+  let r = E({ week: 1, day: 'T1', seq: [4, 1, 2, 3] });
+  assert.deepEqual(r.set, [[0, { nr: 2 }], [1, { nr: 3 }], [2, { nr: 4 }], [3, { nr: 1 }]]);
+  assert.deepEqual(r.rows.find(x => x.order === 4), { order: 4, to: 1, name: 'Plnak' });
+  assert.equal(r.n, 4);
+  assert.match(E({ week: 1, day: 'T1', seq: [2, 1, 3, 4] }).error, /Obwód A/);            // obwód rozdzielony
+  assert.match(E({ week: 1, day: 'T1', seq: [4, 1, 2] }).error, /odśwież/);                // brakuje ćwiczenia
+  assert.match(E({ week: 1, day: 'T1', seq: [4, 1, 2, 3] }, { logged: { 1: 1 } }).error, /zapisane serie/);
+  r = E({ week: 1, day: 'T1', seq: [1, 3, 2, 4] }, { logged: { 1: 1, 4: 1 } });             // zapisane stoją, reszta się zamienia
+  assert.deepEqual(r.set, [[1, { nr: 3 }], [2, { nr: 2 }]]);
+  // nazwa: ta jednostka, a z next także kolejne niezrobione tygodnie (po starej nazwie, bez rozróżniania wielkości liter)
+  r = E({ week: 1, day: 'T1', names: [{ order: 4, name: '  Plank  boczny ' }], next: true }, { done: { 'ania|3|T1': 1 }, logged: { 4: 1 } });
+  assert.deepEqual(r.set, [[3, { cwiczenie: 'Plank boczny' }], [6, { cwiczenie: 'Plank boczny' }]]);
+  assert.deepEqual(r.logRen, [{ order: 4, name: 'Plank boczny' }]);
+  assert.deepEqual(r.weeks, [2]);
+  assert.equal(E({ week: 1, day: 'T1', names: [{ order: 4, name: 'Plnak' }] }).n, 0);       // bez zmian
+  assert.match(E({ week: 1, day: 'T1', names: [{ order: 4, name: ' ' }] }).error, /pusta/);
+  assert.match(E({ week: 1, day: 'T1', names: [{ order: 9, name: 'X' }] }).error, /Nie ma takiego/);
+  // klient: tylko własny trening, bez kolejnych tygodni
+  assert.match(E({ week: 1, day: 'T1', seq: [4, 1, 2, 3] }, { tr: false }).error, /własnym treningu/);
+  r = E({ week: 1, day: 'W1', seq: [2, 1], names: [{ order: 1, name: 'Uginanie' }], next: true }, { tr: false });
+  assert.deepEqual(r.set, [[8, { nr: 2, cwiczenie: 'Uginanie' }], [9, { nr: 1 }]]);
+  assert.deepEqual(r.weeks, []);
+  assert.match(E({ week: 1, day: 'X9' }).error, /Nie ma takiej jednostki/);
+});

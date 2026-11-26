@@ -3533,3 +3533,78 @@ test('„Ostatnio otwarta”: getData wysyła stały losowy znacznik telefonu; l
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
+
+test('Kolejność i nazwa ćwiczenia: strzałki i ✎ w kreatorze (obwód w całości), „⋯ → Kolejność i nazwy” w Prowadź (zapisane stoją)', async () => {
+  // 1) kreator własnego treningu (klient)
+  const api1 = b => b.fn === 'getExNames' ? [['Pompki', '', 'klatka'], ['Wiosłowanie hantlem', '', 'plecy'], ['Plank', '', 'brzuch'], ['Hammer Curl', '', 'biceps']] : null;
+  for (const scheme of ['light', 'dark']) {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: Object.assign({}, PRO, { cfg: Object.assign({}, PRO.cfg, { own: true }) }), api: api1, scheme });
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+    await p.click('#nav [data-tab="plan"]'); await p.click('#own-new'); await p.waitForFunction(() => EXN.list.length > 0);
+    const add = async n => { await p.fill('#ow-q', n); await p.dispatchEvent('#ow-q', 'input'); await p.click(`#ow-res .ow-add[data-n="${n}"]`); };
+    const names = () => p.$$eval('#ow-list .ow-it b', b => b.map(x => x.textContent));
+    for (const n of ['Hammer Curl', 'Pompki', 'Wiosłowanie hantlem', 'Plank']) await add(n);
+    await p.click('#ow-list [data-link="2"]'); await p.click('#ow-list [data-circ="2"]');      // Pompki + Wiosłowanie = superseria A
+    assert.equal(await p.isDisabled('#ow-list [data-mv="0"][data-d="-1"]'), true);           // pierwsze nie idzie wyżej
+    assert.equal(await p.isDisabled('#ow-list [data-mv="1"][data-d="-1"]:not([data-g])'), true);   // brzeg obwodu: nie wychodzi
+    await p.click('#ow-list [data-mv="3"][data-d="-1"]');                                     // Plank przeskakuje całą superserię
+    assert.deepEqual(await names(), ['Hammer Curl', 'Plank', 'A1 · Pompki', 'A2 · Wiosłowanie hantlem']);
+    await p.click('#ow-list [data-mv="3"][data-d="-1"]:not([data-g])');                       // w superserii: zamiana kolejności
+    assert.deepEqual(await names(), ['Hammer Curl', 'Plank', 'A1 · Wiosłowanie hantlem', 'A2 · Pompki']);
+    await p.click('#ow-list [data-mv="2"][data-g][data-d="-1"]');                             // cała superseria wyżej
+    assert.deepEqual(await names(), ['Hammer Curl', 'A1 · Wiosłowanie hantlem', 'A2 · Pompki', 'Plank']);
+    await p.click('#ow-list [data-ren-go="3"]');
+    assert.equal(await p.evaluate(() => document.activeElement.dataset.ren), '3');
+    await p.fill('#ow-list input[data-ren="3"]', 'Plank  boczny'); await p.dispatchEvent('#ow-list input[data-ren="3"]', 'input');
+    await p.evaluate(() => { $('#toast').style.display = 'none'; });
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `kolejnosc-kreator-nazwa-${scheme}.png`) }); }
+    await p.press('#ow-list input[data-ren="3"]', 'Enter');
+    assert.deepEqual(await names(), ['Hammer Curl', 'A1 · Wiosłowanie hantlem', 'A2 · Pompki', 'Plank  boczny']);
+    assert.deepEqual(await a11y(p), []);
+    if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, `kolejnosc-kreator-${scheme}.png`) });
+    await p.click('#ow-save'); await p.waitForSelector('#sheet', { state: 'hidden' });
+    assert.deepEqual(calls.find(c => c.fn === 'addOwnUnit').args[0].exercises.map(e => e.name + (e.circuit ? '/' + e.circuit : '')),
+      ['Hammer Curl', 'Wiosłowanie hantlem/A', 'Pompki/A', 'Plank boczny']);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+  // 2) zapisana jednostka w trybie „Prowadź”: przysiad ma zapisane serie (stoi), plank przeskakuje superserię, nowa nazwa przysiadu
+  const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  const ex = (order, name, x) => Object.assign({ week: 13, day: 'T1', title: 'Nogi', date: day(0), order, name, prio: 'A', sets: 3, reps: '8', pct: null, kg: 40, rpe: '', note: '', extra: 1, drop: 0, block: 'B2', circuit: '' }, x || {});
+  const LD = { cfg: { name: 'Ania', pain: true, simple: false, extra: 1, swap: 'DOWOLNA', scale: 'RPE', edit: true, own: true, live: true },
+    plan: [ex(1, 'Przysiad tylny'), ex(2, 'Plank', { kg: 'BW', reps: '30 s' }), ex(3, 'Wiosłowanie hantlem', { circuit: 'A' }), ex(4, 'Pompki', { circuit: 'A', kg: 'BW' })],
+    logs: [{ id: 'ania|13|T1|1|1', tydzien: 13, jednostka: 'T1', data: day(0), nr_cw: 1, cwiczenie: 'Przysiad tylny', seria: 1, kg: 85, powt: 5, rpe: 8, wykonane: 'TAK', typ: '', zapisano: day(0) + 'T07:00:00.000Z' }],
+    sessions: [] };
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const JWT = b64({ alg: 'none' }) + '.' + b64({ exp: Math.floor(Date.now() / 1000) + 3600, email: 't@example.com' }) + '.sig';
+  const api2 = b => b.fn === 'editUnit' ? { ok: true, n: 4, weeks: [14], rows: [{ order: 1, to: 1, name: 'Przysiad tylny z pauzą' }, { order: 2, to: 4, name: 'Plank' }, { order: 3, to: 2, name: 'Wiosłowanie hantlem' }, { order: 4, to: 3, name: 'Pompki' }] }
+    : b.fn === 'trPlan' ? { n: 2, weeks: [13], rows: [{ week: 13, day: 'T1', order: 2, f: { reps: '20 s', kg: 'BW' } }] } : null;
+  for (const scheme of ['light', 'dark']) {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: LD, api: api2, scheme });
+    await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); localStorage.setItem('fx_L_ania', '0'); } catch (e) {} }, JWT);
+    await p.goto(base + '?prowadz=ania&j=13%7CT1'); await p.waitForSelector('.set[data-o="4"]');
+    await p.click('#umore'); await p.click('#u-ord'); await p.waitForSelector('#or-list');
+    assert.equal(await p.$('#or-list [data-mv="0"]'), null);                                  // zapisane serie: bez strzałek
+    assert.match(await p.textContent('#or-list .ow-it'), /zostaje na miejscu/);
+    assert.equal(await p.isDisabled('#or-list [data-mv="1"][data-d="-1"]'), true);            // nad zapisane nie wejdzie
+    await p.click('#or-list [data-mv="1"][data-d="1"]');                                      // plank pod superserię
+    assert.deepEqual(await p.$$eval('#or-list .ow-it b', b => b.map(x => x.textContent)), ['Przysiad tylny', 'Wiosłowanie hantlem', 'Pompki', 'Plank']);
+    await p.click('#or-list [data-ren-go="0"]'); await p.fill('#or-list input[data-ren="0"]', 'Przysiad tylny z pauzą'); await p.dispatchEvent('#or-list input[data-ren="0"]', 'input');
+    await p.click('#or-list [data-ren-ok="0"]'); await p.check('#or-next');
+    assert.deepEqual((await a11y(p)).filter(x => !/tplan|tylko ja|dla klienta|INPUT $/.test(x)), []);   // cele trybu trenera pod oknem i pole wyboru w etykiecie .chk: jak dotąd
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `kolejnosc-prowadz-${scheme}.png`) }); }
+    await p.click('#or-ok'); await p.waitForSelector('#sheet', { state: 'hidden' });
+    assert.deepEqual(calls.find(c => c.fn === 'editUnit').args[0], { week: 13, day: 'T1', names: [{ order: 1, name: 'Przysiad tylny z pauzą' }], next: true, seq: [1, 3, 4, 2] });
+    assert.deepEqual(await p.$$eval('.card[data-card]', c => c.map(x => x.dataset.card)), ['1', '2', '3', '4']);
+    assert.deepEqual(await p.evaluate(() => curExs().map(e => e.name)), ['Przysiad tylny z pauzą', 'Wiosłowanie hantlem', 'Pompki', 'Plank']);
+    assert.match(await p.textContent('.card[data-card="1"]'), /Przysiad tylny z pauzą/);
+    // pomyłka przy dodaniu: „✎ zmień plan” przełącza ćwiczenie z ciężarem na masę ciała i na czas
+    await p.click('[data-tplan="2"]'); await p.click('[data-kbw="1"]'); await p.click('[data-ktm="1"]'); await p.fill('#tp-reps', '20');
+    await p.click('#tp-ok'); await p.waitForSelector('#sheet', { state: 'hidden' });
+    const tp = calls.find(c => c.fn === 'trPlan').args[1];
+    assert.deepEqual(tp.ex, [{ order: 2, reps: '20 s', kg: 'BW' }]);
+    assert.equal(await p.getAttribute('.set[data-o="2"][data-s="1"] .kg', 'placeholder'), 'BW');
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});

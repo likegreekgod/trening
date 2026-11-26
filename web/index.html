@@ -405,7 +405,7 @@
   .gl{flex:none;align-self:flex-start;font:700 25px/1.02 var(--f-display);color:var(--accent)}
   .set.nowrow{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r)}
   .ow-grp{border:2px solid var(--accent);border-radius:var(--rc);padding:4px 10px;margin:8px 0}
-  .ow-grp .ow-gh{display:flex;align-items:center;gap:8px;padding:4px 0 6px;border-bottom:1px solid var(--line)}
+  .ow-grp .ow-gh{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:4px 0 6px;border-bottom:1px solid var(--line)}
   .ow-grp .ow-gh b{flex:1;color:var(--accent);font:700 14px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase}
   .ow-grp .ow-gh label{font:600 12px/1.2 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:6px}
   .ow-grp .ow-gh input{width:54px;height:44px;text-align:center;padding:0 4px}
@@ -414,6 +414,17 @@
   .ow-ch{grid-column:1 / -1;display:grid;gap:6px;padding:8px;border-radius:var(--r);background:var(--surface-2)}
   .ow-ch .opt small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
   .ow-it .ow-row{grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  .ow-nm{grid-column:1 / -1;display:flex;align-items:center;gap:6px}
+  .ow-nm b{flex:1;min-width:0;overflow-wrap:anywhere}
+  .ow-nm .ow-ni{flex:1;min-width:0;height:44px;text-align:left;padding:0 10px}
+  .ow-mv{flex:none;width:44px;height:44px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--ink-2);font-size:18px;line-height:1}
+  .ow-mv:disabled{opacity:.35}
+  .ow-ed{font-size:16px}
+  .ow-gh.k b{flex-basis:100%}
+  .ow-mvs{margin-left:auto;display:flex;gap:6px}
+  .ow-it.ord{display:block}
+  .ow-it.ord small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+  .ow-it.ord .lk{color:var(--muted);font-size:13px;flex:none}
   .ow-it .ow-tag{font:600 12px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 8px}
   .ow-tm{min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r);background:transparent;color:var(--ink-2);font-size:13px}
   .ow-tm[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
@@ -1084,7 +1095,7 @@ const { fmtKg, num, esc, blank, plural, nextUnit, likeLast, tplUnit, EFF, EFF_FI
   isOly, RATE, rateOf, olyCap, sugOly, olyLocked, SWAP_WHY, swapOptions, swapAuto, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, orderMove, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, timeUnit, repsLabel,
   isEmom, SETS_MAX, emomSegs, emomKg, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart, blockReport, icsFile, gcalUrl, STAN_PLACES, STAN_CTX, stanKey, stanRecent, stanApply, stanDrop } = window.TL;
 
 /* ---------- kolejka offline ---------- */
@@ -3003,7 +3014,7 @@ function openOwn(unit, preset){   // preset (trening bez planu): {title, list: [
   OWN = unit ? { week: unit.week, day: unit.day, date: unit.date, title: String(unit.title || '').replace(/^Własny( · )?/, ''), edit: true,
       list: unit.rows.slice().sort((a, b) => a.order - b.order).map(r => ({ name: r.name, sets: r.sets, reps: String(r.reps), kg: r.kg === '' ? '' : String(fmtKg(r.kg)), old: true, c: r.circuit || '' })) }
     : { date: localDate(), title: preset ? String(preset.title || '').slice(0, 40) : '', list: preset ? preset.list.map(e => ({ name: e.name, sets: e.sets, reps: String(e.reps), kg: kgS(e.kg), c: e.c || '' })) : [], edit: false };
-  OWN.part = ''; OWN.pick = -1;
+  OWN.part = ''; OWN.pick = -1; OWN.ren = -1;
   const lv = LIVE && !OWN.edit;                                  // trener: nowa jednostka w planie klienta (bieżący blok)
   openSheet(`<h2 id="sheet-t">${OWN.edit ? 'Dodaj ćwiczenie' : lv ? 'Nowa jednostka: ' + esc(NAME) : 'Własny trening'}</h2>
     <p class="sub">${OWN.edit ? 'Dopisz ćwiczenia do tego treningu.' : lv ? 'Trafi do planu jako Twoja jednostka (bieżący blok), od razu do prowadzenia.' : 'Poza planem trenera. Trener zobaczy go w arkuszu.'}</p>
@@ -3046,6 +3057,34 @@ function ownRes(q){
     $('#ow-q').value = ''; ownRes(''); ownList(); toast('Dodano: ' + n + '.');
   });
 }
+/* ---------- kolejność i nazwa ćwiczenia (kreator i „Kolejność i nazwy”): strzałki ↑ ↓ (lib orderMove), ✎ = nazwa w miejscu ---------- */
+/** strzałki pozycji i (grp = cały obwód); a = [{c, lock}] w kolejności listy */
+const ordMvBtns = (a, i, grp, nm) => [-1, 1].map(d => `<button type="button" class="ow-mv" data-mv="${i}" data-d="${d}"${grp ? ' data-g="1"' : ''}${orderMove(a, i, d, grp) ? '' : ' disabled'} aria-label="${esc(nm)}: ${d < 0 ? 'wyżej' : 'niżej'}">${d < 0 ? '↑' : '↓'}</button>`).join('');
+const ordRenBtn = (i, nm) => `<button type="button" class="ow-mv ow-ed" data-ren-go="${i}" aria-label="Zmień nazwę: ${esc(nm)}">✎</button>`;
+const ordNameIn = (i, nm) => `<div class="ow-nm"><input class="ow-ni" data-ren="${i}" maxlength="80" value="${esc(nm)}" aria-label="Nazwa ćwiczenia" autocomplete="off"><button type="button" class="ow-tm" data-ren-ok="${i}">OK</button></div>`;
+/** st = {list: [{name, c, old | lock}], ren}; redraw = rysuje listę od nowa. Nazwa zmienia się od razu przy pisaniu, OK / Enter zamyka pole. */
+function ordBind(box, st, redraw){
+  const L = st.list;
+  box.querySelectorAll('[data-ren-go]').forEach(b => b.onclick = () => {
+    st.ren = +b.dataset.renGo; redraw();
+    const inp = box.querySelector('input[data-ren]'); if (inp) { inp.focus(); inp.select(); }
+  });
+  const close = () => { st.ren = -1; redraw(); };
+  box.querySelectorAll('input[data-ren]').forEach(inp => {
+    inp.oninput = () => { L[+inp.dataset.ren].name = inp.value; const er = $('#ow-err') || $('#or-err'); if (er) er.hidden = true; };
+    inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); if (inp.value.trim()) close(); } };
+  });
+  box.querySelectorAll('[data-ren-ok]').forEach(b => b.onclick = () => { if (String(L[+b.dataset.renOk].name).trim()) close(); });
+  box.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.mv, d = +b.dataset.d, grp = !!b.dataset.g;
+    const r = orderMove(L.map((e, k) => ({ c: e.c, lock: !!(e.old || e.lock), k })), i, d, grp); if (!r) return;
+    const moved = L[i], out = r.map(x => L[x.k]);
+    L.splice(0, L.length, ...out); st.pick = -1; st.ren = -1; redraw();
+    // fokus zostaje na tej samej strzałce przesuniętej pozycji (czytnik ekranu, klawiatura)
+    const ni = L.indexOf(moved), sel = `[data-mv="${ni}"]${grp ? '[data-g]' : ':not([data-g])'}`;
+    const f = box.querySelector(sel + `[data-d="${d}"]:not([disabled])`) || box.querySelector(sel + ':not([disabled])'); if (f) f.focus();
+  });
+}
 function ownList(){
   const box = $('#ow-list'), L = OWN.list;
   // kompleks z poprzednim: oba nowe (niezapisane), żadne na czas ani w obwodzie, nazwa mieści się w 80 znakach (limit Planu)
@@ -3055,11 +3094,12 @@ function ownList(){
   const first = i => L[i].c && !(L[i - 1] && L[i - 1].c === L[i].c), last = i => L[i].c && !(L[i + 1] && L[i + 1].c === L[i].c);
   const tagOf = i => { let j = i; while (L[j - 1] && L[j - 1].c === L[i].c) j--; return L[i].c + (i - j + 1); };
   const size = c => L.filter(e => e.c === c).length;
+  const mvL = L.map(e => ({ c: e.c, lock: !!e.old }));                       // strzałki: zapisane (old) stoją
   const item = (e, i) => {
     const cx = isComplex(e.name), nm = (e.c ? tagOf(i) + ' · ' : '') + e.name;
     if (e.old) return `<div class="ow-it old"><b>${esc(nm)}</b><span>${esc(String(e.sets))} × ${esc(e.reps)}${e.kg ? ' · ' + esc(e.kg) + ' kg' : ''}</span></div>`;
     const link = canJoin(i) || canCirc(i);
-    return `<div class="ow-it ${e.c ? 'in' : ''}"><b>${esc(nm)}</b>
+    return `<div class="ow-it ${e.c ? 'in' : ''}">${OWN.ren === i ? ordNameIn(i, e.name) : `<div class="ow-nm"><b>${esc(nm)}</b>${ordRenBtn(i, e.name)}${ordMvBtns(mvL, i, false, e.name)}</div>`}
         <div class="ow-row">${cx ? `<span class="ow-tag">kompleks</span><button type="button" class="ow-tm" data-split="${i}" aria-label="Rozłącz kompleks ${esc(e.name)}">Rozłącz</button>`
           : `<button type="button" class="ow-tm" data-tm="${i}" aria-pressed="${!!e.t}" aria-label="${esc(e.name)}: ćwiczenie na czas">⏱ na czas</button>`}
           ${link ? `<button type="button" class="ow-tm" data-link="${i}" aria-expanded="${OWN.pick === i}" aria-label="Połącz ${esc(e.name)} z poprzednim: ${esc(L[i - 1].name)}">⛓ Połącz z poprzednim</button>` : ''}</div>
@@ -3071,9 +3111,9 @@ function ownList(){
         <button type="button" class="ow-rm" data-rm="${i}" aria-label="Usuń ${esc(e.name)}">✕</button></div>`;
   };
   box.innerHTML = !L.length ? '<p class="sub">Jeszcze nic. Wyszukaj ćwiczenie powyżej i dotknij, żeby dodać.</p>'
-    : L.map((e, i) => (first(i) && size(e.c) > 1 ? `<div class="ow-grp"><div class="ow-gh"><b>${size(e.c) === 2 ? 'Superseria' : 'Obwód'} ${esc(e.c)} · na zmianę</b>` +
+    : L.map((e, i) => (first(i) && size(e.c) > 1 ? `<div class="ow-grp"><div class="ow-gh k"><b>${size(e.c) === 2 ? 'Superseria' : 'Obwód'} ${esc(e.c)} · na zmianę</b>` +
         (e.old ? `<span class="sub">${esc(String(e.sets))} rundy</span>` : `<label>rundy<input inputmode="numeric" data-rounds="${esc(e.c)}" value="${esc(String(e.sets))}" aria-label="Rundy obwodu ${esc(e.c)}"></label>
-        <button type="button" class="ow-tm" data-uncirc="${esc(e.c)}" aria-label="Rozłącz obwód ${esc(e.c)}">Rozłącz</button>`) + '</div>' : '') +
+        <button type="button" class="ow-tm" data-uncirc="${esc(e.c)}" aria-label="Rozłącz obwód ${esc(e.c)}">Rozłącz</button><span class="ow-mvs">${ordMvBtns(mvL, i, true, (size(e.c) === 2 ? 'superseria ' : 'obwód ') + e.c)}</span>`) + '</div>' : '') +
       item(e, i) + (last(i) && size(e.c) > 1 ? '</div>' : '')).join('');
   box.querySelectorAll('input[data-i]').forEach(inp => inp.oninput = () => { L[+inp.dataset.i][inp.dataset.f] = inp.value; $('#ow-err').hidden = true; });
   box.querySelectorAll('input[data-rounds]').forEach(inp => inp.oninput = () => { L.forEach(e => { if (e.c === inp.dataset.rounds && !e.old) e.sets = inp.value; }); $('#ow-err').hidden = true; });
@@ -3091,12 +3131,15 @@ function ownList(){
     L[i].c = a.c; redo();
   });
   box.querySelectorAll('[data-uncirc]').forEach(b => b.onclick = () => { L.forEach(e => { if (e.c === b.dataset.uncirc && !e.old) e.c = ''; }); redo(); });
-  box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { L.splice(+b.dataset.rm, 1); redo(); });
+  box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { L.splice(+b.dataset.rm, 1); OWN.ren = -1; redo(); });
+  ordBind(box, OWN, ownList);
 }
 function ownSave(){
   const err = t => { const e = $('#ow-err'); e.textContent = t; e.hidden = false; };
   OWN.list = circuitTidy(OWN.list);
   if (!OWN.list.length) return err('Dodaj co najmniej jedno ćwiczenie.');
+  OWN.list.forEach(e => { if (!e.old) e.name = String(e.name).trim().replace(/\s+/g, ' ').slice(0, 80); });
+  if (OWN.list.some(e => !e.name)) { OWN.ren = OWN.list.findIndex(e => !e.name); ownList(); return err('Wpisz nazwę ćwiczenia.'); }
   if (OWN.list.some(e => !(+e.sets >= 1 && +e.sets <= SETS_MAX) || !String(e.reps).trim())) return err('Przy każdym ćwiczeniu wpisz serie (1–' + SETS_MAX + ') i powtórzenia albo czas.');
   if (OWN.list.some(e => e.t && !e.old && !(parseInt(e.reps) > 0))) return err('Przy ćwiczeniu na czas wpisz liczbę sekund.');
   if (OWN.list.some(e => !e.old && !e.t && isComplex(e.name) && !complexRepsOk(e.name, e.reps))) return err('W kompleksie wpisz powtórzenia każdej części, np. 1+2.');
@@ -3171,7 +3214,7 @@ function renderTrening(){
     s0.title || cur.day,
     `<span>Czas <b class="clock">${clockText()}</b></span><span>Serie <b id="st-sets"></b></span><span>Tonaż <b id="st-ton"></b> kg</span>`,
     (SIMPLE ? '' : `<span class="sc" role="group" aria-label="Skala">${['RPE', 'RIR'].map(s => `<button type="button" data-sc="${s}" aria-pressed="${SCALE === s}">${s}</button>`).join('')}</span>`) +
-    (exs.length > 1 || LIVE || (!sessDone(cur.week, cur.day) && unitEntries().length) ? `<button type="button" class="hmore" id="umore" aria-label="Więcej akcji: ${esc(s0.title || cur.day)}">${MORE_SVG}</button>` : ''));
+    (exs.length > 1 || LIVE || ordOk(s0) || (!sessDone(cur.week, cur.day) && unitEntries().length) ? `<button type="button" class="hmore" id="umore" aria-label="Więcej akcji: ${esc(s0.title || cur.day)}">${MORE_SVG}</button>` : ''));
   document.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => {
     SCALE = b.dataset.sc; try { localStorage.setItem('sc_' + KEY, SCALE); } catch (e) {}
     renderTrening();
@@ -3213,6 +3256,7 @@ function renderTrening(){
         ${open ? '<button type="button" class="opt" id="cut"><i aria-hidden="true">⏱</i>Skróć trening<small>gdy brakuje czasu</small></button>' : ''}
         ${fx ? '' : '<button type="button" class="opt" id="fold-all"><i aria-hidden="true">▴</i>Zwiń zrobione</button>'}
         ${calOk(unitList().find(x => x.week === cur.week && x.day === cur.day)) ? `<button type="button" class="opt" id="u-cal"><i aria-hidden="true">${CAL_SVG}</i>Dodaj do kalendarza<small>Google, iPhone</small></button>` : ''}
+        ${ordOk(s0) ? '<button type="button" class="opt" id="u-ord"><i aria-hidden="true">⇅</i>Kolejność i nazwy<small>przesuń ćwiczenie, popraw nazwę</small></button>' : ''}
         ${LIVE ? '<button type="button" class="opt" id="u-new"><i aria-hidden="true">＋</i>Nowa jednostka<small>jak ostatnio, z szablonu albo pusta</small></button>' : ''}
         ${LIVE && exs.length && !exs[0].own ? '<button type="button" class="opt" id="u-tpl"><i aria-hidden="true">⧉</i>Zapisz jako szablon<small>ćwiczenia, serie, powt. (bez kg)</small></button>' : ''}
         ${LIVE ? `<a class="opt" id="u-exit" href="${esc($('#live-back').href)}"><i aria-hidden="true">✕</i>Wyjdź z prowadzenia<small>wracasz do panelu, zapisy zostają</small></a>` : ''}
@@ -3227,6 +3271,7 @@ function renderTrening(){
       openCal(u, l.filter(x => calOk(x) && x.date >= m && x.date <= addDays(m, 6))); };
     const ur = $('#u-reset'); if (ur) ur.onclick = () => openReset(s0);
     const un = $('#u-new'); if (un) un.onclick = () => openNoPlan(false);
+    const uo = $('#u-ord'); if (uo) uo.onclick = () => { closeSheet(); openOrder(); };
     const ut = $('#u-tpl'); if (ut) ut.onclick = () => openTplSave(s0);
   };
 }
@@ -3527,6 +3572,67 @@ function openTPlan(order){
       const w = (r.weeks || []).length; toast(!r.n ? 'Bez zmian.' : 'Plan zmieniony' + (w > 1 ? ' (ten tydzień i ' + (w - 1) + ' ' + plural(w - 1, 'kolejny', 'kolejne', 'kolejnych') + ').' : '.'));
     }).catch(e => { b.disabled = false; b.textContent = 'Zapisz w planie'; err(e.message); });
   };
+}
+/* ---------- „⋯ → Kolejność i nazwy” zapisanej jednostki (editUnit, 26.11.2026): trener w „Prowadź” każda jednostka, klient własny trening ----------
+ * Ćwiczenie z zapisanym wpisem stoi w miejscu (id serii w Logu ma numer ćwiczenia), obwód przesuwa się w całości; tylko z siecią. */
+let ORD = null;
+const ordOk = s0 => !!s0 && !!(LIVE || (s0.own && ownOn()));
+function openOrder(){
+  const exs = PLAN.filter(r => r.week === cur.week && r.day === cur.day).sort((a, b) => a.order - b.order);
+  if (!exs.length) return;
+  ORD = { list: exs.map(ex => ({ order: ex.order, name: ex.name, name0: ex.name, c: isEmom(ex) ? '' : ex.circuit || '', lock: Object.keys(exLogs(ex)).length > 0,
+    info: ex.sets + ' × ' + ex.reps + (ex.kg !== '' ? ' · ' + (typeof ex.kg === 'number' ? fmtKg(ex.kg) + ' kg' : ex.kg) : ''), sw: (withSwap(ex).swap || {}).to || '' })), ren: -1, pick: -1 };
+  const nx = LIVE && !exs[0].own;
+  openSheet(`<h2 id="sheet-t">Kolejność i nazwy</h2><p class="sub">${esc(exs[0].title || cur.day)} · ↑ ↓ przesuwa, ✎ poprawia nazwę</p>
+    <div id="or-list"></div>
+    ${nx ? '<label class="chk"><input type="checkbox" id="or-next"> Nową nazwę także w kolejnych tygodniach tej jednostki</label>' : ''}
+    <p class="hint" id="or-err" role="alert" hidden></p>
+    <button type="button" class="btn p" id="or-ok">Zapisz</button>
+    <button type="button" class="btn" data-close>Anuluj</button>`);
+  ordDraw();
+  $('#or-ok').onclick = ordSave;
+}
+function ordDraw(){
+  const box = $('#or-list'); if (!box) return;
+  const L = ORD.list, a = L.map(e => ({ c: e.c, lock: e.lock }));
+  const same = (i, j) => !!L[j] && L[i].c && L[j].c === L[i].c, size = c => L.filter(e => e.c === c).length;
+  const item = (e, i) => `<div class="ow-it ord">${ORD.ren === i ? ordNameIn(i, e.name) : `<div class="ow-nm"><b>${esc(e.name)}</b>${ordRenBtn(i, e.name)}${e.lock ? '<span class="lk">🔒</span>' : ordMvBtns(a, i, false, e.name)}</div>`}
+      <small>${esc(e.info)}${e.sw ? ' · dziś zamiana: ' + esc(e.sw) : ''}${e.lock ? ' · zapisane serie, zostaje na miejscu' : ''}</small></div>`;
+  box.innerHTML = L.map((e, i) => (e.c && !same(i, i - 1) && size(e.c) > 1 ? `<div class="ow-grp"><div class="ow-gh"><b>${size(e.c) === 2 ? 'Superseria' : 'Obwód'} ${esc(e.c)} · na zmianę</b>${ordMvBtns(a, i, true, (size(e.c) === 2 ? 'superseria ' : 'obwód ') + e.c)}</div>` : '') +
+    item(e, i) + (e.c && !same(i, i + 1) && size(e.c) > 1 ? '</div>' : '')).join('');
+  ordBind(box, ORD, ordDraw);
+}
+/** wynik editUnit: nowe numery i nazwy w planie telefonu; zamiany, komentarze, notatki i zwinięcie idą za ćwiczeniem */
+function ordApply(r){
+  const rows = r.rows || [], mp = {};
+  rows.forEach(x => { if (x.to !== x.order) mp[x.order] = x.to; });
+  const unit = DATA.plan.filter(p => p.week === cur.week && p.day === cur.day);
+  rows.forEach(x => { const row = unit.find(p => p.order === x.order); if (row) { row._to = x.to; row.name = x.name; } });
+  unit.forEach(p => { if ('_to' in p) { p.order = p._to; delete p._to; } });
+  if (Object.keys(mp).length) {
+    const pre = cur.week + '|' + cur.day + '|', remap = m => { const out = {}; Object.keys(m).forEach(k => { const o = k.indexOf(pre) === 0 ? Number(k.slice(pre.length)) : NaN; out[o in mp ? pre + mp[o] : k] = m[k]; }); return out; };
+    [[SWK, swGet], [ENK, enGet], [FK, foldGet]].forEach(([k, get]) => { try { localStorage.setItem(k, JSON.stringify(remap(get()))); } catch (e) {} });
+    const t = remap(TND); Object.keys(TND).forEach(k => delete TND[k]); Object.assign(TND, t); LN = remap(LN);
+  }
+  PLAN = DATA.plan; try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
+}
+function ordSave(){
+  const err = t => { const e = $('#or-err'); e.textContent = t; e.hidden = false; };
+  const L = ORD.list, orig = L.map(e => e.order).sort((x, y) => x - y), seq = L.map(e => e.order), moved = seq.some((o, k) => o !== orig[k]);
+  L.forEach(e => { e.name = String(e.name).trim().replace(/\s+/g, ' ').slice(0, 80); });
+  if (L.some(e => !e.name)) { ORD.ren = L.findIndex(e => !e.name); ordDraw(); return err('Wpisz nazwę ćwiczenia.'); }
+  const names = L.filter(e => e.name !== e.name0).map(e => ({ order: e.order, name: e.name }));
+  if (!moved && !names.length) { closeSheet(); return; }
+  if (navigator.onLine === false) return err('Bez sieci kolejności ani nazw nie zmienisz. Serie zapisują się dalej.');
+  const nx = $('#or-next'), b = $('#or-ok'); b.disabled = true; b.textContent = 'Zapisuję…';
+  const fxo = FX && FXI !== null ? (focusSteps(curExs(), CIRC)[FXI] || {}).orders : null;
+  call('editUnit', Object.assign({ week: cur.week, day: cur.day, names, next: !!(nx && nx.checked) }, moved ? { seq } : {})).then(r => {
+    ordApply(r); closeSheet();
+    if (fxo) { const to = ((r.rows || []).find(x => x.order === fxo[0]) || {}).to || fxo[0], ex = curExs(), i = focusSteps(ex, circuitGroups(ex)).findIndex(st => st.orders.includes(to)); if (i >= 0) { FXI = i; FXM = true; } }   // tryb skupienia: zostaje to samo ćwiczenie
+    renderTrening();
+    const w = (r.weeks || []).length;
+    toast(moved && names.length ? 'Zapisano kolejność i nazwy.' : moved ? 'Zapisano kolejność.' : 'Zapisano nazwę' + (w ? ' (też ' + w + ' ' + plural(w, 'kolejny tydzień', 'kolejne tygodnie', 'kolejnych tygodni') + ').' : '.'));
+  }).catch(e => { b.disabled = false; b.textContent = 'Zapisz'; err(e.message); });
 }
 if (LIVE) {
   document.body.classList.add('live');
