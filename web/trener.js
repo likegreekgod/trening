@@ -884,7 +884,9 @@ function renderKlientUst(id){
     '<div class="pg"><div class="kgrid"><div class="card" id="kl-form">' + f + '</div><div class="stack">' + side + '</div></div></div>';
   const re = () => { KLM = { ok: '', err: '', busy: false, rekey: '' }; renderKlientUst(id); };
   klCtl(d, re); klBind(); importBind(k, () => { if (location.hash === '#klienci/' + encodeURIComponent(id)) renderKlientUst(id); });
-  agentBind(k, () => { if (location.hash === '#klienci/' + encodeURIComponent(id)) renderKlientUst(id); });
+  const agRe = () => { const el = document.getElementById('agent'); if (!el || location.hash !== '#klienci/' + encodeURIComponent(id)) return;   // tylko ta karta: formularz klienta obok zostaje
+    el.outerHTML = agentCard(k); agentBind(k, agRe); };
+  agentBind(k, agRe);
   const em = $('#kl-email');
   if (em) em.oninput = () => { d.email = em.value.trim(); const n = KL_F.filter(f => d[f] !== k[f]).length, sv = $('#kl-save'); if (sv && !KLM.busy) sv.disabled = !n; };
   const mt = $('#kl-mailtest');
