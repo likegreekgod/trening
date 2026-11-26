@@ -453,21 +453,23 @@ function agentGet_(e) {
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
-/** Akcje z zapisem do arkusza. */
-function agWrite_(fn, x, a, lim) {
+/** Akcje z zapisem do arkusza. dry = próba z czatu w panelu: te same reguły, bez zapisu. */
+function agWrite_(fn, x, a, lim, dry) {
+  const PR = 'próba: nic nie zapisano';
   const c = x.c;
   if (fn === 'zapiszSerie') {
     const id = [c.id, a.tydzien, agTxt_(a.jednostka, 20), a.nr, agTxt_(a.seria, 4).toUpperCase()].join('|');
     const old = (x.d.logs || []).find(l => String(l.id) === id);
     const r = agSet_(a, x.d, { today: x.today, old: old });
     if (r.error) return r;
-    logSet(c.key, r.set);
-    return { zapisano: id, uwaga: r.ponad ? 'Ciężar ponad plan: trener zobaczy to w podsumowaniu.' : r.set.rpe === '' && !r.set.typ && !/^R/.test(String(r.set.set)) ? 'Seria bez oceny: zapytaj klienta o światło (reguła 1.7).' : '' };
+    if (!dry) logSet(c.key, r.set);
+    return { zapisano: dry ? PR : id, uwaga: r.ponad ? 'Ciężar ponad plan: trener zobaczy to w podsumowaniu.' : r.set.rpe === '' && !r.set.typ && !/^R/.test(String(r.set.set)) ? 'Seria bez oceny: zapytaj klienta o światło (reguła 1.7).' : '' };
   }
   if (fn === 'zapiszTrening') {
     if (!c.own) return agErr_('Własne treningi są wyłączone przez trenera.');
     const r = agTrening_(a, x.d, { today: x.today, find: x.find, busy: x.busy, taper: x.taper });
     if (r.error) return r;
+    if (dry) return { zapisano: PR, jednostka: { tydzien: r.unit.week, jednostka: r.unit.day, data: r.unit.date }, cwiczenia: r.exercises.map(e => e.name), serie: r.exercises.reduce((n, e) => n + e.sets.length, 0) };
     const lock = LockService.getScriptLock(); lock.waitLock(20000);
     try { const res = ownRows_(c.id, r.unit, tableOf_('Plan'), false); if (res.error) return { error: res.error }; ownWrite_(c.id, r.unit.week, r.unit.day, res.rows); }
     finally { lock.releaseLock(); }
@@ -480,6 +482,7 @@ function agWrite_(fn, x, a, lim) {
   if (fn === 'zaproponuj') {
     const r = agProp_(a, x.d, { today: x.today, done: x.done, find: x.find, taper: x.taper, busy: x.busy, planDays: x.planDays, limity: lim,
       ciezar: (w, dd) => agCiezar_(x.d, { week: w, day: dd, today: x.today, done: x.done, verdict: x.verdict, olyCeil: c.olyCeil }) });
+    if (dry) return r.status === 'odrzucona' ? { error: 'Odrzucone: ' + r.uwaga } : { zapisano: PR, status: 'czekałaby na trenera', typ: r.typ, tresc: r.tresc };
     const id = c.id + '|p|' + Date.now();
     sheet_('Propozycje', PROP_HEADERS).appendRow(plainRow_([id, new Date(), c.id, 'api', r.typ, r.tydzien, r.jednostka, r.nr, r.cwiczenie, r.tresc, r.powod, r.status, r.uwaga, '', '']));
     if (r.status === 'odrzucona') return { error: 'Odrzucone: ' + r.uwaga };
@@ -488,6 +491,7 @@ function agWrite_(fn, x, a, lim) {
   if (fn === 'zglos') {
     const z = agZglos_(a, x.today);
     if (z.error) return z;
+    if (dry) return { zapisano: PR, typ: z.typ, opis: z.opis };
     const id = c.id + '|z|' + Date.now();
     sheet_('Propozycje', PROP_HEADERS).appendRow(plainRow_([id, new Date(), c.id, 'api', z.typ, '', '', '', '', '', z.opis, 'czeka', '', '', '']));
     if (z.stan) { const rows = stanRows_(c.id, [z.stan], new Date(), x.today); if (rows.length) upsert_('Stan', STAN_HEADERS, rows[0][0], rows[0]); }
@@ -575,4 +579,137 @@ function trZasadyUstaw(tekst, limity) {
     sh.getRange(2, 1, 2, 3).setValues(plainRows_([['tekst', v.tekst, now], ['limity', JSON.stringify(v.limity), now]]));
   } finally { lock.releaseLock(); }
   return agZasady_();
+}
+
+/* ---------- czat „Wypróbuj asystenta” w panelu (trAsystent): trener rozmawia jak klient ----------
+ * Te same akcje i reguły co bot klienta, przez Claude API z kluczem panelu (CLAUDE_API_KEY, limit dzienny AI_LIMIT).
+ * Domyślnie próba: zapisy przechodzą przez reguły, ale nic nie trafia do arkusza (agWrite_ z dry). */
+const AG_CHAT_MAX = 20, AG_CHAT_TXT = 2000, AG_CHAT_KROKI = 8, AG_CHAT_CZAS = 240000;
+// Akcje dla modelu: te same nazwy, opisy i pola co lib AG_READ + AG_WRITE (test pilnuje zgodności)
+const AG_TOOLS = [
+  ['zasady', 'Zasady trenera, ograniczenia tego klienta i limity. Pobierz na początku rozmowy.', {}],
+  ['plan', 'Plan na najbliższe dni: jednostki, ćwiczenia, serie, kg, RPE max, notatki trenera dla klienta.', { dni: ['integer', 'Ile dni do przodu (1–31, domyślnie 14)'] }],
+  ['historia', 'Zapisane serie z ostatnich dni (bez bólu i dyspozycji).', { dni: ['integer', 'Ile dni wstecz (1–90, domyślnie 30)'] }],
+  ['ciezarNaDzis', 'Ciężar i sufit na dziś wg zasad trenera (reguła 1.9, sufit w bojach). Nie licz ciężaru sam.', { tydzien: ['integer', 'Tydzień z planu (puste = najbliższa jednostka)'], jednostka: ['string', 'Jednostka z planu'] }],
+  ['cwiczenia', 'Szukaj ćwiczenia w bazie trenera (nazwy do zapisu i propozycji).', { q: ['string', 'Nazwa albo jej część'] }],
+  ['zapiszSerie', 'Zapisz jedną serię ćwiczenia z planu.', { tydzien: ['integer'], jednostka: ['string'], nr: ['integer', 'Numer ćwiczenia z planu'], seria: ['string', '1, 2… robocze, R1… rozgrzewka, D1… drop set'],
+    kg: ['number'], powt: ['integer', 'Powtórzenia (sekundy przy ćwiczeniu na czas)'], swiatlo: ['string', 'zielone / żółte / czerwone / nieudana albo RPE 5–10; puste = bez oceny'] }, ['tydzien', 'jednostka', 'nr', 'seria']],
+  ['zapiszTrening', 'Zapisz własny trening klienta poza planem (dziś albo do 7 dni wstecz, ćwiczenia tylko z bazy).', { data: ['string', 'RRRR-MM-DD'], tytul: ['string'], rpe_sesji: ['number'], czas_min: ['integer'], uwagi: ['string'],
+    cwiczenia: ['array', 'Lista {nazwa, serie: [{kg, powt, swiatlo}]}'] }, ['cwiczenia']],
+  ['zaproponuj', 'Propozycja zmiany planu do akceptacji trenera. Do decyzji plan zostaje bez zmian.', { typ: ['string', 'zamiana / ciezar / serie / trening'], tydzien: ['integer'], jednostka: ['string'], nr: ['integer'],
+    na: ['string', 'Zamiennik (typ zamiana)'], kg: ['number', 'Nowy ciężar (typ ciezar)'], serie: ['integer', 'Nowa liczba serii (typ serie)'], data: ['string', 'Dzień dodatkowego treningu (typ trening)'], opis: ['string'], powod: ['string', 'Powód od klienta'] }, ['typ', 'powod']],
+  ['zglos', 'Zgłoszenie do trenera (ból, czerwona flaga, pytanie o plan, dietę, cel…).', { temat: ['string', 'czerwona_flaga / bol / plan / ciezar / status / fail / pominiete / dieta / cel / zawody / inne'], opis: ['string'],
+    miejsce: ['string', 'Przy bólu: miejsce'], strona: ['string', 'L / P'], ocena: ['integer', 'Przy bólu: 0–10'] }, ['temat', 'opis']]
+];
+
+/** Czysta: akcje → narzędzia Messages API. */
+function agTools_() {
+  return AG_TOOLS.map(([n, d, p, req]) => {
+    const props = {};
+    Object.keys(p).forEach(k => { const [t, ds] = p[k];
+      props[k] = Object.assign(t === 'array' ? { type: 'array', items: { type: 'object' } } : { type: t }, ds ? { description: ds } : {}); });
+    return { name: n, description: d, input_schema: { type: 'object', properties: props, required: req || [] } };
+  });
+}
+
+/** Czysta: instrukcja systemowa czatu próbnego. o = {zasady, ogr, today, real}. Bez imienia klienta. */
+function agChatSystem_(o) {
+  o = o || {};
+  return [
+    'Jesteś asystentem treningowym klienta w aplikacji trenera Damiana (Siła z Ruchu). Mówisz jak trener: krótko, po polsku, konkretnie. Dziś jest ' + o.today + '.',
+    'To rozmowa próbna: trener pisze jako klient i sprawdza, jak się zachowasz. Odpowiadaj dokładnie tak, jak odpowiedziałbyś klientowi.',
+    o.real ? 'Zapisy są prawdziwe: trafiają do arkusza trenera.' : 'Akcje zapisu (zapiszSerie, zapiszTrening, zaproponuj, zglos) działają w trybie próby: serwer sprawdza je regułami, ale nic nie zapisuje. Mów o nich tak, jak gdyby się udały albo jak odmówił serwer.',
+    'Zasady trenera i ograniczenia klienta masz poniżej. Plan sprawdzaj akcją „plan”, ciężar na dziś akcją „ciezarNaDzis” (nie licz go sam).',
+    'Planu nie zmieniasz: zmiany idą przez „zaproponuj” i czekają na trenera. Ból, czerwone flagi i sprawy, o których decyduje trener, zgłaszasz akcją „zglos”.',
+    'Każdą serię oceniaj światłem (zielone / żółte / czerwone / nieudana). Bez oceny zapytaj klienta, nie zgaduj.',
+    'Gdy serwer odmówi, powiedz klientowi powód (numer reguły) i nie próbuj obejść go inną akcją.',
+    'Nie diagnozujesz i nie leczysz. Przy czerwonej fladze: przerwij trening, zgłoś („zglos”, temat czerwona_flaga) i odeślij do specjalisty.',
+    '',
+    '## Zasady trenera',
+    String(o.zasady || '').trim() || '(Trener nie wkleił jeszcze zasad. Trzymaj się powyższych reguł i planu.)',
+    '',
+    '## Ograniczenia tego klienta',
+    String(o.ogr || '').trim() || '(brak)'
+  ].join('\n');
+}
+
+/** Czysta: historia czatu z panelu [{role, text}] → messages albo {error}. Zaczyna i kończy się klientem, role na zmianę. */
+function agChatMsgs_(list) {
+  if (!Array.isArray(list) || !list.length) return { error: 'Napisz wiadomość.' };
+  const m = list.slice(-AG_CHAT_MAX).map(x => ({ role: x && x.role === 'assistant' ? 'assistant' : 'user', content: String(x && x.text || '').replace(/\r\n/g, '\n').trim().slice(0, AG_CHAT_TXT) }))
+    .filter(x => x.content);
+  while (m.length && m[0].role !== 'user') m.shift();
+  if (!m.length || m[m.length - 1].role !== 'user') return { error: 'Napisz wiadomość.' };
+  const out = [];
+  m.forEach(x => { const last = out[out.length - 1]; if (last && last.role === x.role) last.content += '\n\n' + x.content; else out.push(x); });
+  return { msgs: out };
+}
+
+/** Czysta: krótki opis kroku (akcja + pola) do pokazania pod odpowiedzią. */
+function agStep_(fn, a, r) {
+  const args = Object.keys(a || {}).filter(k => a[k] !== '' && a[k] !== null && a[k] !== undefined)
+    .map(k => k + ': ' + (typeof a[k] === 'object' ? JSON.stringify(a[k]) : String(a[k]))).join(', ');
+  return { fn: String(fn), args: args.slice(0, 160), ok: !(r && r.error), info: r && r.error ? String(r.error).slice(0, 200) : '' };
+}
+
+/**
+ * Pętla narzędzi (czysta, z wstrzykniętym send i run): send(req) → odpowiedź Messages API, run(fn, args) → wynik akcji.
+ * Odpowiedź modelu wraca do historii w całości (z blokami myślenia). → {text, steps, usage: [], model, refusal, cut}
+ */
+function agChatLoop_(req, send, run, max) {
+  const msgs = req.messages.slice(), steps = [], usage = [];
+  let model = req.model;
+  for (let i = 0; i < (max || AG_CHAT_KROKI); i++) {
+    const j = send(Object.assign({}, req, { messages: msgs })) || {};
+    usage.push(j.usage || {}); model = j.model || model;
+    const content = j.content || [], text = content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
+    if (j.stop_reason === 'refusal') return { text: text, steps: steps, usage: usage, model: model, refusal: true };
+    const uses = content.filter(b => b.type === 'tool_use');
+    if (j.stop_reason !== 'tool_use' || !uses.length) return { text: text, steps: steps, usage: usage, model: model };
+    msgs.push({ role: 'assistant', content: content });
+    msgs.push({ role: 'user', content: uses.map(u => {
+      let r;
+      try { r = run(u.name, u.input || {}); } catch (e) { r = { error: String(e && e.message || e) }; }
+      if (r === undefined || r === null) r = {};
+      steps.push(agStep_(u.name, u.input, r));
+      return Object.assign({ type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(r).slice(0, 30000) }, r.error ? { is_error: true } : {});
+    }) });
+  }
+  return { text: '', steps: steps, usage: usage, model: model, cut: true };
+}
+
+/** Jedna akcja w czacie: uprawnienia z ustawień API klienta jak u bota, zapis tylko przy real. */
+function agChatTool_(fn, x, a, lim, real) {
+  if (!Object.prototype.hasOwnProperty.call(AGENT_FNS, fn)) return agErr_('Nieznana akcja: ' + fn + '.');
+  const u = x.ust;
+  if (AG_WRITE[fn] && !u.write) return agErr_('Zapis wyłączony przez trenera.');
+  if (AG_PROP[fn] && !u.prop) return agErr_('Propozycje wyłączone przez trenera.');
+  if (!AG_WRITE[fn] && !AG_PROP[fn] && fn !== 'zglos' && !u.read) return agErr_('Odczyt wyłączony przez trenera.');
+  if (fn === 'zasady') { const r = AGENT_FNS.zasady(x, a); delete r.klient.imie; return r; }
+  return AGENT_FNS[fn] ? AGENT_FNS[fn](x, a) : agWrite_(fn, x, a, lim, !real);
+}
+
+/** Panel: wiadomość od „klienta” w czacie próbnym → {text, steps, cost, n, limit, real}. msgs = [{role: user|assistant, text}], opt = {real}. */
+function trAsystent(id, msgs, opt) {
+  id = String(id || '').trim().toLowerCase();
+  const row = klRows_(klSheet_()).find(r => String(r[1]).trim().toLowerCase() === id);
+  if (!row) throw new Error('Nie ma klienta „' + id + '”.');
+  const m = agChatMsgs_(msgs);
+  if (m.error) throw new Error(m.error);
+  const real = !!(opt && opt.real), pre = aiPre_(), x = agCtx_(row), z = agZasady_(), t0 = Date.now();
+  const req = { model: AI_MODEL, max_tokens: 4000, system: agChatSystem_({ zasady: z.tekst, ogr: x.ogr, today: x.today, real: real }), tools: agTools_(),
+    messages: m.msgs, output_config: { effort: 'low' }, fallbacks: 'default' };
+  const out = agChatLoop_(req, r => {
+    if (Date.now() - t0 > AG_CHAT_CZAS) throw new Error('Asystent pracował za długo (limit czasu skryptu Google). Zadaj prostsze pytanie.');
+    return aiFetch_(pre.key, r);
+  }, (fn, a) => {
+    const r = agChatTool_(fn, x, a, z.limity, real);
+    if (real && (AG_WRITE[fn] || AG_PROP[fn] || fn === 'zglos')) agLog_(id, 'czat:' + fn, !(r && r.error), r && r.error || '');
+    return r;
+  }, AG_CHAT_KROKI);
+  const cost = Math.round(out.usage.reduce((s, u) => s + aiCost_(out.model, u), 0) * 10000) / 10000;
+  const tok = out.usage.reduce((s, u) => ({ input_tokens: s.input_tokens + (Number(u.input_tokens) || 0), output_tokens: s.output_tokens + (Number(u.output_tokens) || 0) }), { input_tokens: 0, output_tokens: 0 });
+  const n = aiNote_(pre, ['asystent' + (real ? '' : ' (próba)'), id, '', ''], out.model, tok, cost);
+  const text = out.refusal ? 'Asystent odmówił odpowiedzi na to pytanie (filtr bezpieczeństwa Claude).' : out.cut ? 'Asystent zrobił ' + out.steps.length + ' kroków i nie skończył. Zadaj prostsze pytanie.' : out.text || '(pusta odpowiedź)';
+  return { text: text, steps: out.steps, cost: cost, n: n, limit: pre.limit, real: real };
 }
