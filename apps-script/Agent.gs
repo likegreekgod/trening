@@ -98,12 +98,22 @@ function agDone_(id, d) {
   return out;
 }
 
+/** Czysta: faktyczny dzień jednostki (jak w aplikacji): start z Sesji, inaczej najpóźniejszy zapis serii, inaczej data z planu. → {„tydzień|jednostka”: dzień} */
+function agUnitDays_(d, dayOf) {
+  const day = dayOf || (v => v instanceof Date ? fmtDate_(v) : sesDay_(v)), out = {}, saved = {};
+  (d.logs || []).forEach(l => { const k = l.tydzien + '|' + l.jednostka, t = day(l.zapisano) || String(l.data || '').slice(0, 10); if (t && (!saved[k] || t > saved[k])) saved[k] = t; });
+  Object.keys(saved).forEach(k => { out[k] = saved[k]; });
+  (d.sessions || []).forEach(s => { const t = day(s.start); if (t) out[s.tydzien + '|' + s.jednostka] = t; });
+  return out;
+}
+
 /** Czysta: plan dla bota: niezrobione jednostki od tygodnia temu do today + dni, zrobione dziś, notatki trenera dla klienta. */
 function agPlan_(d, o) {
   const today = o.today, days = Math.min(Math.max(Math.round(Number(o.days)) || AG_PLAN_DNI, 1), 31), end = agAddDays_(today, days);
-  const units = agUnits_(d.plan), done = o.done || {}, swap = d.cfg && d.cfg.swap;
+  const units = agUnits_(d.plan), done = o.done || {}, swap = d.cfg && d.cfg.swap, real = agUnitDays_(d, o.dayOf);
+  const doneToday = o.doneToday || {}; Object.keys(done).forEach(k => { if (real[k] === today) doneToday[k] = 1; });
   const pick = units.filter(u => { const k = u.week + '|' + u.day, dt = u.date;
-    if (done[k]) return o.doneToday && o.doneToday[k];
+    if (done[k]) return !!doneToday[k];
     return !dt || (dt >= agAddDays_(today, -7) && dt <= end); }).slice(0, 12);
   const blocks = {}; pick.forEach(u => { if (u.block) blocks[u.block] = 1; });
   return {
@@ -112,7 +122,7 @@ function agPlan_(d, o) {
     dla_klienta: Object.keys(blocks).map(b => ({ blok: b, tekst: (d.blockNotes || {})[b] || '' })).filter(x => x.tekst),
     jednostki: pick.map(u => {
       const k = u.week + '|' + u.day;
-      return { tydzien: u.week, jednostka: u.day, tytul: u.title, data: u.date || '', blok: u.block,
+      return { tydzien: u.week, jednostka: u.day, tytul: u.title, data: (done[k] && real[k]) || u.date || '', blok: u.block,
         stan: done[k] ? 'zrobiona' : !u.date ? 'bez daty' : u.date < today ? 'zaległa' : u.date === today ? 'dziś' : 'zaplanowana',
         prowadzi_trener: u.coach, wlasna: u.own, uwagi_trenera: u.unote,
         cwiczenia: u.rows.map(r => ({ nr: r.order, nazwa: r.name, prio: r.prio, serie: r.sets, powt: r.reps,
@@ -128,9 +138,9 @@ function agHistoria_(d, o) {
   const today = o.today, days = Math.min(Math.max(Math.round(Number(o.days)) || 30, 1), AG_HIST_DNI), from = agAddDays_(today, -days);
   const title = {}; (d.plan || []).forEach(r => { title[r.week + '|' + r.day] = r.title; });
   const ses = {}; (d.sessions || []).forEach(s => { ses[s.tydzien + '|' + s.jednostka] = s; });
-  const U = {}, out = [];
+  const U = {}, out = [], real = agUnitDays_(d, o.dayOf);
   (d.logs || []).forEach(l => {
-    const dt = String(l.data || '').slice(0, 10), se = String(l.seria === undefined || l.seria === null ? '' : l.seria).trim();
+    const dt = real[l.tydzien + '|' + l.jednostka] || String(l.data || '').slice(0, 10), se = String(l.seria === undefined || l.seria === null ? '' : l.seria).trim();
     if (!dt || dt < from || dt > today || !se) return;
     const k = l.tydzien + '|' + l.jednostka;
     if (!U[k]) { const s = ses[k] || {}; U[k] = { data: dt, tydzien: Number(l.tydzien), jednostka: String(l.jednostka), tytul: title[k] || '',

@@ -2250,18 +2250,28 @@ test('agent: światła i RPE z bota (1.7: brak oceny ≠ RPE 7)', () => {
 test('agent: plan i historia (bez bólu, dyspozycji, filmów)', () => {
   const d = agD(), done = C.agDone_('ania', d);
   assert.deepEqual(Object.keys(done), ['7|A']);
-  const p = plain(C.agPlan_(d, { today: '2026-11-26', done: done, version: 'v1' }));
+  const day = v => String(v || '').slice(0, 10);
+  const p = plain(C.agPlan_(d, { today: '2026-11-26', done: done, version: 'v1', dayOf: day }));
   assert.deepEqual(p.jednostki.map(u => u.jednostka + u.tydzien + ':' + u.stan), ['W18:zaległa', 'A8:dziś', 'T18:zaplanowana']);
   const a = p.jednostki[1];
   assert.equal(a.uwagi_trenera, 'Spokojnie');
   assert.deepEqual(a.cwiczenia.map(c => [c.nazwa, c.boj, c.dod_serie, c.procent]), [['Przysiad', false, 1, null], ['Rwanie', true, 0, 72.5], ['Plank', false, 1, null]]);
   assert.equal(p.jednostki[2].prowadzi_trener, true);
   assert.deepEqual(p.dla_klienta, [{ blok: 'B2', tekst: 'Dobra robota' }]);
-  const h = plain(C.agHistoria_(d, { today: '2026-11-26', days: 30 }));
+  const h = plain(C.agHistoria_(d, { today: '2026-11-26', days: 30, dayOf: day }));
   const s = JSON.stringify(h);
+  assert.equal(h.jednostki[0].data, '2026-11-19');
   assert.ok(!/kolano|bol|werdykt|Zmęczenie|film/i.test(s), s);
   assert.equal(h.jednostki[0].rpe_sesji, 7);
   assert.deepEqual(h.jednostki[0].cwiczenia[0].serie.map(x => x.swiatlo), ['zielone', 'zielone', 'żółte', 'rozgrzewka']);
+  // jednostka z planu na wczoraj zrobiona (przesunięta) dziś: dzień z Sesji, nie z planu
+  const d2 = agD(); d2.sessions[0].start = '2026-11-26T17:00:00Z';
+  const p2 = plain(C.agPlan_(d2, { today: '2026-11-26', done: done, dayOf: day }));
+  assert.deepEqual(p2.jednostki.filter(u => u.stan === 'zrobiona').map(u => [u.tydzien, u.jednostka, u.data]), [[7, 'A', '2026-11-26']]);
+  assert.equal(plain(C.agHistoria_(d2, { today: '2026-11-26', dayOf: day })).jednostki[0].data, '2026-11-26');
+  // bez Sesji: dzień ostatniego zapisu serii
+  const d3 = agD(); d3.sessions = []; d3.logs.forEach(l => { l.zapisano = '2026-11-25 18:00:00'; });
+  assert.equal(plain(C.agHistoria_(d3, { today: '2026-11-26', dayOf: day })).jednostki[0].data, '2026-11-25');
 });
 
 test('agent: ciężar na dziś (1.9, sufit w bojach, dyspozycja)', () => {
