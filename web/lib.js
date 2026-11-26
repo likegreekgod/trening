@@ -371,6 +371,58 @@
   };
   /** partie mięśniowe z bazy [[nazwa, film, „partia; partia”]], alfabetycznie */
   L.exParts = base => [...new Set([].concat(...(base || []).map(b => String(b[2] || '').split(';').map(s => s.trim()).filter(Boolean))))].sort((a, b) => a.localeCompare(b, 'pl'));
+  /**
+   * przeglądanie bazy po partii (26.11.2026): kafle regionów → partie regionu. Boje = ćwiczenia bez partii rozpoznane jako
+   * rwanie / podrzut / ich ciągi (groupOf), Inne = reszta bez partii (mobilność, technika) i szyja.
+   * part: partie z bazy; skrót = podpis na pigułce.
+   */
+  L.EX_REGIONS = [
+    { id: 'nogi', name: 'Nogi', parts: ['czworogłowe', 'pośladki', 'dwugłowe uda', 'łydki', 'przywodziciele', 'odwodziciele'] },
+    { id: 'plecy', name: 'Plecy', parts: ['plecy', 'prostowniki grzbietu', 'kapturowe'] },
+    { id: 'klatka', name: 'Klatka', parts: ['klatka'] },
+    { id: 'barki', name: 'Barki', parts: ['barki'] },
+    { id: 'ramiona', name: 'Ramiona', parts: ['biceps', 'triceps', 'przedramiona'] },
+    { id: 'brzuch', name: 'Brzuch', parts: ['brzuch', 'skośne brzucha'] },
+    { id: 'boje', name: 'Boje', parts: [] },
+    { id: 'inne', name: 'Inne', parts: ['szyja'] }
+  ];
+  L.EX_PART_SHORT = { 'prostowniki grzbietu': 'prostowniki', 'skośne brzucha': 'skośne', 'dwugłowe uda': 'tył uda' };
+  const exPs = b => String(b[2] || '').split(';').map(s => s.trim()).filter(Boolean);
+  /** regiony ćwiczenia z bazy [nazwa, film, „partie”, „aliasy”] → ['plecy', 'nogi'] */
+  L.exRegionsOf = b => {
+    const ps = exPs(b);
+    if (!ps.length) { const g = L.groupOf('', b[0]); return [g === 'R' || g === 'P' || g === 'CR' || g === 'CP' ? 'boje' : 'inne']; }
+    const out = L.EX_REGIONS.filter(r => r.parts.some(p => ps.indexOf(p) >= 0)).map(r => r.id);
+    return out.length ? out : ['inne'];
+  };
+  /** kafle: regiony z liczbą ćwiczeń (n) i z filmem (f), bez pustych */
+  L.exRegions = base => L.EX_REGIONS.map(r => {
+    const l = (base || []).filter(b => L.exRegionsOf(b).indexOf(r.id) >= 0);
+    return { id: r.id, name: r.name, n: l.length, f: l.filter(b => !!b[1]).length };
+  }).filter(r => r.n);
+  /** polska nazwa z aliasów: pierwszy z polską literą albo polskim słowem łączącym („Wiosłowanie sztangą w opadzie”) */
+  L.exPl = aliases => String(aliases || '').split(';').map(s => s.trim()).filter(Boolean)
+    .find(a => /[ąćęłńóśźż]/i.test(a) || /(^|\s)(z|ze|na|w|do|od|przy|bez|nad|pod)(\s|$)/i.test(a)) || '';
+  /**
+   * lista regionu: o = {region, part, q, film}; planNames = ćwiczenia z planu klienta (najpierw).
+   * → {mine: [it], rest: [it] (najpierw z filmem, potem alfabetycznie po polskiej nazwie), total (cały region), parts: [[partia, n]]}
+   * it = {name, film, pl, parts: []}; q = wszystkie słowa w nazwie albo aliasach (bez wielkości liter i polskich znaków).
+   */
+  L.exBrowse = (planNames, base, o) => {
+    o = o || {};
+    const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
+    const reg = L.EX_REGIONS.find(r => r.id === o.region), inReg = (base || []).filter(b => L.exRegionsOf(b).indexOf(o.region) >= 0);
+    const parts = reg ? reg.parts.map(p => [p, inReg.filter(b => exPs(b).indexOf(p) >= 0).length]).filter(x => x[1]) : [];
+    const words = fold(o.q || '').split(/\s+/).filter(Boolean);
+    const ok = b => (!o.part || exPs(b).indexOf(o.part) >= 0) && (!o.film || !!b[1]) && words.every(w => fold(b[0] + ' ' + (b[3] || '')).indexOf(w) >= 0);
+    const it = b => ({ name: b[0], film: !!b[1], pl: L.exPl(b[3]), parts: exPs(b) });
+    const byName = {}; inReg.forEach(b => { byName[fold(b[0])] = b; });
+    const seen = {}, mine = [];
+    (planNames || []).forEach(n => { const b = byName[fold(n)]; if (b && !seen[fold(n)] && ok(b)) { seen[fold(n)] = 1; mine.push(it(b)); } });
+    const rest = inReg.filter(b => !seen[fold(b[0])] && ok(b)).map(it)
+      .sort((a, b) => (b.film - a.film) || (a.pl || a.name).localeCompare(b.pl || b.name, 'pl'));
+    return { mine, rest, total: inReg.length, parts };
+  };
   L.blockInfo = (plan, week) => {
     const r = plan.find(x => x.week === week && x.block);
     if (!r) return null;
