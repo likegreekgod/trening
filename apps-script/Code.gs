@@ -53,6 +53,7 @@ const OCENY = ['L', 'S', 'W', 'X'];   // boje: Łatwo / Średnio / Walka / Spalo
  * google.script.run wywołać każdą funkcję skryptu bez „_” na końcu (np. dodajKlientaZapisz), także bez klucza klienta.
  */
 function doGet(e) {
+  if (e && e.parameter && e.parameter.api !== undefined) return agentGet_(e);   // bot klienta: odczyt GET /exec/<akcja>?api=… (Agent.gs)
   return ContentService.createTextOutput(oldLinkText_(PropertiesService.getScriptProperties().getProperty('PWA_URL')));
 }
 /** Czysta funkcja: komunikat dla starego linku (adres aplikacji bez klucza; klucz klient ma w nowym linku od trenera). */
@@ -123,7 +124,11 @@ function doPost(e) {
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (Object.prototype.hasOwnProperty.call(TR_FNS, req.fn)) {          // panel trenera: bilet Google zamiast klucza klienta
+    const apiKey = req.api !== undefined ? req.api : e && e.parameter && e.parameter.api;
+    if (apiKey !== undefined && apiKey !== null) {                      // bot klienta: osobny klucz API (Agent.gs), /exec/<akcja> albo {fn}
+      const fn = req.fn !== undefined ? req.fn : (e && e.pathInfo) || '';
+      out = { ok: true, result: agentDo_(fn, apiKey, Array.isArray(req.args) ? req.args[0] : req) };
+    } else if (Object.prototype.hasOwnProperty.call(TR_FNS, req.fn)) {          // panel trenera: bilet Google zamiast klucza klienta
       if (req.fn !== 'trConfig') trAuth_(req.token);
       out = { ok: true, result: TR_FNS[req.fn].apply(null, req.args || []) };
     } else if (req.as !== undefined && req.as !== null) {               // trener prowadzi trening klienta (bilet + klient_id)

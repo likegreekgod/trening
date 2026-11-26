@@ -7,7 +7,7 @@
  *                       (tylko gdy żaden inny klient nie ma tego samego imienia, bo folder jest po imieniu), właściwości maili. Nie da się cofnąć;
  *                       trzeba wpisać imię klienta. Cotygodniowe kopie arkusza (_kopie) zostają do rotacji (KOPIE_ILE tygodni).
  */
-const RODO_POMIN = ['klucz', 'link', 'urzadzenia'];     // kolumny Klientów, których nie oddajemy w pliku (dostęp do aplikacji, znaczniki telefonów)
+const RODO_POMIN = ['klucz', 'link', 'urzadzenia', 'api_klucz'];     // kolumny Klientów, których nie oddajemy w pliku (dostęp do aplikacji, znaczniki telefonów)
 
 /** Czysta: indeks kolumny z identyfikatorem klienta w nagłówku (klient_id ma pierwszeństwo przed klient) albo -1. */
 function rodoCol_(head) {

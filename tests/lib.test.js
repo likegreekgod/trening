@@ -1148,3 +1148,18 @@ test('Ciało (punkt 15 przeglądu v80): cialoVal, cialoList, cialoApply / cialoD
   assert.equal(up.length, 4); assert.deepEqual(L.cialoList(up).pop(), { date: '2026-11-20', masa: 72, talia: null, biodra: null, klatka: null, ramie: null, udo: 50 });
   assert.deepEqual(L.cialoList(L.cialoDrop(rows, '2026-09-01')).map(o => o.date), ['2026-11-01', '2026-11-20']);
 });
+
+test('agOpenApi / agInstrukcja: opis API dla bota klienta (te same akcje co serwer)', () => {
+  const C = require('./load-code')();
+  const o = L.agOpenApi('https://script.google.com/macros/s/X/exec/');
+  assert.equal(o.openapi, '3.1.0');
+  assert.equal(o.servers[0].url, 'https://script.google.com/macros/s/X/exec');
+  assert.deepEqual(o.components.securitySchemes.klucz, { type: 'apiKey', in: 'query', name: 'api' });
+  assert.deepEqual(Object.keys(o.paths).map(p => p.slice(1)).sort(), Object.keys(C.AGENT_FNS).sort());     // każda akcja serwera opisana
+  assert.ok(o.paths['/plan'].get && o.paths['/zapiszSerie'].post);
+  Object.keys(C.AGENT_FNS).forEach(k => assert.equal(!!C.AGENT_FNS[k], !!o.paths['/' + k].get, k));          // GET tylko dla odczytu
+  assert.deepEqual(o.paths['/zglos'].post.requestBody.content['application/json'].schema.required, ['temat', 'opis']);
+  const t = L.agInstrukcja('https://x/exec', 'Marcin');
+  assert.match(t, /Klient: Marcin/); assert.match(t, /zaproponuj/); assert.match(t, /\?api=KLUCZ/);
+  assert.ok(!/sz_[0-9a-f]{8}/.test(t));                                                                   // bez klucza
+});
