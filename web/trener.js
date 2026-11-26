@@ -733,6 +733,43 @@ function agentBind(k, re){
     catch (e) { set({ err: e.auth ? '' : e.message }); }
   };
 }
+/* czat „Wypróbuj asystenta” (trAsystent, apps-script/Agent.gs): trener pisze jako klient; rozmowa tylko w pamięci strony */
+let ACH = { id: '', msgs: [], busy: false, err: '', real: false, draft: '', cost: 0 };
+function agChatCard(k){
+  const c = ACH.id === k.id ? ACH : { msgs: [], busy: false, err: '', real: false, draft: '', cost: 0 }, dis = c.busy ? ' disabled' : '';
+  const steps = st => st && st.length ? '<ul class="acst">' + st.map(x => '<li class="' + (x.ok ? 'ok' : 'no') + '"><span class="mono">' + esc(x.fn) + '</span>' + (x.args ? ' <small>' + esc(x.args) + '</small>' : '') +
+    (x.ok ? ' ✓' : ' ✕ ' + esc(x.info)) + '</li>').join('') + '</ul>' : '';
+  const bub = m => '<div class="acm ' + (m.role === 'user' ? 'u' : 'a') + '"><div class="acb">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' + steps(m.steps) + '</div>';
+  return '<div class="card" id="agchat"><h2>Wypróbuj asystenta</h2>' +
+    '<p class="legend" style="margin-top:0;font-size:13px;line-height:1.5">Piszesz jako ' + esc(k.name) + '. Asystent widzi plan, historię, Twoje zasady i ograniczenia tego klienta, tak jak bot klienta. Płacisz z klucza Claude API panelu (Ustawienia).</p>' +
+    frH('Zapisuj naprawdę', c.real ? 'Serie, treningi, propozycje i zgłoszenia trafiają do arkusza.' : 'Wyłączone: serwer sprawdza zapisy regułami, ale nic nie zapisuje.',
+      '<button class="sw" type="button" role="switch" id="ach-real" aria-label="Zapisuj naprawdę" aria-checked="' + !!c.real + '"' + dis + '></button>') +
+    '<div class="acl" id="ach-list" aria-live="polite">' + (c.msgs.length ? c.msgs.map(bub).join('') : '<p class="muted">Napisz np. „Co mam dziś?”, „Zrobiłem 3×5 po 100 kg, ciężko” albo „Boli mnie kolano”.</p>') +
+    (c.busy ? '<p class="muted acw">Asystent myśli…</p>' : '') + '</div>' +
+    (c.err ? '<p class="err" role="alert">' + esc(c.err) + '</p>' : '') +
+    '<div class="agta"><label for="ach-in">Wiadomość od klienta</label><textarea id="ach-in" rows="3"' + dis + '>' + esc(c.draft) + '</textarea></div>' +
+    '<div class="row2" style="margin-top:10px"><button class="b p" type="button" id="ach-go"' + (c.busy || !c.draft.trim() ? ' disabled' : '') + '>Wyślij</button>' +
+    (c.msgs.length ? '<button class="cp" type="button" id="ach-clr"' + dis + '>Nowa rozmowa</button>' : '') +
+    (c.cost ? '<span class="legend">Koszt rozmowy ok. ' + esc(pl(Math.round(c.cost * 100) / 100)) + ' USD</span>' : '') + '</div></div>';
+}
+function agChatBind(k, re){
+  const id = k.id;
+  if (ACH.id !== id) ACH = { id, msgs: [], busy: false, err: '', real: false, draft: '', cost: 0 };
+  const l = $('#ach-list'); if (l) l.scrollTop = l.scrollHeight;
+  const t = $('#ach-in'); if (t) t.oninput = () => { ACH.draft = t.value; const b = $('#ach-go'); if (b) b.disabled = ACH.busy || !t.value.trim(); };
+  const rl = $('#ach-real'); if (rl) rl.onclick = () => { ACH.real = !ACH.real; re(); };
+  const cl = $('#ach-clr'); if (cl) cl.onclick = () => { ACH = { id, msgs: [], busy: false, err: '', real: ACH.real, draft: '', cost: 0 }; re(); };
+  const go = $('#ach-go'); if (go) go.onclick = async () => {
+    const txt = ACH.draft.trim(); if (!txt || ACH.busy) return;
+    ACH.msgs.push({ role: 'user', text: txt }); ACH.draft = ''; ACH.busy = true; ACH.err = ''; re();
+    try {
+      const r = await guard(api('trAsystent', id, ACH.msgs.map(m => ({ role: m.role, text: m.text })), { real: ACH.real }));
+      if (ACH.id !== id) return;
+      ACH.msgs.push({ role: 'assistant', text: r.text, steps: r.steps || [] }); ACH.cost += Number(r.cost) || 0;
+    } catch (e) { if (ACH.id !== id) return; ACH.msgs.pop(); ACH.draft = txt; ACH.err = e.auth ? '' : e.message; }
+    ACH.busy = false; re();
+  };
+}
 let DY = null, DYM = { busy: false, ok: '', err: '' };   // miejsce na Dysku i kopie arkusza (trDysk, trKopia; apps-script/Kopia.gs)
 const gb = b => pl(Math.round(b / 1024 / 1024 / 102.4) / 10);
 function dyskCard(){
@@ -880,7 +917,7 @@ function renderKlientUst(id){
       : '<p class="muted">Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL.</p>') +
     '<div class="sec" style="border:0">Nowy link</div><p class="legend" style="font-size:13px">Gdy link trafił do niewłaściwej osoby. Stary link przestaje działać, a klient musi dostać nowy. Treningi i historia zostają.</p>' +
     '<button class="cp danger" type="button" id="kl-rekey"' + dis + '>' + (m.busy === 'rekey' ? 'Generuję…' : m.rekey === id ? 'Na pewno? Stary link przestanie działać' : 'Wygeneruj nowy link') + '</button></div>' +
-    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>' + importCard(k) + agentCard(k) + rodoCard(k);
+    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>' + importCard(k) + agentCard(k) + agChatCard(k) + rodoCard(k);
   $('#main').innerHTML = head('<a href="#klienci" style="color:inherit">Klienci</a> › ustawienia', k.name, '<a class="b" ' + klLink + ' href="#k/' + encodeURIComponent(id) + '">Karta klienta ›</a>') +
     '<div class="pg"><div class="kgrid"><div class="card" id="kl-form">' + f + '</div><div class="stack">' + side + '</div></div></div>';
   const re = () => { KLM = { ok: '', err: '', busy: false, rekey: '' }; renderKlientUst(id); };
@@ -888,6 +925,9 @@ function renderKlientUst(id){
   const agRe = () => { const el = document.getElementById('agent'); if (!el || location.hash !== '#klienci/' + encodeURIComponent(id)) return;   // tylko ta karta: formularz klienta obok zostaje
     el.outerHTML = agentCard(k); agentBind(k, agRe); };
   agentBind(k, agRe);
+  const achRe = () => { const el = document.getElementById('agchat'); if (!el || location.hash !== '#klienci/' + encodeURIComponent(id)) return;
+    el.outerHTML = agChatCard(k); agChatBind(k, achRe); };
+  agChatBind(k, achRe);
   const em = $('#kl-email');
   if (em) em.oninput = () => { d.email = em.value.trim(); const n = KL_F.filter(f => d[f] !== k[f]).length, sv = $('#kl-save'); if (sv && !KLM.busy) sv.disabled = !n; };
   const mt = $('#kl-mailtest');

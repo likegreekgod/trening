@@ -2364,3 +2364,49 @@ test('agent: zgłoszenia, lista dla pulpitu, zasady i ustawienia z panelu', () =
   Object.keys(C.AGENT_FNS).forEach(k => { assert.equal(C.API_FNS[k], undefined, k); assert.equal(C.TR_FNS[k], undefined, k); });
   ['trAgent', 'trAgentKlucz', 'trAgentUstaw', 'trZasady', 'trZasadyUstaw'].forEach(k => assert.ok(C.TR_FNS[k], k));
 });
+
+test('czat „Wypróbuj asystenta”: narzędzia, historia, pętla akcji, instrukcja', () => {
+  const C = require('./load-code')();
+  const plain = x => JSON.parse(JSON.stringify(x));
+  // narzędzia = akcje bota
+  const t = plain(C.agTools_());
+  assert.deepEqual(t.map(x => x.name).sort(), Object.keys(C.AGENT_FNS).sort());
+  const zs = t.find(x => x.name === 'zapiszSerie');
+  assert.deepEqual(zs.input_schema.required, ['tydzien', 'jednostka', 'nr', 'seria']);
+  assert.equal(zs.input_schema.properties.kg.type, 'number');
+  assert.equal(t.find(x => x.name === 'zapiszTrening').input_schema.properties.cwiczenia.items.type, 'object');
+  assert.deepEqual(t.find(x => x.name === 'plan').input_schema.required, []);
+  // historia z panelu: zaczyna i kończy klient, role na zmianę, przycięcie
+  assert.ok(C.agChatMsgs_([]).error && C.agChatMsgs_([{ role: 'user', text: 'a' }, { role: 'assistant', text: 'b' }]).error);
+  const m = plain(C.agChatMsgs_([{ role: 'assistant', text: 'x' }, { role: 'user', text: ' Co dziś? ' }, { role: 'user', text: 'I jutro' }, { role: 'assistant', text: 'Przysiad' }, { role: 'hacker', text: 'y'.repeat(3000) }]));
+  assert.deepEqual(m.msgs.map(x => x.role), ['user', 'assistant', 'user']);
+  assert.equal(m.msgs[0].content, 'Co dziś?\n\nI jutro');
+  assert.equal(m.msgs[2].content.length, C.AG_CHAT_TXT);
+  // pętla: akcja → wynik → odpowiedź; błąd akcji wraca jako is_error
+  const sent = [];
+  const replies = [
+    { model: 'claude-opus-5-5', stop_reason: 'tool_use', usage: { input_tokens: 100, output_tokens: 10 }, content: [{ type: 'thinking', thinking: '' }, { type: 'tool_use', id: 't1', name: 'plan', input: { dni: 3 } }, { type: 'tool_use', id: 't2', name: 'zapiszSerie', input: { kg: 120 } }] },
+    { model: 'claude-opus-5-5', stop_reason: 'end_turn', usage: { input_tokens: 200, output_tokens: 20 }, content: [{ type: 'text', text: 'Dziś przysiad. ' }, { type: 'text', text: '120 kg odpada (reguła 1.9).' }] }
+  ];
+  const out = plain(C.agChatLoop_({ model: 'm', messages: [{ role: 'user', content: 'Co dziś?' }] }, r => { sent.push(plain(r)); return replies[sent.length - 1]; },
+    (fn, a) => { if (fn === 'zapiszSerie') throw new Error('Najwyżej 110 kg (reguła 1.9)'); return { dni: a.dni }; }, 5));
+  assert.equal(out.text, 'Dziś przysiad. 120 kg odpada (reguła 1.9).');
+  assert.deepEqual(out.steps, [{ fn: 'plan', args: 'dni: 3', ok: true, info: '' }, { fn: 'zapiszSerie', args: 'kg: 120', ok: false, info: 'Najwyżej 110 kg (reguła 1.9)' }]);
+  assert.equal(out.usage.length, 2);
+  const m2 = sent[1].messages;
+  assert.equal(m2.length, 3);
+  assert.equal(m2[1].content[0].type, 'thinking');                                // odpowiedź modelu wraca w całości
+  assert.deepEqual(m2[2].content.map(r => [r.tool_use_id, !!r.is_error]), [['t1', false], ['t2', true]]);   // oba wyniki w jednej wiadomości
+  assert.equal(sent[0].messages.length, 1);                                       // zapytanie nie zmienia historii poprzedniego
+  // limit kroków i odmowa
+  const loop = { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'x', name: 'plan', input: {} }] };
+  const cut = C.agChatLoop_({ messages: [{ role: 'user', content: 'a' }] }, () => loop, () => ({}), 3);
+  assert.ok(cut.cut); assert.equal(cut.steps.length, 3);
+  assert.ok(C.agChatLoop_({ messages: [{ role: 'user', content: 'a' }] }, () => ({ stop_reason: 'refusal', content: [] }), () => ({}), 3).refusal);
+  // instrukcja: zasady i ograniczenia w środku, tryb próby opisany, bez imienia
+  const sp = C.agChatSystem_({ zasady: '## 1. Ciężar\nreguła 1.9', ogr: 'bez skoków', today: '2026-11-26' });
+  assert.match(sp, /reguła 1\.9/); assert.match(sp, /bez skoków/); assert.match(sp, /trybie próby/); assert.match(sp, /2026-11-26/);
+  assert.match(C.agChatSystem_({ real: true }), /Zapisy są prawdziwe/);
+  assert.match(C.agChatSystem_({}), /nie wkleił jeszcze zasad/);
+  assert.ok(C.TR_FNS.trAsystent);
+});

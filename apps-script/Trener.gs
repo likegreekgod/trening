@@ -17,6 +17,7 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trAgentKlucz,
   trAgentUstaw,
   trAI,
+  trAsystent,
   trBlok,
   trBlokPlan,
   trBlokSzkic,
@@ -522,13 +523,12 @@ function aiPre_() {
   return { key: key, limit: limit, today: today };
 }
 
-/** Zapytanie do Messages API, licznik dnia i wiersz w zakładce „AI”. log: [akcja, klient, tydzien, jednostka]. → {text, cost, n, limit, model} */
-function aiCall_(req, log) {
-  const pre = aiPre_(), props = PropertiesService.getScriptProperties();
+/** Jedno zapytanie do Messages API → odpowiedź (JSON) albo błąd po polsku. */
+function aiFetch_(key, req) {
   let r;
   try {
     r = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-      headers: { 'x-api-key': pre.key, 'anthropic-version': '2026-10-21', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+      headers: { 'x-api-key': key, 'anthropic-version': '2026-10-21', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
       payload: JSON.stringify(req) });
   } catch (e) {   // Apps Script czeka na odpowiedź ograniczony czas (dłuższy szkic bloku może go przekroczyć)
     throw new Error(/time|czas/i.test(String(e && e.message)) ? 'AI nie zdążyło odpowiedzieć w limicie czasu Apps Script. Spróbuj ponownie albo z mniejszą liczbą tygodni.' : 'AI: brak połączenia (' + String(e && e.message).slice(0, 120) + ').');
@@ -542,18 +542,29 @@ function aiCall_(req, log) {
     if (/credit|balance/i.test(m)) throw new Error('Brak środków na koncie Claude API (console.anthropic.com → Billing).');
     throw new Error('AI: ' + m);
   }
+  return j;
+}
+
+/** Licznik dnia i wiersz w zakładce „AI” po udanym zapytaniu. → numer zapytania dziś */
+function aiNote_(pre, log, model, u, cost) {
+  const props = PropertiesService.getScriptProperties(), lock = LockService.getScriptLock();
+  u = u || {};
+  lock.waitLock(20000);
+  try {
+    const n = aiDay_(props.getProperty('AI_DZIEN'), pre.today, pre.limit).n + 1;
+    props.setProperty('AI_DZIEN', JSON.stringify({ d: pre.today, n: n }));
+    sheet_('AI', AI_HEADERS).appendRow(plainRow_([new Date()].concat(log, [String(model || AI_MODEL), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0, cost])));
+    return n;
+  } finally { lock.releaseLock(); }
+}
+
+/** Zapytanie do Messages API, licznik dnia i wiersz w zakładce „AI”. log: [akcja, klient, tydzien, jednostka]. → {text, cost, n, limit, model} */
+function aiCall_(req, log) {
+  const pre = aiPre_(), j = aiFetch_(pre.key, req);
   if (j.stop_reason === 'refusal') throw new Error('AI nie napisało szkicu. Napisz tekst sam.');
   const text = (j.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
   if (!text) throw new Error('AI zwróciło pusty szkic. Spróbuj ponownie.');
-  const cost = aiCost_(j.model || AI_MODEL, j.usage), u = j.usage || {};
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  let n;
-  try {
-    n = aiDay_(props.getProperty('AI_DZIEN'), pre.today, pre.limit).n + 1;
-    props.setProperty('AI_DZIEN', JSON.stringify({ d: pre.today, n: n }));
-    sheet_('AI', AI_HEADERS).appendRow(plainRow_([new Date()].concat(log, [String(j.model || AI_MODEL), Number(u.input_tokens) || 0, Number(u.output_tokens) || 0, cost])));
-  } finally { lock.releaseLock(); }
+  const cost = aiCost_(j.model || AI_MODEL, j.usage), n = aiNote_(pre, log, j.model, j.usage, cost);
   return { text: text, cost: cost, n: n, limit: pre.limit, model: String(j.model || AI_MODEL) };
 }
 

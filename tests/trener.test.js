@@ -179,6 +179,10 @@ async function page(calls, opt = {}) {
           dziennik: [{ at: TODAY + 'T10:05:00.000Z', fn: 'plan', ok: true, why: '' }, { at: TODAY + 'T10:06:00.000Z', fn: 'zaproponuj', ok: false, why: 'Najwyżej +2,5 kg (reguła 1.9)' }] }); }
         else Object.assign(a, { on: false, has: false, end: '' }); }
       out = { ok: true, result: Object.assign({}, a, key ? { key } : {}) }; }
+    else if (b.fn === 'trAsystent') { await new Promise(res => setTimeout(res, 150));   // czat „Wypróbuj asystenta”
+      const last = b.args[1][b.args[1].length - 1].text;
+      out = /błąd/.test(last) ? { ok: false, error: 'Dzisiejszy limit szkiców AI (30) wyczerpany. Jutro znowu.' } : { ok: true, result: { text: 'Dziś przysiad 3×5.\nNajwyżej 102,5 kg.', cost: 0.0312, n: 1, limit: 30, real: !!b.args[2].real,
+        steps: [{ fn: 'plan', args: 'dni: 1', ok: true, info: '' }, { fn: 'zapiszSerie', args: 'kg: 120', ok: false, info: 'Najwyżej 102,5 kg (reguła 1.9)' }] } }; }
     else if (b.fn === 'trMail') out = { ok: true, result: { hour: st.hour || 6, hours: [5, 6, 7, 8, 9], trigger: true, quota: 97,
       day: { day: TODAY, at: TODAY + 'T05:02:00.000Z', names: ['Ania', 'Bartek'] }, log: { ania: { at: TODAY + 'T05:02:00.000Z', day: TODAY, title: 'Siła B' } } } };
     else if (b.fn === 'trMailUstaw') { await new Promise(res => setTimeout(res, 100)); st.hour = b.args[0];
@@ -1207,6 +1211,25 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   const oa = JSON.parse(decodeURIComponent((await p.getAttribute('#ag-oapi', 'href')).split(',')[1]));
   assert.equal(oa.openapi, '3.1.0'); assert.ok(oa.paths['/ciezarNaDzis'].get);
   await shot(p, 'trener-agent-ai.png');
+  // czat „Wypróbuj asystenta”: domyślnie próba, historia idzie w całości, kroki pod odpowiedzią, błąd przywraca wiadomość
+  assert.ok(await p.isDisabled('#ach-go'));
+  assert.equal(await p.getAttribute('#ach-real', 'aria-checked'), 'false');
+  await p.fill('#ach-in', 'Co mam dziś?'); await p.click('#ach-go');
+  await p.waitForSelector('#agchat .acm.a');
+  assert.match(await p.textContent('#agchat .acm.a .acb'), /Dziś przysiad 3×5\.Najwyżej 102,5 kg/);
+  assert.match(await p.textContent('#agchat .acst li.no'), /zapiszSerie\s*kg: 120\s*✕ Najwyżej 102,5 kg \(reguła 1\.9\)/);
+  assert.match(await p.textContent('#agchat'), /Koszt rozmowy ok\. 0,03 USD/);
+  await p.click('#ach-real'); await p.fill('#ach-in', 'Zrobiłem 3×5 po 120'); await p.click('#ach-go'); await p.waitForFunction(() => document.querySelectorAll('#agchat .acm.a').length === 2);
+  const ac = calls.filter(c => c.fn === 'trAsystent');
+  assert.deepEqual(ac[0].args, ['ania', [{ role: 'user', text: 'Co mam dziś?' }], { real: false }]);
+  assert.deepEqual(ac[1].args[1].map(m => m.role), ['user', 'assistant', 'user']); assert.deepEqual(ac[1].args[2], { real: true });
+  assert.equal(await p.getAttribute('[data-sw="on"]', 'aria-checked'), 'true', 'czat nie rusza formularza klienta');
+  await shot(p, 'trener-asystent-czat.png');
+  await p.fill('#ach-in', 'błąd'); await p.click('#ach-go'); await p.waitForSelector('#agchat .err');
+  assert.match(await p.textContent('#agchat .err'), /limit szkiców AI/);
+  assert.equal(await p.inputValue('#ach-in'), 'błąd', 'nieudana wiadomość wraca do pola');
+  assert.equal(await p.$$eval('#agchat .acm', a => a.length), 4);
+  await p.click('#ach-clr'); assert.equal(await p.$$eval('#agchat .acm', a => a.length), 0);
   await p.click('#ag-off'); await p.click('#ag-off'); await p.waitForFunction(() => /Wyłączony/.test(document.querySelector('#agent .kstat').textContent));
   assert.equal(await p.$('#ag-key'), null, 'klucz znika po wyłączeniu');
   assert.deepEqual(p.errors, []);

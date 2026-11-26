@@ -1162,4 +1162,5 @@ test('agOpenApi / agInstrukcja: opis API dla bota klienta (te same akcje co serw
   const t = L.agInstrukcja('https://x/exec', 'Marcin');
   assert.match(t, /Klient: Marcin/); assert.match(t, /zaproponuj/); assert.match(t, /\?api=KLUCZ/);
   assert.ok(!/sz_[0-9a-f]{8}/.test(t));                                                                   // bez klucza
+  assert.deepEqual(JSON.parse(JSON.stringify(C.AG_TOOLS)), L.AG_READ.concat(L.AG_WRITE));                       // czat w panelu ma te same akcje i opisy
 });
