@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Siła z Ruchu">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <!-- aplikacja ma własny jasny i ciemny motyw: bez tego Samsung / Chrome przyciemniają jasny motyw po swojemu (czarny nagłówek, szare karty) -->
 <meta name="color-scheme" content="light dark">
 <style>
@@ -50,6 +50,9 @@
           --panel:#050806;--light-off:#26302a;--h1:#535b3f;--h2:#747c59;--h3:#99a17a;--h4:#c5cfa9;--shadow:0 0 0 transparent;--bar:#2e4a3b;--bar-ink:#ffffff;--bar-muted:#cfdcd5;--bar-line:#4c6555;color-scheme:dark}
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  /* bez powiększania dwoma palcami i podwójnym dotknięciem (26.11, prośba Damiana): przypadkowe powiększenie w trakcie treningu.
+     Android: user-scalable=no w viewport (wyłącza je ustawienie „Wymuś powiększanie” w Chrome); iPhone ignoruje viewport, więc touch-action tutaj i gesturestart w JS. */
+  html{touch-action:pan-x pan-y}
   [hidden]{display:none!important}                      /* atrybut hidden wygrywa z display:grid/flex */
   body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 var(--f-body)}
   button,input,select,textarea{font:inherit;color:inherit}
