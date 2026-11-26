@@ -1043,6 +1043,47 @@ const EDIT = Object.assign({}, PRO, { cfg: Object.assign({}, PRO.cfg, { edit: tr
   plan: [].concat(...[1, 2, 3, 4].map(w => [EDROW(w, 1, 'Przysiad ze sztangą'), EDROW(w, 2, 'Wypychanie nóg na suwnicy')])) });
 const EXNAMES = [['Wykroki z hantlami', 'https://example.com/wykroki', 'czworogłowe; pośladki'], ['Wykroki chodzone', '', 'pośladki'], ['Goblet squat', '', 'czworogłowe']];
 
+// przeglądanie bazy po partii w „Dodaj ćwiczenie” (26.11.2026): kafle → partie → lista z filmem / opisem (zdjęcia z cw/opisy.json)
+const PKNAMES = [['Bent Row', 'https://example.com/br', 'plecy', 'Bent Over Barbell Row; Wiosłowanie sztangą w opadzie'], ['Alternating Kettlebell Row', '', 'plecy'],
+  ['Back Extension', 'https://example.com/be', 'prostowniki grzbietu; pośladki', 'Wyprost na ławce 45°'], ['Lat Pulldown', 'https://example.com/lp', 'plecy', 'Ściąganie drążka wyciągu'],
+  ['Wykroki z hantlami', 'https://example.com/wykroki', 'czworogłowe; pośladki'], ['Hang Snatch', 'https://example.com/hs', ''], ['Plank', '', 'brzuch']];
+for (const scheme of ['light', 'dark']) test(`Dodaj ćwiczenie ${scheme}: przeglądanie po partii, podgląd opisu, wybór`, async () => {
+  const { ctx, p } = await page([], false, { data: EDIT, scheme, api: b => b.fn === 'getExNames' ? PKNAMES : null });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  await p.click('#ed-add'); await p.waitForSelector('#ed-q');
+  await p.waitForSelector('#ed-res [data-pkr]');
+  assert.deepEqual(await p.$$eval('#ed-res [data-pkr]', b => b.map(x => x.dataset.pkr)), ['nogi', 'plecy', 'brzuch', 'boje']);
+  assert.match(await p.textContent('#ed-res [data-pkr="plecy"]'), /4 ćwiczenia · ▶ 3/);
+  assert.deepEqual(await p.$$eval('#ed-res .pk-ch [data-n]', b => b.map(x => x.dataset.n)), ['Wypychanie nóg na suwnicy', 'Przysiad ze sztangą']);   // z planu
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `partie-kafle-${scheme}.png`) }); }
+  await p.click('#ed-res [data-pkr="plecy"]');
+  assert.equal(await p.textContent('#ed-res .pk-h b'), 'Plecy');
+  assert.equal(await p.getAttribute('#ed-q', 'placeholder'), 'szukaj w: Plecy');
+  assert.deepEqual(await p.$$eval('#ed-res .pk-ch [data-pkp]', b => b.map(x => x.textContent)), ['Wszystkie 4', 'plecy 3', 'prostowniki 1']);
+  assert.deepEqual(await p.$$eval('#ed-res .pk-n', b => b.map(x => x.dataset.n)), ['Lat Pulldown', 'Bent Row', 'Back Extension', 'Alternating Kettlebell Row']);
+  assert.equal(await p.textContent('#ed-res .pk-n[data-n="Bent Row"] b'), 'Wiosłowanie sztangą w opadzie');
+  assert.equal(await p.getAttribute('#ed-res .pk-r:has([data-n="Bent Row"]) a.pk-v', 'href'), 'https://example.com/br');
+  await p.fill('#ed-q', 'wiosl'); await p.dispatchEvent('#ed-q', 'input');            // szukanie w obrębie partii
+  assert.deepEqual(await p.$$eval('#ed-res .pk-n', b => b.map(x => x.dataset.n)), ['Bent Row']);
+  assert.equal(await p.textContent('#ed-res .pk-h small'), '1 z 4');
+  await p.fill('#ed-q', ''); await p.dispatchEvent('#ed-q', 'input');
+  await p.click('#ed-res [data-pkp="plecy"]');
+  await p.waitForSelector('#ed-res [data-pkv="Alternating Kettlebell Row"]');        // opis z cw/opisy.json
+  await p.click('#ed-res [data-pkv="Alternating Kettlebell Row"]');
+  await p.waitForSelector('#ed-res .pk-pv .fxk li');
+  assert.equal((await p.$$('#ed-res .pk-pv img')).length, 2);
+  assert.deepEqual(await a11y(p), []);
+  if (process.env.SCREENS !== '0') {
+    await p.locator('#ed-res .pk-h').scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(SCREENS, `partie-lista-${scheme}.png`) });
+    await p.locator('#ed-res .pk-pv').scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(SCREENS, `partie-opis-${scheme}.png`) });
+  }
+  await p.click('#ed-res .pk-pv .pk-ok');
+  assert.equal(await p.textContent('#ed-sel'), 'Wybrane: Alternating Kettlebell Row');
+  assert.equal(await p.$eval('#ed-ok', b => b.disabled), false);
+  assert.ok(await p.$('#ed-res [data-pkr]'));                                       // po wyborze z powrotem kafle
+  await ctx.close();
+});
+
 test('Zmiany w jednostce bez flagi „edycja”: nie ma „+ ćwiczenie” ani „Usuń z treningu”', async () => {
   const { ctx, p } = await page([], false, { data: Object.assign({}, EDIT, { cfg: Object.assign({}, EDIT.cfg, { edit: false }) }) });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
@@ -1795,11 +1836,15 @@ test('Własny trening: Plan → wyszukiwarka z bazy, własna nazwa, zapis W1, tr
   assert.equal(await p.textContent('#sheet-t'), 'Dodaj ćwiczenie');
   assert.equal((await p.$$('#ow-list .ow-it.old')).length, 2);                   // istniejących nie da się usunąć
   await p.fill('#ow-q', 'pull'); await p.dispatchEvent('#ow-q', 'input'); await p.click('#ow-res .ow-add[data-n="Pull-up"]');
-  // szukanie po partii mięśniowej i ćwiczenie na czas
-  assert.deepEqual(await p.$$eval('#ow-parts .ow-pt', b => b.map(x => x.textContent)), ['biceps', 'brzuch', 'plecy']);
-  await p.click('#ow-parts [data-pt="biceps"]');
-  assert.deepEqual(await p.$$eval('#ow-res .ow-add', b => b.map(x => x.dataset.n)), ['Hammer Curl', 'EZ-Curl', 'Barbell Curl', 'Pull-up']);
-  await p.click('#ow-parts [data-pt="brzuch"]'); await p.click('#ow-res .ow-add[data-n="Plank"]');
+  // przeglądanie po partii (kafle regionów → lista; z planu najpierw, potem z filmem) i ćwiczenie na czas
+  assert.deepEqual(await p.$$eval('#ow-res [data-pkr]', b => b.map(x => x.dataset.pkr)), ['plecy', 'ramiona', 'brzuch']);
+  await p.click('#ow-res [data-pkr="ramiona"]');
+  assert.equal(await p.getAttribute('#ow-q', 'placeholder'), 'szukaj w: Ramiona');
+  assert.deepEqual(await p.$$eval('#ow-res .ow-add', b => b.map(x => x.dataset.n)), ['Hammer Curl', 'EZ-Curl', 'Pull-up', 'Barbell Curl']);
+  await p.click('#ow-res [data-pkf]');                                              // tylko z filmem
+  assert.deepEqual(await p.$$eval('#ow-res .ow-add', b => b.map(x => x.dataset.n)), ['Hammer Curl', 'EZ-Curl', 'Pull-up']);
+  await p.click('#ow-res [data-pkb]'); await p.click('#ow-res [data-pkr="brzuch"]'); await p.click('#ow-res .ow-add[data-n="Plank"]');
+  assert.equal(await p.textContent('#ow-res .pk-h b'), 'Brzuch');                // po dodaniu partia zostaje (można dodać kolejne)
   await p.click('#ow-list [data-tm="3"]');
   assert.equal(await p.inputValue('#ow-list [data-i="3"][data-f="reps"]'), '30');
   assert.match(await p.textContent('#ow-list .ow-it:last-child'), /sek\./);
@@ -3391,6 +3436,36 @@ test('Prowadź trening (tryb trenera): bilet trenera zamiast klucza, notatka, zm
   }
 });
 
+test('Prowadź: „wstecz” telefonu zamyka okno (np. „⋯” ćwiczenia) i zostaje przy kliencie, a nie wraca do panelu', async () => {
+  const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  const ex = (order, name, prio, kg) => ({ week: 13, day: 'T1', title: 'Nogi', date: day(0), order, name, prio, sets: 3, reps: '5', pct: null, kg, rpe: 8, note: '', extra: 1, drop: 0, block: 'B2' });
+  const LD = { cfg: { name: 'Ania', pain: true, simple: false, extra: 1, swap: 'DOWOLNA', scale: 'RPE', edit: true, own: true, live: true },
+    plan: [ex(1, 'Przysiad tylny', 'A', 85), ex(2, 'Martwy ciąg rumuński', 'B', 70)], logs: [], sessions: [] };
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const JWT = b64({ alg: 'none' }) + '.' + b64({ exp: Math.floor(Date.now() / 1000) + 3600, email: 't@example.com' }) + '.sig';
+  const calls = []; const { ctx, p } = await page(calls, false, { data: LD });
+  await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); } catch (e) {} }, JWT);
+  await p.goto(base + 'manifest.json');                                  // strona „przed” = panel trenera
+  await p.goto(base + '?prowadz=ania&j=13%7CT1'); await p.waitForSelector('.set[data-o="1"]');
+  const live = () => p.evaluate(() => location.search.includes('prowadz=ania'));
+  const more = async () => { await p.click('.card[data-card="1"] [data-more]'); await p.waitForSelector('#sheet:not([hidden])'); };
+  // okno „⋯” → wstecz: okno zamknięte, dalej prowadzony trening
+  await more();
+  await p.goBack(); await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.equal(await live(), true);
+  // okno z okna („⋯” → Komentarz): jedno „wstecz” zamyka drugie okno
+  await more(); await p.click('#sheet [data-mnote]'); await p.waitForSelector('#nt');
+  await p.goBack(); await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.equal(await live(), true);
+  // zamknięcie przyciskiem nie zostawia pustego wpisu: następne „wstecz” wychodzi z prowadzenia jak dotąd
+  await more(); await p.click('#sheet [data-close]'); await p.waitForSelector('#sheet', { state: 'hidden' });
+  await p.waitForTimeout(100);
+  assert.equal(await live(), true);
+  await p.goBack(); await p.waitForURL(/manifest\.json$/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('Pakiet treningów: „Zdejmij 1 trening z pakietu” w podsumowaniu prowadzonego treningu (logSession pkg), licznik u klienta tylko z cfg.pkg', async () => {
   const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
   const ex = (order, name, prio, kg) => ({ week: 13, day: 'T1', title: 'Nogi', date: day(0), order, name, prio, sets: 3, reps: '5', pct: null, kg, rpe: 8, note: '', extra: 1, drop: 0, block: 'B2' });
@@ -3552,4 +3627,79 @@ test('„Ostatnio otwarta”: getData wysyła stały losowy znacznik telefonu; l
   assert.equal(calls.filter(c => c.fn === 'getData').pop().args[0].dev, dev);       // ten sam po ponownym otwarciu
   assert.deepEqual(p.errors, []);
   await ctx.close();
+});
+
+test('Kolejność i nazwa ćwiczenia: strzałki i ✎ w kreatorze (obwód w całości), „⋯ → Kolejność i nazwy” w Prowadź (zapisane stoją)', async () => {
+  // 1) kreator własnego treningu (klient)
+  const api1 = b => b.fn === 'getExNames' ? [['Pompki', '', 'klatka'], ['Wiosłowanie hantlem', '', 'plecy'], ['Plank', '', 'brzuch'], ['Hammer Curl', '', 'biceps']] : null;
+  for (const scheme of ['light', 'dark']) {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: Object.assign({}, PRO, { cfg: Object.assign({}, PRO.cfg, { own: true }) }), api: api1, scheme });
+    await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+    await p.click('#nav [data-tab="plan"]'); await p.click('#own-new'); await p.waitForFunction(() => EXN.list.length > 0);
+    const add = async n => { await p.fill('#ow-q', n); await p.dispatchEvent('#ow-q', 'input'); await p.click(`#ow-res .ow-add[data-n="${n}"]`); };
+    const names = () => p.$$eval('#ow-list .ow-it b', b => b.map(x => x.textContent));
+    for (const n of ['Hammer Curl', 'Pompki', 'Wiosłowanie hantlem', 'Plank']) await add(n);
+    await p.click('#ow-list [data-link="2"]'); await p.click('#ow-list [data-circ="2"]');      // Pompki + Wiosłowanie = superseria A
+    assert.equal(await p.isDisabled('#ow-list [data-mv="0"][data-d="-1"]'), true);           // pierwsze nie idzie wyżej
+    assert.equal(await p.isDisabled('#ow-list [data-mv="1"][data-d="-1"]:not([data-g])'), true);   // brzeg obwodu: nie wychodzi
+    await p.click('#ow-list [data-mv="3"][data-d="-1"]');                                     // Plank przeskakuje całą superserię
+    assert.deepEqual(await names(), ['Hammer Curl', 'Plank', 'A1 · Pompki', 'A2 · Wiosłowanie hantlem']);
+    await p.click('#ow-list [data-mv="3"][data-d="-1"]:not([data-g])');                       // w superserii: zamiana kolejności
+    assert.deepEqual(await names(), ['Hammer Curl', 'Plank', 'A1 · Wiosłowanie hantlem', 'A2 · Pompki']);
+    await p.click('#ow-list [data-mv="2"][data-g][data-d="-1"]');                             // cała superseria wyżej
+    assert.deepEqual(await names(), ['Hammer Curl', 'A1 · Wiosłowanie hantlem', 'A2 · Pompki', 'Plank']);
+    await p.click('#ow-list [data-ren-go="3"]');
+    assert.equal(await p.evaluate(() => document.activeElement.dataset.ren), '3');
+    await p.fill('#ow-list input[data-ren="3"]', 'Plank  boczny'); await p.dispatchEvent('#ow-list input[data-ren="3"]', 'input');
+    await p.evaluate(() => { $('#toast').style.display = 'none'; });
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `kolejnosc-kreator-nazwa-${scheme}.png`) }); }
+    await p.press('#ow-list input[data-ren="3"]', 'Enter');
+    assert.deepEqual(await names(), ['Hammer Curl', 'A1 · Wiosłowanie hantlem', 'A2 · Pompki', 'Plank  boczny']);
+    assert.deepEqual(await a11y(p), []);
+    if (process.env.SCREENS !== '0') await p.screenshot({ path: path.join(SCREENS, `kolejnosc-kreator-${scheme}.png`) });
+    await p.click('#ow-save'); await p.waitForSelector('#sheet', { state: 'hidden' });
+    assert.deepEqual(calls.find(c => c.fn === 'addOwnUnit').args[0].exercises.map(e => e.name + (e.circuit ? '/' + e.circuit : '')),
+      ['Hammer Curl', 'Wiosłowanie hantlem/A', 'Pompki/A', 'Plank boczny']);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+  // 2) zapisana jednostka w trybie „Prowadź”: przysiad ma zapisane serie (stoi), plank przeskakuje superserię, nowa nazwa przysiadu
+  const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  const ex = (order, name, x) => Object.assign({ week: 13, day: 'T1', title: 'Nogi', date: day(0), order, name, prio: 'A', sets: 3, reps: '8', pct: null, kg: 40, rpe: '', note: '', extra: 1, drop: 0, block: 'B2', circuit: '' }, x || {});
+  const LD = { cfg: { name: 'Ania', pain: true, simple: false, extra: 1, swap: 'DOWOLNA', scale: 'RPE', edit: true, own: true, live: true },
+    plan: [ex(1, 'Przysiad tylny'), ex(2, 'Plank', { kg: 'BW', reps: '30 s' }), ex(3, 'Wiosłowanie hantlem', { circuit: 'A' }), ex(4, 'Pompki', { circuit: 'A', kg: 'BW' })],
+    logs: [{ id: 'ania|13|T1|1|1', tydzien: 13, jednostka: 'T1', data: day(0), nr_cw: 1, cwiczenie: 'Przysiad tylny', seria: 1, kg: 85, powt: 5, rpe: 8, wykonane: 'TAK', typ: '', zapisano: day(0) + 'T07:00:00.000Z' }],
+    sessions: [] };
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const JWT = b64({ alg: 'none' }) + '.' + b64({ exp: Math.floor(Date.now() / 1000) + 3600, email: 't@example.com' }) + '.sig';
+  const api2 = b => b.fn === 'editUnit' ? { ok: true, n: 4, weeks: [14], rows: [{ order: 1, to: 1, name: 'Przysiad tylny z pauzą' }, { order: 2, to: 4, name: 'Plank' }, { order: 3, to: 2, name: 'Wiosłowanie hantlem' }, { order: 4, to: 3, name: 'Pompki' }] }
+    : b.fn === 'trPlan' ? { n: 2, weeks: [13], rows: [{ week: 13, day: 'T1', order: 2, f: { reps: '20 s', kg: 'BW' } }] } : null;
+  for (const scheme of ['light', 'dark']) {
+    const calls = []; const { ctx, p } = await page(calls, false, { data: LD, api: api2, scheme });
+    await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); localStorage.setItem('fx_L_ania', '0'); } catch (e) {} }, JWT);
+    await p.goto(base + '?prowadz=ania&j=13%7CT1'); await p.waitForSelector('.set[data-o="4"]');
+    await p.click('#umore'); await p.click('#u-ord'); await p.waitForSelector('#or-list');
+    assert.equal(await p.$('#or-list [data-mv="0"]'), null);                                  // zapisane serie: bez strzałek
+    assert.match(await p.textContent('#or-list .ow-it'), /zostaje na miejscu/);
+    assert.equal(await p.isDisabled('#or-list [data-mv="1"][data-d="-1"]'), true);            // nad zapisane nie wejdzie
+    await p.click('#or-list [data-mv="1"][data-d="1"]');                                      // plank pod superserię
+    assert.deepEqual(await p.$$eval('#or-list .ow-it b', b => b.map(x => x.textContent)), ['Przysiad tylny', 'Wiosłowanie hantlem', 'Pompki', 'Plank']);
+    await p.click('#or-list [data-ren-go="0"]'); await p.fill('#or-list input[data-ren="0"]', 'Przysiad tylny z pauzą'); await p.dispatchEvent('#or-list input[data-ren="0"]', 'input');
+    await p.click('#or-list [data-ren-ok="0"]'); await p.check('#or-next');
+    assert.deepEqual((await a11y(p)).filter(x => !/tplan|tylko ja|dla klienta|INPUT $/.test(x)), []);   // cele trybu trenera pod oknem i pole wyboru w etykiecie .chk: jak dotąd
+    if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `kolejnosc-prowadz-${scheme}.png`) }); }
+    await p.click('#or-ok'); await p.waitForSelector('#sheet', { state: 'hidden' });
+    assert.deepEqual(calls.find(c => c.fn === 'editUnit').args[0], { week: 13, day: 'T1', names: [{ order: 1, name: 'Przysiad tylny z pauzą' }], next: true, seq: [1, 3, 4, 2] });
+    assert.deepEqual(await p.$$eval('.card[data-card]', c => c.map(x => x.dataset.card)), ['1', '2', '3', '4']);
+    assert.deepEqual(await p.evaluate(() => curExs().map(e => e.name)), ['Przysiad tylny z pauzą', 'Wiosłowanie hantlem', 'Pompki', 'Plank']);
+    assert.match(await p.textContent('.card[data-card="1"]'), /Przysiad tylny z pauzą/);
+    // pomyłka przy dodaniu: „✎ zmień plan” przełącza ćwiczenie z ciężarem na masę ciała i na czas
+    await p.click('[data-tplan="2"]'); await p.click('[data-kbw="1"]'); await p.click('[data-ktm="1"]'); await p.fill('#tp-reps', '20');
+    await p.click('#tp-ok'); await p.waitForSelector('#sheet', { state: 'hidden' });
+    const tp = calls.find(c => c.fn === 'trPlan').args[1];
+    assert.deepEqual(tp.ex, [{ order: 2, reps: '20 s', kg: 'BW' }]);
+    assert.equal(await p.getAttribute('.set[data-o="2"][data-s="1"] .kg', 'placeholder'), 'BW');
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
 });

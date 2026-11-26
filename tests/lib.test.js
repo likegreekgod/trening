@@ -489,6 +489,26 @@ test('weekSummary: podsumowanie tygodnia w Postępie', () => {
   assert.deepEqual([e.empty, e.units.plan, e.tonAvg, e.pain, e.feel, e.records], [true, 0, Math.round((2040 + 500 + 500) / 3), null, null, []]);
 });
 
+test('exRegions, exBrowse, exPl: przeglądanie bazy po partii (kafle → partie → lista)', () => {
+  const base = [['Bent Row', 'https://x/br', 'plecy', 'Bent Over Barbell Row; Wiosłowanie sztangą w opadzie'], ['Alternating Kettlebell Row', '', 'plecy'],
+    ['Back Extension', 'https://x/be', 'prostowniki grzbietu; pośladki', 'Wyprost na ławce 45°'], ['Pendlay Row', 'https://x/pr', 'plecy', 'Wiosłowanie Pendlaya'],
+    ['Back Squat', 'https://x/bs', 'czworogłowe; pośladki'], ['Hang Snatch', 'https://x/hs', ''], ['Snatch Pull', 'https://x/sp', ''], ['Band Pull-Apart', '', ''], ['Neck Flexion', '', 'szyja']];
+  assert.deepEqual(L.exRegionsOf(base[2]), ['nogi', 'plecy']);                       // kilka partii = kilka regionów
+  assert.deepEqual([5, 6, 7, 8].map(i => L.exRegionsOf(base[i])[0]), ['boje', 'boje', 'inne', 'inne']);
+  assert.deepEqual(L.exRegions(base).map(r => [r.id, r.n, r.f]), [['nogi', 2, 2], ['plecy', 4, 3], ['boje', 2, 2], ['inne', 2, 0]]);   // bez pustych
+  assert.equal(L.exPl('Bent Over Barbell Row; Wiosłowanie sztangą w opadzie'), 'Wiosłowanie sztangą w opadzie');
+  assert.equal(L.exPl('Ab Wheel; Ab Roller'), '');
+  const b = L.exBrowse(['Pendlay Row', 'Przysiad'], base, { region: 'plecy' });
+  assert.deepEqual(b.mine.map(x => x.name), ['Pendlay Row']);                         // z planu najpierw
+  assert.deepEqual(b.rest.map(x => x.name), ['Bent Row', 'Back Extension', 'Alternating Kettlebell Row']);   // z filmem, potem alfabetycznie po polskiej nazwie
+  assert.deepEqual([b.total, b.parts], [4, [['plecy', 3], ['prostowniki grzbietu', 1]]]);
+  assert.equal(b.rest[0].pl, 'Wiosłowanie sztangą w opadzie');
+  assert.deepEqual(L.exBrowse([], base, { region: 'plecy', part: 'prostowniki grzbietu' }).rest.map(x => x.name), ['Back Extension']);
+  assert.deepEqual(L.exBrowse([], base, { region: 'plecy', film: true }).rest.map(x => x.name), ['Pendlay Row', 'Bent Row', 'Back Extension']);
+  assert.deepEqual(L.exBrowse([], base, { region: 'plecy', q: 'wioslowanie' }).rest.map(x => x.name), ['Pendlay Row', 'Bent Row']);   // aliasy, bez polskich znaków
+  assert.deepEqual(L.exBrowse([], base, { region: 'xyz' }), { mine: [], rest: [], total: 0, parts: [] });
+});
+
 test('ownWeek, ownNextDay, exSearch: własny trening klienta', () => {
   const plan = [{ week: 1, day: 'T1', date: '2026-10-05' }, { week: 1, day: 'T2', date: '2026-10-07' }, { week: 2, day: 'T1', date: '2026-10-12' },
     { week: 2, day: 'W1', date: '2026-10-20', own: true }, { week: 2, day: 'W3', date: '2026-10-21', own: true }];
@@ -646,6 +666,33 @@ test('circuitGroups, circuitState, circuitLetter, circuitTidy: obwód / superser
   const T = (c, sets, old) => ({ c, sets, old });
   assert.deepEqual(L.circuitTidy([T('A', 3), T('A', 5), T('', 2), T('B', 4), T('', 1), T('C', 2, true), T('C', 2, true)]).map(e => e.c + e.sets), ['A3', 'A3', '2', '4', '1', 'C2', 'C2']);
   assert.equal(L.CIRCUIT_REST, 90);
+});
+
+test('orderBlocks, orderMove: kolejność ćwiczeń, obwód jako jeden blok, zapisane stoją', () => {
+  const P = s => s.split(' ').map(t => ({ n: t[0], c: /[a-z]/.test(t[0]) ? t[0].toUpperCase() : '', lock: t[1] === '!' }));
+  const N = l => l ? l.map(e => e.n + (e.lock ? '!' : '')).join(' ') : null;
+  const L1 = P('1 a a a 2 b b 3');                                          // a, b = obwody A i B
+  assert.deepEqual(L.orderBlocks(L1), [[0], [1, 2, 3], [4], [5, 6], [7]]);
+  assert.equal(N(L.orderMove(L1, 4, -1)), '1 2 a a a b b 3');                // pojedyncze przeskakuje cały obwód
+  assert.equal(N(L.orderMove(L1, 4, 1)), '1 a a a b b 2 3');
+  assert.equal(N(L.orderMove(L1, 0, -1)), null);                             // na górze
+  assert.equal(N(L.orderMove(L1, 7, 1)), null);                              // na dole
+  const A = [{ n: 'x', c: 'A' }, { n: 'y', c: 'A' }, { n: 'z', c: '' }];
+  assert.deepEqual(L.orderMove(A, 1, -1).map(e => e.n), ['y', 'x', 'z']);   // w obwodzie: zamiana z sąsiadem z obwodu
+  assert.equal(L.orderMove(A, 0, -1), null);                                 // brzeg obwodu: nie wychodzi
+  assert.equal(L.orderMove(A, 1, 1), null);
+  assert.deepEqual(L.orderMove(A, 0, 1, true).map(e => e.n), ['z', 'x', 'y']);   // cały obwód niżej
+  assert.equal(N(L.orderMove(L1, 5, -1, true)), '1 a a a b b 2 3');          // cały obwód B wyżej (nad 2)
+  const L2 = P('1! 2 3! 4 5');                                               // ! = zapisane serie
+  assert.equal(L.orderMove(L2, 1, -1), null);                                // zapisanego nie przeskakuje
+  assert.equal(L.orderMove(L2, 2, 1), null);                                 // zapisane nie rusza
+  assert.equal(N(L.orderMove(L2, 4, -1)), '1! 2 3! 5 4');
+  const L3 = [{ n: 'x', c: 'A', lock: true }, { n: 'y', c: 'A' }, { n: 'w', c: 'A' }, { n: 'z', c: '' }];
+  assert.equal(L.orderMove(L3, 0, 1, true), null);                           // obwód z zapisanym stoi
+  assert.equal(L.orderMove(L3, 1, -1), null);
+  assert.deepEqual(L.orderMove(L3, 1, 1).map(e => e.n), ['x', 'w', 'y', 'z']);
+  assert.equal(L.orderMove(L3, 3, -1), null);
+  assert.equal(L.orderMove([], 0, 1), null);
 });
 
 test('unitSummary: okno „Trening zrobiony” – porównanie z poprzednią taką samą jednostką i rekordy', () => {
