@@ -772,11 +772,11 @@ let MS = null, MT = { id: '', busy: false, ok: '', err: '' };   // poranny mail:
 const mailAt = iso => { const d = new Date(iso); return isNaN(d) ? '' : DOW[d.getDay()] + ' ' + d.getDate() + '.' + String(d.getMonth() + 1).padStart(2, '0') + ', ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
 const mailHour = () => MS ? MS.hour : 6;
 const slug = s => String(s || '').replace(/[łŁ]/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-const KL_F = ['on', 'mode', 'scale', 'swap', 'pain', 'masters', 'extra', 'oly', 'own', 'edit', 'email', 'mail', 'mailKom'];
+const KL_F = ['on', 'mode', 'scale', 'swap', 'pain', 'masters', 'extra', 'oly', 'own', 'edit', 'email', 'mail', 'mailKom', 'body'];
 const klLink = 'style="display:inline-flex;align-items:center;text-decoration:none"';
 const klFlags = k => [k.mode === 'PROSTY' ? 'Prosty' : 'PRO', k.mode === 'PRO' && k.scale === 'RIR' ? 'RIR' : '', k.swap === 'DOWOLNA' ? 'zamiana dowolna' : k.swap === 'TRENER' ? 'zamiana od trenera' : '',
   k.edit ? 'zmiany w treningu' : '', k.masters ? 'masters' : '', k.pain ? 'ból zawsze' : '', k.extra ? '+' + k.extra + (k.extra === 1 ? ' seria' : ' serie') : '', k.own ? '' : 'bez własnych',
-  k.oly !== 5 ? 'sufit ' + pl(k.oly) + '%' : '', k.mail ? 'mail rano' : '', k.mailKom ? 'mail po komentarzu' : ''].filter(Boolean).join(' · ');
+  k.oly !== 5 ? 'sufit ' + pl(k.oly) + '%' : '', k.mail ? 'mail rano' : '', k.mailKom ? 'mail po komentarzu' : '', k.body ? 'pomiary ciała' : ''].filter(Boolean).join(' · ');
 /** „ostatnio otwarta” (Klienci U/V, punkt 13 przeglądu v80): kiedy klient otworzył aplikację i na ilu telefonach (60 dni); 3+ = uwaga */
 function seenTxt(k){
   if (!k.seen) return '<span class="muted">aplikacja: brak danych o otwarciu</span>';
@@ -855,6 +855,7 @@ function renderKlientUst(id){
     frH('Tryb', 'Prosty: słowa i duże przyciski, bez % i prędkości. PRO: liczby RPE, % i VBT.', segH('mode', [['PROSTY', 'Prosty'], ['PRO', 'PRO']], d.mode)) +
     frH('Skala wysiłku', 'Tylko widok w PRO. Arkusz zawsze zapisuje RPE.', segH('scale', [['RPE', 'RPE'], ['RIR', 'RIR']], d.scale)) +
     frH('Ból zawsze widoczny', 'Pytanie o ból przy każdym podsumowaniu treningu.', swH('pain', d.pain, 'Ból zawsze widoczny')) +
+    frH('Pomiary ciała', 'Postęp → Ciało: masa i obwody (talia, biodra, klatka, ramię, udo) raz w tygodniu, z wykresem. Dla klientów sylwetkowych; widzisz je w karcie klienta.', swH('body', d.body, 'Pomiary ciała')) +
     '<div class="sec">Co klient może zmieniać</div>' +
     frH('Zamiana ćwiczenia', 'Od trenera: tylko zamienniki z planu i bazy. Dowolna: cała baza i własna nazwa.', segH('swap', [['NIE', 'Nie'], ['TRENER', 'Od trenera'], ['DOWOLNA', 'Dowolna']], d.swap)) +
     frH('Zmiany w treningu trenera', 'Dodanie i usunięcie ćwiczenia w Twojej jednostce, też na stałe.', swH('edit', d.edit, 'Zmiany w treningu trenera')) +
@@ -1175,7 +1176,17 @@ function przeglad(d, c, sets, dates, today, rd){
     return '<div class="sg"><div><b>' + esc(r.name) + '</b><small>' + (ser.length > 1 ? 'od ' + esc(dm(f.date)) + ': ' + (dv >= 0 ? '+' : '−') + esc(fmt1(Math.abs(dv))) + ' kg' : 'jeden wynik') + (r.oly ? ' · najlepsze kg' : '') + '</small></div>' +
       spark(ser.map(p => p.v), 110, 32) + '<span class="mono">' + esc(fmt1(l.v)) + ' kg</span></div>'; }).join('') : '<p class="muted">Brak wyników ćwiczeń głównych (prio A).</p>') + '</div>';
   const tonC = '<div class="card"><h2>Tonaż tygodniowy</h2>' + bars(ton.map(x => ({ week: x.week, v: x.ton })), 'Tonaż w 12 tygodniach') + '</div>';
-  return stats + '<div class="kov"><div class="stack">' + pkgCard(d) + sesH + '</div><div class="stack">' + sila + tonC + '</div></div>';
+  return stats + '<div class="kov"><div class="stack">' + pkgCard(d) + sesH + '</div><div class="stack">' + sila + tonC + cialoCard(d, today) + '</div></div>';
+}
+/** Ciało (punkt 15 przeglądu v80): masa z wykresem i obwody ze zmianą w 12 tygodniach; tylko klient z Klienci W „cialo” = TAK */
+function cialoCard(d, today){
+  if (!d.cfg || !d.cfg.body) return '';
+  const list = TL.cialoList(d.cialo), ms = list.filter(o => o.masa !== null).map(o => ({ date: o.date, v: o.masa })).slice(-16);
+  if (!list.length) return '<div class="card" id="k-cialo"><h2>Ciało</h2><p class="muted">Klient nie zapisał jeszcze pomiaru (aplikacja → Postęp → Ciało).</p></div>';
+  const sg = x => (x > 0 ? '+' : x < 0 ? '−' : '±') + pl(Math.abs(x));
+  const pills = TL.CIALO.map(([k, n, u]) => [n, u, TL.cialoDelta(list, k, today)]).filter(x => x[2])
+    .map(([n, u, x]) => '<span class="pill">' + esc(n) + ' ' + pl(x.now) + ' ' + u + (x.since !== x.date ? ' · ' + sg(x.d) + ' od ' + esc(dm(x.since)) : '') + '</span>').join('');
+  return '<div class="card" id="k-cialo"><h2>Ciało · ostatni pomiar ' + esc(dowDm(list[list.length - 1].date)) + '</h2>' + (ms.length > 1 ? line(ms, 'Masa ciała') : '') + '<div style="margin-top:8px">' + pills + '</div></div>';
 }
 function sesList(d, dates){
   const ss = sessRows(d, dates);

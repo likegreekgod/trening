@@ -4,8 +4,8 @@
  * Apps Script nie czyta nagłówków, więc klucz idzie w treści albo w adresie. Odpowiedź jak reszta API: {ok, result} | {ok:false, error}.
  *
  * Bot może mówić, co chce, ale do arkusza wchodzi tylko to, co przepuści serwer:
- * - klucz: Klienci W api_klucz = SHA-256 klucza (pełny klucz trener widzi raz, przy tworzeniu), X api_ustawienia (JSON:
- *   on, read, write, prop, limit), Y ograniczenia_ai (część klienta z „Zasad trenerskich”, sekcja 5);
+ * - klucz: Klienci X api_klucz = SHA-256 klucza (pełny klucz trener widzi raz, przy tworzeniu), Y api_ustawienia (JSON:
+ *   on, read, write, prop, limit), Z ograniczenia_ai (część klienta z „Zasad trenerskich”, sekcja 5);
  * - zasady trenera (sekcje 1–4 i 6, bez danych klientów): zakładka Zasady_AI (tekst + limity), panel → Ustawienia;
  * - twarde reguły z zasad pilnuje kod (numery reguł w komunikatach): 1.1 sufit RPE, 1.2 / 1.12 sufit w bojach (sufit_oly,
  *   dyspozycja „Uwaga” / „Zmęczenie” = plan), 1.4 po żółtej serii bez dokładania, 1.5 bez serii dodatkowych w bojach,
@@ -16,7 +16,7 @@
  * - limity dzienne (CacheService), każde zapytanie w zakładce „API” (bez treści serii).
  * Propozycje i zgłoszenia: zakładka Propozycje (status czeka / odrzucona). Kolejka do zatwierdzania w panelu: PR 2.
  */
-const AG_COL = { hash: 22, ust: 23, ogr: 24 };                      // Klienci W, X, Y (indeksy od 0)
+const AG_COL = { hash: 23, ust: 24, ogr: 25 };                      // Klienci X, Y, Z (indeksy od 0)
 const AG_DOMYSLNE = { on: false, read: true, write: true, prop: true, limit: 200 };
 const AG_LIMITY = { skok_kg: 2.5, zapisy: 50, propozycje: 5, zgloszenia: 10 };
 const AG_LIMIT_MAX = 500, AG_TEKST_MAX = 45000, AG_OGR_MAX = 5000, AG_OPIS_MAX = 600;
@@ -53,7 +53,7 @@ function agLimity_(json) {
   return { skok_kg: pick('skok_kg', 0, 10, 2.5), zapisy: pick('zapisy', 10, 200, 1), propozycje: pick('propozycje', 0, 20, 1), zgloszenia: pick('zgloszenia', 1, 30, 1) };
 }
 
-/** Czysta: wiersze Klienci → indeks aktywnego klienta z tym skrótem klucza (kolumna W) albo -1. */
+/** Czysta: wiersze Klienci → indeks aktywnego klienta z tym skrótem klucza (kolumna X) albo -1. */
 function agFindRow_(rows, hash) {
   if (!/^[0-9a-f]{64}$/.test(String(hash || ''))) return -1;
   return (rows || []).findIndex(r => String(r[AG_COL.hash] || '').trim() === hash && String(r[0] || '').trim() && String(r[3]).trim().toUpperCase() !== 'NIE');

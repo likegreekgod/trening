@@ -157,6 +157,26 @@
     const keys = add.map(r => L.stanKey(r.data, r.miejsce, r.strona));
     return (rows || []).filter(r => keys.indexOf(L.stanKey(L.stanDay(r.data), r.miejsce, r.strona)) < 0).concat(add);
   };
+  /** Ciało (punkt 15 przeglądu v80): masa i obwody, jeden wpis dziennie; [klucz, nazwa, jednostka, najmniej, najwięcej] jak CIALO_ZAKRES w Code.gs */
+  L.CIALO = [['masa', 'Masa ciała', 'kg', 25, 300], ['talia', 'Talia', 'cm', 30, 250], ['biodra', 'Biodra', 'cm', 30, 250], ['klatka', 'Klatka', 'cm', 30, 250], ['ramie', 'Ramię', 'cm', 10, 100], ['udo', 'Udo', 'cm', 20, 150]];
+  const cNum = v => { const t = String(v === undefined || v === null ? '' : v).trim().replace(',', '.'); if (!t) return null; const n = Number(t); return isFinite(n) ? n : NaN; };
+  /** pole formularza → null (puste), liczba albo komunikat błędu */
+  L.cialoVal = (k, v) => { const n = cNum(v), z = L.CIALO.find(x => x[0] === k); if (n === null) return null; return isNaN(n) || n < z[3] || n > z[4] ? z[1] + ': ' + z[3] + '–' + z[4] + ' ' + z[2] : Math.round(n * 10) / 10; };
+  /** wiersze zakładki Ciało → [{date, masa, talia, …}] od najstarszego; puste pola = null */
+  L.cialoList = rows => (rows || []).map(r => { const o = { date: L.stanDay(r.data) }; L.CIALO.forEach(([k]) => { const n = cNum(r[k]); o[k] = n === null || isNaN(n) ? null : n; }); return o; })
+    .filter(o => /^\d{4}-\d{2}-\d{2}$/.test(o.date)).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  /** zapis z aplikacji (też czekający w kolejce) zastępuje wpis z tego dnia */
+  L.cialoApply = (rows, e, at) => (rows || []).filter(r => L.stanDay(r.data) !== e.date)
+    .concat([Object.assign({ id: 'local|' + e.date, zapisano: at || '', data: e.date }, ...L.CIALO.map(([k]) => ({ [k]: e[k] === null || e[k] === undefined ? '' : e[k] })))]);
+  L.cialoDrop = (rows, date) => (rows || []).filter(r => L.stanDay(r.data) !== date);
+  /** zmiana pomiaru k w ostatnich `weeks` tygodniach: {now, from, d, date (ostatni), since (pierwszy w oknie)} albo null */
+  L.cialoDelta = (list, k, today, weeks = 12) => {
+    const from = L.addDays(today, -7 * weeks), xs = (list || []).filter(o => o[k] !== null && o.date <= today);
+    if (!xs.length) return null;
+    const last = xs[xs.length - 1], first = xs.find(o => o.date >= from) || last;
+    return { now: last[k], date: last.date, from: first[k], since: first.date, d: Math.round((last[k] - first[k]) * 10) / 10 };
+  };
+
   /** usunięcie wpisu: e = {date, place, side} */
   L.stanDrop = (rows, e) => (rows || []).filter(r => L.stanKey(L.stanDay(r.data), r.miejsce, r.strona) !== L.stanKey(e.date, e.place, e.side));
 
