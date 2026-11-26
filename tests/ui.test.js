@@ -3341,6 +3341,36 @@ test('Prowadź trening (tryb trenera): bilet trenera zamiast klucza, notatka, zm
   }
 });
 
+test('Prowadź: „wstecz” telefonu zamyka okno (np. „⋯” ćwiczenia) i zostaje przy kliencie, a nie wraca do panelu', async () => {
+  const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  const ex = (order, name, prio, kg) => ({ week: 13, day: 'T1', title: 'Nogi', date: day(0), order, name, prio, sets: 3, reps: '5', pct: null, kg, rpe: 8, note: '', extra: 1, drop: 0, block: 'B2' });
+  const LD = { cfg: { name: 'Ania', pain: true, simple: false, extra: 1, swap: 'DOWOLNA', scale: 'RPE', edit: true, own: true, live: true },
+    plan: [ex(1, 'Przysiad tylny', 'A', 85), ex(2, 'Martwy ciąg rumuński', 'B', 70)], logs: [], sessions: [] };
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const JWT = b64({ alg: 'none' }) + '.' + b64({ exp: Math.floor(Date.now() / 1000) + 3600, email: 't@example.com' }) + '.sig';
+  const calls = []; const { ctx, p } = await page(calls, false, { data: LD });
+  await ctx.addInitScript(j => { try { localStorage.setItem('tr_tok', j); } catch (e) {} }, JWT);
+  await p.goto(base + 'manifest.json');                                  // strona „przed” = panel trenera
+  await p.goto(base + '?prowadz=ania&j=13%7CT1'); await p.waitForSelector('.set[data-o="1"]');
+  const live = () => p.evaluate(() => location.search.includes('prowadz=ania'));
+  const more = async () => { await p.click('.card[data-card="1"] [data-more]'); await p.waitForSelector('#sheet:not([hidden])'); };
+  // okno „⋯” → wstecz: okno zamknięte, dalej prowadzony trening
+  await more();
+  await p.goBack(); await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.equal(await live(), true);
+  // okno z okna („⋯” → Komentarz): jedno „wstecz” zamyka drugie okno
+  await more(); await p.click('#sheet [data-mnote]'); await p.waitForSelector('#nt');
+  await p.goBack(); await p.waitForSelector('#sheet', { state: 'hidden' });
+  assert.equal(await live(), true);
+  // zamknięcie przyciskiem nie zostawia pustego wpisu: następne „wstecz” wychodzi z prowadzenia jak dotąd
+  await more(); await p.click('#sheet [data-close]'); await p.waitForSelector('#sheet', { state: 'hidden' });
+  await p.waitForTimeout(100);
+  assert.equal(await live(), true);
+  await p.goBack(); await p.waitForURL(/manifest\.json$/);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('Pakiet treningów: „Zdejmij 1 trening z pakietu” w podsumowaniu prowadzonego treningu (logSession pkg), licznik u klienta tylko z cfg.pkg', async () => {
   const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
   const ex = (order, name, prio, kg) => ({ week: 13, day: 'T1', title: 'Nogi', date: day(0), order, name, prio, sets: 3, reps: '5', pct: null, kg, rpe: 8, note: '', extra: 1, drop: 0, block: 'B2' });
