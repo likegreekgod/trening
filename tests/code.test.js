@@ -2151,7 +2151,7 @@ test('wieczorny mail po komentarzu (komNowe_, komMail_, komPierwsze_) i „ostat
   assert.deepEqual([k.mailKom, k.seen, k.devs], [true, '2026-11-23T10:00:00.000Z', 2]);
   assert.equal(C.trKlientVals_(Object.assign({}, C.KL_DOMYSLNE, { email: 'a@b.pl', mailKom: true })).vals[19], 'TAK');
   assert.match(C.trKlientVals_(Object.assign({}, C.KL_DOMYSLNE, { mailKom: true })).error, /Mail po komentarzu/);
-  assert.deepEqual(C.KL_HEAD.concat(C.KL_EXTRA).slice(15), ['mail_rano', 'max_rwanie', 'max_podrzut', 'start', 'mail_kom', 'otwarta', 'urzadzenia', 'cialo']);
+  assert.deepEqual(C.KL_HEAD.concat(C.KL_EXTRA).slice(15), ['mail_rano', 'max_rwanie', 'max_podrzut', 'start', 'mail_kom', 'otwarta', 'urzadzenia', 'cialo', 'api_klucz', 'api_ustawienia', 'ograniczenia_ai']);
   // „Sprawdź arkusz”: mail po komentarzu bez wyzwalacza = błąd
   const dg = C.diagnose_({ pwaUrl: 'x', triggers: ['podsumowanie', 'wczytajPlany', 'kopiaArkusza'], klienci: [{ klucz: 'kaaaaaaaaaa1', klient_id: 'ania', imie: 'Ania', aktywny: 'TAK', mail_kom: 'TAK', email: 'a@b.pl' }], plan: [], log: [] });
   assert.ok(dg.some(x => /wieczornyMail/.test(x[1])), JSON.stringify(dg));
@@ -2187,4 +2187,166 @@ test('unitEdit_: kolejność i nazwy ćwiczeń jednostki (trener: każda, klient
   assert.deepEqual(r.set, [[8, { nr: 2, cwiczenie: 'Uginanie' }], [9, { nr: 1 }]]);
   assert.deepEqual(r.weeks, []);
   assert.match(E({ week: 1, day: 'X9' }).error, /Nie ma takiej jednostki/);
+});
+
+/* ---------- Agent AI klienta (Agent.gs, PR 1) ---------- */
+const agD = () => {
+  const P = (week, day, order, name, x) => Object.assign({ week, day, order, name, title: 'Siła', date: '', prio: 'A', sets: 3, reps: '5', pct: null, kg: '', rpe: 8, note: '',
+    extra: null, drop: 0, group: '', block: 'B2', swaps: ['Przysiad przedni'], own: false, added: false, coach: false, unote: '' }, x || {});
+  const L = (week, day, nr, seria, x) => Object.assign({ id: ['ania', week, day, nr, seria].join('|'), tydzien: week, jednostka: day, nr_cw: nr, seria, data: '2026-11-19',
+    cwiczenie: 'Przysiad', kg: 100, powt: 5, rpe: 7, wykonane: 'TAK', typ: '', uwagi: '', film_link: '' }, x || {});
+  return {
+    cfg: { name: 'Ania', extra: 1, swap: 'TRENER', olyCeil: 0.05 },
+    plan: [P(7, 'A', 1, 'Przysiad', { date: '2026-11-19', kg: 100 }), P(7, 'A', 2, 'Rwanie', { date: '2026-11-19', kg: 70, pct: 0.7, group: 'R', rpe: 8 }),
+      P(8, 'A', 1, 'Przysiad', { date: '2026-11-26', kg: 102.5 }), P(8, 'A', 2, 'Rwanie', { date: '2026-11-26', kg: 72.5, pct: 0.725, group: 'R', rpe: 8, unote: 'Spokojnie' }),
+      P(8, 'A', 3, 'Plank', { date: '2026-11-26', reps: '30 s', prio: 'K' }), P(8, 'T1', 1, 'Przysiad', { date: '2026-11-27', kg: 100, coach: true }),
+      P(8, 'W1', 1, 'Curl', { date: '2026-11-24', own: true, block: '' })],
+    logs: [L(7, 'A', 1, 1), L(7, 'A', 1, 2), L(7, 'A', 1, 3, { rpe: 8 }), L(7, 'A', 1, 'R1', { kg: 60, rpe: '' }),
+      L(7, 'A', 2, 1, { cwiczenie: 'Rwanie', kg: 70, rpe: 7 }), L(7, 'A', 2, 2, { cwiczenie: 'Rwanie', kg: 70, rpe: 9 })],
+    sessions: [{ tydzien: 7, jednostka: 'A', data: '2026-11-19', start: '2026-11-19T17:00:00Z', rpe_sesji: 7, czas_min: 60, bol: 'kolano:3', uwagi: 'ok' }],
+    readiness: [{ data: '2026-11-26', werdykt: 'Zmęczenie' }], stan: [{ miejsce: 'Kolano' }], blockNotes: { B2: 'Dobra robota' }
+  };
+};
+
+test('agent: klucz, ustawienia, limity, wiersz klienta', () => {
+  assert.ok(C.agKeyOk_('sz_' + 'a'.repeat(32)));
+  assert.ok(!C.agKeyOk_('k123') && !C.agKeyOk_('sz_' + 'A'.repeat(32)) && !C.agKeyOk_(''));
+  assert.equal(C.agUst_('{"on":true}', false).on, false);                       // bez klucza nigdy włączone
+  assert.deepEqual(plain(C.agUst_('{"on":true,"read":false,"limit":5}', true)), { on: true, read: false, write: true, prop: true, limit: 200, at: '', end: '' });
+  assert.equal(C.agUst_('zepsute', true).limit, 200);
+  assert.deepEqual(plain(C.agLimity_('{"skok_kg":5,"zapisy":9,"propozycje":3,"zgloszenia":"x"}')), { skok_kg: 5, zapisy: 50, propozycje: 3, zgloszenia: 10 });
+  assert.equal(C.agLimity_('{"skok_kg":3}').skok_kg, 2.5);                       // tylko co 2,5 kg
+  const h = 'ab'.repeat(32), row = (k, akt, hash) => { const r = new Array(26).fill(''); r[0] = k; r[1] = 'x'; r[3] = akt; r[C.AG_COL.hash] = hash; return r; };
+  assert.equal(C.agFindRow_([row('k1', 'TAK', 'cd'.repeat(32)), row('k2', 'TAK', h)], h), 1);
+  assert.equal(C.agFindRow_([row('k2', 'NIE', h)], h), -1);                     // nieaktywny
+  assert.equal(C.agFindRow_([row('', 'TAK', h)], h), -1);                       // bez klucza z linku
+  assert.equal(C.agFindRow_([row('k2', 'TAK', '')], ''), -1);                   // pusty skrót nie pasuje do pustej komórki
+});
+
+test('agent: światła i RPE z bota (1.7: brak oceny ≠ RPE 7)', () => {
+  assert.deepEqual(plain(C.agLight_('zielone')), { rpe: 7, typ: '' });
+  assert.deepEqual(plain(C.agLight_('Żółte')), { rpe: 8, typ: '' });
+  assert.deepEqual(plain(C.agLight_('nieudana')), { rpe: '', typ: 'FAIL' });
+  assert.deepEqual(plain(C.agLight_('8,5')), { rpe: 8.5, typ: '' });
+  assert.deepEqual(plain(C.agLight_('')), { rpe: '', typ: '' });
+  assert.ok(C.agLight_('8.3').error && C.agLight_('super').error);
+  assert.equal(C.agLightOf_(7.5, ''), 'zielone'); assert.equal(C.agLightOf_(8.5, ''), 'żółte'); assert.equal(C.agLightOf_('', 'FAIL'), 'nieudana'); assert.equal(C.agLightOf_('', ''), 'brak oceny');
+});
+
+test('agent: plan i historia (bez bólu, dyspozycji, filmów)', () => {
+  const d = agD(), done = C.agDone_('ania', d);
+  assert.deepEqual(Object.keys(done), ['7|A']);
+  const p = plain(C.agPlan_(d, { today: '2026-11-26', done: done, version: 'v1' }));
+  assert.deepEqual(p.jednostki.map(u => u.jednostka + u.tydzien + ':' + u.stan), ['W18:zaległa', 'A8:dziś', 'T18:zaplanowana']);
+  const a = p.jednostki[1];
+  assert.equal(a.uwagi_trenera, 'Spokojnie');
+  assert.deepEqual(a.cwiczenia.map(c => [c.nazwa, c.boj, c.dod_serie, c.procent]), [['Przysiad', false, 1, null], ['Rwanie', true, 0, 72.5], ['Plank', false, 1, null]]);
+  assert.equal(p.jednostki[2].prowadzi_trener, true);
+  assert.deepEqual(p.dla_klienta, [{ blok: 'B2', tekst: 'Dobra robota' }]);
+  const h = plain(C.agHistoria_(d, { today: '2026-11-26', days: 30 }));
+  const s = JSON.stringify(h);
+  assert.ok(!/kolano|bol|werdykt|Zmęczenie|film/i.test(s), s);
+  assert.equal(h.jednostki[0].rpe_sesji, 7);
+  assert.deepEqual(h.jednostki[0].cwiczenia[0].serie.map(x => x.swiatlo), ['zielone', 'zielone', 'żółte', 'rozgrzewka']);
+});
+
+test('agent: ciężar na dziś (1.9, sufit w bojach, dyspozycja)', () => {
+  const d = agD(), done = C.agDone_('ania', d);
+  let r = plain(C.agCiezar_(d, { today: '2026-11-26', done: done, verdict: '', olyCeil: 0.05 }));
+  assert.equal(r.jednostka, 'A'); assert.equal(r.tydzien, 8);
+  const sq = r.cwiczenia[0], sn = r.cwiczenia[1];
+  assert.equal(sq.kg_dzis, 102.5); assert.match(sq.powod, /1\.9/);              // wszystkie ≤ RPE 8
+  assert.equal(sn.kg_dzis, 70); assert.match(sn.powod, /ponad RPE 8/);         // rwanie: seria RPE 9 > 8 → powtórka
+  assert.equal(r.cwiczenia[2].kg_dzis, null);
+  d.logs[4].rpe = 7; d.logs[5].rpe = 8;                                         // rwanie ok → plan + sufit 5% z 100 kg
+  r = plain(C.agCiezar_(d, { today: '2026-11-26', done: done, verdict: '', olyCeil: 0.05 }));
+  assert.equal(r.cwiczenia[1].kg_dzis, 72.5); assert.equal(r.cwiczenia[1].sufit, 77.5);
+  r = plain(C.agCiezar_(d, { today: '2026-11-26', done: done, verdict: 'Zmęczenie', olyCeil: 0.05 }));
+  assert.equal(r.cwiczenia[1].sufit, 72.5); assert.ok(r.dyspozycja_obniza);   // 1.2
+  assert.equal(plain(C.agCiezar_(d, { today: '2026-11-26', done: done, olyCeil: 0 })).cwiczenia[1].sufit, 72.5);   // sufit_oly 0
+  d.logs[2].rpe = '';                                                           // seria bez oceny → powtórka i pytanie o RPE
+  r = plain(C.agCiezar_(d, { today: '2026-11-26', done: done, olyCeil: 0.05 }));
+  assert.equal(r.cwiczenia[0].kg_dzis, 100); assert.match(r.cwiczenia[0].powod, /1\.7/);
+  assert.ok(C.agCiezar_(d, { week: 9, day: 'A', today: '2026-11-26', done: done }).error);
+});
+
+test('agent: zapis serii (limity serii, stare pola zostają)', () => {
+  const d = agD(), S = (x, old) => plain(C.agSet_(Object.assign({ tydzien: 8, jednostka: 'A', nr: 1, seria: '1', kg: 102.5, powt: 5, swiatlo: 'zielone' }, x), d, { today: '2026-11-26', old: old }));
+  let r = S({});
+  assert.equal(r.set.rpe, 7); assert.equal(r.set.done, true); assert.equal(r.set.name, 'Przysiad'); assert.equal(r.ponad, false);
+  assert.equal(S({ seria: '4' }).set.set, 4);                                  // 1 dodatkowa (cfg.extra 1)
+  assert.match(S({ seria: '5' }).error, /1\.8/);
+  assert.match(S({ nr: 2, seria: '4' }).error, /1\.5/);                         // boje bez dodatkowych
+  assert.match(S({ seria: 'D1' }).error, /Drop set/);
+  assert.equal(S({ seria: 'r1', swiatlo: 'czerwone' }).set.rpe, '');             // rozgrzewka bez oceny
+  assert.equal(S({ kg: 110 }).ponad, true);
+  assert.equal(S({ swiatlo: 'nieudana' }).set.typ, 'FAIL');
+  r = S({}, { film_link: 'https://x', uwagi: 'kolano ok', zamiana: 'Przysiad → Przysiad przedni | sprzęt', cwiczenie: 'Przysiad przedni' });
+  assert.equal(r.set.video, 'https://x'); assert.equal(r.set.note, 'kolano ok'); assert.equal(r.set.name, 'Przysiad przedni');
+  assert.match(S({ nr: 9 }).error, /Nie ma takiego/);
+  assert.match(S({ powt: 2.5 }).error, /Powtórzenia/);
+});
+
+test('agent: własny trening (baza, 4.4, 4.6)', () => {
+  const d = agD(), find = n => /^(przysiad|wiosłowanie)$/i.test(n) ? n[0].toUpperCase() + n.slice(1).toLowerCase() : null;
+  const o = x => Object.assign({ today: '2026-11-26', find: find, busy: C.agBusyDays_(d, v => String(v || '').slice(0, 10)), taper: null }, x);
+  const T = (x, oo) => plain(C.agTrening_(Object.assign({ data: '2026-11-25', tytul: 'Plecy', cwiczenia: [{ nazwa: 'wiosłowanie', serie: [{ kg: 40, powt: 10, swiatlo: 'zielone' }, { kg: 40, powt: 10 }] }], rpe_sesji: 6 }, x), d, o(oo)));
+  const r = T({});
+  assert.equal(r.unit.week, 7); assert.equal(r.unit.day, 'W1');        // tydzień ostatniej jednostki planu przed tym dniem assert.equal(r.unit.exercises[0].name, 'Wiosłowanie');
+  assert.deepEqual(r.exercises[0].sets.map(s => s.rpe), [7, '']);
+  assert.equal(r.session.rpeSession, 6);
+  assert.match(T({ data: '2026-11-19' }).error, /4\.4/);                        // dzień z treningiem
+  assert.match(T({ data: '2026-11-27' }).error, /Data/);                        // przyszłość
+  assert.match(T({}, { taper: ['2026-11-24', '2026-12-01'] }).error, /4\.6/);
+  assert.match(T({ cwiczenia: [{ nazwa: 'Bieg po górach', serie: [{ powt: 1 }] }] }).error, /3\.2/);
+  assert.match(T({ cwiczenia: [{ nazwa: 'Przysiad', serie: [] }] }).error, /bez serii/);
+});
+
+test('agent: propozycje zmian planu (reguły serwera)', () => {
+  const d = agD(), done = C.agDone_('ania', d), find = n => /przysiad przedni|max przysiad/i.test(n) ? n : null;
+  const ciezar = (w, dd) => C.agCiezar_(d, { week: w, day: dd, today: '2026-11-26', done: done, olyCeil: 0.05 });
+  const Pr = (x, oo) => plain(C.agProp_(Object.assign({ tydzien: 8, jednostka: 'A', nr: 1, powod: 'kolano' }, x), d,
+    Object.assign({ today: '2026-11-26', done: done, find: find, ciezar: ciezar, limity: C.agLimity_(''), planDays: { '2026-11-26': 1 }, busy: {} }, oo)));
+  assert.equal(Pr({ typ: 'zamiana', na: 'Przysiad przedni' }).status, 'czeka');
+  assert.match(Pr({ typ: 'zamiana', na: 'Przysiad przedni', powod: '' }).uwaga, /3\.1/);
+  assert.match(Pr({ typ: 'zamiana', na: 'Przysiad przedni', na_stale: true }).uwaga, /3\.7/);
+  assert.match(Pr({ typ: 'zamiana', nr: 2, na: 'Przysiad przedni' }).uwaga, /3\.4/);
+  assert.match(Pr({ typ: 'zamiana', na: 'Leg press' }).uwaga, /3\.2/);
+  assert.match(Pr({ typ: 'zamiana', na: 'Max przysiad' }).uwaga, /1\.6/);
+  assert.equal(Pr({ typ: 'ciezar', kg: 105 }).status, 'czeka');                // +2,5 ponad 102,5
+  assert.match(Pr({ typ: 'ciezar', kg: 107.5 }).uwaga, /1\.9/);
+  assert.match(Pr({ typ: 'ciezar', nr: 2, kg: 75 }).uwaga, /1\.9|1\.2/);
+  assert.match(Pr({ typ: 'serie', serie: 5 }).uwaga, /1\.8/);
+  assert.equal(Pr({ typ: 'serie', serie: 2 }).status, 'czeka');
+  assert.match(Pr({ typ: 'serie', nr: 2, serie: 4 }).uwaga, /1\.5/);
+  assert.match(Pr({ typ: 'zamiana', jednostka: 'T1', na: 'Przysiad przedni' }).uwaga, /4\.12/);
+  assert.match(Pr({ typ: 'zamiana', tydzien: 7, na: 'Przysiad przedni' }).uwaga, /zrobiona/);
+  assert.match(Pr({ typ: 'ciezar', kg: 102.5 }, { taper: ['2026-11-20', '2026-11-27'] }).uwaga, /4\.6/);
+  assert.equal(Pr({ typ: 'trening', data: '2026-11-28', opis: 'Mobilność 30 min' }).status, 'czeka');
+  assert.match(Pr({ typ: 'trening', data: '2026-11-26', opis: 'Mobilność' }).uwaga, /4\.4/);
+  assert.match(Pr({ typ: 'trening', data: '2026-11-28', opis: 'Test maksa w przysiadzie' }).uwaga, /1\.6/);
+  assert.match(Pr({ typ: 'dieta' }).uwaga, /zglos/);
+  const bez = agD(); bez.plan = bez.plan.filter(r => r.own);
+  assert.match(plain(C.agProp_({ typ: 'serie' }, bez, { today: '2026-11-26' })).uwaga, /5\.42/);
+});
+
+test('agent: zgłoszenia, lista dla pulpitu, zasady i ustawienia z panelu', () => {
+  const z = plain(C.agZglos_({ temat: 'Ból', opis: 'Kolano kłuje przy przysiadzie', miejsce: 'Kolano', strona: 'l', ocena: 4 }, '2026-11-26'));
+  assert.equal(z.typ, 'zgloszenie:bol'); assert.deepEqual(z.stan, { date: '2026-11-26', place: 'Kolano', side: 'L', score: 4, context: '', note: 'Kolano kłuje przy przysiadzie' });
+  assert.equal(C.agZglos_({ temat: 'dieta', opis: 'Pytanie o białko' }, '2026-11-26').stan, null);
+  assert.ok(C.agZglos_({ temat: 'pogoda', opis: 'x' }).error && C.agZglos_({ temat: 'bol', opis: '' }).error);
+  assert.match(C.agZglos_({ temat: 'bol', opis: 'x', miejsce: 'Bark', ocena: 11 }).error, /0–10/);
+  const rows = [{ status: 'czeka', zapisano: '2026-11-25', klient: 'ania', typ: 'zamiana', cwiczenie: 'Przysiad', tresc: '{"na":"Przysiad przedni"}' },
+    { status: 'czeka', zapisano: '2026-11-24', klient: 'ania', typ: 'zgloszenie:czerwona_flaga', powod_klienta: 'Drętwienie ręki' },
+    { status: 'odrzucona', zapisano: '2026-11-25', klient: 'ania', typ: 'serie' }, { status: 'czeka', zapisano: '2026-11-01', klient: 'ania', typ: 'serie' }];
+  const o = plain(C.agOpen_(rows, { ania: 'Ania' }, '2026-11-26', 7));
+  assert.deepEqual(o.map(x => [x.typ, x.pilne, x.text]), [['czerwona_flaga', true, 'Drętwienie ręki'], ['zamiana', false, 'Przysiad → Przysiad przedni']]);
+  assert.match(C.trZasadyVals_('## 1. Zasady\n...\n## 5. Ograniczenia per klient\nAnia: kolano').error, /sekcję 5/);
+  assert.equal(C.trZasadyVals_('  ## 1. Ciężar \r\n tekst ', { skok_kg: 5 }).tekst, '## 1. Ciężar \n tekst');
+  assert.match(C.trAgentVals_({ limit: 5 }).error, /10–500/);
+  const v = plain(C.trAgentVals_({ limit: 100, read: true, write: false, prop: true, ogr: ' bez skoków ' }, { on: true, at: 'x', end: 'abcd' }));
+  assert.deepEqual(v, { ust: { on: true, read: true, write: false, prop: true, limit: 100, at: 'x', end: 'abcd' }, ogr: 'bez skoków' });
+  // nazwy akcji bota nie kolidują z akcjami aplikacji i panelu
+  Object.keys(C.AGENT_FNS).forEach(k => { assert.equal(C.API_FNS[k], undefined, k); assert.equal(C.TR_FNS[k], undefined, k); });
+  ['trAgent', 'trAgentKlucz', 'trAgentUstaw', 'trZasady', 'trZasadyUstaw'].forEach(k => assert.ok(C.TR_FNS[k], k));
 });

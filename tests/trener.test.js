@@ -135,7 +135,9 @@ async function page(calls, opt = {}) {
     else if (!b.token) out = { ok: false, error: 'Logowanie: brak biletu' };
     else if (st.authFail > 0) { st.authFail--; out = { ok: false, error: 'Logowanie: bilet wygasł' }; }
     else if (b.fn === 'trPulpit' || b.fn === 'trPrzelicz') out = { ok: true, result: Object.assign({}, PULPIT, b.fn === 'trPrzelicz' ? { at: TODAY + 'T09:30:00.000Z' } : {}, opt.diskLow ? { dysk: { used: 13.5 * 1024 ** 3, limit: 15 * 1024 ** 3, free: 1.5 * 1024 ** 3, low: true } } : {},
-      opt.pkg ? { clients: PULPIT.clients.map(c => PKG[c.id] ? Object.assign({}, c, { pkg: PKG[c.id] }) : c) } : {}) };
+      opt.pkg ? { clients: PULPIT.clients.map(c => PKG[c.id] ? Object.assign({}, c, { pkg: PKG[c.id] }) : c) } : {},
+      opt.agent ? { agent: [{ id: 'ania', name: 'Ania', at: TODAY, typ: 'czerwona_flaga', zgl: true, pilne: true, text: 'Drętwienie palców przy martwym ciągu' },
+        { id: 'ania', name: 'Ania', at: TODAY, typ: 'zamiana', zgl: false, pilne: false, text: 'Przysiad → Przysiad przedni' }] } : {}) };
     else if (b.fn === 'trPakiet') { await new Promise(res => setTimeout(res, 100)); const f = b.args[1], k = st.pkg || (st.pkg = opt.pkg ? JSON.parse(JSON.stringify(PKG.ania)) : null);
       if (f.mode === 'nowy' && !(f.n >= 1 && f.n <= 100)) out = { ok: false, error: 'Liczba treningów: 1–100.' };
       else if (f.mode === 'korekta' && !k) out = { ok: false, error: 'Klient nie ma pakietu: najpierw dodaj pakiet.' };
@@ -166,6 +168,17 @@ async function page(calls, opt = {}) {
       if (st.kl.some(k => k.id === f.id)) out = { ok: false, error: 'Klient „' + f.id + '” już istnieje — wybierz inne ID (np. ' + f.id + '-2).' };
       else { const k = { id: f.id, name: f.imie, on: true, mode: f.mode, scale: 'RPE', swap: f.swap, pain: false, masters: f.masters, extra: 0, oly: 5, own: true, edit: false, link: 'https://example.com/trening/?k=knowy0000001' }; out = { ok: true, result: k }; } }
     else if (b.fn === 'trKlientLink') { const i = st.kl.findIndex(k => k.id === b.args[0]); st.kl[i] = Object.assign({}, st.kl[i], { link: 'https://example.com/trening/?k=knowylink001' }); out = { ok: true, result: st.kl[i] }; }
+    else if (b.fn === 'trZasady') out = { ok: true, result: st.zs || { tekst: '', limity: { skok_kg: 2.5, zapisy: 50, propozycje: 5, zgloszenia: 10 }, at: '' } };
+    else if (b.fn === 'trZasadyUstaw') { await new Promise(res => setTimeout(res, 100));
+      out = /^#+\s*5\./m.test(b.args[0]) ? { ok: false, error: 'Usuń sekcję 5 (ograniczenia per klient).' } : { ok: true, result: st.zs = { tekst: String(b.args[0]).trim(), limity: b.args[1], at: TODAY + 'T10:00:00.000Z' } }; }
+    else if (b.fn === 'trAgent' || b.fn === 'trAgentUstaw' || b.fn === 'trAgentKlucz') { await new Promise(res => setTimeout(res, 60));   // asystent AI klienta (Agent.gs)
+      const a = st.ag = st.ag || { on: false, has: false, read: true, write: true, prop: true, limit: 200, at: '', end: '', ogr: '', dzis: 0, dziennik: [] };
+      if (b.fn === 'trAgentUstaw') Object.assign(a, b.args[1]);
+      let key = '';
+      if (b.fn === 'trAgentKlucz') { if (b.args[1] === 'nowy') { key = 'sz_' + '0123456789abcdef'.repeat(2); Object.assign(a, { on: true, has: true, at: TODAY + 'T10:00:00.000Z', end: key.slice(-4),
+          dziennik: [{ at: TODAY + 'T10:05:00.000Z', fn: 'plan', ok: true, why: '' }, { at: TODAY + 'T10:06:00.000Z', fn: 'zaproponuj', ok: false, why: 'Najwyżej +2,5 kg (reguła 1.9)' }] }); }
+        else Object.assign(a, { on: false, has: false, end: '' }); }
+      out = { ok: true, result: Object.assign({}, a, key ? { key } : {}) }; }
     else if (b.fn === 'trMail') out = { ok: true, result: { hour: st.hour || 6, hours: [5, 6, 7, 8, 9], trigger: true, quota: 97,
       day: { day: TODAY, at: TODAY + 'T05:02:00.000Z', names: ['Ania', 'Bartek'] }, log: { ania: { at: TODAY + 'T05:02:00.000Z', day: TODAY, title: 'Siła B' } } } };
     else if (b.fn === 'trMailUstaw') { await new Promise(res => setTimeout(res, 100)); st.hour = b.args[0];
@@ -1116,6 +1129,51 @@ test('panel: historia z innej aplikacji (plik Hevy → podgląd → wczytanie �
   // plik spoza obsługiwanych formatów
   await p.setInputFiles('#hv-file', { name: 'inne.csv', mimeType: 'text/csv', buffer: Buffer.from('a,b\n1,2') });
   await p.waitForFunction(() => /Nie rozpoznaję/.test(document.querySelector('#import').textContent));
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia klienta, zgłoszenia w „Wymaga uwagi”)', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, { loggedIn: true, agent: true });
+  await p.goto(base + 'trener.html'); await p.waitForSelector('.todo .it');
+  const it = await p.$$eval('.todo .it', a => a.map(x => [x.querySelector('b').textContent, x.querySelector('.dot').className]));
+  assert.deepEqual(it.filter(x => /asystenta AI/.test(x[0])).map(x => [x[0], /lv-bad/.test(x[1])]),
+    [['Ania: czerwona flaga od asystenta AI', true], ['Ania: propozycja asystenta AI (zamiana)', false]]);
+  // Ustawienia: zasady trenera (sekcja 5 odrzucona, limity)
+  await p.goto(base + 'trener.html#ustawienia'); await p.waitForSelector('#zasady-card');
+  assert.match(await p.textContent('#zasady-card'), /Brak zasad/);
+  assert.ok(await p.isDisabled('#zs-save'));
+  await p.fill('#zs-t', '## 1. Ciężar\n1.1 RPE nie wyżej niż rpe_max.\n## 5. Ograniczenia per klient\nAnia: kolano');
+  await p.click('#zs-save'); await p.waitForSelector('#zasady-card .err');
+  assert.match(await p.textContent('#zasady-card .err'), /sekcję 5/);
+  await p.fill('#zs-t', '## 1. Ciężar\n1.1 RPE nie wyżej niż rpe_max.');
+  await p.click('[data-agnum="propozycje"][data-d="-1"]');
+  await p.click('#zs-save'); await p.waitForSelector('#zasady-card .saved');
+  const z = calls.filter(c => c.fn === 'trZasadyUstaw').pop().args;
+  assert.equal(z[0], '## 1. Ciężar\n1.1 RPE nie wyżej niż rpe_max.'); assert.deepEqual(z[1], { skok_kg: 2.5, zapisy: 50, propozycje: 4, zgloszenia: 10 });
+  assert.match(await p.textContent('#zasady-card .kstat'), /Zapisane/);
+  await shot(p, 'trener-zasady-ai.png');
+  // ustawienia klienta: klucz pokazany raz, uprawnienia, ograniczenia, instrukcja i OpenAPI
+  await p.goto(base + 'trener.html#klienci/ania'); await p.waitForSelector('#agent #ag-new');
+  assert.match(await p.textContent('#agent .kstat'), /Wyłączony/);
+  await p.click('#ag-new'); await p.waitForSelector('#ag-key');
+  assert.equal(await p.textContent('#ag-key'), 'sz_' + '0123456789abcdef'.repeat(2));
+  assert.match(await p.textContent('#agent .kstat'), /Włączony · klucz …cdef/);
+  assert.match(await p.textContent('#agent .aglog'), /zaproponuj\s*odmowa · Najwyżej \+2,5 kg/);
+  await p.click('#ag-new'); assert.match(await p.textContent('#ag-new'), /Na pewno/);
+  assert.equal(calls.filter(c => c.fn === 'trAgentKlucz').length, 1, 'nowy klucz dopiero po drugim dotknięciu');
+  await p.click('[data-agsw="write"]'); await p.fill('#ag-ogr', 'Bez skoków na kolano lewe.');
+  await p.click('[data-agnum="limit"][data-d="-10"]');
+  assert.equal(await p.getAttribute('[data-sw="on"]', 'aria-checked'), 'true', 'przełączniki asystenta nie ruszają formularza klienta');
+  assert.ok(await p.isDisabled('#kl-save'));
+  await p.click('#ag-save'); await p.waitForSelector('#agent .saved');
+  assert.deepEqual(calls.filter(c => c.fn === 'trAgentUstaw').pop().args, ['ania', { read: true, write: false, prop: true, limit: 190, ogr: 'Bez skoków na kolano lewe.' }]);
+  const oa = JSON.parse(decodeURIComponent((await p.getAttribute('#ag-oapi', 'href')).split(',')[1]));
+  assert.equal(oa.openapi, '3.1.0'); assert.ok(oa.paths['/ciezarNaDzis'].get);
+  await shot(p, 'trener-agent-ai.png');
+  await p.click('#ag-off'); await p.click('#ag-off'); await p.waitForFunction(() => /Wyłączony/.test(document.querySelector('#agent .kstat').textContent));
+  assert.equal(await p.$('#ag-key'), null, 'klucz znika po wyłączeniu');
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });

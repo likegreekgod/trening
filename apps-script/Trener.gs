@@ -13,6 +13,9 @@
  * Klucz ustawia trAI / trUstawAI (panel → Ustawienia, działa też na telefonie) albo menu „Ustaw klucz Claude API”; panel widzi tylko 4 ostatnie znaki.
  */
 const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y dopisują w różnych miejscach
+  trAgent,
+  trAgentKlucz,
+  trAgentUstaw,
   trAI,
   trBlok,
   trBlokPlan,
@@ -44,6 +47,8 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trPulpit,
   trSzkic,
   trUstawAI,
+  trZasady,
+  trZasadyUstaw,
 };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
@@ -131,6 +136,8 @@ function trPulpit() {
     { today: today_(), localDay: localDay, at: PropertiesService.getScriptProperties().getProperty('PODSUM_AT') || '' });
   out.dysk = dysk_();                    // miejsce na Dysku: mało = czerwony wpis w „Wymaga uwagi” (Kopia.gs)
   out.clients.forEach(c => { if (pk[c.id]) c.pkg = pk[c.id]; });
+  const names = {}; out.clients.forEach(c => { names[c.id] = c.name; });
+  out.agent = agOpen_(tableOf_('Propozycje'), names, today_(), 7);   // zgłoszenia i propozycje botów klientów (Agent.gs)
   return out;
 }
 
@@ -1005,7 +1012,7 @@ function trBlokWczytaj(id, rows) {
 
 /* ---------- klienci: lista, ustawienia (flagi z zakładki Klienci), nowy klient, nowy link ----------
  * Kolumny Klienci po pozycji (jak clientOf_): A klucz, B klient_id, C imie, D aktywny, E link, F bol, G tryb, H dod_serie, I masters,
- * J zamiana, K skala, L sufit_oly, M wlasne, N edycja, O email, P mail_rano (TAK = poranny mail, Mail.gs); dalej KL_EXTRA (Q–W).
+ * J zamiana, K skala, L sufit_oly, M wlasne, N edycja, O email, P mail_rano (TAK = poranny mail, Mail.gs); dalej KL_EXTRA (Q–Z; X–Z = API bota klienta, Agent.gs).
  * Usuwania nie ma: „nieaktywny” zostawia historię.
  */
 const KL_HEAD = ['klucz', 'klient_id', 'imie', 'aktywny', 'link', 'bol', 'tryb', 'dod_serie', 'masters', 'zamiana', 'skala', 'sufit_oly', 'wlasne', 'edycja', 'email', 'mail_rano'];
@@ -1053,9 +1060,9 @@ const KL_DOMYSLNE = { on: true, mode: 'PRO', scale: 'RPE', swap: 'NIE', pain: fa
  * T mail_kom (TAK = wieczorny mail po komentarzu, zapisuje panel), U otwarta (ostatnie otwarcie aplikacji), V urzadzenia (JSON, seen_),
  * W cialo (TAK = pomiary ciała, zapisuje panel).
  */
-const KL_EXTRA = ['max_rwanie', 'max_podrzut', 'start', 'mail_kom', 'otwarta', 'urzadzenia', 'cialo'];
+const KL_EXTRA = ['max_rwanie', 'max_podrzut', 'start', 'mail_kom', 'otwarta', 'urzadzenia', 'cialo', 'api_klucz', 'api_ustawienia', 'ograniczenia_ai'];   // X–Z: Agent.gs
 
-/** Arkusz Klienci; brakujące nagłówki (puste komórki A1–W1) dopisuje, istniejących nie zmienia. Kolumna „start” jako tekst. */
+/** Arkusz Klienci; brakujące nagłówki (puste komórki A1–Z1) dopisuje, istniejących nie zmienia. Kolumna „start” jako tekst. */
 function klSheet_() {
   const sh = sheet_('Klienci', KL_HEAD.slice(0, 9)), all = KL_HEAD.concat(KL_EXTRA);
   const h = sh.getRange(1, 1, 1, all.length).getValues()[0];

@@ -165,6 +165,8 @@ function todoItems(){
     else if (k.to && k.to < PUL.today) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': pakiet wygasł ' + dm(k.to), d: 'niewykorzystane: ' + k.left + ' z ' + k.n, a: ref });
     else if (k.left <= PKG_LOW) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': ' + (k.left === 1 ? 'został 1 trening' : 'zostały ' + k.left + ' treningi') + ' z pakietu', d: info, a: ref });
     else if (k.to && k.to <= TL.addDays(PUL.today, PKG_DAYS)) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': pakiet ważny do ' + dowDm(k.to), d: 'zostało ' + k.left + ' z ' + k.n + ' treningów', a: ref }); });
+  (PUL.agent || []).forEach(x => out.push({ o: x.pilne ? 0 : 1, lv: x.pilne ? 'lv-bad' : 'lv-warn', t: x.name + ': ' + (x.zgl ? (AG_TEMAT[x.typ] || 'zgłoszenie') + ' od asystenta AI' : 'propozycja asystenta AI (' + (AG_TYP[x.typ] || x.typ) + ')'),
+    d: x.text + ' · ' + dowDm(x.at), a: go(kHref(x.id), 'Otwórz') }));   // Agent.gs: bot klienta (kolejka do zatwierdzania: PR 2)
   PUL.blocks.forEach(b => out.push({ o: 3, lv: 'lv-warn', t: b.name + ': blok ' + b.block + ' do zamknięcia', d: (b.to < PUL.today ? 'skończył się ' : 'kończy się ') + dowDm(b.to) + ' · brak wniosków', a: go(kHref(b.id, 'bloki'), 'Zamknij') }));
   PUL.clients.forEach(c => { if (c.planLeft !== null && c.planLeft >= 0 && c.planLeft <= 7) out.push({ o: 4, lv: 'lv-warn', t: c.name + ': plan kończy się ' + (c.planLeft === 0 ? 'dziś' : 'za ' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni')), d: 'czas na kolejny blok', a: go(kHref(c.id, 'bloki'), 'Następny') }); });
   return out.sort((a, b) => a.o - b.o);
@@ -602,7 +604,7 @@ async function cwSave(k){
 let AIS = null, AIM = { ok: '', err: '', busy: false, del: false };
 async function renderUstawienia(){
   if (!AIS) { $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
-    try { [AIS, MS, DY] = await Promise.all([guard(api('trAI')), guard(api('trMail')), guard(api('trDysk'))]); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + errBox(e); return; }
+    try { [AIS, MS, DY, ZS] = await Promise.all([guard(api('trAI')), guard(api('trMail')), guard(api('trDysk')), guard(api('trZasady'))]); ZD = null; } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + errBox(e); return; }
     if (!location.hash.startsWith('#ustawienia')) return; }
   const a = AIS, m = AIM, dis = m.busy ? ' disabled' : '';
   $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="card" id="aikey-card" style="max-width:640px"><h2>Szkic AI · klucz Claude API</h2>' +
@@ -612,7 +614,7 @@ async function renderUstawienia(){
     (a.set ? '<button class="b" type="button" id="aikey-del"' + dis + '>' + (m.del ? 'Na pewno usunąć?' : 'Usuń klucz') + '</button>' : '') + '</div>' +
     (m.ok ? '<p class="saved" role="status">' + esc(m.ok) + '</p>' : '') + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '') +
     '<p class="legend">Klucz założysz na <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> → API Keys → Create Key. Przed zapisem sprawdzam go w Anthropic (bez opłaty). ' +
-    'Klucz trafia do ustawień skryptu arkusza, nie do arkusza ani do tej strony: tutaj widać tylko 4 ostatnie znaki.</p></div>' + mailCard() + dyskCard() + '</div>';
+    'Klucz trafia do ustawień skryptu arkusza, nie do arkusza ani do tej strony: tutaj widać tylko 4 ostatnie znaki.</p></div>' + zasadyCard() + mailCard() + dyskCard() + '</div>';
   const save = async key => {
     Object.assign(AIM, { busy: true, ok: '', err: '', del: false }); renderUstawienia();
     try { const r = await guard(api('trUstawAI', key)); AIS = r;
@@ -622,6 +624,7 @@ async function renderUstawienia(){
   };
   $('#aikey-save').onclick = () => { const k = $('#aikey').value.trim(); if (!k) { Object.assign(AIM, { err: 'Wklej klucz.', ok: '' }); renderUstawienia(); return; } save(k); };
   const del = $('#aikey-del'); if (del) del.onclick = () => { if (!AIM.del) { Object.assign(AIM, { del: true, ok: '', err: '' }); renderUstawienia(); return; } save(''); };
+  zasadyBind();
   const kb = $('#kopia-go'); if (kb) kb.onclick = async () => {
     if (DYM.busy) return; DYM = { busy: true, ok: '', err: '' }; renderUstawienia();
     try { DY = await guard(api('trKopia')); DYM = { busy: false, ok: '✓ Kopia zapisana.', err: '' }; }
@@ -637,6 +640,99 @@ async function renderUstawienia(){
   });
 }
 let MH = { busy: false, ok: '', err: '' };
+/* ---------- asystent AI klienta (Agent.gs): zasady trenera w Ustawieniach, klucz API i uprawnienia w ustawieniach klienta ---------- */
+let ZS = null, ZD = null, ZM = { busy: false, ok: '', err: '' };      // zasady (trZasady), szkic, stan zapisu; tylko w pamięci strony
+const AGS = {}, AGD = {};                                               // klient → ustawienia API (trAgent) i szkic zmian
+let AGM = { id: '', busy: '', ok: '', err: '', sure: '', key: '', cp: '' };
+const AG_LIM = { skok_kg: [0, 10, 2.5], zapisy: [10, 200, 10], propozycje: [0, 20, 1], zgloszenia: [1, 30, 1], limit: [10, 500, 10] };
+const AG_TEMAT = { czerwona_flaga: 'czerwona flaga', bol: 'ból', plan: 'pytanie o plan', ciezar: 'pytanie o ciężar', status: 'sygnał w podsumowaniu', fail: 'nieudane serie', pominiete: 'pominięte treningi', dieta: 'dieta', cel: 'zmiana celu', zawody: 'zawody', inne: 'zgłoszenie' };
+const AG_TYP = { zamiana: 'zamiana', ciezar: 'ciężar', serie: 'serie', trening: 'dodatkowy trening' };
+const agNumH = (f, v, u) => { const [mn, mx, st] = AG_LIM[f]; return '<div class="num"><button type="button" data-agnum="' + f + '" data-d="-' + st + '"' + (v <= mn ? ' disabled' : '') + ' aria-label="mniej">−</button><output>' + pl(v) + (u || '') +
+  '</output><button type="button" data-agnum="' + f + '" data-d="' + st + '"' + (v >= mx ? ' disabled' : '') + ' aria-label="więcej">+</button></div>'; };
+const agSwH = (f, v, lbl) => '<button type="button" class="sw" role="switch" data-agsw="' + f + '" aria-checked="' + !!v + '" aria-label="' + esc(lbl) + '"></button>';
+function agCtl(st, re){   // osobne atrybuty: na stronie klienta data-sw / data-num należą do formularza klienta (klCtl)
+  document.querySelectorAll('[data-agsw]').forEach(b => b.onclick = () => { st[b.dataset.agsw] = !st[b.dataset.agsw]; re(); });
+  document.querySelectorAll('[data-agnum]').forEach(b => b.onclick = () => { const f = b.dataset.agnum, l = AG_LIM[f]; st[f] = Math.min(l[1], Math.max(l[0], Math.round((st[f] + Number(b.dataset.d)) * 10) / 10)); re(); });
+}
+const zsCh = () => { const z = ZS || {}, d = ZD; return !!d && (d.t !== (z.tekst || '') || Object.keys(d.l).some(k => d.l[k] !== (z.limity || {})[k])); };
+function zasadyCard(){
+  const z = ZS || { tekst: '', limity: { skok_kg: 2.5, zapisy: 50, propozycje: 5, zgloszenia: 10 }, at: '' };
+  const d = ZD = ZD || { t: z.tekst, l: Object.assign({}, z.limity) }, dis = ZM.busy ? ' disabled' : '';
+  return '<div class="card" id="zasady-card" style="max-width:640px"><h2>Asystent AI klienta · zasady trenera</h2>' +
+    '<p class="kstat"><span class="dot' + (z.tekst ? ' on' : '') + '"></span><span>' + (z.tekst ? 'Zapisane ' + esc(mailAt(z.at)) + ' · ' + z.tekst.length + ' znaków' : 'Brak zasad: bot klienta zna tylko twarde reguły serwera.') + '</span></p>' +
+    '<div class="agta"><label for="zs-t">Zasady z projektu trenera: sekcje 1–4 i 6</label><textarea id="zs-t" rows="10" spellcheck="false"' + dis + '>' + esc(d.t) + '</textarea></div>' +
+    '<p class="legend">Ten tekst dostaje bot każdego klienta, więc bez imion i bez sekcji 5. Ograniczenia jednej osoby (zdrowie, kontuzje) wklejasz w jej ustawieniach: Klienci → Ustawienia → Asystent AI.</p>' +
+    '<div class="frm">' +
+    frH('Skok ciężaru', 'Najwyżej tyle kg ponad ciężar na dziś w propozycji bota (reguła 1.9).', agNumH('skok_kg', d.l.skok_kg, ' kg')) +
+    frH('Zapisy dziennie', 'Serie i treningi zapisane przez bota jednego klienta.', agNumH('zapisy', d.l.zapisy)) +
+    frH('Propozycje dziennie', 'Zmiany planu do Twojej akceptacji. 0 = bot nie proponuje.', agNumH('propozycje', d.l.propozycje)) +
+    frH('Zgłoszenia dziennie', 'Ból, czerwone flagi i pytania do Ciebie.', agNumH('zgloszenia', d.l.zgloszenia)) + '</div>' +
+    '<div class="row2" style="margin-top:12px"><button class="b p" type="button" id="zs-save"' + (zsCh() && !ZM.busy ? '' : ' disabled') + '>' + (ZM.busy ? 'Zapisuję…' : 'Zapisz zasady') + '</button>' +
+    (ZM.ok ? '<span class="saved" role="status">' + esc(ZM.ok) + '</span>' : '') + '</div>' + (ZM.err ? '<p class="err" role="alert">' + esc(ZM.err) + '</p>' : '') + '</div>';
+}
+function zasadyBind(){
+  const re = () => { ZM.ok = ''; if (location.hash.startsWith('#ustawienia')) renderUstawienia(); };
+  agCtl(ZD.l, re);
+  const t = $('#zs-t'); if (t) t.oninput = () => { ZD.t = t.value; const b = $('#zs-save'); if (b && !ZM.busy) b.disabled = !zsCh(); };
+  const b = $('#zs-save'); if (b) b.onclick = async () => {
+    ZM = { busy: true, ok: '', err: '' }; renderUstawienia();
+    try { ZS = await guard(api('trZasadyUstaw', ZD.t, ZD.l)); ZD = null; ZM = { busy: false, ok: '✓ Zapisano. Boty klientów dostaną nowe zasady przy następnym pytaniu.', err: '' }; }
+    catch (e) { ZM = { busy: false, ok: '', err: e.auth ? '' : e.message }; }
+    if (location.hash.startsWith('#ustawienia')) renderUstawienia();
+  };
+}
+const AG_F = ['read', 'write', 'prop', 'limit', 'ogr'];
+function agentCard(k){
+  const a = AGS[k.id], m = AGM.id === k.id ? AGM : { busy: '', ok: '', err: '', sure: '', key: '', cp: '' }, dis = m.busy ? ' disabled' : '';
+  const h = '<div class="card" id="agent"><h2>Asystent AI klienta (API)</h2>';
+  if (!a) return h + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '<p class="muted">Ładowanie…</p>') + '</div>';
+  const d = AGD[k.id] = AGD[k.id] || { read: a.read, write: a.write, prop: a.prop, limit: a.limit, ogr: a.ogr }, ch = AG_F.some(f => d[f] !== a[f]);
+  const stat = a.on ? 'Włączony · klucz …' + esc(a.end) + (a.at ? ' od ' + esc(dm(a.at.slice(0, 10))) : '') + ' · dziś ' + a.dzis + ' z ' + a.limit + ' zapytań' : 'Wyłączony: bot klienta nie ma dostępu.';
+  const url = String(window.API_URL || '');
+  return h + '<p class="kstat"><span class="dot' + (a.on ? ' on' : '') + '"></span><span>' + stat + '</span></p>' +
+    (m.key ? '<div class="okbox" role="status"><b>Klucz dla bota ' + esc(k.name) + '</b>Pokazuję go tylko teraz. Klient wpisuje go w ustawieniach swojego bota (nie w czacie).' +
+      '<div class="linkbox mono agkey" id="ag-key">' + esc(m.key) + '</div><button class="cp' + (m.cp === 'key' ? ' done' : '') + '" type="button" id="ag-cpkey">' + (m.cp === 'key' ? '✓ Skopiowano' : '⧉ Kopiuj klucz') + '</button></div>' : '') +
+    '<div class="row2"><button class="cp" type="button" id="ag-new"' + dis + '>' + (m.busy === 'nowy' ? 'Tworzę…' : m.sure === 'nowy' ? 'Na pewno? Stary klucz przestanie działać' : a.has ? 'Nowy klucz' : 'Utwórz klucz i włącz') + '</button>' +
+    (a.has ? '<button class="cp danger" type="button" id="ag-off"' + dis + '>' + (m.busy === 'wylacz' ? 'Wyłączam…' : m.sure === 'wylacz' ? 'Na pewno wyłączyć?' : 'Wyłącz dostęp') + '</button>' : '') + '</div>' +
+    '<div class="frm">' +
+    frH('Odczyt', 'Zasady, plan, historia serii, ciężar na dziś. Bez bólu i dyspozycji.', agSwH('read', d.read, 'Odczyt')) +
+    frH('Zapis', 'Serie z planu i własne treningi (jak w aplikacji).', agSwH('write', d.write, 'Zapis')) +
+    frH('Propozycje zmian planu', 'Zamiana, ciężar, serie, dodatkowy trening: czekają na Ciebie, plan bez zmian.', agSwH('prop', d.prop, 'Propozycje zmian planu')) +
+    frH('Zapytania dziennie', 'Wszystkie akcje bota tego klienta razem.', agNumH('limit', d.limit)) + '</div>' +
+    '<div class="agta"><label for="ag-ogr">Ograniczenia tego klienta (jego część sekcji 5)</label><textarea id="ag-ogr" rows="4"' + dis + '>' + esc(d.ogr) + '</textarea></div>' +
+    '<p class="legend">To dane o zdrowiu: widzi je tylko bot tego klienta, zostają w arkuszu.</p>' +
+    '<div class="row2" style="margin-top:10px"><button class="b p" type="button" id="ag-save"' + (ch && !m.busy ? '' : ' disabled') + '>' + (m.busy === 'save' ? 'Zapisuję…' : 'Zapisz') + '</button>' +
+    (m.ok ? '<span class="saved" role="status">' + esc(m.ok) + '</span>' : '') + '</div>' + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '') +
+    '<div class="sec" style="border:0">Dla bota</div><div class="row2"><button class="cp' + (m.cp === 'ins' ? ' done' : '') + '" type="button" id="ag-ins">' + (m.cp === 'ins' ? '✓ Skopiowano' : '⧉ Kopiuj instrukcję dla bota') + '</button>' +
+    '<a class="cp" ' + klLink + ' id="ag-oapi" download="sila-z-ruchu-api.json" href="data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(TL.agOpenApi(url), null, 2)) + '">⇩ Opis API (OpenAPI)</a></div>' +
+    '<p class="legend">Klucz idzie w adresie (?api=…), bo skrypt Google nie czyta nagłówków. Wystarczy to botom pisanym samodzielnie i automatyzacjom (Make, n8n). ChatGPT i Claude jako „narzędzie” dojdą w następnym kroku.</p>' +
+    (a.dziennik && a.dziennik.length ? '<div class="sec" style="border:0">Ostatnie zapytania</div><ul class="aglog">' + a.dziennik.map(l => '<li><span class="mono">' + esc(mailAt(l.at)) + '</span> <b>' + esc(l.fn) + '</b> ' +
+      (l.ok ? '<span class="saved">ok</span>' : '<span class="err">odmowa</span>' + (l.why ? ' · ' + esc(l.why) : '')) + '</li>').join('') + '</ul>' : '') + '</div>';
+}
+function agentBind(k, re){
+  const id = k.id, set = x => { AGM = Object.assign({ id, busy: '', ok: '', err: '', sure: '', key: AGM.id === id ? AGM.key : '', cp: '' }, x); re(); };
+  if (!AGS[id]) { if (AGM.id !== id || !AGM.busy) { AGM = { id, busy: 'load', ok: '', err: '', sure: '', key: '', cp: '' };
+    guard(api('trAgent', id)).then(r => { AGS[id] = r; AGM.busy = ''; re(); }).catch(e => { AGM.busy = ''; AGM.err = e.auth ? '' : e.message; re(); }); } return; }
+  const d = AGD[id];
+  agCtl(d, () => { AGM.ok = ''; re(); });
+  const t = $('#ag-ogr'); if (t) t.oninput = () => { d.ogr = t.value; const b = $('#ag-save'); if (b && !AGM.busy) b.disabled = !AG_F.some(f => d[f] !== AGS[id][f]); };
+  const key = async mode => {
+    if ((mode === 'wylacz' || AGS[id].has) && !(AGM.id === id && AGM.sure === mode)) return set({ sure: mode });   // drugie dotknięcie
+    set({ busy: mode, key: '' });
+    try { const r = await guard(api('trAgentKlucz', id, mode)); AGS[id] = r; delete AGD[id];
+      set({ key: r.key || '', ok: mode === 'wylacz' ? 'Dostęp wyłączony. Bot klienta dostaje teraz „Brak dostępu”.' : '' }); }
+    catch (e) { set({ err: e.auth ? '' : e.message }); }
+  };
+  const nb = $('#ag-new'); if (nb) nb.onclick = () => key('nowy');
+  const ob = $('#ag-off'); if (ob) ob.onclick = () => key('wylacz');
+  const ck = $('#ag-cpkey'); if (ck) ck.onclick = async () => { if (await copyTxt(AGM.key)) { AGM.cp = 'key'; re(); } };
+  const ci = $('#ag-ins'); if (ci) ci.onclick = async () => { if (await copyTxt(TL.agInstrukcja(String(window.API_URL || ''), k.name))) { AGM = Object.assign({}, AGM, { id, cp: 'ins' }); re(); } };
+  const sv = $('#ag-save'); if (sv) sv.onclick = async () => {
+    set({ busy: 'save' });
+    try { AGS[id] = await guard(api('trAgentUstaw', id, d)); delete AGD[id]; set({ ok: '✓ Zapisano.' }); }
+    catch (e) { set({ err: e.auth ? '' : e.message }); }
+  };
+}
 let DY = null, DYM = { busy: false, ok: '', err: '' };   // miejsce na Dysku i kopie arkusza (trDysk, trKopia; apps-script/Kopia.gs)
 const gb = b => pl(Math.round(b / 1024 / 1024 / 102.4) / 10);
 function dyskCard(){
@@ -783,11 +879,14 @@ function renderKlientUst(id){
       : '<p class="muted">Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL.</p>') +
     '<div class="sec" style="border:0">Nowy link</div><p class="legend" style="font-size:13px">Gdy link trafił do niewłaściwej osoby. Stary link przestaje działać, a klient musi dostać nowy. Treningi i historia zostają.</p>' +
     '<button class="cp danger" type="button" id="kl-rekey"' + dis + '>' + (m.busy === 'rekey' ? 'Generuję…' : m.rekey === id ? 'Na pewno? Stary link przestanie działać' : 'Wygeneruj nowy link') + '</button></div>' +
-    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>' + importCard(k);
+    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>' + importCard(k) + agentCard(k);
   $('#main').innerHTML = head('<a href="#klienci" style="color:inherit">Klienci</a> › ustawienia', k.name, '<a class="b" ' + klLink + ' href="#k/' + encodeURIComponent(id) + '">Karta klienta ›</a>') +
     '<div class="pg"><div class="kgrid"><div class="card" id="kl-form">' + f + '</div><div class="stack">' + side + '</div></div></div>';
   const re = () => { KLM = { ok: '', err: '', busy: false, rekey: '' }; renderKlientUst(id); };
   klCtl(d, re); klBind(); importBind(k, () => { if (location.hash === '#klienci/' + encodeURIComponent(id)) renderKlientUst(id); });
+  const agRe = () => { const el = document.getElementById('agent'); if (!el || location.hash !== '#klienci/' + encodeURIComponent(id)) return;   // tylko ta karta: formularz klienta obok zostaje
+    el.outerHTML = agentCard(k); agentBind(k, agRe); };
+  agentBind(k, agRe);
   const em = $('#kl-email');
   if (em) em.oninput = () => { d.email = em.value.trim(); const n = KL_F.filter(f => d[f] !== k[f]).length, sv = $('#kl-save'); if (sv && !KLM.busy) sv.disabled = !n; };
   const mt = $('#kl-mailtest');
