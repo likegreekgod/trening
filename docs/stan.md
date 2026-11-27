@@ -118,6 +118,8 @@ Od 25.11 nowe wpisy są w `docs/zmiany/` (plik na PR, najnowsze = nazwy od końc
 
 ## Czeka na Damiana
 
+- Po scaleniu sekcji ćwiczeń (27.11): w projekcie trenera podmienić w SKILL.md opis pliku planu (pole `sekcja`, rozgrzewka jako zwykłe ćwiczenia, tekst w wątku „Dodaj zwijane sekcje ćwiczeń”), przebudować ZIP; wrzucić plan z rozgrzewką `"sekcja": "R"` i obejrzeć w aplikacji całą listę i tryb skupienia.
+
 - Po scaleniu poprawek Podsumowania (25.11): Trening → Odśwież podsumowanie; w Klientach pojawią się nagłówki `max_rwanie`, `max_podrzut`, `start`. U ciężarowca wpisz maksy i datę startu (RRRR-MM-DD), odśwież i sprawdź w Podsumowanie_OLY kolumny `K_value`, `dni_do_startu`, `sygnaly`. Skill trenera: dopisać nowe kolumny do SKILL.md.
 - Po scaleniu „Prowadź trening” (v83): na telefonie panel → Dziś albo karta klienta testowego → „▶ Prowadź”, zapisz serię, notatkę „dla klienta”, „+ Ćwiczenie”; w arkuszu sprawdź Log (`notatka_trenera` / `komentarz_trenera`), Sesje (`prowadzil`) i Plan (`zrodlo` = trener). Skill trenera: dopisać do SKILL.md nowe kolumny i `zrodlo` = trener.
 - Po scaleniu zapisu jako tekst (22.11): w aplikacji u siebie wpisz komentarz do ćwiczenia `=1+1` i odśwież; ma zostać `=1+1` (nie 2 i bez apostrofu z przodu). Potem na komputerze menu Trening → Sprawdź arkusz: nie powinno być wiersza „Formuły w zakładce …”; jeśli jest, obejrzyj wskazane komórki.
