@@ -55,5 +55,5 @@ Szkice i analiza: dokument „Panel trenera v2: porządek, kalendarz, okno jedno
 | v2-2 | Kalendarz wszystkich klientów (tydzień, miesiąc; filtr; „Bez daty”; kolor klienta) i okno jednostki do czytania (zrobiona: wyniki, komentarz, szkic AI; niezrobiona: plan, „▶ Prowadź”); `trKalendarz`. Widok „Dzień” odłożony: na telefonie tydzień jest już listą dni | scalone (#150) |
 | v2-3 | Edycja w oknie jednostki: kolejność (przeciąganie, Alt + ↑ ↓), dodawanie z bazy, usuwanie, prio, obwody, notatka, zmiana dnia, „też kolejne tygodnie bloku”; `trJednostka`, `trPrzesun`, przeciąganie jednostki na inny dzień w kalendarzu (`docs/zmiany/2026-11-27-edycja-jednostki.md`) | scalone (#151) |
 | v2-4 | Plan klienta jako siatka tygodnie × dni, przeciąganie jednostek, kopia (Shift), „Kopiuj tydzień”, „+ Tydzień”; `trKopiuj` (`docs/zmiany/2026-11-27-plan-bloku-siatka.md`). Nowa pusta jednostka / z szablonu w pustym polu odłożona: na razie kopia albo „Nowa jednostka” w „Prowadź” | zrobione, PR |
-| v2-5 | Biblioteka: szablony; Rozliczenia: pakiety wszystkich klientów; maksy i start (Klienci Q–S) w ustawieniach klienta | czeka |
+| v2-5 | Biblioteka: szablony; Rozliczenia: pakiety wszystkich klientów; maksy i start (Klienci Q–S) w ustawieniach klienta; `trSzablony`, `trSzablon`, `trPakiety` (`docs/zmiany/2026-11-27-szablony-pakiety-maksy.md`) | zrobione, PR |
 

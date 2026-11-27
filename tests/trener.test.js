@@ -94,7 +94,7 @@ function kalendarz(from, to) {
     undated: [U('darek', 'Darek', 3, 'T3', 'Mobilność', '', 'wait', { plan: '', ex: 5, sets: 10 })] };
 }
 
-const KL1 = { scale: 'RPE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false, mailKom: false, seen: '', devs: 0, body: false };
+const KL1 = { scale: 'RPE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false, mailKom: false, seen: '', devs: 0, body: false, snatch: '', cj: '', start: '' };
 const KLIENCI = [   // panel → Klienci (trKlienci): ustawienia z zakładki Klienci, dane syntetyczne
   Object.assign({}, KL1, { id: 'ania', name: 'Ania', on: true, mode: 'PRO', swap: 'DOWOLNA', pain: true, edit: true, extra: 2, seen: new Date(Date.now() - 2 * 3600e3).toISOString(), devs: 3, link: 'https://example.com/trening/?k=kaaaaaaaaaa1' }),
   Object.assign({}, KL1, { id: 'bartek', name: 'Bartek', on: true, mode: 'PROSTY', swap: 'TRENER', extra: 1, seen: new Date(Date.now() - 26 * 3600e3).toISOString(), devs: 1, link: 'https://example.com/trening/?k=kbbbbbbbbbb2' }),
@@ -236,6 +236,19 @@ async function page(calls, opt = {}) {
         { name: 'Wymyślone „ćwiczenie” <b>', inBase: false, as: [], n: 1, clients: 1, last: '' }].filter(x => !st.cw.films[x.name]);
       const dead = [{ name: 'Hang Clean', url: 'https://youtu.be/bbbbbbbbbbb', why: 'brak', n: 2 }].filter(x => !st.cw.films[x.name]);
       out = { ok: true, result: { missing: miss, dead, links: 640, at: st.cw.at, checked: st.cw.at ? 641 : 0, trigger: true } }; }
+    else if (b.fn === 'trSzablony' || b.fn === 'trSzablon') {   // Biblioteka → Szablony (zakładka Szablony, tplSave_)
+      st.sz = st.sz || [{ name: 'Full body A', ex: [{ name: 'Przysiad tylny', sets: 3, reps: '5', circuit: '' }, { name: 'Wyciskanie na ławce', sets: 3, reps: '6-8', circuit: '' }, { name: 'Plank', sets: 2, reps: '30 s', circuit: '' }] },
+        { name: 'Rozruch', ex: [{ name: 'Goblet Squat', sets: 2, reps: '10', circuit: 'A' }, { name: 'Face pull', sets: 2, reps: '15', circuit: 'A' }] }];
+      if (b.fn === 'trSzablon') { await new Promise(res => setTimeout(res, 80)); const t = b.args[0], drop = [t.name.toLowerCase(), String(t.old || '').toLowerCase()];
+        st.sz = st.sz.filter(x => !drop.includes(x.name.toLowerCase()));
+        if (!t.del) st.sz.push({ name: t.name, ex: t.ex });
+        st.sz.sort((a, c) => a.name.localeCompare(c.name, 'pl')); }
+      out = { ok: true, result: st.sz }; }
+    else if (b.fn === 'trPakiety') out = { ok: true, result: { today: TODAY, list: [
+      { id: 'bartek', name: 'Bartek', on: true, n: 8, used: 9, left: -1, from: addDays(TODAY, -40), to: '', price: 960, show: true, last: addDays(TODAY, -2) },
+      { id: 'ania', name: 'Ania', on: true, n: 10, used: 8, left: 2, from: addDays(TODAY, -30), to: addDays(TODAY, 20), price: 1200, show: false, last: addDays(TODAY, -1) },
+      { id: 'kasia', name: 'Kasia', on: true, n: 12, used: 3, left: 9, from: addDays(TODAY, -10), to: addDays(TODAY, 80), price: 0, show: true, last: '' },
+      { id: 'ewa', name: 'Ewa', on: false, n: 5, used: 2, left: 3, from: addDays(TODAY, -200), to: addDays(TODAY, -100), price: 500, show: true, last: addDays(TODAY, -120) }] } };
     else if (b.fn === 'trKlientEksport') { await new Promise(res => setTimeout(res, 100));   // RODO (apps-script/Rodo.gs)
       out = { ok: true, result: { name: 'dane-' + b.args[0] + '-' + TODAY + '.zip', b64: Buffer.from('PK\u0003\u0004 syntetyczny zip').toString('base64'), tabs: { Plan: 40, Log: 120, Sesje: 20, Klienci: 1 }, films: 3 } }; }
     else if (b.fn === 'trKlientUsun') { await new Promise(res => setTimeout(res, 100)); st.kl = st.kl || KLIENCI.map(k => Object.assign({}, k));
@@ -745,6 +758,96 @@ test('panel: Więcej → Prowadzone treningi (miesiąc, na klienta, CSV do rozli
     assert.equal(await p.$('#pw-csv'), null);
     await ctx.close();
   }
+});
+
+test('panel: Biblioteka → Szablony (lista, nowy szablon, zmiana nazwy, usunięcie po drugim dotknięciu)', async () => {
+  for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
+    const calls = [], sfx = vp ? 'telefon-ciemny' : 'jasny';
+    const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
+    await p.goto(base + 'trener.html#biblioteka'); await p.waitForSelector('#cw-sum');
+    await p.click('.tabs a[href="#biblioteka/szablony"]'); await p.waitForSelector('#sz-list');
+    assert.equal(await p.getAttribute('.tabs a[href="#biblioteka/szablony"]', 'aria-current'), 'page');
+    assert.deepEqual(await p.$$eval('.szh b', b => b.map(x => x.textContent)), ['Full body A', 'Rozruch']);
+    assert.match(await p.textContent('[data-szt="Full body A"]'), /3 ćwiczenia · 8 serii.*Wyciskanie na ławce 3 × 6-8/s);
+    assert.match(await p.textContent('[data-szt="Rozruch"]'), /obwód A/);
+    if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    await shot(p, 'trener-szablony-' + sfx + '.png');
+    // nowy: walidacja, dwa ćwiczenia, zamiana kolejności
+    await p.click('#sz-new'); await p.waitForSelector('#sz-form');
+    await p.click('#sz-save'); assert.match(await p.textContent('#sz-form .err'), /Nazwa szablonu/);
+    await p.fill('#sz-name', 'Rozruch'); await p.fill('[data-szi="0"] [data-szf="name"]', 'Plank'); await p.fill('[data-szi="0"] [data-szf="reps"]', '30 s');
+    await p.click('#sz-save'); assert.match(await p.textContent('#sz-form .err'), /już jest/);
+    await p.fill('#sz-name', 'Góra B');
+    await p.click('#sz-add'); await p.fill('[data-szi="1"] [data-szf="name"]', 'Wyciskanie żołnierskie'); await p.fill('[data-szi="1"] [data-szf="sets"]', '4'); await p.fill('[data-szi="1"] [data-szf="circuit"]', 'b');
+    assert.equal(await p.inputValue('[data-szi="1"] [data-szf="circuit"]'), 'B');
+    await p.click('[data-szi="1"] [data-szmv="-1"]');
+    assert.equal(await p.inputValue('[data-szi="0"] [data-szf="name"]'), 'Wyciskanie żołnierskie');
+    assert.ok(await p.$('#sz-dl option[value="Face pull"]'), 'podpowiedzi z bazy ćwiczeń');
+    if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    await shot(p, 'trener-szablon-edycja-' + sfx + '.png');
+    await p.click('#sz-save'); await p.waitForSelector('#sz-ok');
+    assert.deepEqual(calls.filter(c => c.fn === 'trSzablon').pop().args[0], { name: 'Góra B', old: '', ex: [{ name: 'Wyciskanie żołnierskie', sets: 4, reps: '30 s', circuit: 'B' }, { name: 'Plank', sets: 3, reps: '30 s', circuit: '' }] });
+    assert.deepEqual(await p.$$eval('.szh b', b => b.map(x => x.textContent)), ['Full body A', 'Góra B', 'Rozruch']);
+    // zmiana nazwy: old = poprzednia nazwa
+    await p.click('[data-szt="Rozruch"] [data-szed]'); await p.waitForSelector('#sz-form');
+    assert.equal(await p.inputValue('#sz-name'), 'Rozruch');
+    await p.fill('#sz-name', 'Rozruch obwód'); await p.click('#sz-save'); await p.waitForSelector('#sz-ok');
+    const r = calls.filter(c => c.fn === 'trSzablon').pop().args[0];
+    assert.deepEqual([r.name, r.old, r.ex.length], ['Rozruch obwód', 'Rozruch', 2]);
+    // usunięcie po drugim dotknięciu
+    await p.click('[data-szt="Full body A"] [data-szdel]');
+    assert.match(await p.textContent('[data-szt="Full body A"] [data-szdel]'), /Na pewno/);
+    assert.equal(calls.filter(c => c.fn === 'trSzablon' && c.args[0].del).length, 0);
+    await p.click('[data-szt="Full body A"] [data-szdel]'); await p.waitForFunction(() => /Usunięto/.test((document.querySelector('#sz-ok') || {}).textContent));
+    assert.deepEqual(calls.filter(c => c.fn === 'trSzablon').pop().args[0], { name: 'Full body A', del: true });
+    assert.deepEqual(await p.$$eval('.szh b', b => b.map(x => x.textContent)), ['Góra B', 'Rozruch obwód']);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});
+
+test('panel: Rozliczenia → Pakiety wszystkich klientów (najmniej zostało na górze, link do karty klienta)', async () => {
+  for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
+    const calls = [];
+    const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
+    await p.goto(base + 'trener.html#rozliczenia'); await p.waitForSelector('#pw-sum');
+    await p.click('.tabs a[href="#rozliczenia/pakiety"]'); await p.waitForSelector('#pk-sum');
+    assert.match(await p.textContent('#pk-sum'), /3 aktywne pakiety · 2 do odnowienia · niewykorzystane ok\. 240 zł/);
+    assert.deepEqual(await p.$$eval('.pkt tbody tr', a => a.map(x => [...x.querySelectorAll('td')].slice(0, 3).map(t => t.textContent.trim()))),
+      [['Bartek', '0 z 8 (+1 poza)', '9 / 8'], ['Ania', '2 z 10', '8 / 10'], ['Kasia', '9 z 12', '3 / 12'], ['Ewa nieaktywny', '3 z 5', '2 / 5']]);
+    assert.ok(await p.$('.pkt tr[data-pk="bartek"] .pill.lv-bad')); assert.ok(await p.$('.pkt tr[data-pk="ania"] .pill.lv-warn')); assert.ok(await p.$('.pkt tr[data-pk="kasia"] .pill.lv-ok'));
+    assert.match(await p.textContent('.pkt tr[data-pk="ewa"]'), /wygasł/);
+    assert.match(await p.textContent('.pkt tr[data-pk="ania"]'), /1200 zł · 120 zł\/tr\..*ukryty/s);
+    if (!vp) assert.equal(await p.getAttribute('#nav2 a[data-v="rozliczenia"]', 'aria-current'), 'page');
+    else assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    await shot(p, 'trener-pakiety-' + (vp ? 'telefon-ciemny' : 'jasny') + '.png');
+    await p.click('.pkt tr[data-pk="ania"] a.who'); await p.waitForFunction(() => location.hash === '#k/ania/przeglad');
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});
+
+test('panel: ustawienia klienta → maksy w bojach i dzień startu (Klienci Q–S)', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, { loggedIn: true });
+  await p.goto(base + 'trener.html#k/bartek/ustawienia/aplikacja'); await p.waitForSelector('[data-kin="snatch"]');
+  await p.fill('[data-kin="snatch"]', '82,5'); await p.fill('[data-kin="cj"]', '105');
+  await p.fill('#kl-start', '2026-11-10'); await p.dispatchEvent('#kl-start', 'change');
+  await p.waitForSelector('#kl-form .hint');
+  assert.match(await p.textContent('#kl-form'), /Start już minął/);
+  await p.fill('#kl-start', '2027-03-14'); await p.dispatchEvent('#kl-start', 'change');
+  assert.doesNotMatch(await p.textContent('#kl-form'), /Start już minął/);
+  assert.match(await p.textContent('#kl-form'), /Zmienione: 3/);
+  await shot(p, 'trener-klient-maksy-jasny.png');
+  await p.click('#kl-save'); await p.waitForSelector('#kl-form .saved');
+  const f = calls.filter(c => c.fn === 'trKlientUstaw').pop().args[1];
+  assert.deepEqual([f.snatch, f.cj, f.start], [82.5, 105, '2027-03-14']);
+  assert.equal(await p.inputValue('[data-kin="snatch"]'), '82,5');
+  // czyszczenie pola = pusty maks
+  await p.fill('[data-kin="cj"]', ''); await p.click('#kl-save'); await p.waitForSelector('#kl-form .saved');
+  assert.equal(calls.filter(c => c.fn === 'trKlientUstaw').pop().args[1].cj, '');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
 });
 
 test('panel: Ćwiczenia bez filmu (link trenera do bazy, martwe linki, szukanie, sprawdzenie teraz)', async () => {
