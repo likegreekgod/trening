@@ -854,7 +854,7 @@ function mailCard(){   // panel → Ustawienia: godzina porannego maila (trMailU
     '<div class="fr"><div><b>Godzina</b><small>Google uruchamia wysyłkę w ciągu kwadransa od tej godziny.</small></div><div class="seg" role="group">' +
     m.hours.map(h => '<button type="button" data-hour="' + h + '" aria-pressed="' + (h === m.hour) + '"' + (MH.busy ? ' disabled' : '') + '>' + h + ':00</button>').join('') + '</div></div>' +
     (MH.ok ? '<p class="saved" role="status">' + esc(MH.ok) + '</p>' : '') + (MH.err ? '<p class="err" role="alert">' + esc(MH.err) + '</p>' : '') +
-    (m.trigger === false ? '<p class="err">Wysyłka nie jest włączona: wybierz godzinę albo w arkuszu uruchom menu Trening → Zainstaluj wyzwalacze.</p>' : '') +
+    (m.trigger === false ? '<p class="err">Wysyłka nie jest włączona: wybierz godzinę albo w arkuszu uruchom menu Trening → Ustawienia (raz) → Zainstaluj albo napraw wyzwalacze.</p>' : '') +
     '<div class="mstat">' + stat + (m.quota !== null && m.quota !== undefined ? ' Zostało dziś w limicie Google: ' + m.quota + ' adresów.' : '') + '</div></div>';
 }
 
@@ -1337,13 +1337,69 @@ function sesList(d, dates){
   if (!ss.length) return '<div class="card es"><b>Brak sesji</b>Klient nie zakończył jeszcze żadnej jednostki.</div>';
   return '<div class="card"><h2>Sesje (' + ss.length + ')</h2>' + ss.map((x, i) => {
     const p = painOf(x.s), ex = setsOf(d, x.u);
-    return '<details class="ses"' + (i === 0 ? ' open' : '') + '><summary><b>' + esc(dowDm(x.day)) + ' · tydz. ' + esc(x.s.tydzien) + ' · ' + esc(x.s.jednostka) + (x.title ? ' · ' + esc(x.title) : '') + '</b>' +
+    return '<details class="ses"' + (i === 0 || TN[x.u] ? ' open' : '') + '><summary>' + sesHead(x) +
       '<span class="muted">' + [x.s.czas_min ? x.s.czas_min + ' min' : '', nf(x.s.rpe_sesji) >= 0 ? 'RPE ' + pl(x.s.rpe_sesji) : '', nf(x.s.samopoczucie) > 0 ? 'samopoczucie ' + x.s.samopoczucie + '/5' : '', isFinite(p[1]) && p[1] > 0 ? 'ból ' + pl(p[1]) + (p[0] ? ' ' + p[0] : '') : '', sv(x.s.odpowiedz_klienta) ? '↩ odpowiedź klienta' : ''].filter(Boolean).map(esc).join(' · ') + '</span></summary>' +
+      snBox(x) +
       '<div class="tw"><table><tbody>' + ex.map(e => '<tr><td><b>' + esc(e.name) + '</b> <span class="muted">' + esc(e.prio) + '</span>' + (e.swap ? '<br>' + swapTxt(e.swap) : '') + '</td><td class="sets">' + e.sets.map(setTxt).join(', ') + '</td><td>' + esc(e.note) + '</td></tr>').join('') + '</tbody></table></div>' + ndNote(ex) +
       (x.s.uwagi ? '<p class="note"><span class="eb">Uwagi klienta</span><br>' + esc(x.s.uwagi) + '</p>' : '') +
       komBox(x.s, ex.length) + '</details>';
   }).join('') + '</div>';
 }
+/* ---------- nazwa sesji (trTytul → Plan.tytul całej jednostki; klient widzi ją w aplikacji); szkic tylko w pamięci strony ---------- */
+const TN = {};                  // tydzień|jednostka → {text, busy, err} (otwarte pole nazwy)
+const TITLE_MAX = 40;
+const ownTitle = t => String(t || '').replace(/^Własny( · )?/, '');
+const sesHead = x => '<span class="sh"><b>' + esc(dowDm(x.day)) + ' · tydz. ' + esc(x.s.tydzien) + ' · ' + esc(x.s.jednostka) + (x.title ? ' · ' + esc(x.title) : '') + '</b>' +
+  '<button type="button" class="sren" data-sren="' + esc(x.u) + '" aria-label="Zmień nazwę sesji" title="Zmień nazwę sesji">✎</button></span>';
+function snBox(x){
+  const st = TN[x.u]; if (!st) return '';
+  const r0 = (CUR.plan || []).find(r => uKey(r.week, r.day) === x.u) || {};
+  return '<div class="snm" data-u="' + esc(x.u) + '"><label class="eb" for="sn-in">Nazwa sesji</label>' +
+    '<div class="snr"><input id="sn-in" maxlength="' + TITLE_MAX + '" value="' + esc(st.text) + '" placeholder="' + esc(x.s.jednostka) + '"' + (st.busy ? ' disabled' : '') + '>' +
+    '<button type="button" class="b p" data-sn="save"' + (st.busy ? ' disabled' : '') + '>' + (st.busy ? 'Zapisuję…' : 'Zapisz') + '</button><button type="button" class="b" data-sn="cancel"' + (st.busy ? ' disabled' : '') + '>Anuluj</button></div>' +
+    '<p class="muted">Klient zobaczy nową nazwę w aplikacji (Trening, Plan, komentarze). ' + (r0.own ? 'To własny trening klienta: przed nazwą zostaje „Własny”. ' : '') + 'Tydzień i ' + esc(x.s.jednostka) + ' zostają.</p>' +
+    (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') + '</div>';
+}
+function snRedraw(u, focus){
+  const d = CUR; if (!d) return;
+  const el = [...document.querySelectorAll('details.ses')].find(x => x.querySelector('[data-sren="' + CSS.escape(u) + '"]')); if (!el) return;
+  const x = sessRows(d, sesDates(d)).find(y => y.u === u); if (!x) return;
+  el.querySelector('summary > .sh').outerHTML = sesHead(x);
+  const old = el.querySelector('.snm'), html = snBox(x);
+  if (old) { if (html) old.outerHTML = html; else old.remove(); } else if (html) el.querySelector('summary').insertAdjacentHTML('afterend', html);
+  if (focus) { const i = el.querySelector('#sn-in'); if (i) { i.focus(); i.select(); } }
+}
+async function snSave(u){
+  const st = TN[u]; if (!st || st.busy) return;
+  const [w, day] = [u.split('|')[0], u.split('|').slice(1).join('|')], cid = CID, text = String(st.text).replace(/\s+/g, ' ').trim();
+  st.busy = true; st.err = ''; snRedraw(u);
+  try {
+    const r = await guard(api('trTytul', cid, { week: Number(w), day, title: text }));
+    (CUR.plan || []).forEach(p => { if (uKey(p.week, p.day) === u) p.title = r.title; });
+    delete TN[u];
+    if (CID === cid) { snRedraw(u); const b = document.querySelector('[data-sren="' + CSS.escape(u) + '"]'); if (b) b.focus(); }
+  } catch (err) { st.busy = false; if (!err.auth) st.err = err.message; if (CID === cid) snRedraw(u); }
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-sren]');
+  if (b && CUR) {
+    e.preventDefault(); e.stopPropagation();
+    const u = b.dataset.sren, r0 = (CUR.plan || []).find(r => uKey(r.week, r.day) === u) || {};
+    if (!TN[u]) TN[u] = { text: r0.own ? ownTitle(r0.title) : String(r0.title || '') };
+    b.closest('details').open = true; snRedraw(u, true); return;
+  }
+  const s = e.target.closest('.snm [data-sn]'); if (!s) return;
+  const u = s.closest('.snm').dataset.u;
+  if (s.dataset.sn === 'cancel') { delete TN[u]; snRedraw(u); return; }
+  snSave(u);
+});
+document.addEventListener('input', e => { const i = e.target.closest('.snm input'); if (i && TN[i.closest('.snm').dataset.u]) TN[i.closest('.snm').dataset.u].text = i.value; });
+document.addEventListener('keydown', e => {
+  const i = e.target.closest && e.target.closest('.snm input'); if (!i) return;
+  const u = i.closest('.snm').dataset.u;
+  if (e.key === 'Enter') { e.preventDefault(); snSave(u); }
+  if (e.key === 'Escape') { e.preventDefault(); delete TN[u]; snRedraw(u); const b = document.querySelector('[data-sren="' + CSS.escape(u) + '"]'); if (b) b.focus(); }
+});
 /* ---------- komentarz do sesji: zapis (trKomentarz) i szkic AI (trSzkic); stan pola tylko w pamięci strony ---------- */
 const KD = {};                  // klient|tydzień|jednostka → {text, edit, ai, busy, ok, err, cost, n, limit}
 const SPARK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" fill="currentColor"/></svg>';
