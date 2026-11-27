@@ -48,7 +48,7 @@ async function guard(p){
   finally { $('#busy').hidden = true; }
 }
 
-/* ---------- start i nawigacja (#dzis, #filmy, #bloki, #klienci[/nowy|/<id>], #k/<id>/<zakładka>) ---------- */
+/* ---------- start i nawigacja (#dzis, #kalendarz, #filmy, #bloki, #klienci[/nowy|/<id>], #k/<id>/<zakładka>) ---------- */
 async function start(){
   if (!tokenGet()) return login();
   $('#login').hidden = true; $('#app').hidden = false;
@@ -61,6 +61,7 @@ function errBox(e){ return '<div class="pg"><div class="card es"><b>Nie udało s
 function route(){
   if (!PUL) return;
   document.body.classList.remove('pvfs');
+  if ($('#kw')) { $('#kw').remove(); document.body.classList.remove('kwon'); } KW = null;   // okno jednostki zamyka każda zmiana adresu
   let h = (location.hash || '#dzis').slice(1).split('/'), v = h[0];
   if (v === 'prowadz' && h[1]) { location.replace(liveHref(decodeURIComponent(h[1]))); return; }   // powrót z aplikacji po ponownym zalogowaniu
   // stare adresy (v81–v102) → nowe miejsca (zakładki w przeglądarce, linki z alertu)
@@ -80,6 +81,7 @@ function route(){
   $('#at').textContent = PUL.at ? 'dane z ' + (PUL.at.slice(0, 10) === PUL.today ? '' : dowDm(PUL.at.slice(0, 10)) + ', ') + t : 'jeszcze nie przeliczone';
   $('#at-m').textContent = PUL.at ? (PUL.at.slice(0, 10) === PUL.today ? t : dm(PUL.at.slice(0, 10))) : '–';
   $('#av').textContent = meInit();
+  if (v === 'kalendarz') return renderKalendarz(h[1] || '', h[2] || '');
   if (v === 'k') return renderKlient(kid, h[2] || 'przeglad', decodeURIComponent(h[3] || ''));
   if (v === 'filmy') return renderFilmy(h[1] || '');
   if (v === 'bloki') return renderBloki();
@@ -111,7 +113,7 @@ document.addEventListener('click', e => {
   const r = e.target.closest('tr.row[data-k]'); if (r && !e.target.closest('a,button')) location.hash = '#k/' + encodeURIComponent(r.dataset.k);
   if (e.target.closest('[data-retry]')) start();
 });
-async function recalc(){ try { PUL = await guard(api('trPrzelicz')); Object.keys(CK).forEach(k => delete CK[k]); route(); } catch (e) { if (!e.auth) alertBox(e); } }
+async function recalc(){ try { PUL = await guard(api('trPrzelicz')); Object.keys(CK).forEach(k => delete CK[k]); Object.keys(KAL).forEach(k => delete KAL[k]); route(); } catch (e) { if (!e.auth) alertBox(e); } }
 function logout(){ tokenSet(''); try { google.accounts.id.disableAutoSelect(); } catch (e) {} PUL = null; login('Wylogowano.'); }
 $('#recalc').onclick = recalc; $('#recalc-m').onclick = recalc; $('#logout').onclick = logout;
 function alertBox(e){ const d = document.createElement('div'); d.className = 'card err'; d.textContent = e.message; $('#main').prepend(d); setTimeout(() => d.remove(), 6000); }
@@ -1208,6 +1210,151 @@ function renderNowyKlient(){
   };
 }
 
+/* ---------- Kalendarz (panel v2 PR 2, 27.11.2026): jednostki wszystkich aktywnych klientów (trKalendarz) i okno jednostki ----------
+ * Trasy: #kalendarz (ten tydzień), #kalendarz/<RRRR-MM-DD> (tydzień z tym dniem), #kalendarz/m/<RRRR-MM> (miesiąc).
+ * Kolor klienta = jego miejsce na liście alfabetycznej (--k0…--k7). Okno jednostki czyta kartę klienta (trKlient), tylko komentarz do sesji da się zapisać.
+ * Dane, filtr i otwarte okno tylko w pamięci strony.
+ */
+const KAL = {};                 // od|do → wynik trKalendarz (recalc czyści)
+let KFI = '';                    // filtr klienta ('' = wszyscy)
+let KLIST = [], KW = null;      // jednostki w kolejności kalendarza (do ← →), otwarte okno {i}
+const K_N = 8;
+function kColor(id){
+  const ids = PUL.clients.slice().sort((a, b) => a.name.localeCompare(b.name, 'pl')).map(c => c.id), i = ids.indexOf(id);
+  return 'var(--k' + ((i < 0 ? ids.length : i) % K_N) + ')';
+}
+const kBadge = u => u.st === 'done' ? '<i class="ok">✓</i>' : u.st === 'live' ? '<i class="lv">● w trakcie</i>' : u.st === 'late' ? '<i class="la">! zaległa</i>' : u.date === PUL.today ? '<i class="td">dziś</i>' : '';
+function kMeta(u){
+  const a = [u.ex + ' ćw.'];
+  if (u.st === 'done') a.push(u.done + ' serii', u.min ? u.min + ' min' : '', u.rpe !== null && u.rpe !== undefined ? 'RPE ' + pl(u.rpe) : '', u.led ? 'prowadzony' : '');
+  else if (u.st === 'live') a.push(u.done + ' z ' + u.sets + ' serii');
+  else a.push(u.sets + ' serii');
+  if (u.plan && u.date && u.plan !== u.date) a.push((u.st === 'late' ? 'zaległa od ' : 'w planie ') + dowDm(u.plan));
+  return a.filter(Boolean).join(' · ');
+}
+const kuHtml = (u, i, mini) => '<button type="button" class="ku st-' + u.st + (mini ? ' mini' : '') + '" data-ku="' + i + '" style="--c:' + kColor(u.id) + '">' +
+  '<span class="kt"><b>' + esc(u.name) + '</b>' + kBadge(u) + '</span>' + (mini ? '' : '<span class="kn">' + esc(u.day) + ' · ' + esc(u.title) + '</span><small>' + esc(kMeta(u)) + '</small>') + '</button>';
+const kHash = (mode, a) => '#kalendarz' + (mode === 'm' ? '/m/' + a : a ? '/' + a : '');
+const MIESD = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
+function kRange(a, b){
+  const m = +a.slice(5, 7) - 1, n = +b.slice(5, 7) - 1;
+  return a.slice(0, 7) === b.slice(0, 7) ? +a.slice(8) + '–' + +b.slice(8) + ' ' + MIESD[m] + ' ' + a.slice(0, 4) : +a.slice(8) + ' ' + MIESD[m] + ' – ' + +b.slice(8) + ' ' + MIESD[n] + ' ' + b.slice(0, 4);
+}
+async function renderKalendarz(a, b){
+  const today = PUL.today, month = a === 'm';
+  let from, to, mm = '', anchor = today;
+  if (month) {
+    mm = /^\d{4}-\d{2}$/.test(b || '') ? b : today.slice(0, 7);
+    const first = mm + '-01', last = TL.addDays(TL.addDays(first, 32).slice(0, 7) + '-01', -1);
+    from = TL.mondayOf(first); to = TL.addDays(TL.mondayOf(last), 6);
+  } else {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(a || '')) anchor = a;
+    from = TL.mondayOf(anchor); to = TL.addDays(from, 6);
+  }
+  const key = from + '|' + to, hash = location.hash;
+  if (!KAL[key]) {
+    $('#main').innerHTML = head('Wszyscy klienci', 'Kalendarz') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
+    try { KAL[key] = await guard(api('trKalendarz', from, to)); } catch (e) { if (!e.auth) $('#main').innerHTML = errBox(e); return; }
+    if (location.hash !== hash) return;
+  }
+  const R = KAL[key], ids = [...new Set(R.units.concat(R.undated).map(u => u.id))];
+  const names = {}; R.units.concat(R.undated).forEach(u => { names[u.id] = u.name; });
+  if (KFI && !ids.includes(KFI)) KFI = '';
+  const pick = u => !KFI || u.id === KFI, units = R.units.filter(pick), und = R.undated.filter(pick);
+  KLIST = units.concat(und);
+  const idx = u => KLIST.indexOf(u);
+  const days = []; for (let d = from; d <= to; d = TL.addDays(d, 1)) days.push(d);
+  const by = {}; units.forEach(u => { (by[u.date] = by[u.date] || []).push(u); });
+  const inM = month ? units.filter(u => u.date.slice(0, 7) === mm) : units, led = inM.filter(u => u.led).length;
+  const eb = (KFI ? esc(names[KFI]) : 'Wszyscy klienci') + ' · ' + inM.length + ' ' + plN(inM.length, 'jednostka', 'jednostki', 'jednostek') + (led ? ' · ' + led + ' ' + plN(led, 'prowadzona', 'prowadzone', 'prowadzonych') + ' przez Ciebie' : '');
+  const seg = '<div class="seg" role="group" aria-label="Widok"><a href="' + kHash('w', month ? (today.slice(0, 7) === mm ? '' : mm + '-01') : a) + '" aria-pressed="' + !month + '">Tydzień</a>' +
+    '<a href="' + kHash('m', (month ? mm : anchor.slice(0, 7))) + '" aria-pressed="' + month + '">Miesiąc</a></div>';
+  const prev = month ? kHash('m', TL.addDays(mm + '-01', -1).slice(0, 7)) : kHash('w', TL.addDays(from, -7)), next = month ? kHash('m', TL.addDays(mm + '-01', 32).slice(0, 7)) : kHash('w', TL.addDays(from, 7));
+  const isNow = month ? mm === today.slice(0, 7) : from === TL.mondayOf(today);
+  const label = month ? MIES[+mm.slice(5) - 1] + ' ' + mm.slice(0, 4) : kRange(from, to);
+  const chips = ids.length > 1 ? '<div class="chips kf"><button class="chip" type="button" data-kf="" aria-pressed="' + !KFI + '">Wszyscy <small>' + ids.length + '</small></button>' +
+    ids.slice().sort((x, y) => names[x].localeCompare(names[y], 'pl')).map(id => '<button class="chip" type="button" data-kf="' + esc(id) + '" aria-pressed="' + (KFI === id) + '"><i class="kdot" style="--c:' + kColor(id) + '"></i>' + esc(names[id]) + '</button>').join('') + '</div>' : '';
+  const bar = '<div class="kbar"><a class="sb kn2" href="' + prev + '" aria-label="' + (month ? 'Poprzedni miesiąc' : 'Poprzedni tydzień') + '">‹</a>' +
+    (isNow ? '' : '<a class="sb" href="' + (month ? kHash('m', today.slice(0, 7)) : '#kalendarz') + '">Dziś</a>') +
+    '<a class="sb kn2" href="' + next + '" aria-label="' + (month ? 'Następny miesiąc' : 'Następny tydzień') + '">›</a><h2 class="klab">' + label + '</h2><span class="sp"></span>' + chips + '</div>';
+  let grid;
+  if (month) {
+    grid = '<div class="kalm" role="grid" aria-label="' + esc(label) + '">' + ['pn', 'wt', 'śr', 'cz', 'pt', 'sb', 'nd'].map(d => '<div class="kmh">' + d + '</div>').join('') +
+      days.map(d => { const us = by[d] || [], wk = TL.mondayOf(d);
+        return '<div class="kmd' + (d.slice(0, 7) !== mm ? ' out' : '') + (d === today ? ' t' : '') + '"><a class="kmn" href="' + kHash('w', wk) + '" aria-label="Tydzień od ' + esc(dowDm(wk)) + '">' + +d.slice(8) + '</a>' +
+          us.slice(0, 3).map(u => kuHtml(u, idx(u), true)).join('') + (us.length > 3 ? '<a class="kmore" href="' + kHash('w', wk) + '">+' + (us.length - 3) + ' więcej</a>' : '') + '</div>'; }).join('') + '</div>';
+  } else {
+    grid = '<div class="kal">' + days.map((d, i) => { const us = by[d] || [];
+      return '<section class="kd' + (d === today ? ' t' : '') + (us.length ? '' : ' empty') + '" aria-label="' + esc(DOWL[(i + 1) % 7] + ' ' + dm(d)) + '"><h3><b>' + +d.slice(8) + '</b><span>' + DOW[(i + 1) % 7] + (d === today ? ' · dziś' : '') + '</span><em>' + (us.length || '') + '</em></h3>' +
+        us.map(u => kuHtml(u, idx(u))).join('') + '</section>'; }).join('') + '</div>';
+  }
+  const undH = und.length ? '<div class="card kund"><h2>Bez daty · ' + und.length + '</h2><div class="kul">' + und.map(u => kuHtml(u, idx(u))).join('') + '</div>' +
+    '<p class="hint">Najbliższy tydzień planu bez wpisanego dnia. Dzień ustawisz w planie klienta.</p></div>' : '';
+  const leg = '<p class="kleg hint"><span><i class="ok">✓</i> zrobiona</span><span><i class="lv">●</i> w trakcie</span><span><i class="la">!</i> zaległa</span><span>kolor paska = klient</span></p>';
+  const empty = !inM.length && !und.length ? '<div class="card es"><b>Pusto</b>' + (month ? 'W tym miesiącu' : 'W tym tygodniu') + ' nie ma jednostek z datą.</div>' : '';
+  $('#main').innerHTML = head(eb, 'Kalendarz', seg) + '<div class="pg kpg">' + bar + grid + empty + undH + leg + '</div>';
+  document.querySelectorAll('[data-kf]').forEach(c => c.onclick = () => { KFI = c.dataset.kf; renderKalendarz(a, b); });
+  if (KW && KLIST[KW.i]) kwOpen(KW.i); else KW = null;
+}
+/* okno jednostki: nad kalendarzem, ← → poprzednia / następna z kalendarza, Esc zamyka */
+function kwClose(){ KW = null; const o = $('#kw'); if (o) { o.remove(); document.body.classList.remove('kwon'); } const f = KW_BACK; KW_BACK = null; if (f && document.contains(f)) f.focus(); }
+let KW_BACK = null;
+async function kwOpen(i){
+  const u = KLIST[i]; if (!u) return;
+  KW = { i };
+  let o = $('#kw');
+  if (!o) { KW_BACK = document.activeElement; o = document.createElement('div'); o.id = 'kw'; o.className = 'kwo'; document.body.append(o); document.body.classList.add('kwon'); }
+  const near = j => KLIST[j] ? '<button type="button" class="b" data-kwgo="' + j + '">' + (j < i ? '‹ ' : '') + esc((KLIST[j].date ? DOW[new Date(KLIST[j].date + 'T12:00:00Z').getUTCDay()] + ': ' : '') + KLIST[j].name + ' · ' + KLIST[j].title) + (j > i ? ' ›' : '') + '</button>' : '<span></span>';
+  const st = { done: 'zrobiona', live: 'w trakcie', late: 'zaległa', wait: u.date === PUL.today ? 'dziś' : 'zaplanowana' }[u.st];
+  const eb = [u.name, u.block ? 'blok ' + u.block : '', u.week ? 'tydz. ' + u.week : '', u.day, st + (u.date ? ' ' + dowDm(u.date) : ' · bez daty'), u.led ? 'prowadzona przez Ciebie' : ''].filter(Boolean).map(esc).join(' · ');
+  const shell = body => '<div class="kwd" role="dialog" aria-modal="true" aria-labelledby="kw-t" style="--c:' + kColor(u.id) + '"><header class="kwh"><div><div class="eb">' + eb + '</div><h2 id="kw-t">' + esc(u.title) + '</h2></div>' +
+    '<a class="sb" href="' + kHref(u.id, u.st === 'done' ? 'sesje' : 'plan') + '">Karta klienta ›</a><button type="button" class="b kwx" data-kwx aria-label="Zamknij">✕</button></header>' +
+    '<div class="kwb">' + body + '</div><footer class="kwf">' + near(i - 1) + '<span class="hint hide-m">← → poprzednia / następna z kalendarza</span>' + near(i + 1) + '</footer></div>';
+  if (!CK[u.id]) {
+    o.innerHTML = shell('<div class="es">Ładowanie…</div>');
+    try { CK[u.id] = await guard(api('trKlient', u.id)); } catch (e) { if (KW && KW.i === i) o.innerHTML = shell(e.auth ? '' : '<p class="err">' + esc(e.message) + '</p>'); return; }
+    if (!KW || KW.i !== i) return;
+  }
+  CUR = CK[u.id]; CID = u.id;               // komentarz do sesji (komBox) pracuje na bieżącym kliencie
+  o.innerHTML = shell(kwBody(u, CUR));
+  const x = o.querySelector('[data-kwx]'); if (x && !o.contains(document.activeElement)) x.focus();
+}
+function kwBody(u, d){
+  const key = uKey(u.week, u.day), rows = (d.plan || []).filter(r => uKey(r.week, r.day) === key).sort((a, b) => a.order - b.order);
+  const s = (d.sessions || []).find(x => uKey(x.tydzien, x.jednostka) === key), ex = setsOf(d, key);
+  const P = {}; rows.forEach(r => { P[r.order] = r; });
+  const c = PUL.clients.find(x => x.id === u.id);
+  let h = '';
+  if (s) {
+    const p = painOf(s), ton = ex.reduce((a, e) => a + e.sets.reduce((t, l) => t + (nf(l.kg) > 0 && nf(l.powt) > 0 ? nf(l.kg) * nf(l.powt) : 0), 0), 0);
+    h += '<div class="card stats kws">' + [[s.czas_min ? s.czas_min + ' min' : '–', 'czas'], [nf(s.rpe_sesji) >= 0 ? pl(s.rpe_sesji) : '–', 'RPE sesji'], [nf(s.samopoczucie) > 0 ? s.samopoczucie + '/5' : '–', 'samopoczucie'],
+      [u.done + '/' + u.sets, 'serii'], [ton ? Math.round(ton).toLocaleString('pl-PL') + ' kg' : '–', 'tonaż']].concat(isFinite(p[1]) && p[1] > 0 ? [[(p[0] ? p[0] + ' ' : '') + pl(p[1]) + '/10', 'ból']] : [])
+      .map(x => '<div class="st"><b>' + esc(x[0]) + '</b><span>' + x[1] + '</span></div>').join('') + '</div>';
+  }
+  if (ex.length) h += '<div class="card"><h3>' + (s ? 'Wykonanie' : 'Zapisane serie') + '</h3>' + ex.map(e => { const r = Object.values(P).find(x => x.name === e.name || (e.swap && x.name === e.swap.from)) || {};
+    return '<div class="kwe"><div><b>' + esc(e.name) + '</b> <span class="muted">' + esc(e.prio) + '</span>' + (e.swap ? '<br>' + swapTxt(e.swap) : '') + (e.note ? '<small>„' + esc(e.note) + '”</small>' : '') + '</div>' +
+      '<span class="mono muted">' + esc(r.name ? [r.sets + ' × ' + r.reps, nf(r.kg) > 0 ? pl(r.kg) + ' kg' : r.kg || '', r.rpe ? 'RPE ≤ ' + pl(r.rpe) : ''].filter(Boolean).join(' · ') : '') + '</span><span class="sets">' + setsShort(e.sets) + '</span></div>'; }).join('') + ndNote(ex) + '</div>';
+  const left = rows.filter(r => !ex.some(e => e.name === r.name || (e.swap && e.swap.from === r.name)));
+  if (!s && left.length) h += '<div class="card"><h3>' + (ex.length ? 'Jeszcze do zrobienia' : 'Plan') + '</h3>' + left.map(puLine).join('') + (rows[0] && rows[0].unote ? '<p class="note"><span class="eb">Notatka do jednostki</span><br>' + esc(rows[0].unote) + '</p>' : '') + '</div>';
+  if (!rows.length && !ex.length) h += '<div class="card es">Brak ćwiczeń w planie tej jednostki.</div>';
+  if (s && s.uwagi) h += '<div class="card"><p class="note" style="margin:0"><span class="eb">Uwaga klienta</span><br>' + esc(s.uwagi) + '</p></div>';
+  if (s) h += '<div class="card">' + komBox(s, ex.length) + '</div>';
+  else if (c && u.st !== 'done') h += '<div class="row kwgo"><span class="hint">' + (u.st === 'live' ? 'Klient jest w trakcie.' : 'Zmiany w planie: Karta klienta → Plan.') + '</span><span class="sp"></span>' + go(liveHref(u.id, u.week, u.day), '▶ Prowadź', 'acc') + '</div>';
+  return h;
+}
+document.addEventListener('click', e => {
+  const k = e.target.closest('[data-ku]'); if (k) { e.preventDefault(); kwOpen(+k.dataset.ku); return; }
+  const g = e.target.closest('[data-kwgo]'); if (g) { kwOpen(+g.dataset.kwgo); return; }
+  if (e.target.closest('[data-kwx]') || e.target.id === 'kw') { kwClose(); return; }
+  if (e.target.closest('#kw a[href^="#"]')) kwClose();
+});
+document.addEventListener('keydown', e => {
+  if (!KW || !$('#kw')) return;
+  if (e.key === 'Escape') { e.preventDefault(); kwClose(); return; }
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || '')) || e.target.isContentEditable) return;
+  if (e.key === 'ArrowLeft' && KLIST[KW.i - 1]) { e.preventDefault(); kwOpen(KW.i - 1); }
+  if (e.key === 'ArrowRight' && KLIST[KW.i + 1]) { e.preventDefault(); kwOpen(KW.i + 1); }
+});
 /* ---------- karta klienta (v87: nagłówek z sygnałami i „Prowadź trening”, przegląd jak na telefonie) ---------- */
 /** faktyczny dzień jednostki z Sesje.start (klucz tydzień|jednostka) */
 function sesDates(d){ const o = {}; (d.sessions || []).forEach(s => { if (/T/.test(String(s.start || ''))) o[uKey(s.tydzien, s.jednostka)] = TL.localDate(new Date(s.start)); }); return o; }

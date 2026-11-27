@@ -1193,6 +1193,41 @@ test('trDzis_: kto dziś trenuje (plan z datą, serie zapisane dziś, sesja zacz
   assert.deepEqual(C.trDzis_(kl, [], [], [], today, d10), []);
 });
 
+test('trKalendarz_: jednostki wszystkich klientów w zakresie dat (dzień faktyczny, stan, bez daty)', () => {
+  const today = '2026-11-17', d10 = v => String(v).slice(0, 10);
+  const kl = [{ klient_id: 'ania', imie: 'Ania' }, { klient_id: 'bartek', imie: 'Bartek' }, { klient_id: 'ewa', imie: 'Ewa', aktywny: 'NIE' }];
+  const P = (klient, tydzien, jednostka, data, cw, extra) => Object.assign({ klient, tydzien, jednostka, tytul: 'Góra', data, cwiczenie: cw, serie: 3, zrodlo: '', blok: 'B1' }, extra || {});
+  const plan = [
+    P('ania', 4, 'T1', '2026-11-16', 'Przysiad'), P('ania', 4, 'T1', '2026-11-16', 'Wiosłowanie'), P('ania', 4, 'T1', '2026-11-16', 'Dodane', { zrodlo: 'dodane' }),
+    P('ania', 4, 'T2', '2026-11-17', 'Wyciskanie'),                       // dziś, serie dziś bez Sesji = w trakcie
+    P('ania', 4, 'T3', '2026-11-19', 'Martwy'),                           // przyszła
+    P('ania', 5, 'T1', '', 'Przysiad'), P('ania', 6, 'T1', '', 'Przysiad'), // bez daty: tylko najniższy niezrobiony tydzień (5)
+    P('bartek', 2, 'T1', '2026-11-12', 'Rwanie'),                          // zrobiona przesunięta: dzień z Sesji (16.11)
+    P('bartek', 2, 'T2', '2026-11-14', 'Podrzut'),                         // zaległa sprzed zakresu: poza zakresem
+    P('bartek', 3, 'T1', '2026-11-15', 'Rwanie'),                          // zaległa w zakresie
+    P('bartek', 1, 'W1', '', 'Pompki', { zrodlo: 'klient', tytul: '' }),   // własny bez daty i bez serii: nigdzie
+    P('bartek', 1, 'W2', '', 'Pompki', { zrodlo: 'klient', tytul: '' }),   // własny z sesją 18.11
+    P('ewa', 4, 'T1', '2026-11-16', 'Przysiad')                            // nieaktywna
+  ];
+  const L = (klient, tydzien, jednostka, seria, zapisano, extra) => Object.assign({ klient, tydzien, jednostka, seria, zapisano, wykonane: 'TAK', kg: 60, powt: 5, typ: '' }, extra || {});
+  const log = [L('ania', 4, 'T1', 1, '2026-11-16T09:00:00Z'), L('ania', 4, 'T1', 'R1', '2026-11-16T08:50:00Z'), L('ania', 4, 'T2', 1, '2026-11-17T09:00:00Z'),
+    L('bartek', 2, 'T1', 1, '2026-11-16T07:10:00Z')];
+  const ses = [{ klient: 'ania', tydzien: 4, jednostka: 'T1', start: '2026-11-16T08:45:00Z', czas_min: 50, rpe_sesji: 8, prowadzil: 'trener' },
+    { klient: 'bartek', tydzien: 2, jednostka: 'T1', start: '2026-11-16T07:00:00Z', czas_min: 40, rpe_sesji: 7 },
+    { klient: 'bartek', tydzien: 1, jednostka: 'W2', start: '2026-11-18T07:00:00Z', czas_min: 30 }];
+  const r = C.trKalendarz_(kl, plan, log, ses, '2026-11-15', '2026-11-21', today, d10);
+  assert.deepEqual(plain(r.units.map(u => [u.date, u.name, u.week + u.day, u.st, u.ex, u.sets, u.done, u.plan, u.led, u.own, u.min])), [
+    ['2026-11-15', 'Bartek', '3T1', 'late', 1, 3, 0, '2026-11-15', false, false, null],
+    ['2026-11-16', 'Ania', '4T1', 'done', 2, 6, 1, '2026-11-16', true, false, 50],     // dodane przez klienta i rozgrzewka się nie liczą
+    ['2026-11-16', 'Bartek', '2T1', 'done', 1, 3, 1, '2026-11-12', false, false, 40],  // dzień z Sesji, data z planu w „plan”
+    ['2026-11-17', 'Ania', '4T2', 'live', 1, 3, 1, '2026-11-17', false, false, null],
+    ['2026-11-18', 'Bartek', '1W2', 'done', 1, 3, 0, '', false, true, 30],
+    ['2026-11-19', 'Ania', '4T3', 'wait', 1, 3, 0, '2026-11-19', false, false, null]]);
+  assert.equal(r.units[1].title, 'Góra'); assert.equal(r.units[1].block, 'B1'); assert.equal(r.units[4].title, 'Własny trening');
+  assert.deepEqual(plain(r.undated.map(u => [u.name, u.week + u.day])), [['Ania', '5T1']]);
+  assert.deepEqual(plain(C.trKalendarz_(kl, [], [], [], '2026-11-15', '2026-11-21', today, d10)), { from: '2026-11-15', to: '2026-11-21', today, units: [], undated: [] });
+});
+
 test('doGet: stary link dostaje zwykły tekst (bez strony HtmlService, więc bez google.script.run)', () => {
   // Atrapy usług Google: doGet nie może sięgnąć po HtmlService, bo z takiej strony da się wywołać każdą funkcję skryptu.
   const out = [];

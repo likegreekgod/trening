@@ -76,6 +76,24 @@ function klient() {
   };
 }
 
+// Kalendarz (trKalendarz): Ania z klient() (zrobione = z Sesją), reszta syntetycznie w bieżącym tygodniu; bez daty: Darek
+function kalendarz(from, to) {
+  const d = klient(), units = [], seen = {};
+  d.plan.forEach(r => { const k = r.week + '|' + r.day; if (seen[k]) return; seen[k] = 1;
+    const rows = d.plan.filter(x => x.week === r.week && x.day === r.day), s = d.sessions.find(x => x.tydzien === r.week && x.jednostka === r.day);
+    units.push({ id: 'ania', name: 'Ania', week: r.week, day: r.day, title: r.title, block: r.block, date: r.date, plan: r.date, own: false, led: !!s && r.week === 11 && r.day === 'T1',
+      ex: rows.length, sets: rows.length * 3, done: s ? rows.length * 3 : 0, st: s ? 'done' : r.date < TODAY ? 'late' : 'wait', rpe: s ? s.rpe_sesji : null, min: s ? s.czas_min : null }); });
+  const U = (id, name, week, day, title, date, st, extra) => Object.assign({ id, name, week, day, title, block: 'B1', date, plan: date, own: false, led: false, ex: 4, sets: 12, done: 0, st, rpe: null, min: null }, extra || {});
+  units.push(U('bartek', 'Bartek', 4, 'T1', 'FBW', MON, 'done', { done: 12, rpe: 8, min: 55, led: true }),
+    U('celina', 'Celina', 8, 'T2', 'Góra', TODAY, 'live', { done: 3 }),
+    U('darek', 'Darek', 3, 'T1', 'Siła dół', MON, 'late', { ex: 5, sets: 14 }),
+    U('celina', 'Celina', 8, 'T3', 'Dół', addDays(MON, 3), 'wait'),
+    U('bartek', 'Bartek', 4, 'T2', 'Klatka i plecy', addDays(MON, 4), 'wait', { ex: 5, sets: 15, plan: addDays(MON, 2) }),
+    U('darek', 'Darek', 3, 'T2', 'Siła góra', addDays(MON, 5), 'wait'));
+  return { from, to, today: TODAY, units: units.filter(u => u.date >= from && u.date <= to).sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, 'pl')),
+    undated: [U('darek', 'Darek', 3, 'T3', 'Mobilność', '', 'wait', { plan: '', ex: 5, sets: 10 })] };
+}
+
 const KL1 = { scale: 'RPE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false, mailKom: false, seen: '', devs: 0, body: false };
 const KLIENCI = [   // panel → Klienci (trKlienci): ustawienia z zakładki Klienci, dane syntetyczne
   Object.assign({}, KL1, { id: 'ania', name: 'Ania', on: true, mode: 'PRO', swap: 'DOWOLNA', pain: true, edit: true, extra: 2, seen: new Date(Date.now() - 2 * 3600e3).toISOString(), devs: 3, link: 'https://example.com/trening/?k=kaaaaaaaaaa1' }),
@@ -167,6 +185,7 @@ async function page(calls, opt = {}) {
       else { st.key = k; out = { ok: true, result: Object.assign(k ? { set: true, end: '…' + k.slice(-4), limit: 30, n: 0 } : { set: false, end: '', limit: 30, n: 0 }, { checked: true }) }; } }
     else if (b.fn === 'trFilm') { st.nFilm = (st.nFilm || 0) + 1; if (st.nFilm > 1) st.fresh = true; out = { ok: true, result: { token: 'tok-film', exp: Date.now() + 3e6 } }; }
     else if (b.fn === 'trKomentarzFilm') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { text: String(b.args[5]).trim(), at: TODAY + 'T20:00:00.000Z' } }; }
+    else if (b.fn === 'trKalendarz') out = { ok: true, result: kalendarz(b.args[0], b.args[1]) };
     else if (b.fn === 'trKlienci') { st.kl = st.kl || KLIENCI.map(k => Object.assign({}, k)); out = { ok: true, result: st.kl }; }
     else if (b.fn === 'trKlientUstaw') { await new Promise(res => setTimeout(res, 100)); const f = b.args[1], i = st.kl.findIndex(k => k.id === b.args[0]);
       if (f.extra > 5) out = { ok: false, error: 'Dodatkowe serie: liczba 0–5.' };
@@ -568,6 +587,65 @@ test('panel: mało miejsca na Dysku = czerwony wpis w „Wymaga uwagi” z linki
   const d = it.find(x => /Dysku/.test(x[0]));
   assert.ok(d, 'wpis o Dysku'); assert.equal(d[0], 'Na Dysku zostało 1,5 GB'); assert.match(d[1], /lv-bad/); assert.equal(d[2], '#ustawienia/dane');
   await ctx.close();
+});
+
+test('panel: Kalendarz (tydzień, miesiąc, filtr klienta, kolory) i okno jednostki (wykonanie, plan, komentarz, ← →)', async () => {
+  for (const [vp, scheme, sfx] of [[null, 'light', 'jasny'], [{ width: 390, height: 844 }, 'dark', 'telefon-ciemny']]) {
+    const calls = [], { ctx, p } = await page(calls, Object.assign({ loggedIn: true, scheme }, vp ? { vp } : {}));
+    await p.goto(base + 'trener.html'); await p.waitForSelector('.dr');
+    await p.click((vp ? '#bnav' : '#nav') + ' a[data-v="kalendarz"]'); await p.waitForSelector('.kal');
+    assert.deepEqual(calls.filter(c => c.fn === 'trKalendarz').pop().args, [MON, addDays(MON, 6)]);
+    assert.equal(await p.getAttribute((vp ? '#bnav' : '#nav') + ' a[data-v="kalendarz"]', 'aria-current'), 'page');
+    assert.equal(await p.locator('.kal .ku').count(), 8);
+    assert.equal(await p.locator('.kund .ku').count(), 1, 'bez daty: najbliższy tydzień planu bez dnia');
+    assert.match(await p.textContent('.kd.t'), /dziś/);
+    assert.match(await p.textContent('.ku:has-text("Celina"):has-text("Góra")'), /w trakcie.*3 z 12 serii/s);
+    assert.match(await p.textContent('.ku:has-text("Darek"):has-text("Siła dół")'), /zaległa/);
+    assert.match(await p.textContent('.ku:has-text("Bartek"):has-text("Klatka")'), /w planie śr 18\.11/);
+    const col = n => p.$eval('.kal .ku:has-text("' + n + '")', e => e.style.getPropertyValue('--c'));
+    assert.deepEqual([await col('Ania'), await col('Bartek'), await col('Celina'), await col('Darek')], ['var(--k0)', 'var(--k1)', 'var(--k2)', 'var(--k3)'], 'kolor = miejsce klienta w alfabecie');
+    if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    await shot(p, 'trener-kalendarz-' + sfx + '.png');
+    // filtr klienta: tylko Ania, bez osobnego zapytania
+    const n0 = calls.length;
+    await p.click('[data-kf="ania"]'); assert.equal(await p.locator('.kal .ku').count(), 2); assert.equal(await p.$('.kund'), null);
+    assert.equal(calls.length, n0);
+    await p.click('[data-kf=""]'); assert.equal(await p.locator('.kal .ku').count(), 8);
+    // okno zrobionej jednostki: wykonanie z karty klienta, komentarz do sesji, ← → po kalendarzu, Esc
+    await p.click('.ku:has-text("Ania"):has-text("Nogi")'); await p.waitForSelector('#kw .kwe');
+    assert.equal(calls.filter(c => c.fn === 'trKlient').pop().args[0], 'ania');
+    assert.match(await p.textContent('#kw .kwh .eb'), /Ania · blok B2 · tydz\. 12 · T1 · zrobiona wt 17\.11/);
+    assert.equal(await p.textContent('#kw-t'), 'Nogi');
+    assert.equal(await p.locator('#kw .kwe').count(), 2);
+    assert.match(await p.textContent('#kw .kws'), /55 min.*6\/6.*kolano 5\/10/s);
+    assert.equal(await p.getAttribute('#kw .kwh a.sb', 'href'), '#k/ania/sesje');
+    await p.fill('#kw .kedit textarea', 'Równe serie, brawo.'); await p.click('#kw .kedit [data-k="save"]'); await p.waitForSelector('#kw .kedit .saved');
+    assert.deepEqual(calls.filter(c => c.fn === 'trKomentarz').pop().args, ['ania', 12, 'T1', 'Równe serie, brawo.']);
+    if (!vp) await shot(p, 'trener-kalendarz-okno-jasny.png');
+    await p.click('#kw .kwf [data-kwgo]:last-child'); await p.waitForFunction(() => (document.querySelector('#kw-t') || {}).textContent === 'Góra');
+    assert.match(await p.textContent('#kw .kwh .eb'), /Celina/);
+    await p.keyboard.press('ArrowRight'); await p.waitForSelector('#kw .pxl');                      // Ania T2: plan, „▶ Prowadź”
+    assert.match(await p.textContent('#kw .kwh .eb'), /Ania · .*T2 · zaplanowana cz 19\.11/);
+    assert.equal(await p.locator('#kw .pxl').count(), 2);
+    assert.equal(await p.getAttribute('#kw .kwgo a.sb', 'href'), './?prowadz=ania&j=12%7CT2');
+    assert.equal(calls.filter(c => c.fn === 'trKlient' && c.args[0] === 'ania').length, 1, 'karta klienta z pamięci strony');
+    if (vp) { assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390)); await shot(p, 'trener-kalendarz-okno-telefon-ciemny.png'); }
+    await p.keyboard.press('ArrowLeft'); await p.waitForFunction(() => /Celina/.test((document.querySelector('#kw .kwh .eb') || {}).textContent));
+    await p.keyboard.press('Escape'); assert.equal(await p.$('#kw'), null);
+    // następny tydzień i miesiąc
+    await p.click('.kbar a[aria-label="Następny tydzień"]'); await p.waitForFunction(() => /23–29 listopada/.test((document.querySelector('.klab') || {}).textContent));
+    assert.deepEqual(calls.filter(c => c.fn === 'trKalendarz').pop().args, [addDays(MON, 7), addDays(MON, 13)]);
+    await p.click('.seg a:has-text("Miesiąc")'); await p.waitForSelector('.kalm');
+    assert.deepEqual(calls.filter(c => c.fn === 'trKalendarz').pop().args, ['2026-10-26', '2026-12-06']);
+    assert.equal(await p.locator('.kmd').count(), 42);
+    assert.match(await p.textContent('.klab'), /listopad 2026/i);
+    if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    await shot(p, 'trener-kalendarz-miesiac-' + sfx + '.png');
+    await p.click('.kmd.t .kmn'); await p.waitForSelector('.kal');                                  // dzień w miesiącu → jego tydzień
+    assert.equal(await p.evaluate(() => location.hash), '#kalendarz/' + MON);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
 });
 
 test('panel: Więcej → Prowadzone treningi (miesiąc, na klienta, CSV do rozliczeń)', async () => {
