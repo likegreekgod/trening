@@ -173,8 +173,8 @@ function todoItems(){
     else if (k.to && k.to < PUL.today) out.push({ k: 'pkg', o: 2, lv: 'lv-warn', t: c.name + ': pakiet wygasł ' + dm(k.to), d: 'niewykorzystane: ' + k.left + ' z ' + k.n, a: ref });
     else if (k.left <= PKG_LOW) out.push({ k: 'pkg', o: 2, lv: 'lv-warn', t: c.name + ': ' + (k.left === 1 ? 'został 1 trening' : 'zostały ' + k.left + ' treningi') + ' z pakietu', d: info, a: ref });
     else if (k.to && k.to <= TL.addDays(PUL.today, PKG_DAYS)) out.push({ k: 'pkg', o: 2, lv: 'lv-warn', t: c.name + ': pakiet ważny do ' + dowDm(k.to), d: 'zostało ' + k.left + ' z ' + k.n + ' treningów', a: ref }); });
-  (PUL.agent || []).forEach(x => out.push({ k: 'sig', o: x.pilne ? 0 : 1, lv: x.pilne ? 'lv-bad' : 'lv-warn', t: x.name + ': ' + (x.zgl ? (AG_TEMAT[x.typ] || 'zgłoszenie') + ' od asystenta AI' : 'propozycja asystenta AI (' + (AG_TYP[x.typ] || x.typ) + ')'),
-    d: x.text + ' · ' + dowDm(x.at), a: go(kHref(x.id), 'Otwórz') }));   // Agent.gs: bot klienta (kolejka do zatwierdzania: PR 2)
+  (PUL.agent || []).filter(x => x.pilne).forEach(x => out.push({ k: 'sig', o: 0, lv: 'lv-bad', t: x.name + ': ' + (AG_TEMAT[x.typ] || 'zgłoszenie') + ' od asystenta AI',
+    d: x.text + ' · ' + dowDm(x.at), a: '<button class="sb" type="button" data-asygo>Otwórz</button>' }));   // Agent.gs: czerwona flaga od bota; reszta spraw w karcie „Od asystenta AI” (asyCard)
   PUL.blocks.forEach(b => out.push({ k: 'blok', o: 3, lv: 'lv-warn', t: b.name + ': blok ' + b.block + ' do zamknięcia', d: (b.to < PUL.today ? 'skończył się ' : 'kończy się ') + dowDm(b.to) + ' · brak wniosków', a: go(kHref(b.id, 'bloki'), 'Zamknij') }));
   PUL.clients.forEach(c => { if (c.planLeft !== null && c.planLeft >= 0 && c.planLeft <= 7) out.push({ k: 'blok', o: 4, lv: 'lv-warn', t: c.name + ': plan kończy się ' + (c.planLeft === 0 ? 'dziś' : 'za ' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni')), d: 'czas na kolejny blok', a: go(kHref(c.id, 'bloki'), 'Następny') }); });
   return out.sort((a, b) => a.o - b.o);
@@ -215,9 +215,61 @@ function renderDzis(){
     '<div class="it"><span class="dot ' + t.lv + '"></span><div class="tx"><b>' + esc(t.t) + '</b><small>' + esc(t.d) + '</small></div>' + t.a + '</div>').join('') : f === 'odp' ? '' : '<p class="muted">Nic pilnego.</p>') + '</div>';
   const d = new Date(PUL.today + 'T12:00:00Z');
   $('#main').innerHTML = head(DOWL[d.getUTCDay()] + ' ' + dm(PUL.today) + ' · tydzień ' + dm(PUL.weeks[11]) + '–' + dm(TL.addDays(PUL.weeks[11], 6)), 'Dziś') +
-    '<div class="pg">' + stats + '<div class="dz"><div class="stack dz-l">' + today + '</div><div class="stack dz-r">' + todo + (f === 'all' || f === 'odp' ? repliesCard() : '') + '</div></div></div>';
+    '<div class="pg">' + stats + '<div class="dz"><div class="stack dz-l">' + today + '</div><div class="stack dz-r">' + todo + (f === 'all' || f === 'sig' ? asyCard() : '') + (f === 'all' || f === 'odp' ? repliesCard() : '') + '</div></div></div>';
   document.querySelectorAll('[data-skf]').forEach(b => b.onclick = () => { SKF = b.dataset.skf; renderDzis(); });
   document.querySelectorAll('[data-rvk]').forEach(a => a.onclick = () => { VALL = true; VSEL = a.dataset.rvk; });   // skomentowany film: lista „Wszystkie”, od razu ten film
+  document.querySelectorAll('[data-asygo]').forEach(b => b.onclick = () => { const c = document.getElementById('asy'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  asyBind();
+}
+/* „Od asystenta AI” (Agent.gs trPropozycja): propozycje botów klientów do zatwierdzenia jednym kliknięciem, zgłoszenia do przeczytania.
+   Stan pól (powód odmowy, „zapamiętaj”) tylko w pamięci strony: ASY[pid] = {rej, why, mem, busy, err}; ASYM = komunikat ostatniej decyzji. */
+let ASY = {}, ASYM = '';
+function asyItem(x){
+  const st = ASY[x.pid] || {}, dis = st.busy ? ' disabled' : '', pid = esc(x.pid);
+  const meta = [dowDm(x.at), x.week ? 'tydz. ' + x.week + ' · ' + x.day : '', x.date ? 'na ' + dowDm(x.date) : ''].filter(Boolean).join(' · ');
+  const tag = '<span class="atag' + (x.pilne ? ' bad' : '') + '">' + esc(x.zgl ? (AG_TEMAT[x.typ] || 'zgłoszenie') : (AG_TYP[x.typ] || x.typ)) + '</span>';
+  const mem = '<label class="amem"><input type="checkbox" data-asy-mem="' + pid + '"' + (st.mem ? ' checked' : '') + dis + '> Zapamiętaj jako zasadę dla tego klienta</label>';
+  const what = x.typ === 'zamiana' ? '<b>' + esc(x.ex) + '</b> → <b>' + esc(x.to) + '</b> · tylko w tej jednostce' : esc(x.text);
+  let act;
+  if (x.zgl) act = '<div class="row2"><button class="b p" type="button" data-asy-read="' + pid + '"' + dis + '>' + (st.busy ? 'Zapisuję…' : '✓ Przeczytane') + '</button>' + go(kHref(x.id), 'Karta klienta') + '</div>';
+  else if (st.rej) act = '<label class="legend" for="asy-why-' + pid + '">Powód odmowy (asystent przekaże klientowi)</label><textarea class="awhy" id="asy-why-' + pid + '" data-asy-why="' + pid + '" rows="2" maxlength="300"' + dis + '>' + esc(st.why || '') + '</textarea>' + mem +
+    '<div class="row2"><button class="b p" type="button" data-asy-nogo="' + pid + '"' + dis + '>' + (st.busy ? 'Zapisuję…' : 'Odrzuć i wyślij powód') + '</button><button class="cp" type="button" data-asy-cancel="' + pid + '"' + dis + '>Anuluj</button></div>';
+  else act = mem + '<div class="row2"><button class="b p" type="button" data-asy-ok="' + pid + '"' + dis + '>' + (st.busy ? 'Zapisuję…' : x.typ === 'trening' ? '✓ Zgoda' : '✓ Zatwierdź i zmień plan') + '</button>' +
+    '<button class="cp" type="button" data-asy-no="' + pid + '"' + dis + '>Odrzuć…</button></div>' + (x.typ === 'trening' ? '<p class="legend">Plan bez zmian: klient zapisze ten trening sam, gdy go zrobi.</p>' : '');
+  return '<div class="api" data-asy="' + pid + '"><div class="aph"><a href="' + kHref(x.id) + '"><b>' + esc(x.name) + '</b></a><span class="muted">' + esc(meta) + '</span>' + tag + '</div>' +
+    '<p class="apw">' + what + '</p>' + (x.why ? '<p class="apr">Powód klienta: „' + esc(x.why) + '”</p>' : '') + act + (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') + '</div>';
+}
+function asyCard(){
+  const list = PUL.agent || [], odrz = PUL.agentOdrz || [];
+  if (!list.length && !odrz.length && !ASYM) return '';
+  return '<div class="card asy" id="asy"><h2>Od asystenta AI · ' + list.length + '</h2>' + (ASYM ? '<p class="saved" role="status">' + esc(ASYM) + '</p>' : '') +
+    (list.length ? list.map(asyItem).join('') : '<p class="muted">Nic nie czeka na decyzję.</p>') +
+    (odrz.length ? '<details class="aodrz"><summary class="muted">Odrzucone przez serwer · ' + odrz.length + '</summary><ul>' + odrz.map(r => '<li><b>' + esc(r.name) + '</b>, ' + esc(dowDm(r.at)) + ': ' + esc(r.text) + (r.uwaga ? ' <span class="muted">· ' + esc(r.uwaga) + '</span>' : '') + '</li>').join('') + '</ul></details>' : '') +
+    '<p class="legend">Bot dostaje Twoje ostatnie decyzje u klienta (z powodem), więc nie proponuje drugi raz tego samego. „Zapamiętaj” dopisuje decyzję do ograniczeń klienta.</p></div>';
+}
+function asyBind(){
+  const re = () => { const el = document.getElementById('asy'), h = asyCard(); if (el) { if (h) el.outerHTML = h; else el.remove(); asyBind(); } };
+  const st = pid => ASY[pid] = ASY[pid] || {};
+  const send = async (pid, mode) => {
+    const s = st(pid), x = (PUL.agent || []).find(a => a.pid === pid); if (!x || s.busy) return;
+    if (mode === 'nie' && !String(s.why || '').trim()) { s.err = 'Napisz powód: asystent przekaże go klientowi.'; return re(); }
+    s.busy = true; s.err = ''; re();
+    try {
+      const r = await guard(api('trPropozycja', pid, { mode, why: mode === 'nie' ? s.why : '', zasada: !!s.mem && mode !== 'czytane' }));
+      PUL.agent = PUL.agent.filter(a => a.pid !== pid); delete ASY[pid];
+      ASYM = x.name + ': ' + (mode === 'tak' ? (r.rows ? 'zatwierdzone, plan zmieniony' : 'zgoda zapisana') : mode === 'nie' ? 'odrzucone, powód pójdzie do klienta' : 'zgłoszenie przeczytane') +
+        (r.memo ? ' · dopisane do ograniczeń' : '') + (r.memoErr ? ' · nie dopisano do ograniczeń: ' + r.memoErr : '') + '.';
+      if (mode === 'czytane' && x.pilne) return renderDzis();   // czerwona flaga znika też z „Wymaga uwagi”
+    } catch (e) { s.busy = false; s.err = e.auth ? '' : e.message; }
+    re();
+  };
+  document.querySelectorAll('[data-asy-ok]').forEach(b => b.onclick = () => send(b.dataset.asyOk, 'tak'));
+  document.querySelectorAll('[data-asy-read]').forEach(b => b.onclick = () => send(b.dataset.asyRead, 'czytane'));
+  document.querySelectorAll('[data-asy-nogo]').forEach(b => b.onclick = () => send(b.dataset.asyNogo, 'nie'));
+  document.querySelectorAll('[data-asy-no]').forEach(b => b.onclick = () => { st(b.dataset.asyNo).rej = true; st(b.dataset.asyNo).err = ''; re(); const t = document.querySelector('[data-asy-why="' + b.dataset.asyNo + '"]'); if (t) t.focus(); });
+  document.querySelectorAll('[data-asy-cancel]').forEach(b => b.onclick = () => { const s = st(b.dataset.asyCancel); s.rej = false; s.err = ''; re(); });
+  document.querySelectorAll('[data-asy-why]').forEach(t => t.oninput = () => { st(t.dataset.asyWhy).why = t.value; });
+  document.querySelectorAll('[data-asy-mem]').forEach(c => c.onchange = () => { st(c.dataset.asyMem).mem = c.checked; });
 }
 const BLOKI_ICO = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 10h16M10 10v10"/></svg>';
 /** „Więcej” (telefon): bloki, ustawienia, mój trening, przeliczenie, wylogowanie */
@@ -745,7 +797,8 @@ function agChatCard(k){
   const steps = st => st && st.length ? '<ul class="acst">' + st.map(x => '<li class="' + (x.ok ? 'ok' : 'no') + '"><span class="mono">' + esc(x.fn) + '</span>' + (x.args ? ' <small>' + esc(x.args) + '</small>' : '') +
     (x.ok ? ' ✓' : ' ✕ ' + esc(x.info)) + '</li>').join('') + '</ul>' : '';
   const bub = m => '<div class="acm ' + (m.role === 'user' ? 'u' : 'a') + '"><div class="acb">' + esc(m.text).replace(/\n/g, '<br>') + '</div>' + steps(m.steps) + (m.cost ? '<small class="acx">ok. ' + esc(pl(Math.round(m.cost * 1000) / 1000)) + ' USD</small>' : '') + '</div>';
-  return '<div class="card" id="agchat"><h2>Wypróbuj asystenta</h2>' +
+  const open = c.open || c.msgs.length || c.busy || c.draft;   // zwinięty do jednej linii, dopóki trener go nie otworzy (sprawdzenie po zmianie zasad)
+  return '<details class="card achd" id="agchat"' + (open ? ' open' : '') + '><summary><h2>Wypróbuj asystenta</h2><span class="muted">po zmianie zasad</span></summary>' +
     '<p class="legend" style="margin-top:0;font-size:13px;line-height:1.5">Piszesz jako ' + esc(k.name) + '. Asystent widzi plan, historię, Twoje zasady i ograniczenia tego klienta, tak jak bot klienta. Płacisz z klucza Claude API panelu (Ustawienia).</p>' +
     frH('Zapisuj naprawdę', c.real ? 'Serie, treningi, propozycje i zgłoszenia trafiają do arkusza.' : 'Wyłączone: serwer sprawdza zapisy regułami, ale nic nie zapisuje.',
       '<button class="sw" type="button" role="switch" id="ach-real" aria-label="Zapisuj naprawdę" aria-checked="' + !!c.real + '"' + dis + '></button>') +
@@ -755,15 +808,16 @@ function agChatCard(k){
     '<div class="agta"><label for="ach-in">Wiadomość od klienta</label><textarea id="ach-in" rows="3"' + dis + '>' + esc(c.draft) + '</textarea></div>' +
     '<div class="row2" style="margin-top:10px"><button class="b p" type="button" id="ach-go"' + (c.busy || !c.draft.trim() ? ' disabled' : '') + '>Wyślij</button>' +
     (c.msgs.length ? '<button class="cp" type="button" id="ach-clr"' + dis + '>Nowa rozmowa</button>' : '') +
-    (c.cost ? '<span class="legend">Koszt rozmowy ok. ' + esc(pl(Math.round(c.cost * 100) / 100)) + ' USD</span>' : '') + '</div></div>';
+    (c.cost ? '<span class="legend">Koszt rozmowy ok. ' + esc(pl(Math.round(c.cost * 100) / 100)) + ' USD</span>' : '') + '</div></details>';
 }
 function agChatBind(k, re){
   const id = k.id;
   if (ACH.id !== id) ACH = { id, msgs: [], busy: false, err: '', real: false, draft: '', cost: 0 };
+  const dt = $('#agchat'); if (dt) dt.ontoggle = () => { ACH.open = dt.open; };
   const l = $('#ach-list'); if (l) l.scrollTop = l.scrollHeight;
   const t = $('#ach-in'); if (t) t.oninput = () => { ACH.draft = t.value; const b = $('#ach-go'); if (b) b.disabled = ACH.busy || !t.value.trim(); };
   const rl = $('#ach-real'); if (rl) rl.onclick = () => { ACH.real = !ACH.real; re(); };
-  const cl = $('#ach-clr'); if (cl) cl.onclick = () => { ACH = { id, msgs: [], busy: false, err: '', real: ACH.real, draft: '', cost: 0 }; re(); };
+  const cl = $('#ach-clr'); if (cl) cl.onclick = () => { ACH = { id, msgs: [], busy: false, err: '', real: ACH.real, draft: '', cost: 0, open: true }; re(); };
   const go = $('#ach-go'); if (go) go.onclick = async () => {
     const txt = ACH.draft.trim(); if (!txt || ACH.busy) return;
     ACH.msgs.push({ role: 'user', text: txt }); ACH.draft = ''; ACH.busy = true; ACH.err = ''; re();

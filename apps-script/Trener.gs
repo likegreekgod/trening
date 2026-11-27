@@ -49,6 +49,7 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trNastepna,
   trPakiet,
   trPlan,
+  trPropozycja,
   trProwadzone,
   trPrzelicz,
   trPrzesun,
@@ -146,7 +147,9 @@ function trPulpit() {
   out.dysk = dysk_();                    // miejsce na Dysku: mało = czerwony wpis w „Wymaga uwagi” (Kopia.gs)
   out.clients.forEach(c => { if (pk[c.id]) c.pkg = pk[c.id]; });
   const names = {}; out.clients.forEach(c => { names[c.id] = c.name; });
-  out.agent = agOpen_(tableOf_('Propozycje'), names, today_(), 7);   // zgłoszenia i propozycje botów klientów (Agent.gs)
+  const prop = tableOf_('Propozycje');
+  out.agent = agOpen_(prop, names, today_(), 7);   // zgłoszenia i propozycje botów klientów (Agent.gs) → karta „Od asystenta AI”
+  out.agentOdrz = agOdrz_(prop, names, today_(), 7);
   return out;
 }
 
