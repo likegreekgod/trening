@@ -2424,3 +2424,21 @@ test('czat „Wypróbuj asystenta”: narzędzia, historia, pętla akcji, instru
   assert.match(C.agChatSystem_({}), /nie wkleił jeszcze zasad/);
   assert.ok(C.TR_FNS.trAsystent);
 });
+
+test('trTitle_: nazwa sesji z panelu (Plan.tytul całej jednostki, własny trening z przedrostkiem)', () => {
+  const R = (w, d, nr, o) => Object.assign({ klient: 'ania', tydzien: w, jednostka: d, tytul: 'TP1', nr, cwiczenie: 'X' + nr, zrodlo: '' }, o);
+  const plan = [R(1, 'T2', 1), R(1, 'T2', 2), R(1, 'T2', 3, { zrodlo: 'usuniete' }), R(2, 'T2', 1), R(1, 'T2', 1, { klient: 'bartek' }),
+    R(1, 'W1', 1, { tytul: 'Własny · Ramiona', zrodlo: 'klient' }), R(1, 'T3', 1, { zrodlo: 'usuniete' })];
+  const t = e => JSON.parse(JSON.stringify(C.trTitle_(plan, 'ania', e)));
+  // cała jednostka (też ślad usuniętego ćwiczenia), bez innych tygodni i klientów; odstępy ścięte
+  assert.deepEqual(t({ week: 1, day: 'T2', title: '  Trening   personalny 1 ' }),
+    { set: [[0, { tytul: 'Trening personalny 1' }], [1, { tytul: 'Trening personalny 1' }], [2, { tytul: 'Trening personalny 1' }]], title: 'Trening personalny 1', own: false });
+  assert.deepEqual(t({ week: 1, day: 'T2', title: 'TP1' }).set, []);                       // bez zmian = nic do zapisu
+  assert.deepEqual(t({ week: 1, day: 'T2', title: '' }).set.map(x => x[1].tytul), ['', '', '']);
+  // własny trening klienta: przedrostek zostaje
+  assert.deepEqual(t({ week: 1, day: 'W1', title: 'Plecy' }), { set: [[5, { tytul: 'Własny · Plecy' }]], title: 'Własny · Plecy', own: true });
+  assert.equal(t({ week: 1, day: 'W1', title: '' }).title, 'Własny');
+  assert.match(t({ week: 1, day: 'T9', title: 'a' }).error, /Nie ma takiej jednostki/);
+  assert.match(t({ week: 1, day: 'T3', title: 'a' }).error, /Nie ma takiej jednostki/);  // same usunięte
+  assert.match(t({ week: 1, day: 'T2', title: 'x'.repeat(41) }).error, /40 znaków/);
+});
