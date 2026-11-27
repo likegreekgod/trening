@@ -266,7 +266,7 @@ test('trKlientOf_ i trKlientVals_: klienci w panelu trenera (ustawienia ↔ wier
   const row = ['kabc', 'Ania', 'Ania', '', 'stary-link', 'tak', 'PROSTY', 2, 'TAK', 'TAK', 'RIR', 0.075, '', 'TAK'];
   const k = C.trKlientOf_(row, 'https://x.github.io/trening/');
   assert.deepEqual(JSON.parse(JSON.stringify(k)), { id: 'ania', name: 'Ania', on: true, mode: 'PROSTY', scale: 'RIR', swap: 'TRENER', pain: true, masters: true,
-    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc', email: '', mail: false, mailKom: false, seen: '', devs: 0, body: false });
+    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc', email: '', mail: false, mailKom: false, seen: '', devs: 0, body: false, snatch: '', cj: '', start: '' });
   // pusty wiersz = wartości domyślne; bez adresu aplikacji link z kolumny E
   const d = C.trKlientOf_(['k1', 'bo', 'Bo', 'NIE', 'link-E'], '');
   assert.equal(d.on, false); assert.equal(d.mode, 'PRO'); assert.equal(d.swap, 'NIE'); assert.equal(d.oly, 5); assert.equal(d.own, true); assert.equal(d.link, 'link-E');
@@ -294,6 +294,20 @@ test('trKlientOf_ i trKlientVals_: klienci w panelu trenera (ustawienia ↔ wier
   assert.match(C.trKlientVals_(Object.assign({}, base, { mail: true })).error, /wpisz najpierw e-mail/);
   assert.match(C.trKlientVals_(Object.assign({}, base, { email: 'bo@', mail: false })).error, /adres e-mail/);
   assert.equal(C.trKlientVals_(Object.assign({}, base, { email: 'bo@example.com', mail: false })).vals[15], '', 'adres zostaje, mail wyłączony');
+  // Q–S (maksy, start): tylko gdy panel je przysłał (starszy panel bez tych pól ich nie czyści)
+  assert.equal(16 in C.trKlientVals_(base).vals, false);
+  const q = C.trKlientVals_(Object.assign({}, base, { snatch: '82,5', cj: 105, start: '2027-03-14' })).vals;
+  assert.deepEqual([q[16], q[17], q[18]], [82.5, 105, '2027-03-14']);
+  const qe = C.trKlientVals_(Object.assign({}, base, { snatch: '', cj: '', start: '' })).vals;
+  assert.deepEqual([qe[16], qe[17], qe[18]], ['', '', ''], 'puste pola czyszczą');
+  assert.match(C.trKlientVals_(Object.assign({}, base, { snatch: 'dużo' })).error, /Max rwanie/);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { cj: 500 })).error, /Max podrzut/);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { start: '2027-02-30' })).error, /Start/);
+  assert.match(C.trKlientVals_(Object.assign({}, base, { start: '14.03.2027' })).error, /Start/);
+  const r4 = ['k', 'x', 'X']; Object.keys(q).forEach(i => { r4[i] = q[i]; });
+  assert.deepEqual((({ snatch, cj, start }) => [snatch, cj, start])(C.trKlientOf_(r4, '')), [82.5, 105, '2027-03-14']);
+  const r5 = ['k', 'x', 'X']; r5[16] = 0; r5[17] = 'brak'; r5[18] = new Date('2027-03-14T00:00:00Z');
+  assert.deepEqual((({ snatch, cj }) => [snatch, cj])(C.trKlientOf_(r5, '')), ['', ''], 'zero i tekst = brak maksa');
   // nazwy akcji panelu nie pokrywają się z akcjami klientów
   ['trKlienci', 'trKlientUstaw', 'trKlientNowy', 'trKlientLink', 'trMail', 'trMailUstaw', 'trMailProba'].forEach(n => { assert.ok(C.TR_FNS[n], n); assert.equal(C.API_FNS[n], undefined); });
 });
@@ -1847,8 +1861,19 @@ test('pkgState_, pkgRow_, pkgAll_: pakiet treningów (zakup, treningi, korekty, 
 });
 
 test('Pakiety: trPakiet tylko w panelu trenera (nie w API klienta ani w „Prowadź”)', () => {
-  assert.ok(C.TR_FNS.trPakiet);
-  assert.ok(!C.API_FNS.trPakiet); assert.ok(!C.LIVE_FNS.trPakiet);
+  for (const n of ['trPakiet', 'trPakiety']) { assert.ok(C.TR_FNS[n], n); assert.ok(!C.API_FNS[n]); assert.ok(!C.LIVE_FNS[n]); }
+});
+
+test('pkgList_: Rozliczenia → pakiety wszystkich klientów (najmniej zostało na górze, nieaktywni na końcu)', () => {
+  const r = (kl, typ, data, ile, x) => Object.assign({ id: kl + typ + data, zapisano: data + 'T10:00:00Z', klient: kl, data: data, typ: typ, ile: ile }, x || {});
+  const rows = [r('ania', 'zakup', '2026-11-01', 10, { cena: 1200, waznosc: '2026-12-31' }), r('ania', 'trening', '2026-11-03', -1), r('ania', 'korekta', '2026-11-08', 1),
+    r('bo', 'zakup', '2026-11-02', 2), r('bo', 'trening', '2026-11-04', -1), r('bo', 'trening', '2026-11-06', -1), r('bo', 'trening', '2026-11-09', -1),
+    r('ewa', 'zakup', '2026-10-01', 4), r('nikt', 'zakup', '2026-10-01', 4)];
+  const kl = [{ id: 'ania', name: 'Ania', on: true }, { id: 'bo', name: 'Bo', on: true }, { id: 'ewa', name: 'Ewa', on: false }, { id: 'zoe', name: 'Zoe', on: true }];
+  const L = plain(C.pkgList_(rows, kl));
+  assert.deepEqual(L.map(x => [x.name, x.n, x.used, x.left, x.last, x.on]), [['Bo', 2, 3, -1, '2026-11-09', true], ['Ania', 10, 0, 10, '2026-11-03', true], ['Ewa', 4, 0, 4, '', false]]);
+  assert.deepEqual([L[1].price, L[1].from, L[1].to], [1200, '2026-11-01', '2026-12-31']);
+  assert.deepEqual(plain(C.pkgList_([], kl)), []);
 });
 
 test('Pakiety (atrapa arkusza): nowy pakiet, trening z „Prowadź” zdejmuje raz, odhaczenie usuwa, korekta, widoczność; klient widzi licznik tylko po włączeniu', () => {
@@ -2164,6 +2189,22 @@ test('tplRows_ / tplList_: szablony jednostek trenera (bez kg i imion klientów)
     { name: 'Rozruch', ex: [{ name: 'Goblet Squat', sets: 3, reps: '10', circuit: '' }, { name: 'Plank', sets: 2, reps: '30 s', circuit: '' }] }]);
   assert.ok(C.LIVE_FNS.saveTemplate && !C.API_FNS.saveTemplate && !C.TR_FNS.saveTemplate);
   try { C.LIVE_ = false; assert.throws(() => C.saveTemplate('k', {}), /Brak dostępu/); } finally { C.LIVE_ = false; }
+  for (const n of ['trSzablon', 'trSzablony']) { assert.ok(C.TR_FNS[n], n); assert.ok(!C.API_FNS[n] && !C.LIVE_FNS[n], n); }
+});
+
+test('Szablony (atrapa arkusza): panel zapisuje, zmienia nazwę i usuwa; to samo widzi „Prowadź”', () => {
+  const S = require('./load-code')(), F = fakeSheets({});
+  S.SpreadsheetApp = { getActive: () => F.ss };
+  S.LockService = { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) };
+  let L = S.trSzablon({ name: 'Rozruch', ex: [{ name: 'Goblet Squat', sets: 3, reps: '6-8' }, { name: 'Plank', sets: 2, reps: '30 s' }] });
+  assert.deepEqual(plain(L).map(t => [t.name, t.ex.length]), [['Rozruch', 2]]);
+  L = S.trSzablon({ name: 'Full body', ex: [{ name: '=Bench', sets: 4, reps: 8 }] });
+  assert.deepEqual(F.formulas(), [], 'nazwa „=Bench” zostaje tekstem');
+  L = S.trSzablon({ name: 'Rozruch B', old: 'rozruch', ex: [{ name: 'Goblet Squat', sets: 4, reps: '6-8' }] });
+  assert.deepEqual(plain(L).map(t => [t.name, t.ex[0].sets, t.ex[0].reps]), [['Full body', 4, '8'], ['Rozruch B', 4, '6-8']]);
+  L = S.trSzablon({ name: 'Full body', del: true });
+  assert.deepEqual(plain(S.trSzablony()).map(t => t.name), ['Rozruch B']);
+  assert.throws(() => S.trSzablon({ name: 'X', ex: [] }), /bez ćwiczeń/);
 });
 
 test('trProwadzone_: treningi prowadzone przez trenera w miesiącu, na klienta (liczba, daty, minuty)', () => {

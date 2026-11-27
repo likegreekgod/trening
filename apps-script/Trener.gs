@@ -48,12 +48,15 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trMailUstaw,
   trNastepna,
   trPakiet,
+  trPakiety,
   trPlan,
   trPropozycja,
   trProwadzone,
   trPrzelicz,
   trPrzesun,
   trPulpit,
+  trSzablon,
+  trSzablony,
   trSzkic,
   trTytul,
   trUstawAI,
@@ -204,6 +207,16 @@ function trProwadzone(mies) {
   const tz = Session.getScriptTimeZone(), localDay = t => Utilities.formatDate(new Date(t), tz, 'yyyy-MM-dd');
   return trProwadzone_(pgTable_('Sesje', ['klient', 'tydzien', 'jednostka', 'data', 'start', 'czas_min', 'prowadzil']), tableOf_('Klienci'),
     pgTable_('Plan', ['klient', 'tydzien', 'jednostka', 'tytul']), mies, today_(), localDay);
+}
+
+/* ---------- Biblioteka → Szablony (v2 PR 5, 27.11.2026): te same szablony co „Zapisz jako szablon” w „Prowadź” ---------- */
+/** Lista szablonów (zakładka Szablony, tplList_). */
+function trSzablony() {
+  return templates_();
+}
+/** Zapis szablonu z panelu: {name, ex, old (poprzednia nazwa)} albo {name, del: true}. Zwraca listę. */
+function trSzablon(t) {
+  return tplSave_(t || {});
 }
 
 /** Przelicza podsumowanie (jak menu „Odśwież podsumowanie”) i zwraca świeży pulpit. */
@@ -1145,6 +1158,7 @@ const KL_HEAD = ['klucz', 'klient_id', 'imie', 'aktywny', 'link', 'bol', 'tryb',
 const KL_KOM = 19;                     // T mail_kom: panel zapisuje A–P i T; U „otwarta” i V „urzadzenia” pisze tylko seen_ (Code.gs)
 const KL_CIALO = 22;                   // W cialo (TAK = pomiary ciała): panel zapisuje też W
 const KL_SUFIT_MAX = 20;               // sufit w bojach: najwyżej 20% maksa ponad plan
+const KL_MAX_KG = 400;                 // Q max_rwanie, R max_podrzut: najwyżej 400 kg
 
 /** Czysta: wiersz Klienci → ustawienia dla panelu; base = adres aplikacji (link liczony z klucza, bo kolumna E bywa nieaktualna). */
 function trKlientOf_(r, base) {
@@ -1152,14 +1166,17 @@ function trKlientOf_(r, base) {
   return { id: c.id, name: c.name, on: up(3) !== 'NIE', mode: c.simple ? 'PROSTY' : 'PRO', scale: c.scale, swap: c.swap || 'NIE',
     pain: c.pain, masters: up(8) === 'TAK', extra: c.extra, oly: Math.round(c.olyCeil * 1000) / 10, own: c.own, edit: c.edit,
     link: base && c.key ? base + '?k=' + c.key : String(r[4] || '').trim(), email: String(r[14] === undefined || r[14] === null ? '' : r[14]).trim(), mail: up(15) === 'TAK',
-    mailKom: up(KL_KOM) === 'TAK', seen: r[20] instanceof Date ? r[20].toISOString() : String(r[20] === undefined || r[20] === null ? '' : r[20]).trim(), devs: devsOf_(r[21]), body: up(KL_CIALO) === 'TAK' };
+    mailKom: up(KL_KOM) === 'TAK', seen: r[20] instanceof Date ? r[20].toISOString() : String(r[20] === undefined || r[20] === null ? '' : r[20]).trim(), devs: devsOf_(r[21]), body: up(KL_CIALO) === 'TAK',
+    snatch: klKg_(r[16]), cj: klKg_(r[17]), start: dayStr_(r[18]) || '' };
 }
+/** Czysta: maks z kolumny Q / R → liczba kg albo '' (pusto, zero i tekst = brak). */
+function klKg_(v) { const x = n_(v); return x > 0 ? Math.round(x * 10) / 10 : ''; }
 /** Czysta: kolumna V „urzadzenia” → liczba telefonów z ostatnich SEEN_DNI dni (lista jest przycinana przy zapisie) */
 function devsOf_(v) {
   try { const a = JSON.parse(String(v || '[]')); return Array.isArray(a) ? a.length : 0; } catch (e) { return 0; }
 }
 
-/** Czysta: ustawienia z panelu → {vals: {indeks kolumny: wartość}} (D, F–P, T, W) albo {error}. */
+/** Czysta: ustawienia z panelu → {vals: {indeks kolumny: wartość}} (D, F–P, T, W; Q–S tylko gdy panel je przysłał) albo {error}. */
 function trKlientVals_(f) {
   f = f || {};
   const extra = Number(f.extra), oly = Number(f.oly), swap = String(f.swap || ''), mode = String(f.mode || ''), scale = String(f.scale || '');
@@ -1172,16 +1189,25 @@ function trKlientVals_(f) {
   if (email && (!mailOk_(email) || email.length > 200)) return { error: 'E-mail klienta: to nie wygląda na adres e-mail.' };
   if (f.mail && !email) return { error: 'Poranny mail: wpisz najpierw e-mail klienta.' };
   if (f.mailKom && !email) return { error: 'Mail po komentarzu: wpisz najpierw e-mail klienta.' };
-  return { vals: { 3: f.on === false ? 'NIE' : 'TAK', 5: f.pain ? 'TAK' : '', 6: mode, 7: extra, 8: f.masters ? 'TAK' : '', 9: swap, 10: scale,
+  const q = {};
+  if ('snatch' in f || 'cj' in f || 'start' in f) {                // starszy panel bez tych pól nie czyści Q–S
+    const kg = (x, nm) => { const t = String(x === undefined || x === null ? '' : x).trim().replace(',', '.'); if (!t) return '';
+      const v = Number(t); return isFinite(v) && v > 0 && v <= KL_MAX_KG ? Math.round(v * 10) / 10 : { error: nm + ': liczba kg 1–' + KL_MAX_KG + ' albo puste.' }; };
+    const sn = kg(f.snatch, 'Max rwanie'), cj = kg(f.cj, 'Max podrzut'), st = String(f.start || '').trim();
+    if (sn.error) return sn; if (cj.error) return cj;
+    if (st && !(/^\d{4}-\d{2}-\d{2}$/.test(st) && !isNaN(new Date(st + 'T00:00:00Z')) && new Date(st + 'T00:00:00Z').toISOString().slice(0, 10) === st)) return { error: 'Start: data RRRR-MM-DD albo puste.' };
+    q[16] = sn; q[17] = cj; q[18] = st;
+  }
+  return { vals: Object.assign(q, { 3: f.on === false ? 'NIE' : 'TAK', 5: f.pain ? 'TAK' : '', 6: mode, 7: extra, 8: f.masters ? 'TAK' : '', 9: swap, 10: scale,
     11: Math.round(oly * 10) / 1000, 12: f.own === false ? 'NIE' : 'TAK', 13: f.edit ? 'TAK' : '',
-    14: email, 15: f.mail ? 'TAK' : '', [KL_KOM]: f.mailKom ? 'TAK' : '', [KL_CIALO]: f.body ? 'TAK' : '' } };
+    14: email, 15: f.mail ? 'TAK' : '', [KL_KOM]: f.mailKom ? 'TAK' : '', [KL_CIALO]: f.body ? 'TAK' : '' }) };
 }
 
 /** Domyślne ustawienia nowego klienta (jak pusty wiersz w arkuszu). */
 const KL_DOMYSLNE = { on: true, mode: 'PRO', scale: 'RPE', swap: 'NIE', pain: false, masters: false, extra: 0, oly: 5, own: true, edit: false, email: '', mail: false, mailKom: false, body: false };
 
 /**
- * Kolumny Klienci za P. Q–S wpisuje trener w arkuszu (panel ich nie zapisuje): Q max_rwanie, R max_podrzut [kg] (K-value
+ * Kolumny Klienci za P. Q–S wpisuje trener w arkuszu albo w panelu (ustawienia klienta → Aplikacja, od 27.11): Q max_rwanie, R max_podrzut [kg] (K-value
  * w Podsumowanie_OLY), S start (RRRR-MM-DD, tekst; przy zawodach dwudniowych pierwszy dzień; kontrola taperu). 25.11.2026.
  * T mail_kom (TAK = wieczorny mail po komentarzu, zapisuje panel), U otwarta (ostatnie otwarcie aplikacji), V urzadzenia (JSON, seen_),
  * W cialo (TAK = pomiary ciała, zapisuje panel).
@@ -1212,7 +1238,7 @@ function trKlienci() {
   return klRows_(sh).filter(r => String(r[1]).trim()).map(r => trKlientOf_(r, base));
 }
 
-/** Zapisuje ustawienia klienta (D, F–P) i odświeża link w kolumnie E. */
+/** Zapisuje ustawienia klienta (D, F–P, T, W, Q–S) i odświeża link w kolumnie E. */
 function trKlientUstaw(id, f) {
   id = String(id || '').trim().toLowerCase();
   const v = trKlientVals_(f);
@@ -1229,6 +1255,10 @@ function trKlientUstaw(id, f) {
     sh.getRange(i + 2, 4, 1, KL_HEAD.length - 3).setValues(plainRows_([r.slice(3, KL_HEAD.length)]));
     sh.getRange(i + 2, KL_KOM + 1).setValues(plainRows_([[v.vals[KL_KOM]]]));
     sh.getRange(i + 2, KL_CIALO + 1).setValues(plainRows_([[v.vals[KL_CIALO]]]));
+    if (16 in v.vals) {                                           // Q–S: maksy i start (start jako tekst, przed zapisem)
+      sh.getRange(i + 2, 19).setNumberFormat('@');
+      sh.getRange(i + 2, 17, 1, 3).setValues(plainRows_([[v.vals[16], v.vals[17], v.vals[18]]]));
+    }
     if (v.vals[KL_KOM] === 'TAK' && !ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'wieczornyMail')) komWyzwalacz_();
     return trKlientOf_(r, base);
   } finally { lock.releaseLock(); }

@@ -141,3 +141,33 @@ function pkgAll_(rows) {
   Object.keys(by).forEach(k => { const s = pkgShort_(pkgState_(by[k])); if (s) out[k] = s; });
   return out;
 }
+
+/* ---------- panel → Rozliczenia: pakiety wszystkich klientów (v2 PR 5, 27.11.2026) ---------- */
+
+/**
+ * Czysta: wiersze Pakiety + klienci [{id, name, on}] → [{id, name, on, n, used, left, from, to, price, show, last}]
+ * tylko klienci z pakietem; last = dzień ostatniego wpisu „trening” albo korekty −1 w obecnym pakiecie.
+ * Kolejność: najmniej zostało na górze (poza pakietem pierwsze), potem imię.
+ */
+function pkgList_(rows, klienci) {
+  const by = {};
+  (rows || []).forEach(r => { const k = String(r.klient || '').trim().toLowerCase(); if (k) (by[k] = by[k] || []).push(r); });
+  const out = [];
+  (klienci || []).forEach(c => {
+    const st = pkgState_(by[String(c.id || '').toLowerCase()] || []);
+    if (!st) return;
+    const last = st.hist.filter(h => h.d < 0).map(h => h.date)[0] || '';
+    out.push({ id: c.id, name: c.name, on: c.on !== false, n: st.n, used: st.used, left: st.left, from: st.from, to: st.to,
+      price: st.price, show: st.show, last: last });
+  });
+  return out.sort((a, b) => (b.on - a.on) || (a.left - b.left) || String(a.name).localeCompare(String(b.name), 'pl'));
+}
+
+/** Panel → Rozliczenia: pakiety wszystkich klientów (też nieaktywnych z pakietem). */
+function trPakiety() {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Klienci');
+  const kl = sh ? klRows_(sh).filter(r => String(r[1]).trim()).map(r => ({ id: String(r[1]).trim().toLowerCase(), name: String(r[2] || '').trim() || String(r[1]).trim(),
+    on: String(r[3] === undefined || r[3] === null ? '' : r[3]).trim().toUpperCase() !== 'NIE' })) : [];
+  let rows = []; try { rows = tableOf_('Pakiety'); } catch (e) {}
+  return { list: pkgList_(rows, kl), today: today_() };
+}
