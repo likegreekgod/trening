@@ -2350,7 +2350,9 @@ test('agent: klucz, ustawienia, limity, wiersz klienta', () => {
   assert.ok(C.agKeyOk_('sz_' + 'a'.repeat(32)));
   assert.ok(!C.agKeyOk_('k123') && !C.agKeyOk_('sz_' + 'A'.repeat(32)) && !C.agKeyOk_(''));
   assert.equal(C.agUst_('{"on":true}', false).on, false);                       // bez klucza nigdy włączone
-  assert.deepEqual(plain(C.agUst_('{"on":true,"read":false,"limit":5}', true)), { on: true, read: false, write: true, prop: true, limit: 200, at: '', end: '' });
+  assert.deepEqual(plain(C.agUst_('{"on":true,"read":false,"limit":5}', true)), { on: true, read: false, write: true, prop: true, auto: false, limit: 200, at: '', end: '' });
+  assert.equal(C.agUst_('{"auto":true}', true).auto, true);                    // „Sam skraca i zamienia” tylko wprost włączone
+  assert.equal(C.agUst_('{"auto":"tak"}', true).auto, false);
   assert.equal(C.agUst_('zepsute', true).limit, 200);
   assert.deepEqual(plain(C.agLimity_('{"skok_kg":5,"zapisy":9,"propozycje":3,"zgloszenia":"x"}')), { skok_kg: 5, zapisy: 50, propozycje: 3, zgloszenia: 10 });
   assert.equal(C.agLimity_('{"skok_kg":3}').skok_kg, 2.5);                       // tylko co 2,5 kg
@@ -2493,7 +2495,7 @@ test('agent: zgłoszenia, lista dla pulpitu, zasady i ustawienia z panelu', () =
   assert.equal(C.trZasadyVals_('  ## 1. Ciężar \r\n tekst ', { skok_kg: 5 }).tekst, '## 1. Ciężar \n tekst');
   assert.match(C.trAgentVals_({ limit: 5 }).error, /10–500/);
   const v = plain(C.trAgentVals_({ limit: 100, read: true, write: false, prop: true, ogr: ' bez skoków ' }, { on: true, at: 'x', end: 'abcd' }));
-  assert.deepEqual(v, { ust: { on: true, read: true, write: false, prop: true, limit: 100, at: 'x', end: 'abcd' }, ogr: 'bez skoków' });
+  assert.deepEqual(v, { ust: { on: true, read: true, write: false, prop: true, auto: false, limit: 100, at: 'x', end: 'abcd' }, ogr: 'bez skoków' });
   // nazwy akcji bota nie kolidują z akcjami aplikacji i panelu
   Object.keys(C.AGENT_FNS).forEach(k => { assert.equal(C.API_FNS[k], undefined, k); assert.equal(C.TR_FNS[k], undefined, k); });
   ['trAgent', 'trAgentKlucz', 'trAgentUstaw', 'trZasady', 'trZasadyUstaw'].forEach(k => assert.ok(C.TR_FNS[k], k));
@@ -2536,6 +2538,61 @@ test('asystent: decyzje trenera (zatwierdź zmienia plan, odrzuć, pamięć decy
   assert.equal(C.agMemo_('', 'x').ogr, '- x');
   assert.match(C.agMemo_('a'.repeat(5000), 'x').error, /pełne/);
   assert.ok(C.TR_FNS.trPropozycja);
+});
+
+test('asystent: sam skraca i zamienia (B od końca, A i K zostają), cofnięcie, „Zrobił sam”', () => {
+  const C = require('./load-code')();
+  const plain = x => JSON.parse(JSON.stringify(x));
+  const R = (order, name, prio, sets, o) => Object.assign({ week: 12, day: 'D1', title: 'Nogi', order: order, name: name, prio: prio, sets: sets, setsMin: null, circuit: '' }, o || {});
+  const d = { plan: [R(1, 'Przysiad tylny', 'A', 4), R(2, 'Wykroki', 'B', 3), R(3, 'Uginanie nóg', 'B', 3, { setsMin: 2 }), R(4, 'Wspięcia na palce', 'B', 3), R(5, 'Plank', 'K', 2),
+    R(1, 'Przysiad', 'A', 3, { week: 13, day: 'T1', coach: true })] };
+  // skrót: tylko B, od końca, mniej serii niż w planie, nie poniżej serie_min, z powodem
+  const ok = plain(C.agSkrot_({ tydzien: 12, jednostka: 'D1', zmiany: [{ nr: 4, serie: 0 }, { nr: 3, serie: 2 }], powod: 'mam 45 minut' }, d, {}));
+  assert.deepEqual(JSON.parse(ok.row.tresc).zmiany, [{ nr: 3, cw: 'Uginanie nóg', z: 3, na: 2 }, { nr: 4, cw: 'Wspięcia na palce', z: 3, na: 0 }]);
+  assert.equal(ok.row.typ, 'skrot'); assert.equal(ok.row.cwiczenie, 'Nogi');
+  const e = z => C.agSkrot_(Object.assign({ tydzien: 12, jednostka: 'D1', powod: 'czas' }, z), d, { done: {} }).error;
+  assert.match(e({ zmiany: [{ nr: 1, serie: 2 }] }), /A i K zostają/);
+  assert.match(e({ zmiany: [{ nr: 5, serie: 1 }] }), /A i K zostają/);
+  assert.match(e({ zmiany: [{ nr: 2, serie: 1 }] }), /od końca: najpierw „Uginanie nóg”/);
+  assert.match(e({ zmiany: [{ nr: 4, serie: 3 }] }), /serie 0–2/);
+  assert.match(e({ zmiany: [{ nr: 4, serie: 0 }, { nr: 3, serie: 1 }] }), /najmniej 2/);
+  assert.match(e({ zmiany: [] }), /Podaj zmiany/);
+  assert.match(C.agSkrot_({ tydzien: 12, jednostka: 'D1', zmiany: [{ nr: 4, serie: 0 }] }, d, {}).error, /powodem/);
+  assert.match(C.agSkrot_({ tydzien: 12, jednostka: 'D1', zmiany: [{ nr: 4, serie: 0 }], powod: 'x' }, d, { done: { '12|D1': 1 } }).error, /zrobiona albo zaczęta/);
+  assert.match(C.agSkrot_({ tydzien: 13, jednostka: 'T1', zmiany: [{ nr: 1, serie: 0 }], powod: 'x' }, d, {}).error, /reguła 4.12/);
+  const dc = { plan: [R(1, 'Przysiad tylny', 'A', 4), R(2, 'Wykroki', 'B', 3, { circuit: 'A' }), R(3, 'Wspięcia', 'B', 3, { circuit: 'A' })] };
+  assert.match(C.agSkrot_({ tydzien: 12, jednostka: 'D1', zmiany: [{ nr: 3, serie: 0 }], powod: 'x' }, dc, {}).error, /obwodzie/);
+  // zapis do Planu: serie albo zrodlo = usuniete, z tym, co było; zmieniony plan = odmowa
+  const P = (nr, name, prio, serie, o) => Object.assign({ klient: 'ania', tydzien: 12, jednostka: 'D1', tytul: 'Nogi', nr: nr, cwiczenie: name, prio: prio, serie: serie, powt: '8', kg: 40, blok: 'B2', zrodlo: '', uwagi: '' }, o || {});
+  const plan = [P(1, 'Przysiad tylny', 'A', 4), P(2, 'Wykroki', 'B', 3), P(3, 'Uginanie nóg', 'B', 3), P(4, 'Wspięcia na palce', 'B', 3)];
+  const st = plain(C.agSkrotSet_('ania', 12, 'D1', JSON.parse(ok.row.tresc), plan, [], []));
+  assert.deepEqual(st.set, [[2, { serie: 2 }], [3, { zrodlo: 'usuniete' }]]);
+  assert.equal(st.tresc.zmiany[1].zr, '');
+  assert.match(C.agSkrotSet_('ania', 12, 'D1', { zmiany: [{ nr: 3, cw: 'Uginanie nóg', z: 4, na: 2 }] }, plan, [], []).error, /Plan się zmienił/);
+  assert.match(C.agSkrotSet_('ania', 12, 'D1', JSON.parse(ok.row.tresc), plan, [{ klient: 'ania', tydzien: 12, jednostka: 'D1' }], []).error, /zrobiona/);
+  // cofnięcie skrótu: plan po zmianie → stan sprzed
+  const after = plan.map(r => Object.assign({}, r)); after[2].serie = 2; after[3].zrodlo = 'usuniete';
+  const pr = { id: 'ania|a|1', klient: 'ania', typ: 'skrot', tydzien: 12, jednostka: 'D1', cwiczenie: 'Nogi', tresc: JSON.stringify(st.tresc), status: 'auto', zapisano: '2026-11-27', powod_klienta: 'mam 45 minut' };
+  assert.deepEqual(plain(C.agUndo_(pr, after, [], [])).set, [[2, { serie: 3 }], [3, { zrodlo: '' }]]);
+  assert.match(C.agUndo_(pr, plan, [], []).error, /Plan się zmienił/);
+  assert.match(C.agUndo_(pr, after, [{ klient: 'ania', tydzien: 12, jednostka: 'D1' }], []).error, /już zaczął/);
+  // cofnięcie zamiany: nazwa i uwagi sprzed
+  const az = plan.map(r => Object.assign({}, r)); az[1].cwiczenie = 'Wykroki z hantlami'; az[1].uwagi = 'zamiana (asystent): Wykroki → Wykroki z hantlami';
+  const pz = { id: 'ania|a|2', klient: 'ania', typ: 'zamiana', tydzien: 12, jednostka: 'D1', nr: 2, cwiczenie: 'Wykroki', tresc: '{"na":"Wykroki z hantlami","z":"Wykroki","uwagi_z":""}', status: 'auto', zapisano: '2026-11-26' };
+  assert.deepEqual(plain(C.agUndo_(pz, az, [], [])).set, [[1, { cwiczenie: 'Wykroki', uwagi: '' }]]);
+  assert.match(C.agUndo_(pz, plan, [], []).error, /Plan się zmienił/);
+  // „Zrobił sam”: tylko status auto z 7 dni, najnowsze pierwsze; opis zmiany
+  const rows = [pr, pz, Object.assign({}, pz, { id: 'ania|a|3', status: 'cofnieta', decyzja_at: '2026-11-27' }), Object.assign({}, pz, { id: 'ania|a|4', zapisano: '2026-11-10' })];
+  const au = plain(C.agAuto_(rows, { ania: 'Ania' }, '2026-11-27', 7));
+  assert.deepEqual(au.map(x => [x.pid, x.typ, x.text]), [['ania|a|1', 'skrot', 'skrócony trening Nogi: Uginanie nóg 3 → 2 serie, Wspięcia na palce pominięte'], ['ania|a|2', 'zamiana', 'Wykroki → Wykroki z hantlami']]);
+  assert.equal(au[0].why, 'mam 45 minut');
+  // pamięć bota: zmiany samodzielne i cofnięte
+  const dz = plain(C.agDecyzje_(rows, 'ania', 20)).map(x => x.status);
+  assert.ok(dz.indexOf('zrobione samodzielnie (trener może cofnąć)') >= 0 && dz.indexOf('cofnięte przez trenera') >= 0);
+  // instrukcja i narzędzia
+  assert.match(C.agChatSystem_({ auto: true }), /pozwolił Ci samemu skracać/);
+  assert.match(C.agChatSystem_({}), /„skroc” i „zamien” są wyłączone/);
+  assert.ok(C.AGENT_FNS.hasOwnProperty('skroc') && C.AGENT_FNS.hasOwnProperty('zamien'));
 });
 
 test('czat „Wypróbuj asystenta”: narzędzia, historia, pętla akcji, instrukcja', () => {

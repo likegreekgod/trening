@@ -42,7 +42,7 @@ function agKeyOk_(k) { return /^sz_[0-9a-f]{32}$/.test(String(k || '')); }
 function agUst_(json, hasKey) {
   let o = {}; try { o = JSON.parse(String(json || '{}')) || {}; } catch (e) { o = {}; }
   const lim = Math.round(Number(o.limit));
-  return { on: !!(o.on && hasKey), read: o.read !== false, write: o.write !== false, prop: o.prop !== false,
+  return { on: !!(o.on && hasKey), read: o.read !== false, write: o.write !== false, prop: o.prop !== false, auto: o.auto === true,
     limit: lim >= 10 && lim <= AG_LIMIT_MAX ? lim : AG_DOMYSLNE.limit, at: String(o.at || ''), end: String(o.end || '') };
 }
 
@@ -368,7 +368,9 @@ const agTresc_ = r => { try { return JSON.parse(String(r.tresc || '{}')) || {}; 
 function agWhat_(r) {
   const t = String(r.typ || ''), tr = agTresc_(r);
   return agTxt_(/^zgloszenie:/.test(t) ? String(r.powod_klienta || '') : t === 'zamiana' ? r.cwiczenie + ' → ' + (tr.na || '') : t === 'ciezar' ? r.cwiczenie + ': ' + String(tr.kg).replace('.', ',') + ' kg'
-    : t === 'serie' ? r.cwiczenie + ': ' + tr.serie + ' serie' : 'dodatkowy trening ' + (tr.data || '') + ': ' + (tr.opis || ''), 160);
+    : t === 'serie' ? r.cwiczenie + ': ' + tr.serie + ' serie'
+    : t === 'skrot' ? 'skrócony trening ' + r.cwiczenie + ': ' + [].concat(tr.zmiany || []).map(z => z.na > 0 ? z.cw + ' ' + z.z + ' → ' + z.na + ' serie' : z.cw + ' pominięte').join(', ')
+    : 'dodatkowy trening ' + (tr.data || '') + ': ' + (tr.opis || ''), 160);
 }
 
 /** Czysta: otwarte sprawy od botów z ostatnich dni (zakładka Propozycje, status „czeka”) → lista dla pulpitu panelu (pid = id wiersza do decyzji). */
@@ -393,9 +395,9 @@ function agOdrz_(rows, names, today, days) {
 
 /** Czysta: ostatnie decyzje trenera u klienta (i propozycje, które czekają) → pamięć bota: [{data, co, status, komentarz}], najnowsze na końcu. */
 function agDecyzje_(rows, clientId, n) {
-  const st = { czeka: 'czeka na trenera', zatwierdzona: 'zatwierdzona przez trenera', odrzucona: 'odrzucona przez trenera' };
+  const st = { czeka: 'czeka na trenera', zatwierdzona: 'zatwierdzona przez trenera', odrzucona: 'odrzucona przez trenera', auto: 'zrobione samodzielnie (trener może cofnąć)', cofnieta: 'cofnięte przez trenera' };
   return (rows || []).filter(r => String(r.klient).toLowerCase() === clientId && !/^zgloszenie:/.test(String(r.typ || '')) &&
-    (String(r.status) === 'czeka' || ((String(r.status) === 'zatwierdzona' || String(r.status) === 'odrzucona') && String(r.decyzja_at || '').trim())))
+    (String(r.status) === 'czeka' || String(r.status) === 'auto' || (['zatwierdzona', 'odrzucona', 'cofnieta'].indexOf(String(r.status)) >= 0 && String(r.decyzja_at || '').trim())))
     .map(r => ({ at: r.zapisano instanceof Date ? r.zapisano.toISOString() : String(r.zapisano || ''), data: agD10_(r.decyzja_at) || agD10_(r.zapisano), co: agWhat_(r),
       status: st[String(r.status)], komentarz: agTxt_(r.komentarz_trenera, 300) }))
     .sort((a, b) => a.at.localeCompare(b.at)).slice(-(n || AG_DECYZJE)).map(x => { const o = { data: x.data, co: x.co, status: x.status }; if (x.komentarz) o.komentarz = x.komentarz; return o; });
@@ -428,6 +430,88 @@ function agMemo_(ogr, line) {
   const out = cur ? cur + '\n' + add : add;
   if (out.length > AG_OGR_MAX) return { error: 'Ograniczenia klienta są pełne (' + AG_OGR_MAX + ' znaków): skróć je w ustawieniach klienta.' };
   return { ogr: out };
+}
+
+/* ---------- PR B: bot sam skraca i zamienia (Klienci Y „auto”, przełącznik „Sam skraca i zamienia”) ----------
+ * Tylko niezrobione jednostki planu trenera (bez własnych, bez T* i treningów trenera). Zmiana trafia do Planu od razu,
+ * wpis w Propozycjach ma status „auto” i to, co było przed zmianą, więc trener może ją cofnąć („Zrobił sam” na ekranie Dziś). */
+
+/** Czysta: skrócenie treningu z bota → {row (wiersz Propozycji bez id i czasu)} albo {error}. p = {tydzien, jednostka, zmiany: [{nr, serie}], powod}; serie 0 = pomiń. */
+function agSkrot_(p, d, o) {
+  p = p || {}; o = o || {};
+  const week = Number(p.tydzien), day = agTxt_(p.jednostka, 20), why = agTxt_(p.powod, 300);
+  const u = agUnits_(d.plan).find(x => Number(x.week) === week && String(x.day) === day);
+  if (!u) return agErr_('Nie ma takiej jednostki w planie (tydzień, jednostka z akcji „plan”).');
+  if ((o.done || {})[week + '|' + day]) return agErr_('Ta jednostka jest już zrobiona albo zaczęta: skraca się tylko trening przed startem.');
+  if (u.own) return agErr_('To własny trening klienta: zmień go w aplikacji.');
+  if (u.coach) return agErr_('To trening na żywo z trenerem: tylko zapis wykonania', '4.12');
+  if (!why) return agErr_('Skrócenie zawsze z powodem (powod).');
+  const list = [].concat(p.zmiany || []);
+  if (!list.length) return agErr_('Podaj zmiany: [{nr, serie}], serie 0 = pomiń ćwiczenie.');
+  const b = u.rows.filter(r => String(r.prio).toUpperCase() === 'B'), ch = {};
+  for (const z of list) {
+    const nr = Number(z && z.nr), n = Math.round(Number(z && z.serie)), ex = u.rows.find(r => Number(r.order) === nr);
+    if (!ex) return agErr_('Nie ma ćwiczenia nr ' + (z && z.nr) + ' w tej jednostce.');
+    if (String(ex.prio).toUpperCase() !== 'B') return agErr_('„' + ex.name + '” ma priorytet ' + (ex.prio || 'A') + ': ćwiczenia A i K zostają, skraca się tylko B');
+    if (!(n >= 0 && n < ex.sets) || String(z.serie).trim() === '') return agErr_('„' + ex.name + '”: serie 0–' + (ex.sets - 1) + ' (mniej niż w planie, 0 = pomiń).');
+    if (n > 0 && ex.setsMin && n < ex.setsMin) return agErr_('„' + ex.name + '”: trener ustawił najmniej ' + ex.setsMin + ' serie.');
+    if (n === 0 && ex.circuit) return agErr_('„' + ex.name + '” jest w obwodzie: można zmniejszyć serie, nie pominąć.');
+    ch[nr] = { nr: nr, cw: ex.name, z: ex.sets, na: n };
+  }
+  const first = b.findIndex(r => ch[Number(r.order)]);
+  const gap = b.slice(first).find(r => !ch[Number(r.order)]);
+  if (gap) return agErr_('Skracaj od końca: najpierw „' + gap.name + '” (ostatnie ćwiczenia B), potem wcześniejsze.');
+  const zm = b.filter(r => ch[Number(r.order)]).map(r => ch[Number(r.order)]);
+  return { row: { typ: 'skrot', tydzien: week, jednostka: day, nr: '', cwiczenie: u.title || day, tresc: JSON.stringify({ zmiany: zm }), powod: why } };
+}
+
+/** Czysta: zmiany skrótu → komórki Planu (serie albo zrodlo = usuniete) z tym, co było, albo {error}. tr = {zmiany}; plan, ses, log jak w trPlanEdit_. */
+function agSkrotSet_(id, week, day, tr, plan, ses, log) {
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  const chk = trPlanEdit_(plan, ses, log, id, { week: week, day: day, ex: [] });
+  if (chk.error) return chk;
+  const set = [], zm = [];
+  for (const z of [].concat(tr.zmiany || [])) {
+    const i = (plan || []).findIndex(r => lc(r.klient) === id && Number(r.tydzien) === week && String(r.jednostka).trim() === day && Number(r.nr) === Number(z.nr) && !removed_(r));
+    if (i < 0 || lc(plan[i].cwiczenie) !== lc(z.cw) || Number(plan[i].serie) !== Number(z.z)) return { error: 'Plan się zmienił (tydz. ' + week + ', ' + day + ', nr ' + z.nr + '): skróć jeszcze raz.' };
+    set.push([i, z.na > 0 ? { serie: z.na } : { zrodlo: 'usuniete' }]);
+    zm.push(Object.assign({}, z, { zr: String(plan[i].zrodlo === undefined || plan[i].zrodlo === null ? '' : plan[i].zrodlo).trim() }));
+  }
+  return { set: set, tresc: { zmiany: zm } };
+}
+
+/** Czysta: cofnięcie zmiany zrobionej samodzielnie przez bota (status „auto”) → {set} albo {error}. */
+function agUndo_(p, plan, ses, log) {
+  const t = String(p.typ || ''), tr = agTresc_(p), id = String(p.klient || '').toLowerCase(), lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  const week = Number(p.tydzien), day = String(p.jednostka || '').trim();
+  const chk = trPlanEdit_(plan, ses, log, id, { week: week, day: day, ex: [] });
+  if (chk.error) return { error: /zrobiona/.test(chk.error) ? 'Klient już zaczął ten trening: cofnąć się nie da.' : chk.error };
+  const at = nr => (plan || []).findIndex(r => lc(r.klient) === id && Number(r.tydzien) === week && String(r.jednostka).trim() === day && Number(r.nr) === Number(nr));
+  if (t === 'zamiana') {
+    const i = at(p.nr);
+    if (i < 0 || lc(plan[i].cwiczenie) !== lc(tr.na)) return { error: 'Plan się zmienił od tej zamiany: popraw go ręcznie.' };
+    return { set: [[i, { cwiczenie: String(p.cwiczenie || tr.z || ''), uwagi: String(tr.uwagi_z === undefined ? '' : tr.uwagi_z) }]] };
+  }
+  if (t === 'skrot') {
+    const set = [];
+    for (const z of [].concat(tr.zmiany || [])) {
+      const i = at(z.nr);
+      if (i < 0 || lc(plan[i].cwiczenie) !== lc(z.cw) || (z.na > 0 ? Number(plan[i].serie) !== Number(z.na) : !removed_(plan[i]))) return { error: 'Plan się zmienił od skrócenia (' + z.cw + '): popraw go ręcznie.' };
+      set.push([i, z.na > 0 ? { serie: z.z } : { zrodlo: z.zr || '' }]);
+    }
+    return { set: set };
+  }
+  return { error: 'Tego nie da się cofnąć.' };
+}
+
+/** Czysta: zmiany zrobione samodzielnie przez boty w ostatnich dniach (status „auto”) → lista „Zrobił sam” dla pulpitu. */
+function agAuto_(rows, names, today, days) {
+  const from = agAddDays_(today, -(days || 7));
+  return (rows || []).filter(r => String(r.status) === 'auto' && agD10_(r.zapisano) >= from).map(r => {
+    const id = String(r.klient).toLowerCase();
+    return { pid: String(r.id || ''), id: id, name: names[id] || String(r.klient), at: r.zapisano instanceof Date ? r.zapisano.toISOString() : String(r.zapisano || ''),
+      typ: String(r.typ), week: Number(r.tydzien) || null, day: String(r.jednostka || ''), text: agWhat_(r), why: agTxt_(r.powod_klienta, 300) };
+  }).sort((a, b) => b.at.localeCompare(a.at));
 }
 
 /* ---------- część z usługami Google ---------- */
@@ -473,15 +557,17 @@ const AGENT_FNS = {   // po jednej nazwie w linii, alfabetycznie; nazwy dla bota
     return { pasuje: hit, podobne: more.filter(n => n !== hit) }; },
   historia: (x, a) => agHistoria_(x.d, { today: x.today, days: a.dni }),
   plan: (x, a) => agPlan_(x.d, { today: x.today, days: a.dni, done: x.done, version: agZasady_().at }),
+  skroc: null,
+  zamien: null,
   zapiszSerie: null,
   zapiszTrening: null,
   zaproponuj: null,
   zasady: x => { const z = agZasady_(); return { wersja: z.at, zasady_trenera: z.tekst, ograniczenia_klienta: x.ogr,
-    limity: z.limity, klient: { imie: x.c.name, zamiana: x.c.swap || 'NIE', skala: x.c.scale, wlasne_treningi: x.c.own },
+    limity: z.limity, klient: { imie: x.c.name, zamiana: x.c.swap || 'NIE', skala: x.c.scale, wlasne_treningi: x.c.own, sam_skraca_i_zamienia: !!x.ust.auto },
     decyzje_trenera: agDecyzje_(tableOf_('Propozycje'), x.c.id, AG_DECYZJE) }; },
   zglos: null,
 };
-const AG_WRITE = { zapiszSerie: 'zapisy', zapiszTrening: 'zapisy' }, AG_PROP = { zaproponuj: 'propozycje' };
+const AG_WRITE = { zapiszSerie: 'zapisy', zapiszTrening: 'zapisy' }, AG_PROP = { skroc: 'propozycje', zamien: 'propozycje', zaproponuj: 'propozycje' };
 
 /** Wejście z doPost: klucz API → klient → akcja (z limitami i dziennikiem). */
 function agentDo_(fn, key, a) {
@@ -556,6 +642,35 @@ function agWrite_(fn, x, a, lim, dry) {
     if (r.status === 'odrzucona') return { error: 'Odrzucone: ' + r.uwaga };
     return { id: id, status: 'czeka na trenera', info: 'Trener zobaczy propozycję w panelu. Do decyzji plan zostaje bez zmian.' };
   }
+  if (fn === 'skroc' || fn === 'zamien') {
+    if (!x.ust.auto) return agErr_('Trener nie pozwolił zmieniać planu samemu: użyj „zaproponuj”.');
+    let r;
+    if (fn === 'skroc') r = agSkrot_(a, x.d, { done: x.done });
+    else {
+      const q = agProp_(Object.assign({}, a, { typ: 'zamiana', na_stale: false }), x.d, { today: x.today, done: x.done, find: x.find, taper: x.taper, busy: x.busy, planDays: x.planDays, limity: lim });
+      r = q.status === 'odrzucona' ? { error: q.uwaga } : { row: q };
+    }
+    if (r.error) return r;
+    if (dry) return { zapisano: PR, zmiana: agWhat_(Object.assign({ klient: c.id, powod_klienta: r.row.powod }, r.row)) };
+    const pid = c.id + '|a|' + Date.now(), row = r.row;
+    let what;
+    const lock = LockService.getScriptLock(); lock.waitLock(20000);
+    try {
+      const plan = tableOf_('Plan'), ses = pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), log = pgTable_('Log', DONE_LOG_COLS);
+      let set, tresc = agTresc_(row);
+      if (fn === 'skroc') { const s = agSkrotSet_(c.id, Number(row.tydzien), String(row.jednostka), tresc, plan, ses, log); if (s.error) return s; set = s.set; tresc = s.tresc; }
+      else {
+        const p = Object.assign({ klient: c.id, powod_klienta: row.powod }, row), ap = agApply_(p, plan, ses, log);
+        if (ap.error) return ap;
+        const i = ap.set[0][0];
+        set = ap.set; tresc = Object.assign(tresc, { z: String(plan[i].cwiczenie).trim(), uwagi_z: String(plan[i].uwagi === undefined || plan[i].uwagi === null ? '' : plan[i].uwagi).trim() });
+      }
+      trPlanSet_(set);
+      sheet_('Propozycje', PROP_HEADERS).appendRow(plainRow_([pid, new Date(), c.id, 'api', row.typ, row.tydzien, row.jednostka, row.nr, row.cwiczenie, JSON.stringify(tresc), row.powod, 'auto', '', '', '']));
+      what = agWhat_({ typ: row.typ, cwiczenie: row.cwiczenie, tresc: JSON.stringify(tresc) });
+    } finally { lock.releaseLock(); }
+    return { id: pid, zmiana: what, info: 'Plan zmieniony. Trener widzi zmianę w panelu i może ją cofnąć.' };
+  }
   if (fn === 'zglos') {
     const z = agZglos_(a, x.today);
     if (z.error) return z;
@@ -587,7 +702,7 @@ function trAgentVals_(f, old) {
   const lim = Math.round(Number(f.limit)), ogr = String(f.ogr === undefined || f.ogr === null ? '' : f.ogr).replace(/\r\n/g, '\n').trim();
   if (!(lim >= 10 && lim <= AG_LIMIT_MAX)) return { error: 'Limit zapytań: 10–' + AG_LIMIT_MAX + ' na dzień.' };
   if (ogr.length > AG_OGR_MAX) return { error: 'Ograniczenia klienta: najwyżej ' + AG_OGR_MAX + ' znaków.' };
-  return { ust: { on: !!(old && old.on), read: f.read !== false, write: f.write !== false, prop: f.prop !== false, limit: lim, at: old ? old.at : '', end: old ? old.end : '' }, ogr: ogr };
+  return { ust: { on: !!(old && old.on), read: f.read !== false, write: f.write !== false, prop: f.prop !== false, auto: f.auto === true, limit: lim, at: old ? old.at : '', end: old ? old.end : '' }, ogr: ogr };
 }
 function agRowSet_(id, fnRow) {
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
@@ -612,12 +727,13 @@ function trAgentUstaw(id, f) {
 }
 /**
  * Decyzja trenera o wpisie z zakładki Propozycje (karta „Od asystenta AI” na ekranie Dziś).
- * e = {mode: 'tak' (zatwierdź: plan zmienia się sam) | 'nie' (odrzuć, why idzie do bota) | 'czytane' (zgłoszenie), why, zasada (dopisz do ograniczeń klienta)}.
+ * e = {mode: 'tak' (zatwierdź: plan zmienia się sam) | 'nie' (odrzuć, why idzie do bota) | 'czytane' (zgłoszenie) | 'cofnij' (zmiana zrobiona samodzielnie przez bota),
+ * why, zasada (dopisz do ograniczeń klienta)}.
  */
 function trPropozycja(pid, e) {
   pid = String(pid || '').trim(); e = e || {};
   const mode = String(e.mode || ''), why = agTxt_(e.why, 300);
-  if (['tak', 'nie', 'czytane'].indexOf(mode) < 0) throw new Error('Nieznana decyzja.');
+  if (['tak', 'nie', 'czytane', 'cofnij'].indexOf(mode) < 0) throw new Error('Nieznana decyzja.');
   let res = null, memo = null;
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
@@ -625,18 +741,22 @@ function trPropozycja(pid, e) {
     const k = vals.findIndex((r, i) => i > 0 && String(r[0]) === pid);
     if (k < 0) throw new Error('Nie ma już tej propozycji.');
     const p = {}; h.forEach((c, j) => { p[c] = vals[k][j]; });
-    if (String(p.status) !== 'czeka') throw new Error('Ta sprawa ma już decyzję (' + p.status + ').');
+    if (String(p.status) !== (mode === 'cofnij' ? 'auto' : 'czeka')) throw new Error(String(p.status) === 'cofnieta' ? 'Ta zmiana jest już cofnięta.' : 'Ta sprawa ma już decyzję (' + p.status + ').');
     const zgl = /^zgloszenie:/.test(String(p.typ || ''));
-    if (zgl !== (mode === 'czytane')) throw new Error(zgl ? 'Zgłoszenie oznacza się jako przeczytane.' : 'Propozycję zatwierdza się albo odrzuca.');
+    if (mode !== 'cofnij' && zgl !== (mode === 'czytane')) throw new Error(zgl ? 'Zgłoszenie oznacza się jako przeczytane.' : 'Propozycję zatwierdza się albo odrzuca.');
     let rows = 0;
-    if (mode === 'tak') {
+    if (mode === 'cofnij') {
+      const a = agUndo_(p, tableOf_('Plan'), pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', DONE_LOG_COLS));
+      if (a.error) throw new Error(a.error);
+      trPlanSet_(a.set); rows = a.set.length;
+    } else if (mode === 'tak') {
       const a = agApply_(p, tableOf_('Plan'), pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', DONE_LOG_COLS));
       if (a.error) throw new Error(a.error);
       trPlanSet_(a.set); rows = a.set.length;
     }
-    const status = mode === 'tak' ? 'zatwierdzona' : mode === 'nie' ? 'odrzucona' : 'przeczytane';
+    const status = mode === 'tak' ? 'zatwierdzona' : mode === 'nie' ? 'odrzucona' : mode === 'cofnij' ? 'cofnieta' : 'przeczytane';
     ['status', 'decyzja_at', 'komentarz_trenera'].forEach(c => { const j = h.indexOf(c); if (j >= 0) sh.getRange(k + 1, j + 1).setValue(plain_(c === 'status' ? status : c === 'decyzja_at' ? new Date() : why)); });
-    if (e.zasada && !zgl) { const d = today_(); memo = [String(p.klient).toLowerCase(), d.slice(8, 10) + '.' + d.slice(5, 7) + ' trener ' + (mode === 'tak' ? 'zatwierdził' : 'odrzucił') + ': ' + agWhat_(p) + (why ? '. ' + why : '') + '.']; }
+    if (e.zasada && !zgl) { const d = today_(); memo = [String(p.klient).toLowerCase(), d.slice(8, 10) + '.' + d.slice(5, 7) + ' trener ' + (mode === 'tak' ? 'zatwierdził' : mode === 'cofnij' ? 'cofnął' : 'odrzucił') + ': ' + agWhat_(p) + (why ? '. ' + why : '') + '.']; }
     res = { status: status, rows: rows, memo: false };
   } finally { lock.releaseLock(); }
   // „Zapamiętaj jako zasadę”: linia w ograniczeniach klienta (Klienci Z), które bot czyta przy każdej rozmowie; decyzja już zapisana
@@ -700,6 +820,10 @@ const AG_TOOLS = [
     cwiczenia: ['array', 'Lista {nazwa, serie: [{kg, powt, swiatlo}]}'] }, ['cwiczenia']],
   ['zaproponuj', 'Propozycja zmiany planu do akceptacji trenera. Do decyzji plan zostaje bez zmian.', { typ: ['string', 'zamiana / ciezar / serie / trening'], tydzien: ['integer'], jednostka: ['string'], nr: ['integer'],
     na: ['string', 'Zamiennik (typ zamiana)'], kg: ['number', 'Nowy ciężar (typ ciezar)'], serie: ['integer', 'Nowa liczba serii (typ serie)'], data: ['string', 'Dzień dodatkowego treningu (typ trening)'], opis: ['string'], powod: ['string', 'Powód od klienta'] }, ['typ', 'powod']],
+  ['skroc', 'Skróć niezrobiony trening sam (tylko gdy w zasadach sam_skraca_i_zamienia = true): mniej serii albo pominięcie ćwiczeń B, od ostatniego B; A i K zostają. Trener widzi zmianę i może ją cofnąć.', { tydzien: ['integer'], jednostka: ['string'],
+    zmiany: ['array', 'Lista {nr, serie}: nowa liczba serii, 0 = pomiń ćwiczenie'], powod: ['string', 'Powód od klienta'] }, ['tydzien', 'jednostka', 'zmiany', 'powod']],
+  ['zamien', 'Zamień ćwiczenie w niezrobionym treningu sam (tylko gdy sam_skraca_i_zamienia = true), tylko w tym treningu, bez bojów, zamiennik z bazy. Trener może cofnąć.', { tydzien: ['integer'], jednostka: ['string'], nr: ['integer'],
+    na: ['string', 'Zamiennik z bazy'], powod: ['string', 'Powód od klienta'] }, ['tydzien', 'jednostka', 'nr', 'na', 'powod']],
   ['zglos', 'Zgłoszenie do trenera (ból, czerwona flaga, pytanie o plan, dietę, cel…).', { temat: ['string', 'czerwona_flaga / bol / plan / ciezar / status / fail / pominiete / dieta / cel / zawody / inne'], opis: ['string'],
     miejsce: ['string', 'Przy bólu: miejsce'], strona: ['string', 'L / P'], ocena: ['integer', 'Przy bólu: 0–10'] }, ['temat', 'opis']]
 ];
@@ -720,9 +844,11 @@ function agChatSystem_(o) {
   return [
     'Jesteś asystentem treningowym klienta w aplikacji trenera Damiana (Siła z Ruchu). Mówisz jak trener: krótko, po polsku, konkretnie. Dziś jest ' + o.today + '.',
     'To rozmowa próbna: trener pisze jako klient i sprawdza, jak się zachowasz. Odpowiadaj dokładnie tak, jak odpowiedziałbyś klientowi.',
-    o.real ? 'Zapisy są prawdziwe: trafiają do arkusza trenera.' : 'Akcje zapisu (zapiszSerie, zapiszTrening, zaproponuj, zglos) działają w trybie próby: serwer sprawdza je regułami, ale nic nie zapisuje i trener nic nie dostaje. Gdy akcja przeszła, dopisz „(próba: nie zapisano)”, np. „Zgłosiłbym to trenerowi (próba: nie zapisano)”; gdy serwer odmówił, podaj powód.',
+    o.real ? 'Zapisy są prawdziwe: trafiają do arkusza trenera.' : 'Akcje zapisu (zapiszSerie, zapiszTrening, zaproponuj, skroc, zamien, zglos) działają w trybie próby: serwer sprawdza je regułami, ale nic nie zapisuje i trener nic nie dostaje. Gdy akcja przeszła, dopisz „(próba: nie zapisano)”, np. „Zgłosiłbym to trenerowi (próba: nie zapisano)”; gdy serwer odmówił, podaj powód.',
     'Zasady trenera i ograniczenia klienta masz poniżej. Plan sprawdzaj akcją „plan”, ciężar na dziś akcją „ciezarNaDzis” (nie licz go sam).',
-    'Planu nie zmieniasz: zmiany idą przez „zaproponuj” i czekają na trenera; zatwierdzona zmienia plan sama. Ból, czerwone flagi i sprawy, o których decyduje trener, zgłaszasz akcją „zglos”.',
+    o.auto ? 'Trener pozwolił Ci samemu skracać trening („skroc”: mniej serii albo pominięcie ćwiczeń B od końca, A i K zostają) i zamieniać ćwiczenie w tym treningu („zamien”, zamiennik z bazy, bez bojów). Inne zmiany planu idą przez „zaproponuj” i czekają na trenera; zatwierdzona zmienia plan sama. Po „skroc” i „zamien” powiedz klientowi, co zmieniłeś.'
+      : 'Planu nie zmieniasz: zmiany idą przez „zaproponuj” i czekają na trenera; zatwierdzona zmienia plan sama. Akcje „skroc” i „zamien” są wyłączone przez trenera.',
+    'Ból, czerwone flagi i sprawy, o których decyduje trener, zgłaszasz akcją „zglos”.',
     'Każdą serię oceniaj światłem (zielone / żółte / czerwone / nieudana). Bez oceny zapytaj klienta, nie zgaduj.',
     'Gdy serwer odmówi, powiedz klientowi powód (numer reguły) i nie próbuj obejść go inną akcją.',
     'Nie diagnozujesz i nie leczysz. Przy czerwonej fladze: przerwij trening, zgłoś („zglos”, temat czerwona_flaga) i odeślij do specjalisty.',
@@ -807,7 +933,7 @@ function trAsystent(id, msgs, opt) {
   const m = agChatMsgs_(msgs);
   if (m.error) throw new Error(m.error);
   const real = !!(opt && opt.real), pre = aiPre_(), x = agCtx_(row), z = agZasady_(), t0 = Date.now();
-  const req = { model: AI_MODEL, max_tokens: 4000, system: agChatSystem_({ zasady: z.tekst, ogr: x.ogr, today: x.today, real: real, decyzje: agDecyzje_(tableOf_('Propozycje'), x.c.id, AG_DECYZJE) }), tools: agTools_(),
+  const req = { model: AI_MODEL, max_tokens: 4000, system: agChatSystem_({ zasady: z.tekst, ogr: x.ogr, today: x.today, real: real, auto: !!x.ust.auto, decyzje: agDecyzje_(tableOf_('Propozycje'), x.c.id, AG_DECYZJE) }), tools: agTools_(),
     messages: m.msgs, output_config: { effort: 'low' }, fallbacks: 'default', cache_control: { type: 'ephemeral' } };   // zasady i narzędzia z pamięci podręcznej w kolejnych krokach (ok. 10% ceny)
   let zgl = 0;
   const out = agChatLoop_(req, r => {
