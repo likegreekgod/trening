@@ -38,7 +38,8 @@ function pkgState_(rows) {
   const after = list.slice(z + 1).map(x => { const d = Math.round(num(x.r.ile)); bal += d;
     const tx = String(x.r.notatka || '').trim();
     return { date: x.day, typ: x.typ, d: d, over: x.typ === 'trening' && bal < 0,
-      txt: x.typ === 'trening' ? (tx || 'trening') + ' · prowadzony' : (tx || (d < 0 ? 'trening' : 'zwrot')) + (d < 0 ? ' · dopisany ręcznie' : ' · zwrot') }; });
+      txt: x.typ === 'trening' ? (tx || 'trening') + ' · prowadzony' : Math.abs(d) > 1 ? (tx || 'korekta') + ' · ' + (d > 0 ? '+' : '−') + Math.abs(d)
+        : (tx || (d < 0 ? 'trening' : 'zwrot')) + (d < 0 ? ' · dopisany ręcznie' : ' · zwrot') }; });
   const used = n - bal, price = num(buy.cena);
   const hist = after.slice().reverse().concat([{ date: list[z].day, typ: 'zakup', d: bought,
     txt: 'zakup ' + bought + ' ' + pkN_(bought) + (price ? ' · ' + String(Math.round(price * 100) / 100).replace('.', ',') + ' zł' : '') + (carry ? ' · +' + carry + ' z poprzedniego' : '') }]);
@@ -61,9 +62,9 @@ function pkgRow_(clientId, f, cur, today, stamp) {
   const d = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : '';
   const note = String(f.note || '').replace(/\s+/g, ' ').trim().slice(0, PK_NOTE_MAX);
   if (f.mode === 'korekta') {
-    const k = Number(f.k);
+    const k = Number(f.k), many = !!f.many;                                     // many: Claude „ustaw” / „dodaj” = korekta o dowolną liczbę
     if (!cur) return { error: 'Klient nie ma pakietu: najpierw dodaj pakiet.' };
-    if (k !== 1 && k !== -1) return { error: 'Korekta: −1 (trening) albo +1 (zwrot).' };
+    if (many ? !(Number.isInteger(k) && k !== 0 && Math.abs(k) <= PK_MAX) : (k !== 1 && k !== -1)) return { error: many ? 'Korekta: liczba całkowita różna od 0, najwyżej ' + PK_MAX + '.' : 'Korekta: −1 (trening) albo +1 (zwrot).' };
     const date = d(f.date) || today;
     if (date < cur.from) return { error: 'Data przed zakupem obecnego pakietu (' + cur.from + ').' };
     return { row: [clientId + '|k|' + stamp, new Date(), clientId, date, 'korekta', k, '', '', '', '', note, ''] };
@@ -110,7 +111,7 @@ function pkgSession_(clientId, s) {
 
 /* ---------- panel ---------- */
 
-/** Panel → karta klienta: nowy pakiet, korekta (±1) albo widoczność licznika ({mode: 'widok', show}). Zwraca nowy stan z historią. */
+/** Panel → karta klienta: nowy pakiet, korekta (±1) albo widoczność licznika ({mode: 'widok', show}); Claude: {mode: 'ustaw' | 'dodaj', n, note, date} (pkgSet_). Zwraca nowy stan z historią. */
 function trPakiet(id, f) {
   id = String(id || '').trim().toLowerCase();
   if (!id || !trRow_(id)) throw new Error('Nie ma klienta „' + id + '”.');
@@ -124,13 +125,40 @@ function trPakiet(id, f) {
       const rows = sh.getDataRange().getValues(), h = rows[0].map(x => String(x).trim()), ci = h.indexOf('widoczny'), ti = h.indexOf('typ'), di = h.indexOf('data');
       let at = -1; rows.forEach((r, i) => { if (i && String(r[2]).toLowerCase() === id && String(r[ti]).trim() === 'zakup' && pkDay_(r[di]) === cur.from) at = i; });
       if (at > 0 && ci >= 0) sh.getRange(at + 1, ci + 1).setValue(plain_(f.show ? 'TAK' : ''));
+    } else if (f.mode === 'ustaw' || f.mode === 'dodaj') {         // Claude (MCP „pakiet”): czysta pkgSet_ wybiera zakup albo korektę
+      const x = pkgSet_(f, cur, today_());
+      if (x.error) throw new Error(x.error);
+      if (x.f) {
+        const r = pkgRow_(id, x.f, cur, today_(), Date.now());
+        if (r.error) throw new Error(r.error);
+        sh.appendRow(plainRow_(r.row));
+      }
     } else {
       const r = pkgRow_(id, f, cur, today_(), Date.now());
       if (r.error) throw new Error(r.error);
       sh.appendRow(plainRow_(r.row));
     }
+    if (f.mode === 'ustaw' || f.mode === 'dodaj') return Object.assign({}, pkgOf_(id), { prev: cur ? cur.left : null });   // Claude: ile było
   } finally { lock.releaseLock(); }
   return pkgOf_(id);
+}
+
+/**
+ * Czysta: Claude (narzędzie „pakiet”) → wpis dla pkgRow_ albo {f: null} (nic do zmiany) albo {error}.
+ * f: {mode: 'dodaj' | 'ustaw', n (> 0), note, date}; cur = pkgState_ albo null; today = 'RRRR-MM-DD'.
+ * Bez pakietu (albo po wygaśnięciu): zakup n. „dodaj” z pakietem: korekta +n (ważność i data zakupu bez zmian;
+ * treningi poza pakietem, gdy zostało < 0, odejmują się). „ustaw”: korekta o różnicę, żeby zostało dokładnie n.
+ */
+function pkgSet_(f, cur, today) {
+  f = f || {};
+  const n = Number(f.n), date = /^\d{4}-\d{2}-\d{2}$/.test(String(f.date || '')) ? String(f.date) : '';
+  if (!(Number.isInteger(n) && n >= 1 && n <= PK_MAX)) return { error: 'Liczba treningów: całkowita 1–' + PK_MAX + '.' };
+  if (String(f.date || '') && !date) return { error: 'Data: RRRR-MM-DD.' };
+  const day = date || today, expired = cur && cur.to && cur.to < day;
+  if (!cur || expired) return { f: { mode: 'nowy', n: n, from: date, note: f.note } };
+  const k = f.mode === 'ustaw' ? n - cur.left : n;
+  if (!k) return { f: null };
+  return { f: { mode: 'korekta', many: true, k: k, date: date, note: f.note || (f.mode === 'ustaw' ? 'ustawiono: zostało ' + n : 'dodano ' + n) } };
 }
 
 /** Pulpit: krótki stan pakietu każdego klienta {klient_id → pkgShort_} z jednego odczytu zakładki. */

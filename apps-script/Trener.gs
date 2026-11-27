@@ -75,13 +75,14 @@ const TR_ODP_DNI = 14;                // odpowiedzi klientów na komentarze na p
  * Pośrednik woła te same TR_FNS z biletem trenera i dopisuje src: 'mcp'. Zapisy z tej listy trafiają do zakładki API
  * (jak akcje botów klientów), żeby było widać, co zmienił Claude. Odczyty nie są zapisywane.
  */
-const TR_MCP_ZAPIS = ['trJednostka', 'trKomentarz', 'trKomentarzFilm', 'trPlan', 'trPropozycja', 'trPrzesun'];   // = ZAPIS w mcp/src/tools.js
+const TR_MCP_ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarzFilm', 'trPakiet', 'trPlan', 'trPropozycja', 'trPrzesun'];   // = ZAPIS w mcp/src/tools.js
 /** Czysta: zapytanie → wiersz dziennika API [klient, akcja, ok, opis] albo null (nie z Claude albo odczyt). */
 function mcpLogRow_(req, ok, why) {
   if (!req || req.src !== 'mcp' || TR_MCP_ZAPIS.indexOf(req.fn) < 0) return null;
-  const a = Array.isArray(req.args) ? req.args : [], id = String(a[0] === undefined || a[0] === null ? '' : a[0]).split('|')[0].toLowerCase();
+  const a = Array.isArray(req.args) ? req.args : [], f = a[0] && typeof a[0] === 'object' ? a[0] : null;   // trKlientNowy: pierwszy argument to formularz
+  const id = f ? slugId_(String(f.id || '').trim() || f.imie) : String(a[0] === undefined || a[0] === null ? '' : a[0]).split('|')[0].toLowerCase();
   let opis = String(why || '');
-  if (!opis) { try { opis = JSON.stringify(a.slice(1)); } catch (e) { opis = ''; } }
+  if (!opis) { try { opis = JSON.stringify(f ? a : a.slice(1)); } catch (e) { opis = ''; } }
   return [id, 'claude: ' + req.fn, !!ok, opis.slice(0, 200)];
 }
 function mcpLog_(req, ok, why) {
@@ -1354,10 +1355,15 @@ function trKlientUstaw(id, f) {
   } finally { lock.releaseLock(); }
 }
 
-/** Nowy klient z panelu: imię, ID (z imienia), tryb, zamiana, masters; reszta domyślna. Zwraca ustawienia z linkiem. */
-function trKlientNowy(f) {
+/**
+ * Nowy klient z panelu albo z Claude (narzędzie MCP „dodaj_klienta”): imię, ID (z imienia), tryb, zamiana, masters; reszta domyślna.
+ * Inne ustawienia z KL_DOMYSLNE (np. scale) tylko, gdy przyszły (`trKlientNowyUst_`). Zwraca ustawienia z linkiem.
+ */
+function trKlientNowy(f) { return klientNowy_(f); }
+/** Wspólny zapis nowego klienta: panel (trKlientNowy), menu arkusza (dodajKlientaZapisz) i Claude (dodaj_klienta). Istniejącego ID nie nadpisuje. */
+function klientNowy_(f) {
   f = f || {};
-  const s = Object.assign({}, KL_DOMYSLNE, { mode: f.mode || 'PRO', swap: f.swap || 'NIE', masters: !!f.masters });
+  const s = trKlientNowyUst_(f);
   const v = trKlientVals_(s);
   if (v.error) throw new Error(v.error);
   const lock = LockService.getScriptLock();
@@ -1374,8 +1380,17 @@ function trKlientNowy(f) {
     sh.getRange(n, 1).setNumberFormat('@');                       // klucz zawsze jako tekst
     sh.getRange(n, 1, 1, r.length).setValues(plainRows_([r]));
     rootFolder_();                                                // folder na filmy (Trening – Klienci) istnieje
+    if (v.vals[KL_KOM] === 'TAK' && !ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'wieczornyMail')) komWyzwalacz_();
     return trKlientOf_(r, base);
   } finally { lock.releaseLock(); }
+}
+/** Czysta: formularz nowego klienta → pełne ustawienia (KL_DOMYSLNE + to, co przyszło; brak trybu = PRO jak w panelu). */
+function trKlientNowyUst_(f) {
+  f = f || {};
+  const s = Object.assign({}, KL_DOMYSLNE);
+  Object.keys(KL_DOMYSLNE).forEach(k => { if (f[k] !== undefined && f[k] !== null && f[k] !== '') s[k] = f[k]; });
+  s.masters = !!f.masters;
+  return s;
 }
 
 /** Nowy klucz klienta: stary link przestaje działać (dane w Logu i Sesjach są po klient_id, więc zostają). */

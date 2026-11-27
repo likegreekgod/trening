@@ -260,6 +260,13 @@ test('slugId_ i buildClientRow_: nowy klient z menu', () => {
   assert.match(C.buildClientRow_({ imie: '' }, [], 'k').error, /imię/);
   assert.match(C.buildClientRow_({ imie: 'A', dod_serie: '9' }, [], 'k').error, /0–5/);
   assert.equal(C.buildClientRow_({ imie: 'Ewa', id: 'Ewa K' }, [], 'k').id, 'ewa-k');
+  assert.match(C.buildClientRow_({ imie: 'Ola' }, ['ola', 'ola-2'], 'k').error, /np\. ola-3/, 'wolne ID w podpowiedzi');
+  assert.equal(C.freeId_('ola', ['Ola-2', 'ola-3']), 'ola-4');
+  assert.deepEqual(JSON.parse(JSON.stringify(C.klientForm_({ imie: 'Ewa', id: '', prosty: true, bol: true, masters: false, dod_serie: '' }))),
+    { imie: 'Ewa', id: '', mode: 'PROSTY', pain: true, masters: false, extra: 0 }, 'okno w arkuszu → wspólny zapis');
+  assert.equal(C.klientForm_({ imie: 'Ewa', dod_serie: '2' }).extra, 2);
+  assert.equal(C.klientForm_({ imie: 'Ewa' }).mode, 'PRO');
+  assert.equal(C.trKlientVals_(C.trKlientNowyUst_(C.klientForm_({ imie: 'A', dod_serie: '9' }))).error, 'Dodatkowe serie: liczba 0–5.');
 });
 
 test('trKlientOf_ i trKlientVals_: klienci w panelu trenera (ustawienia ↔ wiersz Klienci)', () => {
@@ -1861,6 +1868,21 @@ test('pkgState_, pkgRow_, pkgAll_: pakiet treningów (zakup, treningi, korekty, 
   assert.match(C.pkgRow_('ania', { mode: 'korekta', k: -1 }, null, '2026-11-22', 1).error, /nie ma pakietu/);
   assert.match(C.pkgRow_('ania', { mode: 'korekta', k: 2 }, k, '2026-11-22', 1).error, /−1/);
   assert.match(C.pkgRow_('ania', { mode: 'korekta', k: 1, date: '2026-10-20' }, k, '2026-11-22', 1).error, /przed zakupem/);
+  // Claude (MCP „pakiet”): pkgSet_ wybiera zakup albo korektę o dowolną liczbę
+  assert.match(C.pkgRow_('ania', { mode: 'korekta', k: 3 }, k, '2026-11-22', 1).error, /−1/, 'panel dalej tylko ±1');
+  assert.equal(C.pkgRow_('ania', { mode: 'korekta', many: true, k: 3 }, k, '2026-11-22', 1).row[5], 3);
+  assert.match(C.pkgRow_('ania', { mode: 'korekta', many: true, k: 0 }, k, '2026-11-22', 1).error, /różna od 0/);
+  assert.deepEqual(C.pkgSet_({ mode: 'dodaj', n: 2 }, null, '2026-11-27').f, { mode: 'nowy', n: 2, from: '', note: undefined }, 'bez pakietu = zakup');
+  assert.equal(C.pkgSet_({ mode: 'ustaw', n: 4 }, expired, '2026-11-27').f.mode, 'nowy', 'wygasły = nowy zakup');
+  const dd = C.pkgSet_({ mode: 'dodaj', n: 2 }, k, '2026-11-27').f;
+  assert.deepEqual([dd.mode, dd.k, dd.many, dd.note], ['korekta', 2, true, 'dodano 2']);
+  const us = C.pkgSet_({ mode: 'ustaw', n: 4, note: 'gotówka' }, k, '2026-11-27').f;
+  assert.deepEqual([us.k, us.note], [4 - k.left, 'gotówka'], 'ustaw = korekta o różnicę');
+  assert.equal(C.pkgSet_({ mode: 'ustaw', n: k.left }, k, '2026-11-27').f, null, 'już tyle = bez wpisu');
+  for (const n of [0, -1, 1.5, 101]) assert.match(C.pkgSet_({ mode: 'dodaj', n }, k, '2026-11-27').error, /Liczba/);
+  assert.match(C.pkgSet_({ mode: 'dodaj', n: 1, date: '27.11' }, k, '2026-11-27').error, /Data/);
+  const plus = C.pkgState_(rows.concat([r('korekta', '2026-11-25', 3)]));
+  assert.equal(plus.left, k.left + 3); assert.match(plus.hist[0].txt, /\+3/);
   // pulpit: wielu klientów z jednej zakładki
   const all = C.pkgAll_(rows.concat([Object.assign(r('zakup', '2026-11-10', 5), { klient: 'Bartek' }), Object.assign(r('trening', '2026-11-11', -1), { klient: 'kasia' })]));
   assert.deepEqual(Object.keys(all).sort(), ['ania', 'bartek']); assert.equal(all.ania.left, 13); assert.equal(all.bartek.left, 5);
@@ -2775,6 +2797,12 @@ test('rozmiarOpis_: komórki, największe zakładki, ścieżki i czas wczytania'
 });
 
 test('mcpLogRow_: zapisy z Claude (pośrednik MCP) do dziennika API, odczyty i panel pominięte', () => {
+  const nk = C.mcpLogRow_({ src: 'mcp', fn: 'trKlientNowy', args: [{ imie: 'Łucja Ś', mode: 'PROSTY' }] }, true, '');
+  assert.equal(nk[0], 'lucja-s'); assert.equal(nk[1], 'claude: trKlientNowy'); assert.match(nk[3], /PROSTY/);
+  assert.equal(C.mcpLogRow_({ src: 'mcp', fn: 'trKlientNowy', args: [{ imie: 'Ola', id: 'ola-k' }] }, true, '')[0], 'ola-k');
+  assert.deepEqual(JSON.parse(JSON.stringify(C.trKlientNowyUst_({ mode: 'PRO', swap: '', masters: 1 }))), Object.assign({}, JSON.parse(JSON.stringify(C.KL_DOMYSLNE)), { mode: 'PRO', masters: true }), 'panel: puste pola = domyślne');
+  assert.equal(C.trKlientNowyUst_({}).mode, 'PRO', 'bez trybu = PRO jak w panelu');
+  assert.equal(C.trKlientNowyUst_({ mode: 'PROSTY', scale: 'RIR' }).scale, 'RIR');
   assert.equal(C.mcpLogRow_({ fn: 'trPrzesun', args: ['ania', {}] }, true, ''), null, 'panel bez src');
   assert.equal(C.mcpLogRow_({ src: 'mcp', fn: 'trPulpit', args: [] }, true, ''), null, 'odczyt');
   assert.deepEqual(C.mcpLogRow_({ src: 'mcp', fn: 'trPrzesun', args: ['Ania', { week: 3, day: 'B', date: '2026-11-28' }] }, true, ''),
