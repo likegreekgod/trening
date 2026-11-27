@@ -1468,6 +1468,67 @@ test('trPlanEdit_, trPlanVal_: szybka zmiana planu z panelu (tylko niezrobione, 
   assert.ok(C.TR_FNS.trPlan && !C.API_FNS.trPlan);                                 // tylko zalogowany trener
 });
 
+test('trUnitEdit_, trMove_: cała jednostka z okna kalendarza (kolejność, nowe, usunięte, kolejne tygodnie) i przesunięcie dnia', () => {
+  const R = (w, d, nr, name, o) => Object.assign({ klient: 'ania', tydzien: w, jednostka: d, tytul: 'Góra', data: '2026-11-1' + (w - 8), nr, cwiczenie: name, prio: 'A', serie: 4, powt: '5', kg: '', procent: '', rpe_max: 8, uwagi: '', blok: 'B2', zrodlo: '', obwod: '', uwagi_jedn: '' }, o);
+  const plan = [
+    R(9, 'T2', 1, 'Wyciskanie', { kg: '60' }), R(9, 'T2', 2, 'Podciąganie', { kg: 'BW', prio: 'B' }), R(9, 'T2', 3, 'Face pull', { prio: 'K', kg: 'guma' }),
+    R(10, 'T2', 1, 'Wyciskanie', { kg: '62.5' }), R(10, 'T2', 2, 'Podciąganie', { kg: 'BW', prio: 'B' }), R(10, 'T2', 3, 'Face pull', { prio: 'K', kg: 'guma' }),
+    R(11, 'T2', 1, 'Wyciskanie', { kg: '65' }), R(11, 'T2', 2, 'Dipy', { kg: 'BW' }),                     // inny skład: bez zmiany kolejności
+    R(12, 'T2', 1, 'Wyciskanie', { kg: '70', blok: 'B3' }),                                                 // inny blok
+    R(8, 'T2', 1, 'Wyciskanie', { kg: '57.5' }),                                                           // zrobiona
+    R(9, 'W1', 1, 'Bieg', { zrodlo: 'klient' })];
+  const done = { 'ania|8|T2': 1 };
+  const ed = (e, logged) => JSON.parse(JSON.stringify(C.trUnitEdit_(plan, done, logged || {}, 'ania', e)));
+  const it = (order, name, o) => Object.assign({ order, name, prio: 'A', sets: '4', reps: '5', kg: '', pct: '', rpe: '8', note: '' }, o);
+  const base = [it(1, 'Wyciskanie', { kg: '60' }), it(2, 'Podciąganie', { kg: 'BW', prio: 'B' }), it(3, 'Face pull', { prio: 'K', kg: 'guma' })];
+  // bez zmian = nic
+  let r = ed({ week: 9, day: 'T2', items: base });
+  assert.equal(r.n, 0); assert.deepEqual(r.set, []); assert.deepEqual(r.add, []); assert.deepEqual(r.del, []);
+  // kolejność, kg, nowe ćwiczenie w obwodzie z poprzednim, usunięte ćwiczenie
+  r = ed({ week: 9, day: 'T2', items: [it(2, 'Podciąganie', { kg: 'BW', prio: 'B', circuit: 'A' }), it(1, 'Wyciskanie', { kg: '62,5' }), { name: 'Wyciskanie hantli nad głowę', prio: 'B', sets: '3', reps: '10', kg: '14', circuit: 'b' }] });
+  const at = i => (r.set.find(x => x[0] === i) || [])[1];
+  assert.deepEqual(at(1), { nr: 1 });                                    // pojedyncza litera obwodu = zwykłe ćwiczenie
+  assert.deepEqual(at(0), { nr: 2, kg: 62.5 });
+  assert.equal(r.add.length, 1);
+  assert.deepEqual([r.add[0].nr, r.add[0].cwiczenie, r.add[0].prio, r.add[0].serie, r.add[0].powt, r.add[0].kg, r.add[0].zrodlo, r.add[0].obwod, r.add[0].blok, r.add[0].data, r.add[0].tytul], [3, 'Wyciskanie hantli nad głowę', 'B', 3, '10', 14, 'trener', '', 'B2', '2026-11-11', 'Góra']);
+  assert.deepEqual(r.del, [2]); assert.equal(r.n, 4); assert.deepEqual(r.weeks, [9]);
+  // obwód z sąsiadem
+  r = ed({ week: 9, day: 'T2', items: [base[0], it(2, 'Podciąganie', { kg: 'BW', prio: 'B', circuit: 'A' }), it(3, 'Face pull', { prio: 'K', kg: 'guma', circuit: 'A' })] });
+  assert.deepEqual(r.set, [[1, { obwod: 'A' }], [2, { obwod: 'A' }]]);
+  assert.match(ed({ week: 9, day: 'T2', items: [it(1, 'Wyciskanie', { circuit: 'A' }), base[1], it(3, 'Face pull', { prio: 'K', circuit: 'A' }), it(undefined, 'X', { circuit: 'A' })] }).error, /Obwód A musi zostać razem/);
+  // data i notatka do jednostki
+  r = ed({ week: 9, day: 'T2', items: base, date: '2026-11-13', unote: 'pauza 1 s' });
+  assert.deepEqual(r.set, [[0, { data: '2026-11-13', uwagi_jedn: 'pauza 1 s' }], [1, { data: '2026-11-13' }], [2, { data: '2026-11-13' }]]); assert.equal(r.n, 2);
+  // kolejne tygodnie: kg o tę samą różnicę, nazwa, usunięte i dodane po nazwie; kolejność tylko przy tym samym składzie; inny blok bez zmian
+  r = ed({ week: 9, day: 'T2', next: true, items: [it(2, 'Podciąganie nachwytem', { kg: 'BW', prio: 'B' }), it(1, 'Wyciskanie', { kg: '62.5' }), { name: 'Pompki', prio: 'B', sets: '3', reps: '8', kg: 'BW' }] });
+  assert.deepEqual(at(3), { nr: 2, kg: 65 });
+  assert.deepEqual(at(4), { nr: 1, cwiczenie: 'Podciąganie nachwytem' });
+  assert.deepEqual(at(6), { kg: 67.5 });                                  // tydz. 11: bez Podciągania i z Dipami = bez zmiany kolejności
+  assert.equal(at(8), undefined); assert.equal(at(9), undefined);
+  assert.deepEqual(r.del, [5, 2]);
+  assert.deepEqual(r.add.map(x => [x.tydzien, x.nr, x.cwiczenie]), [[9, 3, 'Pompki'], [10, 3, 'Pompki'], [11, 3, 'Pompki']]);
+  assert.deepEqual(r.weeks, [9, 10, 11]);
+  // wpis w Logu: ćwiczenie zostaje na swoim numerze i nie da się go usunąć
+  assert.match(ed({ week: 9, day: 'T2', items: [base[1], base[0], base[2]] }, { '9|1': 1 }).error, /Wyciskanie: ma zapisane serie, zostaje/);
+  assert.match(ed({ week: 9, day: 'T2', items: [base[0], base[1]] }, { '9|3': 1 }).error, /Face pull: ma zapisane serie, nie da/);
+  r = ed({ week: 9, day: 'T2', items: [base[0], base[2], base[1]] }, { '9|1': 1 });
+  assert.deepEqual(r.set, [[1, { nr: 3 }], [2, { nr: 2 }]]);
+  // blokady
+  assert.match(ed({ week: 8, day: 'T2', items: base }).error, /zrobiona/);
+  assert.match(ed({ week: 9, day: 'W1', items: base }).error, /własny/);
+  assert.match(ed({ week: 9, day: 'T2', items: [] }).error, /co najmniej jedno/);
+  assert.match(ed({ week: 9, day: 'T2', items: [it(7, 'X')] }).error, /odśwież/);
+  assert.match(ed({ week: 9, day: 'T2', items: [base[0], base[0]] }).error, /dwa razy/);
+  assert.match(ed({ week: 9, day: 'T2', items: [it(1, 'Wyciskanie', { sets: '0' })] }).error, /Wyciskanie: Serie/);
+  assert.match(ed({ week: 9, day: 'T2', items: base, date: '13.11' }).error, /Zła data/);
+  // przesunięcie dnia
+  assert.deepEqual(JSON.parse(JSON.stringify(C.trMove_(plan, done, 'ania', { week: 9, day: 'T2', date: '2026-11-12' }))), { rows: [[0, '2026-11-12'], [1, '2026-11-12'], [2, '2026-11-12']], date: '2026-11-12' });
+  assert.match(C.trMove_(plan, done, 'ania', { week: 8, day: 'T2', date: '2026-11-12' }).error, /zrobiona/);
+  assert.match(C.trMove_(plan, done, 'ania', { week: 9, day: 'W1', date: '2026-11-12' }).error, /własny/);
+  assert.match(C.trMove_(plan, done, 'ania', { week: 9, day: 'T2', date: '' }).error, /Zła data/);
+  assert.ok(C.TR_FNS.trJednostka && C.TR_FNS.trPrzesun && C.TR_FNS.trCwNazwy && !C.API_FNS.trJednostka);
+});
+
 // --- zapis do arkusza: tekst zostaje tekstem ---
 test('plain_: tekst zaczynający się jak formuła dostaje apostrof, liczby i zwykły tekst zostają bez zmian', () => {
   for (const v of ['=1+1', '=IMPORTRANGE("x";"Klienci!A:C")', ' =A1', '\t=A1', '\n=A1', '+SUM(A1)', '-A1', '- bolało kolano', '+48 600 100 200', '@x', '--', '-%'])

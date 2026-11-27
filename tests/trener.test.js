@@ -181,6 +181,9 @@ async function page(calls, opt = {}) {
     else if (b.fn === 'trFilm') { st.nFilm = (st.nFilm || 0) + 1; if (st.nFilm > 1) st.fresh = true; out = { ok: true, result: { token: 'tok-film', exp: Date.now() + 3e6 } }; }
     else if (b.fn === 'trKomentarzFilm') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { text: String(b.args[5]).trim(), at: TODAY + 'T20:00:00.000Z' } }; }
     else if (b.fn === 'trKalendarz') out = { ok: true, result: kalendarz(b.args[0], b.args[1]) };
+    else if (b.fn === 'trCwNazwy') out = { ok: true, result: [['Wyciskanie hantli nad głowę', 'https://example.com/v', 'barki; triceps', 'wycisk nad głowę'], ['Wyciskanie żołnierskie', '', 'barki', 'OHP'], ['Face pull', '', 'barki', '']] };
+    else if (b.fn === 'trJednostka') { await new Promise(res => setTimeout(res, 100)); out = /^X/.test(b.args[1].items[0].name) ? { ok: false, error: 'Lista ćwiczeń się zmieniła – odśwież i spróbuj jeszcze raz.' } : { ok: true, result: { n: 4, weeks: b.args[1].next ? [12, 13] : [12] } }; }
+    else if (b.fn === 'trPrzesun') { await new Promise(res => setTimeout(res, 60)); out = { ok: true, result: { date: b.args[1].date, n: 2 } }; }
     else if (b.fn === 'trKlienci') { st.kl = st.kl || KLIENCI.map(k => Object.assign({}, k)); out = { ok: true, result: st.kl }; }
     else if (b.fn === 'trKlientUstaw') { await new Promise(res => setTimeout(res, 100)); const f = b.args[1], i = st.kl.findIndex(k => k.id === b.args[0]);
       if (f.extra > 5) out = { ok: false, error: 'Dodatkowe serie: liczba 0–5.' };
@@ -638,6 +641,74 @@ test('panel: Kalendarz (tydzień, miesiąc, filtr klienta, kolory) i okno jednos
     await shot(p, 'trener-kalendarz-miesiac-' + sfx + '.png');
     await p.click('.kmd.t .kmn'); await p.waitForSelector('.kal');                                  // dzień w miesiącu → jego tydzień
     assert.equal(await p.evaluate(() => location.hash), '#kalendarz/' + MON);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+});
+
+test('panel: Kalendarz → edycja jednostki w oknie (kolejność, nowe z bazy, obwód, dzień) i przeciąganie na inny dzień', async () => {
+  for (const [vp, scheme, sfx] of [[null, 'light', 'jasny'], [{ width: 390, height: 844 }, 'dark', 'telefon-ciemny']]) {
+    const calls = [], { ctx, p } = await page(calls, Object.assign({ loggedIn: true, scheme }, vp ? { vp } : {}));
+    await p.goto(base + 'trener.html#kalendarz'); await p.waitForSelector('.kal');
+    // zrobiona i w trakcie: bez przeciągania i bez edycji
+    assert.equal(await p.getAttribute('.ku:has-text("Ania"):has-text("Nogi")', 'draggable'), null);
+    assert.equal(await p.getAttribute('.ku:has-text("Celina"):has-text("Góra")', 'draggable'), null);
+    assert.equal(await p.getAttribute('.ku:has-text("Darek"):has-text("Siła góra")', 'draggable'), 'true');
+    if (!vp) {    // przeciągnięcie jednostki na niedzielę → trPrzesun, komunikat nad kalendarzem
+      await p.dragAndDrop('.ku:has-text("Darek"):has-text("Siła góra")', '.kd[data-kday="' + addDays(MON, 6) + '"]');
+      await p.waitForSelector('#kmsg .saved');
+      assert.deepEqual(calls.filter(c => c.fn === 'trPrzesun').pop().args, ['darek', { week: 3, day: 'T2', date: addDays(MON, 6) }]);
+      assert.match(await p.textContent('#kmsg'), /Darek · T2 Siła góra → nd 22\.11/);
+      await p.dragAndDrop('.kund .ku', '.kd[data-kday="' + addDays(MON, 4) + '"]'); await p.waitForFunction(() => /Mobilność → pt/.test((document.querySelector('#kmsg') || {}).textContent));
+      assert.deepEqual(calls.filter(c => c.fn === 'trPrzesun').pop().args[1], { week: 3, day: 'T3', date: addDays(MON, 4) });
+    }
+    // okno niezrobionej jednostki: dzień i „✎ Edytuj”
+    await p.click('.ku:has-text("Ania"):has-text("Góra")'); await p.waitForSelector('#kw [data-kwedit]');
+    assert.equal(await p.inputValue('#kw [data-kwdate]'), addDays(MON, 3));
+    await p.click('#kw [data-kwedit]'); await p.waitForSelector('#kw .ke[data-ke]');
+    assert.equal(await p.locator('#kw .ke[data-ke]').count(), 2);
+    assert.equal(await p.isDisabled('#kw [data-kesave]'), true);
+    // kg, kolejność (↓), nowe ćwiczenie z bazy (alias), obwód z poprzednim, notatka do jednostki
+    await p.fill('#kw [data-ke="0"] [data-kef="kg"]', '50');
+    assert.match(await p.textContent('#kw [data-ke="0"] .kc-kg .was'), /było 47/);
+    assert.match(await p.textContent('#kw .kef'), /Zmienione: 1/);
+    await p.click('#kw [data-ke="0"] [data-kemv="1"]');
+    assert.match(await p.inputValue('#kw [data-ke="1"] [data-kef="name"]'), /Wyciskanie na ławce/);
+    await p.fill('#ke-q', 'wycisk nad'); await p.waitForSelector('#ke-res [data-keadd]');
+    assert.equal(await p.getAttribute('#ke-res [data-keadd]', 'data-keadd'), 'Wyciskanie hantli nad głowę');
+    await p.press('#ke-q', 'Enter'); await p.waitForSelector('#kw .ke.kenew');
+    assert.equal(await p.inputValue('#kw .ke.kenew [data-kef="name"]'), 'Wyciskanie hantli nad głowę');
+    if (!vp) {
+      await p.check('#kw [data-ke="1"] [data-kesel]'); await p.check('#kw [data-ke="2"] [data-kesel]'); await p.click('#kw [data-kelink]');
+      assert.match(await p.textContent('#kw .kecg'), /Obwód A/);
+      assert.deepEqual(await p.$$eval('#kw .ke[data-ke] .ktag', a => a.map(x => x.textContent)), ['1', 'A1', 'A2']);
+      await p.focus('#kw [data-ke="1"] [data-kef="sets"]'); await p.keyboard.press('Alt+ArrowUp');       // obwód rozdzielony → błąd, bez zapisu
+      assert.match(await p.textContent('#kw .kef .err'), /Obwód A musi zostać razem/);
+      assert.equal(await p.isDisabled('#kw [data-kesave]'), true);
+      await p.keyboard.press('Alt+ArrowDown');
+    }
+    await p.fill('#kw [data-kef="unote"]', 'Pauza 1 s na klatce');
+    await p.keyboard.press('Escape'); assert.ok(await p.$('#kw'), 'niezapisane zmiany: Esc nie zamyka okna');
+    assert.match(await p.textContent('#kw .kef'), /niezapisane zmiany/);
+    if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    await shot(p, 'trener-kalendarz-edycja-' + sfx + '.png');
+    await p.click('#kw [data-kesave]'); await p.waitForFunction(() => /Zapisano/.test((document.querySelector('#kmsg') || {}).textContent));
+    const req = calls.filter(c => c.fn === 'trJednostka').pop().args;
+    assert.equal(req[0], 'ania');
+    const L = vp ? '' : 'A';
+    assert.deepEqual(req[1].items.map(x => [x.order, x.name, x.kg, x.circuit]), [[2, 'Podciąganie', '0', ''], [1, 'Wyciskanie na ławce', '50', L], [undefined, 'Wyciskanie hantli nad głowę', '', L]]);
+    assert.equal(req[1].unote, 'Pauza 1 s na klatce');
+    assert.equal(req[1].date, undefined);
+    assert.match(await p.textContent('#kmsg'), /Zapisano 4 zmiany/);
+    assert.ok(await p.$('#kw .kwgo'), 'po zapisie okno wraca do podglądu');
+    // anuluj = szkic znika
+    await p.click('#kw [data-kwedit]'); await p.fill('#kw [data-ke="0"] [data-kef="sets"]', '5'); await p.click('#kw [data-kecancel]');
+    await p.waitForSelector('#kw .kwgo'); assert.equal(calls.filter(c => c.fn === 'trJednostka').length, 1);
+    // dzień z okna → trPrzesun, okno zostaje
+    await p.fill('#kw [data-kwdate]', addDays(MON, 5)); await p.dispatchEvent('#kw [data-kwdate]', 'change');
+    await p.waitForFunction(() => /→ sb 21\.11/.test((document.querySelector('#kmsg') || {}).textContent));
+    assert.deepEqual(calls.filter(c => c.fn === 'trPrzesun').pop().args, ['ania', { week: 12, day: 'T2', date: addDays(MON, 5) }]);
+    assert.ok(await p.$('#kw'));
     assert.deepEqual(p.errors, []);
     await ctx.close();
   }
