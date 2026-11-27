@@ -2441,6 +2441,7 @@ test('trTitle_: nazwa sesji z panelu (Plan.tytul całej jednostki, własny treni
   assert.match(t({ week: 1, day: 'T9', title: 'a' }).error, /Nie ma takiej jednostki/);
   assert.match(t({ week: 1, day: 'T3', title: 'a' }).error, /Nie ma takiej jednostki/);  // same usunięte
   assert.match(t({ week: 1, day: 'T2', title: 'x'.repeat(41) }).error, /40 znaków/);
+});
 
 test('textCols_, frac_: „zrobione/plan” zostaje tekstem (Arkusze robiły z „1/4” datę), stara data w odczycie = puste', () => {
   assert.deepEqual(Array.from(C.textCols_([['anna', 3, '1/4', '', '2026-11-23'], ['ola', 0, '', '0/2', 'x/y']])), [2, 3]);
