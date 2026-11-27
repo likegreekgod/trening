@@ -4,12 +4,12 @@
  * Odpowiedzi są skracane (bez linków z kluczami klientów, bez ścieżek VBT), żeby Claude dostawał tylko to, co potrzebne do decyzji.
  */
 
-import { UI_DZIS, UI_KLIENT } from './ui.js';
+import { UI_DZIS, UI_KLIENT, UI_FILM } from './ui.js';
 
 const ST_DZIS = { wait: 'czeka', live: 'w trakcie', done: 'zrobione' };
 const SEKCJA = { R: 'Rozgrzewka', G: 'Główne', K: 'Korekcyjne' };   // kolumna Planu `sekcja` (litera), jak SEKCJE w Code.gs
 const ST_KAL = { wait: 'zaplanowana', live: 'w trakcie', done: 'zrobiona', late: 'zaległa' };
-export const ZAPIS = ['trJednostka', 'trKomentarz', 'trPlan', 'trPropozycja', 'trPrzesun'];   // zapisy: serwer wpisuje je do zakładki API
+export const ZAPIS = ['trJednostka', 'trKomentarz', 'trKomentarzFilm', 'trPlan', 'trPropozycja', 'trPrzesun'];   // zapisy: serwer wpisuje je do zakładki API
 
 const s = v => (v === undefined || v === null ? '' : String(v)).trim();
 const num = v => { const x = typeof v === 'number' ? v : parseFloat(s(v).replace(',', '.')); return isFinite(x) ? x : null; };
@@ -191,6 +191,25 @@ export function jednostka(d, week, day) {
     plan: rows.map(exRow), wykonanie: doneEx(logs), sesja: x ? sesTxt(x) : '' });
 }
 
+/* ---------- filmy (D3 część 2): lista, karta z odtwarzaczem, klatki dla Claude, komentarz ---------- */
+
+/** Ref filmu = id wiersza Logu (klient|tydzień|jednostka|nr|seria). */
+export const filmRef = v => [s(v.id).toLowerCase(), Number(v.week), s(v.day), Number(v.order), s(v.set)].join('|');
+export function refParse(ref) {
+  const p = s(ref).split('|');
+  if (p.length !== 5 || !p[0] || !isFinite(Number(p[1])) || !p[2] || !isFinite(Number(p[3])) || !p[4]) throw new Error('Zły identyfikator filmu „' + s(ref) + '” (klient|tydzień|jednostka|nr|seria, z narzędzia „filmy”).');
+  return { id: p[0], week: Number(p[1]), day: p[2], order: Number(p[3]), set: p[4] };
+}
+const filmTxt = v => nz({ ref: filmRef(v), klient: v.name, data: v.at, cwiczenie: v.ex, seria: v.set,
+  wykonanie: setTxt({ seria: v.set, kg: v.kg, powt: v.reps, rpe: v.rpe, typ: v.typ, wykonane: 'TAK' }), zamiana: v.swap, uwagi_klienta: v.note,
+  komentarz_trenera: v.komT, komentarz_z_dysku: v.komD, odpowiedz_klienta: v.rep });
+
+/** Filmy z 14 dni (trPulpit.videos), bez linków. id = jeden klient; wszystkie = też skomentowane. */
+export function filmy(p, id, wszystkie) {
+  const v = ((p && p.videos) || []).filter(x => (!id || x.id === s(id).toLowerCase()) && (wszystkie || !x.kom));
+  return { filmy: v.slice(0, 40).map(filmTxt), razem: v.length };
+}
+
 /* ---------- definicje narzędzi ---------- */
 
 const ID = { type: 'string', description: 'klient_id (małe litery, z narzędzia „klienci” albo „dzis”)' };
@@ -239,6 +258,31 @@ export const TOOLS = [
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } },
 ];
 
+TOOLS.push(
+  { name: 'filmy', title: 'Filmy',
+    description: 'Filmy serii z ostatnich 14 dni (domyślnie tylko bez komentarza trenera): ref do narzędzia „film”, klient, ćwiczenie, wykonanie serii ze światłem, uwaga klienta. Bez linków.',
+    inputSchema: { type: 'object', properties: { id: Object.assign({}, ID, { description: 'klient_id; puste = wszyscy' }), wszystkie: { type: 'boolean', description: 'także skomentowane' } }, additionalProperties: false },
+    annotations: RO },
+  { name: 'film', title: 'Film serii',
+    description: 'Otwiera film serii w karcie z odtwarzaczem (¼× / ½×, klatka po klatce). Trener zaznacza fragment i wysyła klatki do Ciebie: przyjdą jako wiadomość z „klatki_id”, wtedy wołasz „klatki”. Sam filmu nie widzisz, dopóki nie dostaniesz klatek. Komentarz trener zapisuje w karcie albo przez „komentarz_filmu”.',
+    inputSchema: { type: 'object', properties: { ref: { type: 'string', description: 'ref z narzędzia „filmy” (klient|tydzień|jednostka|nr|seria)' } }, required: ['ref'], additionalProperties: false },
+    annotations: RO, _meta: { ui: { resourceUri: UI_FILM } } },
+  { name: 'klatki', title: 'Klatki filmu',
+    description: 'Klatki wycięte przez trenera z filmu (zdjęcia w kolejności czasu, z chwilą w sekundach) i dane serii. Oceń technikę na tym, co widać (pozycja kolan, pleców, tor sztangi), i powiedz, na których klatkach. Klatki wygasają po godzinie.',
+    inputSchema: { type: 'object', properties: { klatki_id: { type: 'string' } }, required: ['klatki_id'], additionalProperties: false }, annotations: RO },
+  { name: 'klatki_zapisz', title: 'Zapisz klatki (karta filmu)',
+    description: 'Tylko dla karty filmu: zapisuje klatki na godzinę i zwraca klatki_id.',
+    inputSchema: { type: 'object', properties: { ref: { type: 'string' }, klatki: { type: 'array', maxItems: 24, items: { type: 'object', properties: { t: { type: 'number' }, jpg: { type: 'string', description: 'JPEG w base64' } }, required: ['t', 'jpg'], additionalProperties: false } } },
+      required: ['ref', 'klatki'], additionalProperties: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }, _meta: { ui: { visibility: ['app'] } } },
+  { name: 'komentarz_filmu', title: 'Komentarz do filmu serii',
+    description: 'Zapisuje komentarz trenera do serii z filmem (klient zobaczy go w aplikacji przy filmie; „m:ss,d” na początku linii = chwila w filmie). Pusty tekst usuwa komentarz. Przed zapisem pokaż trenerowi tekst, jeśli sam go nie podyktował.',
+    inputSchema: { type: 'object', properties: { ref: { type: 'string' }, tekst: { type: 'string' } }, required: ['ref', 'tekst'], additionalProperties: false },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } },
+);
+
+export const KLATKI_MAX = 24, KLATKA_MAX = 400000;   // klatek w paczce, znaków base64 na klatkę (~300 kB)
+
 const need = (a, k) => { if (a[k] === undefined || a[k] === null || s(a[k]) === '') throw new Error('Brak pola „' + k + '”.'); return a[k]; };
 const cid = a => s(need(a, 'id')).toLowerCase();
 
@@ -278,6 +322,36 @@ export async function run(name, a, api, o) {
     case 'komentarz_sesji': {
       await api('trKomentarz', cid(a), Number(need(a, 'tydzien')), s(need(a, 'jednostka')), String(a.tekst === undefined ? '' : a.tekst));
       return { zapisano: true };
+    }
+    case 'filmy': return filmy(await api('trPulpit'), a.id ? cid(a) : '', !!a.wszystkie);
+    case 'film': {
+      const r = refParse(need(a, 'ref')), p = await api('trPulpit');
+      const v = (p.videos || []).find(x => filmRef(x) === filmRef(r));
+      if (!v) throw new Error('Nie ma filmu ' + filmRef(r) + ' z ostatnich 14 dni (lista: narzędzie „filmy”).');
+      if (!o.ticket) throw new Error('Odtwarzacz niedostępny.');
+      const tok = await api('trFilm');
+      return Object.assign(filmTxt(v), { _ui: { src: await o.ticket(v.file, tok.token) } });
+    }
+    case 'klatki_zapisz': {
+      const ref = filmRef(refParse(need(a, 'ref'))), k = Array.isArray(a.klatki) ? a.klatki : [];
+      if (!k.length || k.length > KLATKI_MAX) throw new Error('Od 1 do ' + KLATKI_MAX + ' klatek.');
+      k.forEach(x => { if (typeof x.jpg !== 'string' || x.jpg.length > KLATKA_MAX || !/^[A-Za-z0-9+/=]+$/.test(x.jpg)) throw new Error('Klatka nie jest małym JPEG-iem w base64.'); });
+      if (!o.store) throw new Error('Brak miejsca na klatki.');
+      return { klatki_id: await o.store({ ref, klatki: k.map(x => ({ t: Math.round(Number(x.t) * 100) / 100, jpg: x.jpg })) }), ile: k.length };
+    }
+    case 'klatki': {
+      const x = o.load ? await o.load(s(need(a, 'klatki_id'))) : null;
+      if (!x) throw new Error('Te klatki wygasły (godzina). Poproś trenera, żeby wysłał je jeszcze raz z karty filmu.');
+      const r = refParse(x.ref), p = await api('trPulpit'), v = (p.videos || []).find(y => filmRef(y) === x.ref);
+      const head = Object.assign({ klatek: x.klatki.length, chwile_s: x.klatki.map(k => k.t) }, v ? filmTxt(v) : { ref: x.ref });
+      const content = [{ type: 'text', text: JSON.stringify(head) }];
+      x.klatki.forEach(k => { content.push({ type: 'text', text: 'klatka ' + String(k.t).replace('.', ',') + ' s' }); content.push({ type: 'image', data: k.jpg, mimeType: 'image/jpeg' }); });
+      return { __content: content, __structured: head };
+    }
+    case 'komentarz_filmu': {
+      const r = refParse(need(a, 'ref'));
+      const x = await api('trKomentarzFilm', r.id, r.week, r.day, r.order, r.set, String(a.tekst === undefined ? '' : a.tekst));
+      return { zapisano: true, tekst: x && x.text };
     }
     default: throw new Error('Nieznane narzędzie: ' + name);
   }

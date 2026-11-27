@@ -12,7 +12,7 @@ export const INSTRUCTIONS = [
   'Dane z panelu trenera „Siła z Ruchu” (aplikacja treningowa dla klientów trenera personalnego Damiana). Odpowiadaj po polsku, zwięźle.',
   'Zacznij od „dzis” albo „klienci”, żeby poznać identyfikatory klientów (id) i pid propozycji asystentów.',
   'Wysiłek serii to światła: 🟢 lekko (RPE 7), 🟡 średnio (8), 🔴 ciężko (9), ✖ nieudana. Konwencje: % z maksa, kg w dół do 2,5 kg, RPE max to sufit, prio K = korekcyjne.',
-  'Zapisy (przesun, zmien_plan, decyzja_asystent, komentarz_sesji) zmieniają plan albo to, co widzi klient: rób je tylko na wyraźną prośbę trenera i powiedz, co zmieniłeś.',
+  'Zapisy (przesun, zmien_plan, decyzja_asystent, komentarz_sesji, komentarz_filmu) zmieniają plan albo to, co widzi klient: rób je tylko na wyraźną prośbę trenera i powiedz, co zmieniłeś.',
   'Dane klientów (zdrowie, ból) są poufne: nie przenoś ich poza tę rozmowę.',
 ].join('\n');
 
@@ -37,15 +37,16 @@ export async function handle(msg, ctx) {
     case 'resources/list': return res(id, { resources: RESOURCES });
     case 'resources/templates/list': return res(id, { resourceTemplates: [] });
     case 'resources/read': {
-      const r = readResource(p.uri);
+      const r = readResource(p.uri, ctx.origin);
       return r ? res(id, r) : err(id, -32002, 'Resource not found: ' + p.uri);
     }
     case 'tools/call': {
       const t = TOOLS.find(x => x.name === p.name);
       if (!t) return err(id, -32602, 'Nieznane narzędzie: ' + p.name);
       try {
-        const out = await run(p.name, p.arguments || {}, ctx.api, { today: ctx.today });
-        return res(id, { content: [{ type: 'text', text: JSON.stringify(out) }], structuredContent: out });
+        const out = await run(p.name, p.arguments || {}, ctx.api, { today: ctx.today, ticket: ctx.ticket, store: ctx.store, load: ctx.load });
+        if (out && out.__content) return res(id, { content: out.__content, structuredContent: out.__structured });   // klatki: zdjęcia dla Claude
+        return res(id, { content: [{ type: 'text', text: JSON.stringify(out, (k, v) => (k === '_ui' ? undefined : v)) }], structuredContent: out });   // _ui tylko dla karty
       } catch (e) {
         if (e && e.auth) throw e;                                      // bilet Google nieważny: index.js odpowiada 401, Claude loguje ponownie
         return res(id, { content: [{ type: 'text', text: String((e && e.message) || e) }], isError: true });

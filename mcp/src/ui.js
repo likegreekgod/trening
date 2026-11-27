@@ -8,6 +8,7 @@
 export const UI_MIME = 'text/html;profile=mcp-app';
 export const UI_DZIS = 'ui://sila-z-ruchu/dzis.html';
 export const UI_KLIENT = 'ui://sila-z-ruchu/klient.html';
+export const UI_FILM = 'ui://sila-z-ruchu/film.html';
 export const PANEL = 'https://likegreekgod.github.io/trening/trener.html';   // panel trenera (GitHub Pages), linki z kart przez ui/open-link
 
 const CSS = `
@@ -273,16 +274,143 @@ function draw(){
 }
 `;
 
+/* Karta filmu (D3 część 2): odtwarzacz z pliku przez pośrednika (bilet /film/<k>, 45 min), klatki z zaznaczonego fragmentu → klatki_zapisz → wiadomość do Claude, komentarz → komentarz_filmu. */
+const CSS_FILM = `
+.vw{position:relative;background:#141311;border-radius:var(--r);overflow:hidden}
+video{display:block;width:100%;max-height:62vh;background:#141311}
+.ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.ctl .tm{margin-left:auto;font-size:12px;color:var(--tx2);font-variant-numeric:tabular-nums}
+button.on{border-color:var(--ac);color:var(--ac)}
+.tl{position:relative;height:26px;background:var(--bg2);border-radius:6px;margin-top:8px;cursor:pointer;touch-action:none}
+.tl .sel{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--ac) 28%,transparent);border:2px solid var(--ac);border-radius:6px;pointer-events:none}
+.tl .ph{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--tx);pointer-events:none}
+.fr{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-top:8px}
+.fr img{width:100%;border-radius:4px;display:block}
+.fr div{position:relative}.fr span{position:absolute;left:3px;bottom:2px;font-size:10px;color:#fff;text-shadow:0 0 3px #000}
+.mt{font-size:12px;color:var(--tx2);margin-top:6px}
+@media (max-width:520px){.fr{grid-template-columns:repeat(4,1fr)}}
+`;
+const JS_FILM = `
+var V = null, SEL = null, N_FR = 8, FR = [], BUSY = false, ST_MSG = null;
+function mmss(t){ t = Math.max(0, t || 0); var m = Math.floor(t / 60), s = t - m * 60; return m + ':' + ('0' + Math.floor(s)).slice(-2) + ',' + Math.floor((s % 1) * 10); }
+function ref(){ return D && D.ref; }
+function grab(t){ return new Promise(function(ok, no){
+  var done = function(){ V.removeEventListener('seeked', done); try {
+    var k = Math.min(1, 768 / Math.max(V.videoWidth, V.videoHeight)), c = document.createElement('canvas');
+    c.width = Math.round(V.videoWidth * k); c.height = Math.round(V.videoHeight * k); c.getContext('2d').drawImage(V, 0, 0, c.width, c.height);
+    ok({t: Math.round(t * 100) / 100, url: c.toDataURL('image/jpeg', 0.72)});
+  } catch (e) { no(e); } };
+  V.addEventListener('seeked', done); V.currentTime = t;
+}); }
+function frames(){
+  if (BUSY || !V || !V.duration) return;
+  var a = SEL ? SEL[0] : 0, b = SEL ? SEL[1] : V.duration, n = N_FR, ts = [];
+  for (var i = 0; i < n; i++) ts.push(a + (b - a) * i / (n - 1));
+  BUSY = true; V.pause(); FR = []; ST_MSG = {t: 'Wycinam klatki…'}; draw();
+  var chain = Promise.resolve();
+  ts.forEach(function(t){ chain = chain.then(function(){ return grab(Math.min(t, V.duration - 0.05)).then(function(f){ FR.push(f); }); }); });
+  chain.then(function(){
+    status('Wysyłam ' + FR.length + ' klatek do Claude…');
+    return req('tools/call', {name: 'klatki_zapisz', arguments: {ref: ref(), klatki: FR.map(function(f){ return {t: f.t, jpg: f.url.split(',')[1]}; })}});
+  }).then(function(r){
+    if (r && r.isError) throw new Error((r.content && r.content[0] && r.content[0].text) || 'Nie udało się zapisać klatek.');
+    var x = (r && r.structuredContent) || {}; try { if (!x.klatki_id) x = JSON.parse(r.content[0].text); } catch (e) {}
+    var txt = 'Oceń technikę na klatkach ' + x.klatki_id + ' (' + D.klient + ', ' + D.cwiczenie + ', seria ' + D.seria + ', fragment ' + mmss(ts[0]) + '–' + mmss(ts[ts.length - 1]) + ').';
+    return req('ui/message', {role: 'user', content: {type: 'text', text: txt}}).then(function(){ status('✓ Klatki są u Claude, odpowiedź pojawi się w czacie.'); },
+      function(){ status('Napisz w czacie: „' + txt + '”'); });
+  }).catch(function(e){ status((e && e.message) || String(e), true); }).then(function(){ BUSY = false; draw(); });
+}
+function status(t, bad){ ST_MSG = {t: t, bad: bad}; var m = document.getElementById('st'); if (m) { m.className = bad ? 'err' : 'mt'; m.textContent = t; } size(); }
+function saveKom(ta, box){
+  var b = box.querySelector('button.pri'); b.disabled = true;
+  req('tools/call', {name: 'komentarz_filmu', arguments: {ref: ref(), tekst: ta.value}}).then(function(r){
+    if (r && r.isError) throw new Error((r.content && r.content[0] && r.content[0].text) || 'Nie udało się zapisać.');
+    D.komentarz_trenera = ta.value.trim(); msg(box, ta.value.trim() ? '✓ Zapisane, klient zobaczy komentarz przy filmie.' : '✓ Komentarz usunięty.');
+  }).catch(function(e){ msg(box, e.message || String(e), true); }).then(function(){ b.disabled = false; });
+}
+function msg(box, t, bad){ var m = box.querySelector('.err,.done'); if (m) m.remove(); box.appendChild(el('div', bad ? 'err' : 'done', t)); size(); }
+function tl(){
+  var bar = document.getElementById('tl'); if (!bar || !V) return;
+  var d = V.duration || 0, sel = bar.querySelector('.sel'), ph = bar.querySelector('.ph');
+  if (d && SEL) { sel.style.display = ''; sel.style.left = (SEL[0] / d * 100) + '%'; sel.style.width = ((SEL[1] - SEL[0]) / d * 100) + '%'; } else sel.style.display = 'none';
+  ph.style.left = d ? (V.currentTime / d * 100) + '%' : '0';
+  var tm = document.getElementById('tm'); if (tm) tm.textContent = mmss(V.currentTime) + ' / ' + mmss(d) + (SEL ? ' · zaznaczone ' + mmss(SEL[0]) + '–' + mmss(SEL[1]) : '');
+}
+function draw(){
+  var app = document.getElementById('app');
+  if (!D) { app.textContent = ''; app.appendChild(el('div', 'empty', 'Wczytuję film…')); size(); return; }
+  if (D.blad) { app.textContent = ''; app.appendChild(el('div', 'err', D.blad)); size(); return; }
+  if (!V) {
+    app.textContent = '';
+    add(app, add(el('div', 'hd'), el('b', '', D.klient + ' · ' + D.cwiczenie + ' · seria ' + D.seria), el('span', '', [D.data ? dayTxt(D.data) : '', D.wykonanie].filter(Boolean).join(' · '))));
+    if (D.uwagi_klienta || D.zamiana) app.appendChild(el('div', 'sub', [D.zamiana ? '⇄ ' + D.zamiana : '', D.uwagi_klienta ? 'Klient: „' + D.uwagi_klienta + '”' : ''].filter(Boolean).join(' · ')));
+    var vw = el('div', 'vw'); V = document.createElement('video'); V.crossOrigin = 'anonymous'; V.playsInline = true; V.preload = 'auto'; V.muted = true;
+    V.src = (D._ui && D._ui.src) || ''; vw.appendChild(V); app.appendChild(vw);
+    V.addEventListener('loadedmetadata', function(){ tl(); size(); });
+    V.addEventListener('timeupdate', tl); V.addEventListener('seeked', tl);
+    V.addEventListener('play', function(){ var p = document.getElementById('pp'); if (p) p.textContent = '❚❚'; });
+    V.addEventListener('pause', function(){ var p = document.getElementById('pp'); if (p) p.textContent = '▶'; });
+    V.addEventListener('error', function(){ status('Nie udało się wczytać filmu. Dostęp do filmu działa 45 minut: poproś Claude, żeby otworzył go jeszcze raz.', true); });
+    var c = el('div', 'ctl'), b1 = el('button', '', '‹ klatka'), pp = el('button', '', '▶'), b2 = el('button', '', 'klatka ›');
+    pp.id = 'pp';
+    b1.onclick = function(){ V.pause(); V.currentTime = Math.max(0, V.currentTime - 1 / 30); };
+    b2.onclick = function(){ V.pause(); V.currentTime = Math.min(V.duration || 0, V.currentTime + 1 / 30); };
+    pp.onclick = function(){ if (V.paused) V.play(); else V.pause(); };
+    add(c, b1, pp, b2);
+    [['¼×', .25], ['½×', .5], ['1×', 1]].forEach(function(x){ var b = el('button', x[1] === 1 ? 'on' : '', x[0]); b.setAttribute('data-rate', x[1]);
+      b.onclick = function(){ V.playbackRate = x[1]; [].forEach.call(c.querySelectorAll('[data-rate]'), function(y){ y.className = y === b ? 'on' : ''; }); }; c.appendChild(b); });
+    var tm = el('span', 'tm'); tm.id = 'tm'; c.appendChild(tm); app.appendChild(c);
+    var bar = el('div', 'tl'); bar.id = 'tl'; add(bar, el('span', 'sel'), el('span', 'ph'));
+    bar.onpointerdown = function(e){ var r = bar.getBoundingClientRect(); if (V.duration) V.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * V.duration; };
+    app.appendChild(bar);
+    var c2 = el('div', 'ctl'), s1 = el('button', '', '⇤ Początek tu'), s2 = el('button', '', 'Koniec tu ⇥'), s3 = el('button', '', 'Cały film');
+    s1.onclick = function(){ var t = V.currentTime; SEL = [t, SEL && SEL[1] > t ? SEL[1] : Math.min(V.duration, t + 2)]; tl(); };
+    s2.onclick = function(){ var t = V.currentTime; SEL = [SEL && SEL[0] < t ? SEL[0] : Math.max(0, t - 2), t]; tl(); };
+    s3.onclick = function(){ SEL = null; tl(); };
+    add(app, add(c2, s1, s2, s3));
+    var box0 = el('div'); box0.id = 'frbox'; app.appendChild(box0);
+    var kb0 = el('div'); kb0.id = 'kombox'; app.appendChild(kb0);
+  }
+  var box = document.getElementById('frbox'); box.textContent = '';
+  var bb = el('div', 'btns'), go = el('button', 'pri', BUSY ? 'Pracuję…' : 'Pokaż Claude\\u2019owi ' + N_FR + ' klatek'); go.disabled = BUSY;
+  go.onclick = frames;
+  bb.appendChild(go);
+  [8, 16].forEach(function(n){ var b = el('button', N_FR === n ? 'on' : '', n + ' klatek'); b.onclick = function(){ N_FR = n; draw(); }; bb.appendChild(b); });
+  box.appendChild(bb);
+  var st = el('div', ST_MSG && ST_MSG.bad ? 'err' : 'mt', ST_MSG ? ST_MSG.t : 'Zaznacz fragment („Początek tu” / „Koniec tu”), np. jedno powtórzenie. Bez zaznaczenia klatki idą z całego filmu.'); st.id = 'st'; box.appendChild(st);
+  if (FR.length) { var fr = el('div', 'fr'); FR.forEach(function(f){ var d = el('div'), i = el('img'); i.src = f.url; i.alt = 'klatka ' + f.t + ' s'; add(d, i, el('span', '', mmss(f.t))); fr.appendChild(d); }); box.appendChild(fr); }
+  var kb = document.getElementById('kombox');
+  if (!kb.childNodes.length) {
+    kb.appendChild(el('h3', '', 'Komentarz dla klienta'));
+    if (D.komentarz_z_dysku) kb.appendChild(el('div', 'sub', 'Z komentarzy na Dysku: ' + D.komentarz_z_dysku));
+    var ta = el('textarea'); ta.value = D.komentarz_trenera || ''; ta.placeholder = '0:05,0 kolano ucieka do środka…'; ta.rows = 3; kb.appendChild(ta);
+    var b3 = el('div', 'btns'), ins = el('button', '', '⏱ Wstaw chwilę'), sv = el('button', 'pri', 'Zapisz komentarz');
+    ins.onclick = function(){ var p = ta.selectionStart || 0, v = ta.value, ls = v.lastIndexOf('\\n', p - 1) + 1, tx = mmss(V.currentTime) + ' ';
+      ta.value = v.slice(0, ls) + tx + v.slice(ls); ta.focus(); ta.selectionStart = ta.selectionEnd = ls + tx.length; };
+    sv.onclick = function(){ saveKom(ta, kb); };
+    add(kb, add(b3, ins, sv));
+    if (D.odpowiedz_klienta) kb.appendChild(el('div', 'sub', '↩ Klient odpowiedział: ' + D.odpowiedz_klienta));
+  }
+  tl(); size();
+}
+`;
+
+export const FILM_HTML = page('Film', 'sila-z-ruchu-film', CSS_FILM, JS_FILM);
 export const KLIENT_HTML = page('Klient', 'sila-z-ruchu-klient', CSS_KLIENT, JS_KLIENT);
 
 /** Zasoby ui:// (resources/list i resources/read). */
 export const RESOURCES = [
   { uri: UI_DZIS, name: 'karta-dzis', title: 'Dziś w panelu', description: 'Karta ekranu Dziś: kto trenuje, decyzje o propozycjach asystentów AI, co wymaga uwagi.', mimeType: UI_MIME },
+  { uri: UI_FILM, name: 'karta-film', title: 'Film serii', description: 'Odtwarzacz filmu serii (¼× / ½×, klatka po klatce), klatki dla Claude, komentarz dla klienta.', mimeType: UI_MIME },
   { uri: UI_KLIENT, name: 'karta-klient', title: 'Karta klienta', description: 'Karta klienta: sygnały, liczby tygodnia, siła, ostatnie sesje, najbliższe jednostki.', mimeType: UI_MIME },
 ];
 const META = { ui: { prefersBorder: true, csp: { connectDomains: [], resourceDomains: [], frameDomains: [], baseUriDomains: [] } } };
 
-export function readResource(uri) {
+/** CSP karty filmu: film idzie z adresu pośrednika (origin zapytania). */
+const metaFilm = origin => ({ ui: { prefersBorder: true, csp: { connectDomains: origin ? [origin] : [], resourceDomains: origin ? [origin] : [], frameDomains: [], baseUriDomains: [] } } });
+
+export function readResource(uri, origin) {
+  if (uri === UI_FILM) return { contents: [{ uri: UI_FILM, mimeType: UI_MIME, text: FILM_HTML, _meta: metaFilm(origin) }] };
   if (uri === UI_DZIS) return { contents: [{ uri: UI_DZIS, mimeType: UI_MIME, text: DZIS_HTML, _meta: META }] };
   if (uri === UI_KLIENT) return { contents: [{ uri: UI_KLIENT, mimeType: UI_MIME, text: KLIENT_HTML, _meta: META }] };
   return null;
