@@ -157,10 +157,11 @@ async function page(calls, opt = {}) {
       opt.agent ? { agent: [{ pid: 'ania|z|1', id: 'ania', name: 'Ania', at: TODAY, typ: 'czerwona_flaga', zgl: true, pilne: true, text: 'Drętwienie palców przy martwym ciągu', why: '' },
         { pid: 'ania|p|2', id: 'ania', name: 'Ania', at: TODAY, typ: 'zamiana', zgl: false, pilne: false, text: 'Przysiad → Przysiad przedni', why: 'barki bolą przy gryfie', week: 12, day: 'D1', nr: 1, ex: 'Przysiad', to: 'Przysiad przedni' },
         { pid: 'bartek|p|3', id: 'bartek', name: 'Bartek', at: TODAY, typ: 'ciezar', zgl: false, pilne: false, text: 'Wyciskanie leżąc: 82,5 kg', why: 'ostatnio lekko', week: 7, day: 'D2', nr: 2, ex: 'Wyciskanie leżąc', kg: 82.5 }],
-        agentOdrz: [{ name: 'Bartek', at: TODAY, text: 'Przysiad: 90 kg', uwaga: 'Najwyżej +2,5 kg (reguła 1.9)' }] } : {}) };
+        agentOdrz: [{ name: 'Bartek', at: TODAY, text: 'Przysiad: 90 kg', uwaga: 'Najwyżej +2,5 kg (reguła 1.9)' }],
+        agentAuto: [{ pid: 'ania|a|9', id: 'ania', name: 'Ania', at: TODAY + 'T07:07:00.000Z', typ: 'skrot', week: 12, day: 'D2', text: 'skrócony trening Nogi: Wykroki 3 → 2 serie, Wspięcia pominięte', why: 'mam tylko 45 minut' }] } : {}) };
     else if (b.fn === 'trPropozycja') { await new Promise(res => setTimeout(res, 60)); const e = b.args[1];
       out = b.args[0] === 'bartek|p|3' && e.mode === 'tak' ? { ok: false, error: 'Plan się zmienił od propozycji (tydz. 7, D2, nr 2): odrzuć ją albo zmień plan ręcznie.' }
-        : { ok: true, result: { status: e.mode === 'tak' ? 'zatwierdzona' : e.mode === 'nie' ? 'odrzucona' : 'przeczytane', rows: e.mode === 'tak' ? 1 : 0, memo: !!e.zasada } }; }
+        : { ok: true, result: { status: e.mode === 'tak' ? 'zatwierdzona' : e.mode === 'nie' ? 'odrzucona' : e.mode === 'cofnij' ? 'cofnieta' : 'przeczytane', rows: e.mode === 'tak' ? 1 : 0, memo: !!e.zasada } }; }
     else if (b.fn === 'trPakiet') { await new Promise(res => setTimeout(res, 100)); const f = b.args[1], k = st.pkg || (st.pkg = opt.pkg ? JSON.parse(JSON.stringify(PKG.ania)) : null);
       if (f.mode === 'nowy' && !(f.n >= 1 && f.n <= 100)) out = { ok: false, error: 'Liczba treningów: 1–100.' };
       else if (f.mode === 'korekta' && !k) out = { ok: false, error: 'Klient nie ma pakietu: najpierw dodaj pakiet.' };
@@ -201,7 +202,7 @@ async function page(calls, opt = {}) {
     else if (b.fn === 'trZasadyUstaw') { await new Promise(res => setTimeout(res, 100));
       out = /^#+\s*5\./m.test(b.args[0]) ? { ok: false, error: 'Usuń sekcję 5 (ograniczenia per klient).' } : { ok: true, result: st.zs = { tekst: String(b.args[0]).trim(), limity: b.args[1], at: TODAY + 'T10:00:00.000Z' } }; }
     else if (b.fn === 'trAgent' || b.fn === 'trAgentUstaw' || b.fn === 'trAgentKlucz') { await new Promise(res => setTimeout(res, 60));   // asystent AI klienta (Agent.gs)
-      const a = st.ag = st.ag || { on: false, has: false, read: true, write: true, prop: true, limit: 200, at: '', end: '', ogr: '', dzis: 0, dziennik: [] };
+      const a = st.ag = st.ag || { on: false, has: false, read: true, write: true, prop: true, auto: false, limit: 200, at: '', end: '', ogr: '', dzis: 0, dziennik: [] };
       if (b.fn === 'trAgentUstaw') Object.assign(a, b.args[1]);
       let key = '';
       if (b.fn === 'trAgentKlucz') { if (b.args[1] === 'nowy') { key = 'sz_' + '0123456789abcdef'.repeat(2); Object.assign(a, { on: true, has: true, at: TODAY + 'T10:00:00.000Z', end: key.slice(-4),
@@ -1380,6 +1381,10 @@ test('panel: historia z innej aplikacji (plik Hevy → podgląd → wczytanie �
 test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia klienta, zgłoszenia w „Wymaga uwagi”)', async () => {
   const calls = [];
   const { ctx, p } = await page(calls, { loggedIn: true, agent: true });
+  await p.addInitScript(() => {   // atrapa rozpoznawania mowy (mikrofon w czacie próbnym)
+    window.SpeechRecognition = window.webkitSpeechRecognition = class { start(){ window.__mic = this; } stop(){ this.onend && this.onend(); }
+      say(t){ this.onresult({ results: [[{ transcript: t }]] }); } };
+  });
   await p.goto(base + 'trener.html'); await p.waitForSelector('.todo .it');
   const it = await p.$$eval('.todo .it', a => a.map(x => [x.querySelector('b').textContent, x.querySelector('.dot').className]));
   assert.deepEqual(it.filter(x => /asystenta AI/.test(x[0])).map(x => [x[0], /lv-bad/.test(x[1])]), [['Ania: czerwona flaga od asystenta AI', true]], 'propozycje tylko w karcie');
@@ -1405,6 +1410,14 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   assert.deepEqual(calls.filter(c => c.fn === 'trPropozycja').pop().args, ['ania|z|1', { mode: 'czytane', why: '', zasada: false }]);
   assert.equal(await p.$$eval('.todo .it', a => a.filter(x => /asystenta AI/.test(x.textContent)).length), 0, 'przeczytana flaga znika z „Wymaga uwagi”');
   assert.match(await p.textContent('#asy'), /Nic nie czeka na decyzję/);
+  // „Zrobił sam”: zmiana bota bez czekania, Cofnij po drugim dotknięciu
+  assert.match(await p.textContent('#asy .asec'), /Zrobił sam · 7 dni/);
+  assert.match(await p.textContent('[data-asy="ania|a|9"]'), /skrócony.*Wykroki 3 → 2 serie, Wspięcia pominięte.*Powód klienta: „mam tylko 45 minut”/s);
+  await p.click('[data-asy-undo="ania|a|9"]'); assert.match(await p.textContent('[data-asy-undo="ania|a|9"]'), /Na pewno cofnąć/);
+  assert.equal(calls.filter(c => c.fn === 'trPropozycja').length, 4, 'cofnięcie dopiero po drugim dotknięciu');
+  await p.click('[data-asy-undo="ania|a|9"]'); await p.waitForFunction(() => !document.querySelector('[data-asy="ania|a|9"]'));
+  assert.deepEqual(calls.filter(c => c.fn === 'trPropozycja').pop().args, ['ania|a|9', { mode: 'cofnij', why: '', zasada: false }]);
+  assert.match(await p.textContent('#asy .saved'), /Ania: cofnięte, plan jak przed zmianą/);
   // Ustawienia: zasady trenera (sekcja 5 odrzucona, limity)
   await p.goto(base + 'trener.html#ustawienia'); await p.waitForSelector('#zasady-card');
   assert.match(await p.textContent('#zasady-card'), /Brak zasad/);
@@ -1428,11 +1441,12 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   assert.match(await p.textContent('#agent .aglog'), /zaproponuj\s*odmowa · Najwyżej \+2,5 kg/);
   await p.click('#ag-new'); assert.match(await p.textContent('#ag-new'), /Na pewno/);
   assert.equal(calls.filter(c => c.fn === 'trAgentKlucz').length, 1, 'nowy klucz dopiero po drugim dotknięciu');
-  await p.click('[data-agsw="write"]'); await p.fill('#ag-ogr', 'Bez skoków na kolano lewe.');
+  assert.equal(await p.getAttribute('[data-agsw="auto"]', 'aria-checked'), 'false', '„Sam skraca i zamienia” domyślnie wyłączone');
+  await p.click('[data-agsw="write"]'); await p.click('[data-agsw="auto"]'); await p.fill('#ag-ogr', 'Bez skoków na kolano lewe.');
   await p.click('[data-agnum="limit"][data-d="-10"]');
   assert.equal(await p.$('#kl-form'), null, 'formularz klienta jest w innej sekcji');
   await p.click('#ag-save'); await p.waitForSelector('#agent .saved');
-  assert.deepEqual(calls.filter(c => c.fn === 'trAgentUstaw').pop().args, ['ania', { read: true, write: false, prop: true, limit: 190, ogr: 'Bez skoków na kolano lewe.' }]);
+  assert.deepEqual(calls.filter(c => c.fn === 'trAgentUstaw').pop().args, ['ania', { read: true, write: false, prop: true, auto: true, limit: 190, ogr: 'Bez skoków na kolano lewe.' }]);
   const oa = JSON.parse(decodeURIComponent((await p.getAttribute('#ag-oapi', 'href')).split(',')[1]));
   assert.equal(oa.openapi, '3.1.0'); assert.ok(oa.paths['/ciezarNaDzis'].get);
   await shot(p, 'trener-agent-ai.png');
@@ -1441,7 +1455,13 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   await p.click('#agchat summary');
   assert.ok(await p.isDisabled('#ach-go'));
   assert.equal(await p.getAttribute('#ach-real', 'aria-checked'), 'false');
-  await p.fill('#ach-in', 'Co mam dziś?'); await p.click('#ach-go');
+  // mikrofon: dyktowanie dopisuje tekst do pola, drugie dotknięcie zatrzymuje
+  await p.click('#ach-mic'); await p.waitForSelector('#ach-mic.on');
+  assert.match(await p.textContent('#agchat .acmic'), /Słucham/);
+  await p.evaluate(() => window.__mic.say('Co mam dziś?'));
+  assert.equal(await p.inputValue('#ach-in'), 'Co mam dziś?'); assert.ok(!(await p.isDisabled('#ach-go')));
+  await p.click('#ach-mic'); await p.waitForSelector('#ach-mic:not(.on)');
+  await p.click('#ach-go');
   await p.waitForSelector('#agchat .acm.a');
   assert.match(await p.textContent('#agchat .acm.a .acb'), /Dziś przysiad 3×5\.Najwyżej 102,5 kg/);
   assert.match(await p.textContent('#agchat .acst li.no'), /zapiszSerie\s*kg: 120\s*✕ Najwyżej 102,5 kg \(reguła 1\.9\)/);
