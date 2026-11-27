@@ -1164,3 +1164,24 @@ test('agOpenApi / agInstrukcja: opis API dla bota klienta (te same akcje co serw
   assert.ok(!/sz_[0-9a-f]{8}/.test(t));                                                                   // bez klucza
   assert.deepEqual(JSON.parse(JSON.stringify(C.AG_TOOLS)), L.AG_READ.concat(L.AG_WRITE));                       // czat w panelu ma te same akcje i opisy
 });
+
+test('sekcje jednostki: sectionOf i sectionRuns (bez sortowania, jedna sekcja = bez nagłówków, obwód w jednej sekcji)', () => {
+  const E = (order, prio, section, x) => Object.assign({ order, prio, section }, x || {});
+  assert.deepEqual([E(1, 'A', ''), E(2, 'K', ''), E(3, 'K', 'R'), E(4, 'B', 'g'), E(5, 'K', '', { own: true })].map(L.sectionOf), ['G', 'K', 'R', 'G', 'G']);
+  assert.deepEqual(L.sectionRuns([E(1, 'A', ''), E(2, 'B', '')]), []);                           // stary plan: bez nagłówków
+  assert.deepEqual(L.sectionRuns([E(1, 'K', 'K'), E(2, 'K', '')]), []);                          // jedna sekcja K: też bez
+  assert.deepEqual(L.sectionRuns([E(1, 'K', ''), E(2, 'A', ''), E(3, 'K', '')]), []);            // stary plan z K bez pola sekcja: wygląda jak dotąd
+  const r = L.sectionRuns([E(1, 'K', 'R'), E(2, 'K', 'R'), E(3, 'A', ''), E(4, 'K', ''), E(5, 'B', '')]);
+  assert.deepEqual(r.map(x => [x.sec, x.name, x.orders]), [['R', 'Rozgrzewka', [1, 2]], ['G', 'Główne', [3]], ['K', 'Korekcyjne', [4]], ['G', 'Główne', [5]]]);   // kolejność planu, nagłówek przy zmianie
+  const c = L.sectionRuns([E(1, 'K', 'R'), E(2, 'B', '', { circuit: 'A' }), E(3, 'K', '', { circuit: 'A' })]);
+  assert.deepEqual(c.map(x => x.orders), [[1], [2, 3]]);                                           // obwód nie dzieli się na sekcje
+});
+
+test('sekcja Rozgrzewka poza tonażem w aplikacji: volLogs i unitStats', () => {
+  const plan = [{ week: 1, day: 'T1', order: 1, section: 'R' }, { week: 1, day: 'T1', order: 2, section: '' }];
+  const logs = [{ tydzien: 1, jednostka: 'T1', nr_cw: 1 }, { tydzien: 1, jednostka: 'T1', nr_cw: 2 }, { tydzien: 2, jednostka: 'T1', nr_cw: 1 }];
+  assert.deepEqual(L.volLogs(plan, logs).map(l => l.tydzien + '/' + l.nr_cw), ['1/2', '2/1']);
+  const S = { 1: { wykonane: 'TAK', kg: 20, powt: 10 } };
+  const st = L.unitStats([{ order: 1, sets: 1, reps: '10', section: 'R', prio: 'K' }, { order: 2, sets: 1, reps: '10', prio: 'A' }], () => S);
+  assert.equal(st.ton, 200); assert.equal(st.done, 2);                                  // seria się liczy, tonaż tylko z Głównych
+});

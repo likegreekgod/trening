@@ -53,7 +53,7 @@ const { fmtKg, num, esc, blank, plural, nextUnit, likeLast, tplUnit, EFF, EFF_FI
   isOly, RATE, rateOf, olyCap, sugOly, olyLocked, SWAP_WHY, swapOptions, swapAuto, swapText, parseSwap,
   PLATE_M, analyse, vbtOut, pathSVG, groupOf,
   cmjHeight, CMJ_PRESETS, HOOPER, readyBase, verdict, READY_ADVICE,
-  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, circuitGroups, circuitState, circuitLetter, circuitTidy, orderMove, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, exRegions, exBrowse, EX_REGIONS, EX_PART_SHORT, timeUnit, repsLabel,
+  doneSets, strengthSeries, records, weeklyTonnage, ZONES, zoneReps, loadCalendar, readySeries, mean, hardSetsByPart, coachNotes, notesByWeek, weekSummary, unitSummary, unitRecord, ownWeek, ownNextDay, CIRCUIT_REST, SECTION_NAMES, sectionRuns, volLogs, circuitGroups, circuitState, circuitLetter, circuitTidy, orderMove, isComplex, ownJoin, ownSplit, complexRepsOk, exSearch, exParts, exRegions, exBrowse, EX_REGIONS, EX_PART_SHORT, timeUnit, repsLabel,
   isEmom, SETS_MAX, emomSegs, emomKg, SKIP_WHY, skipText, parseSkip, cutPlan, SET_SEC, cmjSpread, mp4Fps, slowNameLowFps, cmjFlight, CMJ_FPS, CMJ_G, mondayOf, weekDays, pickUnit, todayInfo, nextTip, focusSteps, focusStart, blockReport, icsFile, gcalUrl, STAN_PLACES, STAN_CTX, stanKey, stanRecent, stanApply, stanDrop, CIALO, cialoVal, cialoList, cialoApply, cialoDrop, cialoDelta } = window.TL;
 
 /* ---------- kolejka offline ---------- */
@@ -811,6 +811,7 @@ function refreshStats(){
   if (ton) ton.textContent = st.ton.toLocaleString('pl-PL');
   todayDraw();
   fxDraw();
+  sekDraw();
 }
 /** karta „dziś” (lib todayInfo): przed startem ile ćwiczeń, serii i minut; w trakcie postęp i następne ćwiczenie; po serii rysowana od nowa */
 function todayDraw(){
@@ -831,7 +832,7 @@ function todayDraw(){
   box.hidden = false;
   slimDraw(t);
   $('#td-go').onclick = () => {
-    if (t.next) setFold(t.next.order, false);
+    if (t.next) { sekOpen(t.next.order); setFold(t.next.order, false); }
     const c = t.next ? document.querySelector(`.card[data-card="${t.next.order}"]`) : document.querySelector('.card.sess'); if (!c) return;
     const g = c.closest('.grp') || c;
     window.scrollTo({ top: g.getBoundingClientRect().top + window.scrollY - 8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -1166,7 +1167,7 @@ function unitDays(){
 /** Postęp → Tydzień: wykonanie, rekordy, odczucia, pominięte, komentarze trenera; tydzień kalendarzowy z ◀ ▶ */
 function weekCards(sets, dates, today){
   const now = mondayOf(today), mon = PWK || now, list = unitList(), t = wkTitle(mon, list);
-  const w = weekSummary(mon, { units: list, plan: PLAN, sets, sessions: (DATA && DATA.sessions) || [], ready: readyRows(), logs: (DATA && DATA.logs) || [], notes: cnAll(), dates });
+  const w = weekSummary(mon, { units: list, plan: PLAN, sets, sessions: (DATA && DATA.sessions) || [], ready: readyRows(), logs: vLogs(), notes: cnAll(), dates });
   const nav = `<section class="wk" aria-label="Tydzień ${t.range}"><div class="wk-h"><button type="button" class="wk-a" data-pw="-1" aria-label="Poprzedni tydzień">◀</button>
       <div class="wk-t"><b>${esc(t.t)}</b><small>${t.range}</small></div>
       <button type="button" class="wk-a" data-pw="1" aria-label="Następny tydzień" ${mon >= now ? 'disabled' : ''}>▶</button>
@@ -1199,7 +1200,7 @@ function weekCards(sets, dates, today){
 }
 /** Postęp → Blok: raport po bloku (lib blockReport, jak zakładka Bloki w arkuszu), ◀ ▶ między blokami */
 function blockCards(sets, dates, today){
-  const all = blockReport({ plan: PLAN, logs: (DATA && DATA.logs) || [], sessions: (DATA && DATA.sessions) || [], ready: readyRows(), dates,
+  const all = blockReport({ plan: PLAN, logs: vLogs(), sessions: (DATA && DATA.sessions) || [], ready: readyRows(), dates,
     notes: (DATA && DATA.blockNotes) || {}, today });
   const list = all.filter(b => b.state !== 'next' && (!b.empty || b.state === 'now' || b.note));
   if (!list.length) return emptyCard('chart', 'Tu będzie raport z bloku', 'Raport pojawi się po pierwszym treningu z planu podzielonego na bloki.', ES_GO);
@@ -1301,7 +1302,7 @@ function cialoBind(today){
   });
 }
 function renderPostep(){
-  const logs = (DATA && DATA.logs) || [], dates = unitDays();
+  const logs = vLogs(), dates = unitDays();
   const sets = doneSets(logs, PLAN, dates), today = localDate();
   head(NAME ? 'Cała historia · ' + NAME : 'Cała historia', 'Postęp', '');
   let body = '';
@@ -1826,6 +1827,8 @@ function edUndel(order){
 const CNK = 'cn_' + KEY;
 function cnSeen(){ try { return JSON.parse(localStorage.getItem(CNK) || '[]'); } catch (e) { return []; } }
 function cnMark(keys){ try { localStorage.setItem(CNK, JSON.stringify(cnSeen().concat(keys).slice(-400))); } catch (e) {} }
+/** logi do objętości i tonażu: bez ćwiczeń z sekcji Rozgrzewka (lib volLogs) */
+const vLogs = () => volLogs(PLAN, (DATA && DATA.logs) || []);
 const cnAll = () => coachNotes((DATA && DATA.logs) || [], (DATA && DATA.sessions) || []);
 /** chwila z komentarza: przy serii z filmem przycisk, który otwiera film od tej chwili (openFilm) */
 const cnTime = (n, l) => !l.t ? '' : n.video && l.s >= 0 ? `<button type="button" class="cn-t cn-tb" data-fv="${esc(rkOf(n))}" data-ft="${l.s}" aria-label="Film od ${esc(l.t)}">▶ ${esc(l.t)}</button> ` : `<b class="cn-t">${esc(l.t)}</b> `;
@@ -2309,8 +2312,12 @@ function renderTrening(){
   const fx = FX && exs.length > 1;
   let h = sbNote() + (fx ? '<section class="fx" id="fx" aria-label="Tryb skupienia"></section>' : '') + unoteCard(exs) + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section><div class="wkm" id="wkm"></div>' : '') + weekBar('t') + notesCard() + readyBanner();
   const grps = circuitGroups(exs), gOf = o => grps.find(g => g.orders.includes(o));
+  SKALL = sectionRuns(exs);
+  const sks = fx ? [] : SKALL;                                      // sekcje (Rozgrzewka / Główne / Korekcyjne): nagłówki tylko w całej liście
   exs.forEach(ex => {
     const g = gOf(ex.order), i = g ? g.orders.indexOf(ex.order) : -1;
+    const sk = sks.find(r => r.orders[0] === ex.order);
+    if (sk) h += `<button type="button" class="sek-h" data-sek="${sk.i}" aria-expanded="true"><span class="sek-n">${esc(sk.name)}</span><span class="sek-m"></span><i class="chev" aria-hidden="true"></i></button>`;
     if (i === 0) h += `<section class="grp" data-grp="${g.id}" aria-label="Obwód ${g.id}"><div class="grp-h"><b>${g.orders.length === 2 ? 'Superseria' : 'Obwód'} ${g.id}</b><span class="grp-r"></span></div><div class="grp-now" aria-live="polite"></div>`;
     h += card(ex, g ? g.id + (i + 1) : '');
     if (g && i === g.orders.length - 1) h += '</section>';
@@ -2320,7 +2327,7 @@ function renderTrening(){
   if (EDIT && !s0.own) h += edRemoved();
   h += sessCard(s0) + helpCard() + (fx ? '<div class="fx-nav" id="fx-nav"></div>' : '');
   $('#main').innerHTML = h;
-  CIRC = grps; bind(exs, s0);
+  CIRC = grps; SKS = sks; bind(exs, s0);
   grps.forEach(g => grpDraw(g.id));
   bindNotes();
   const oa = $('#own-add'); if (oa) oa.onclick = () => openOwn(units(PLAN).find(u => u.week === cur.week && u.day === cur.day));
@@ -2328,6 +2335,7 @@ function renderTrening(){
   document.querySelectorAll('[data-undel]').forEach(b => b.onclick = () => edUndel(+b.dataset.undel));
   vqMarks();
   bindFold(exs);
+  sekBind();
   stickDraw();
   refreshStats();
   bindWeekBar();
@@ -2335,7 +2343,8 @@ function renderTrening(){
   const sb = $('#sb-ok'); if (sb) sb.onclick = () => { try { localStorage.setItem(SBK, '1'); } catch (e) {} sb.closest('.sbnote').remove(); };
   $('#go-dysp').onclick = () => { TAB = 'dysp'; render(); window.scrollTo(0, 0); };
   // „⋯” jednostki w górnym pasku: rzadkie akcje całego treningu
-  const foldAll = () => { let n = 0; exs.forEach(ex => { if (cardDone(ex.order) && !document.querySelector(`.card[data-card="${ex.order}"]`).classList.contains('fold')) { setFold(ex.order, true); n++; } }); toast(n ? 'Zwinięto: ' + n + '.' : 'Brak zrobionych do zwinięcia.'); };
+  const foldAll = () => { let n = 0; exs.forEach(ex => { if (cardDone(ex.order) && !document.querySelector(`.card[data-card="${ex.order}"]`).classList.contains('fold')) { setFold(ex.order, true); n++; } });
+    SKS.forEach(r => { if (sekDone(r) && !sekShut(r)) { sekSet(r, true); n++; } }); toast(n ? 'Zwinięto: ' + n + '.' : 'Brak zrobionych do zwinięcia.'); };
   const um = $('#umore'); if (um) um.onclick = () => {
     openSheet(`<h2 id="sheet-t">${esc(s0.title || cur.day)}</h2><p class="sub">Więcej akcji</p>
       <div class="opts act">
@@ -2956,18 +2965,20 @@ function card(ex, tag){
   const skipLine = sk ? `<div class="skipped"><span>${gone ? 'Pominięte' : 'Skrócone do ' + ex.sets + ' z ' + ex.planSets + ' ' + plural(ex.planSets, 'serii', 'serii', 'serii')}${sk.why ? ' · ' + esc(sk.why) : ''}</span><button type="button" class="btn sm" data-unskip="${ex.order}">Przywróć</button></div>` : '';
   // film „Jak wykonać”: ikona w nagłówku (jeden film = link, kilka = lista); bez filmu puste miejsce, żeby „⋯” i strzałka stały w miejscu
   const infs = ex.swap ? [] : (ex.infos || []), prioTxt = ex.prio === 'K' ? 'korekcja' : ex.prio === 'B' ? 'opcjonalne' : 'główne';
+  // w jednostce z sekcjami etykieta priorytetu powtarzająca sekcję znika (K w Rozgrzewce i Korekcyjnych, A w Głównych); „opcjonalne” zostaje
+  const skr = SKALL.find(r => r.orders.includes(ex.order)), prioHide = !!skr && (ex.prio === 'K' ? skr.sec !== 'G' : ex.prio !== 'B' && skr.sec === 'G');
   const infBtn = infs.length === 1 ? `<a class="infb inf" href="${esc(infs[0].u)}" target="_blank" rel="noopener" aria-label="Jak wykonać: ${esc(ex.name)}">${PLAY_SVG}</a>`
     : infs.length ? `<button type="button" class="infb" data-inf="${ex.order}" aria-label="Jak wykonać: ${esc(ex.name)} (${infs.length} filmy)">${PLAY_SVG}</button>`
     : fxOf(ex).length ? fxBtn(ex) : `<span class="infb" data-fxo="${ex.order}" aria-hidden="true"></span>`;
   const top = `<div class="card ${ex.prio === 'K' ? 'k' : ''} ${oly ? 'oly' : ''} ${gone ? 'skip' : ''}" data-card="${ex.order}">
-    <div class="ch"><button type="button" class="fold-b" data-fold="${ex.order}" aria-expanded="true">${tag ? `<span class="gl">${tag}</span>` : ''}<span class="ft"><span class="cn">${esc(ex.name)}</span><span class="badge ${ex.prio}">${prioTxt}</span><span class="fsum"></span></span></button>
+    <div class="ch"><button type="button" class="fold-b" data-fold="${ex.order}" aria-expanded="true">${tag ? `<span class="gl">${tag}</span>` : ''}<span class="ft"><span class="cn">${esc(ex.name)}</span>${prioHide ? '' : `<span class="badge ${ex.prio}">${prioTxt}</span>`}<span class="fsum"></span></span></button>
       <div class="acts">${infBtn}<button type="button" class="more" data-more="${ex.order}" aria-label="Więcej akcji: ${esc(ex.name)}">${MORE_SVG}</button><button type="button" class="fold-c" data-fold="${ex.order}" aria-expanded="true" aria-label="Zwiń albo rozwiń: ${esc(ex.name)}"><i class="chev" aria-hidden="true"></i></button></div></div>
     <div class="cbody">
     ${ex.swap ? `<div class="swapped"><span>Zamiast: ${esc(ex.swap.from)} · ${esc(ex.swap.why)}</span><button type="button" class="btn sm" data-unswap="${ex.order}">Cofnij zamianę</button></div>` : ''}
     ${skipLine}`;
   if (gone) return top + noteBox + '</div></div>';
   return top + `
-    <div class="rx"><span class="badge ${ex.prio} bp">${prioTxt}</span>${SIMPLE ? rxSimple(ex) : rxPro(ex)}${LIVE && !ex.own ? `<button type="button" class="tplan" data-tplan="${ex.order}" aria-label="Zmień plan: ${esc(ex.name)}">✎ zmień plan</button>` : ''}</div>
+    <div class="rx">${prioHide ? '' : `<span class="badge ${ex.prio} bp">${prioTxt}</span>`}${SIMPLE ? rxSimple(ex) : rxPro(ex)}${LIVE && !ex.own ? `<button type="button" class="tplan" data-tplan="${ex.order}" aria-label="Zmień plan: ${esc(ex.name)}">✎ zmień plan</button>` : ''}</div>
     ${lastLine(ex)}
     ${SIMPLE ? hintSimple(ex) : ''}
     ${dropInfo}
@@ -3077,7 +3088,7 @@ const recSum = ex => foldSum(ex.order);
 function doneSummary(minutes){
   const exs = curExs(), sets = unitSets(exs);
   const u = unitList().find(x => x.week === cur.week && x.day === cur.day);
-  return Object.assign(unitSummary({ week: cur.week, day: cur.day, plan: PLAN, logs: (DATA && DATA.logs) || [], sessions: (DATA && DATA.sessions) || [],
+  return Object.assign(unitSummary({ week: cur.week, day: cur.day, plan: PLAN, logs: vLogs(), sessions: (DATA && DATA.sessions) || [],
     dates: unitDays(), stats: unitStats(exs, exLogs), minutes, sets }), { title: (u && u.title) || '', date: localDate() });
 }
 function openDone(u, off){
@@ -3254,6 +3265,43 @@ function bindFold(exs){
   exs.forEach(ex => { const st = foldGet()[foldKey(ex.order)]; foldSum(ex.order); setFold(ex.order, st === undefined ? cardDone(ex.order) : st === 1, false); });
   document.querySelectorAll('[data-fold]').forEach(b => b.onclick = () => { if (!fxOn()) { setFold(b.dataset.fold, !b.closest('.card').classList.contains('fold')); recAll(); } });
 }
+/* ---------- sekcje jednostki w całej liście (lib sectionRuns): nagłówek zwija i rozwija ćwiczenia sekcji; tylko widok ----------
+ * Stan w sk_<klucz> {„tydzień|jednostka”: {nr sekcji: 1 zwinięta / 0 rozwinięta}}; bez wpisu sekcja zrobiona jest zwinięta.
+ * Sekcja, która właśnie stała się zrobiona, zwija się sama (także po ręcznym rozwinięciu), jak karta ćwiczenia. */
+let SKS = [], SKDN = null, SKALL = [];                                       // SKALL: sekcje jednostki także w trybie skupienia (etykieta priorytetu)                                                    // sekcje bieżącej jednostki, zrobione przy ostatnim rysowaniu
+const SKK = 'sk_' + KEY, skUnit = () => cur.week + '|' + cur.day;
+const skGet = () => { try { return JSON.parse(localStorage.getItem(SKK) || '{}') || {}; } catch (e) { return {}; } };
+const sekDone = r => r.orders.every(o => cardDone(o));
+const sekShut = r => { const v = (skGet()[skUnit()] || {})[r.i]; return v === undefined ? sekDone(r) : v === 1; };
+function sekSet(r, on){
+  const m = skGet(), u = skUnit(); (m[u] = m[u] || {})[r.i] = on ? 1 : 0;
+  try { localStorage.setItem(SKK, JSON.stringify(m)); } catch (e) {}
+  sekPaint(r, on);
+}
+/** pokazuje albo chowa ćwiczenia sekcji (karty i ramki obwodów); karty zostają w DOM */
+function sekPaint(r, on){
+  const b = document.querySelector(`.sek-h[data-sek="${r.i}"]`); if (!b) return;
+  b.setAttribute('aria-expanded', String(!on)); b.classList.toggle('shut', on);
+  r.orders.forEach(o => { const c = document.querySelector(`.card[data-card="${o}"]`); if (c) (c.closest('.grp') || c).classList.toggle('sek-off', on); });
+}
+function sekDraw(){
+  if (!SKS.length || !$('.sek-h')) return;
+  const now = new Set(SKS.filter(sekDone).map(r => r.i));
+  SKS.forEach(r => {
+    const dn = r.orders.filter(o => cardDone(o)).length, b = document.querySelector(`.sek-h[data-sek="${r.i}"]`); if (!b) return;
+    b.querySelector('.sek-m').textContent = r.orders.length + ' · ' + dn + '/' + r.orders.length + (dn === r.orders.length ? ' ✓' : '');
+    b.setAttribute('aria-label', `${r.name}: ${r.orders.length} ${plural(r.orders.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')}, zrobione ${dn} z ${r.orders.length}`);
+    if (SKDN && SKDN.u === skUnit() && now.has(r.i) && !SKDN.s.has(r.i)) sekSet(r, true);   // właśnie zrobiona: zwiń
+    else sekPaint(r, sekShut(r));
+  });
+  SKDN = { u: skUnit(), s: now };
+}
+/** rozwija sekcję z ćwiczeniem o (przejście do ćwiczenia z „Dalej” albo z trybu skupienia) */
+const sekOpen = o => { const r = SKS.find(x => x.orders.includes(+o)); if (r && sekShut(r)) sekSet(r, false); };
+function sekBind(){
+  document.querySelectorAll('.sek-h').forEach(b => b.onclick = () => { const r = SKS.find(x => x.i === +b.dataset.sek); if (r) { sekSet(r, !sekShut(r)); stickDraw(); } });
+  sekDraw();
+}
 /* ---------- tryb skupienia (lib focusSteps, focusStart): wszystkie karty zostają w DOM, widać jeden krok; przełącznik pod „⋯” górnego paska, wybór w fx_<klucz> ---------- */
 const FXK = 'fx_' + KEY;
 let FX = false, FXI = null, FXU = '', FXM = false;                // włączony, numer kroku (liczba kroków = podsumowanie), jednostka, której dotyczy krok, klient sam zmienił krok
@@ -3264,7 +3312,7 @@ function fxSet(on){
   FX = on; FXI = null; FXM = false; try { localStorage.setItem(FXK, on ? '1' : '0'); } catch (e) {}
   renderTrening();
   const c = !on && o ? document.querySelector(`.card[data-card="${o}"]`) : null;   // powrót do listy: zostań przy ćwiczeniu, które było na ekranie
-  if (c) { setFold(o, false, false); window.scrollTo(0, (c.closest('.grp') || c).getBoundingClientRect().top + window.scrollY - 8); } else window.scrollTo(0, 0);
+  if (c) { sekOpen(o); setFold(o, false, false); window.scrollTo(0, (c.closest('.grp') || c).getBoundingClientRect().top + window.scrollY - 8); } else window.scrollTo(0, 0);
   stickDraw();
 }
 /** przejście do kroku i; z = obrót (°), na którym palec puścił kartę: wtedy (i przy „‹” / „Następne”) karty jadą po łuku, fxArc */
@@ -3315,7 +3363,8 @@ function fxDraw(){
   });
   show.forEach(o => { const c = document.querySelector(`.card[data-card="${o}"]`); if (c) { c.classList.remove('fold'); c.classList.add('fxc'); } });
   const title = !st ? 'Podsumowanie' : show.length > 1 ? `Ćwiczenia ${pos(show[0])}–${pos(show[show.length - 1])} z ${exs.length}` : `Ćwiczenie ${pos(show[0])} z ${exs.length}`;
-  bar.innerHTML = `<div class="fx-t"><b id="fx-title">${title}</b><button type="button" class="fx-l" id="fx-list">☰ Cała lista</button></div>
+  const skr = sectionRuns(exs).find(r => st && r.orders.includes(st.orders[0]));   // etykieta sekcji, gdy jednostka ma ich kilka
+  bar.innerHTML = `<div class="fx-t"><span class="fx-tt">${skr ? `<small class="fx-sk">${esc(skr.name)}</small>` : ''}<b id="fx-title">${title}</b></span><button type="button" class="fx-l" id="fx-list">☰ Cała lista</button></div>
     <div class="fx-seg" role="img" aria-label="Zrobione ${done.length} z ${exs.length} ćwiczeń">${exs.map(ex => `<i class="${done.includes(ex.order) ? 'd' : show.includes(ex.order) ? 'c' : ''}"></i>`).join('')}</div>`;
   $('#fx-list').onclick = () => fxSet(false);
   const nx = steps[FXI + 1], nav = $('#fx-nav');

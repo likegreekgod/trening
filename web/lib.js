@@ -243,6 +243,36 @@
   /* ---------- obwód / superseria: sąsiednie ćwiczenia z tą samą literą (Plan.obwod), robione na zmianę ---------- */
   L.CIRCUIT_REST = 90;                                                           // przerwa po całej rundzie [s]
   /** grupy obwodów w jednostce: [{id: 'A', orders: [2, 3, 4]}]; sama litera przy jednym ćwiczeniu albo EMOM = zwykłe ćwiczenie */
+  /**
+   * Sekcje jednostki (Plan `sekcja`, w getData `section`): R Rozgrzewka, G Główne, K Korekcyjne. Tylko do wyświetlania.
+   * Puste: prio K → K, reszta → G; własny trening zawsze G. Obwód zostaje w sekcji pierwszego ćwiczenia (walidator i tak go pilnuje).
+   */
+  L.SECTION_NAMES = { R: 'Rozgrzewka', G: 'Główne', K: 'Korekcyjne' };
+  L.sectionOf = ex => {
+    if (!ex || ex.own) return 'G';
+    const s = String(ex.section || '').toUpperCase();
+    return /^[RGK]$/.test(s) ? s : String(ex.prio || '').toUpperCase() === 'K' ? 'K' : 'G';
+  };
+  /**
+   * → [{i, sec, name, orders}] po kolei wg planu; nagłówek tam, gdzie sekcja się zmienia. Bez nagłówków ([]), gdy żadne ćwiczenie
+   * nie ma wpisanej sekcji (stary plan, także z K między innymi) albo jednostka ma jedną sekcję.
+   */
+  L.sectionRuns = exs => {
+    if (!(exs || []).some(ex => !ex.own && /^[RGK]$/i.test(String(ex.section || '')))) return [];
+    const out = []; let prev = null;
+    (exs || []).forEach(ex => {
+      const c = /^EMOM$/i.test(String(ex.mode || '')) ? '' : String(ex.circuit || '');
+      const sec = prev && c && prev.c === c ? prev.sec : L.sectionOf(ex);
+      if (!out.length || out[out.length - 1].sec !== sec) out.push({ i: out.length, sec, name: L.SECTION_NAMES[sec], orders: [] });
+      out[out.length - 1].orders.push(ex.order); prev = { c, sec };
+    });
+    return new Set(out.map(r => r.sec)).size > 1 ? out : [];
+  };
+  /** logi bez ćwiczeń z sekcji Rozgrzewka (jawne `section` R): poza tonażem i objętością w Postępie i podsumowaniu (decyzja 27.11) */
+  L.volLogs = (plan, logs) => {
+    const W = {}; (plan || []).forEach(r => { if (String(r.section || '').toUpperCase() === 'R' && !r.own) W[r.week + '|' + r.day + '|' + r.order] = 1; });
+    return Object.keys(W).length ? (logs || []).filter(l => !W[l.tydzien + '|' + l.jednostka + '|' + l.nr_cw]) : (logs || []);
+  };
   L.circuitGroups = exs => {
     const out = []; let g = null;
     (exs || []).forEach(ex => {
@@ -461,7 +491,7 @@
         if (l.wykonane !== 'TAK' || /^R/i.test(s)) return;
         if (/^\d+$/.test(s) && +s <= ex.sets) done++;
         const kg = parseFloat(String(l.kg).replace(',', '.')), reps = parseFloat(String(l.powt).replace(',', '.'));
-        if (kg > 0 && reps > 0 && !L.timeUnit(ex.reps)) ton += kg * reps;     // ćwiczenie na czas: sekundy to nie powtórzenia
+        if (kg > 0 && reps > 0 && !L.timeUnit(ex.reps) && L.sectionOf(ex) !== 'R') ton += kg * reps;   // na czas i sekcja Rozgrzewka: bez tonażu
       });
     });
     return { done, all, ton: Math.round(ton) };
