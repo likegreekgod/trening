@@ -147,6 +147,8 @@ async function page(calls, opt = {}) {
         else k.show = !!f.show;
         out = { ok: true, result: st.pkg }; } }
     else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: Object.assign(opt.noSets ? Object.assign(klient(), { logs: [] }) : opt.unticked ? untick(klient()) : klient(), opt.pkg ? { pkg: PKG.ania } : {}) } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
+    else if (b.fn === 'trTytul') { await new Promise(res => setTimeout(res, 100)); const t = String(b.args[1].title).replace(/\s+/g, ' ').trim();
+      out = t.length > 40 ? { ok: false, error: 'Nazwa: najwyżej 40 znaków.' } : { ok: true, result: { title: t, n: 2 } }; }
     else if (b.fn === 'trKomentarz') out = { ok: true, result: { text: String(b.args[3]).trim(), at: TODAY + 'T19:52:00.000Z' } };
     else if (b.fn === 'trSzkic') { st.ai = (st.ai || 0) + 1; await new Promise(res => setTimeout(res, 150));
       out = opt.ai === false ? { ok: false, error: 'Szkic AI nie jest jeszcze włączony: wklej klucz Claude API w panelu → Ustawienia (klucz z console.anthropic.com).' }
@@ -512,6 +514,43 @@ test('panel: komentarz do sesji ze szkicem AI (szkic, poprawka „Krócej”, za
   await s3.p.goto(base + 'trener.html#k/ania/przeglad'); await s3.p.waitForSelector('.sr .sx .nd');   // szare też w skrócie sesji w Przeglądzie
   assert.deepEqual(s3.p.errors, []);
   await s3.ctx.close();
+});
+
+test('panel: nazwa sesji (✎ przy nagłówku → trTytul, Enter zapisuje, Esc anuluje)', async () => {
+  for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
+    const calls = [];
+    const { ctx, p } = await page(calls, Object.assign({ loggedIn: true, scheme }, vp ? { vp } : {}));
+    await p.goto(base + 'trener.html#k/ania/sesje'); await p.waitForSelector('details.ses[open] .kedit textarea');
+    const ses = 'details.ses:has-text("tydz. 11 · T2")';
+    assert.equal(await p.$eval(ses, d => d.open), false);
+    await p.click(ses + ' .sren');                                                // ✎ otwiera sesję i pole z obecną nazwą, bez zwijania
+    await p.waitForSelector(ses + '[open] .snm input:focus');
+    assert.equal(await p.inputValue(ses + ' .snm input'), 'Góra');
+    if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
+    await p.fill(ses + ' .snm input', '  Trening   personalny 2 ');
+    await p.$eval(ses + ' .snm', e => e.scrollIntoView({ block: 'center' }));
+    await p.screenshot({ path: path.join(SCREENS, vp ? 'trener-nazwa-sesji-telefon-ciemny.png' : 'trener-nazwa-sesji-jasny.png') });
+    await p.click(ses + ' .snm [data-sn="save"]');
+    await p.waitForSelector(ses + ' .snm', { state: 'detached' });
+    assert.deepEqual(calls.find(c => c.fn === 'trTytul').args, ['ania', { week: 11, day: 'T2', title: 'Trening personalny 2' }]);
+    assert.match(await p.textContent(ses + ' summary b'), /tydz\. 11 · T2 · Trening personalny 2$/);
+    assert.equal(await p.$eval(ses, d => d.open), true);
+    // Esc zamyka pole bez zapisu; za długa nazwa = komunikat serwera w polu
+    await p.click(ses + ' .sren'); await p.waitForSelector(ses + ' .snm input:focus');
+    assert.equal(await p.inputValue(ses + ' .snm input'), 'Trening personalny 2');
+    await p.keyboard.press('Escape'); await p.waitForSelector(ses + ' .snm', { state: 'detached' });
+    await p.click(ses + ' .sren'); await p.waitForSelector(ses + ' .snm input:focus');
+    await p.$eval(ses + ' .snm input', i => { i.removeAttribute('maxlength'); });
+    await p.fill(ses + ' .snm input', 'x'.repeat(41)); await p.keyboard.press('Enter');
+    await p.waitForSelector(ses + ' .snm .err');
+    assert.match(await p.textContent(ses + ' .snm .err'), /40 znaków/);
+    assert.equal(calls.filter(c => c.fn === 'trTytul').length, 2);
+    // nowa nazwa także w „Ostatnie sesje” w Przeglądzie
+    await p.click('.tabs a[href$="/przeglad"]'); await p.waitForSelector('.sr');
+    assert.match(await p.textContent('.sr:has-text("T2")'), /Trening personalny 2/);
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
 });
 
 test('panel: mało miejsca na Dysku = czerwony wpis w „Wymaga uwagi” z linkiem do Ustawień', async () => {

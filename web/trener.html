@@ -220,7 +220,16 @@
   details.ses{border-top:1px solid var(--line);padding:8px 0}
   details.ses:first-of-type{border-top:0}
   details.ses summary{cursor:pointer;display:flex;gap:12px;flex-wrap:wrap;align-items:baseline;min-height:32px}
-  details.ses summary b{min-width:220px}
+  details.ses summary .sh{min-width:220px;display:inline-flex;align-items:center;gap:4px}
+  /* nazwa sesji: ✎ przy nagłówku, pole pod nim (trTytul) */
+  .sren{flex:none;width:36px;height:36px;margin:-6px 0;border:1px solid transparent;border-radius:var(--r);background:none;color:var(--muted);font-size:16px;cursor:pointer}
+  .sren:hover,.sren:focus-visible{border-color:var(--line);color:var(--ink)}
+  .snm{margin:8px 0 12px;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}
+  .snm .eb{display:block;margin:0 0 6px}
+  .snr{display:flex;gap:8px;flex-wrap:wrap}
+  .snr input{flex:1 1 220px;min-width:0;min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);padding:8px 12px;font:600 15px var(--f-body)}
+  .snm .muted{font-size:13px;margin:8px 0 0}
+  @media (max-width:760px){.sren{width:44px;height:44px}}
   .note{white-space:pre-wrap;font-size:14px}
   .swp{font-size:13px;font-weight:600;color:var(--accent)}
   /* odpowiedź klienta na komentarz trenera: pod komentarzem, z kreską akcentu */

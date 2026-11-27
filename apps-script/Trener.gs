@@ -49,6 +49,7 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trPrzelicz,
   trPulpit,
   trSzkic,
+  trTytul,
   trUstawAI,
   trZasady,
   trZasadyUstaw,
@@ -321,6 +322,39 @@ function trKomentarz(id, week, day, text) {
     sh.getRange(hit.getRow(), col).setValue(plain_(text));
   } finally { lock.releaseLock(); }
   return { text: text, at: new Date().toISOString() };
+}
+
+/* ---------- nazwa sesji (Plan.tytul całej jednostki; klient widzi ją w aplikacji, 27.11.2026) ----------
+ * Zmienia tylko tytuł: tydzień i jednostka (T2, W1 …) zostają, bo są w id serii Logu i Sesji. Działa też w zrobionej jednostce.
+ * Własny trening klienta zachowuje przedrostek „Własny · ”; pusty tytuł = sama jednostka (własny: „Własny”).
+ */
+const TR_TITLE_MAX = 40;
+
+/** Czysta funkcja: e = {week, day, title} → {error} albo {set: [[indeks wiersza Planu od 0, {tytul}]], title (zapisany), own}. */
+function trTitle_(plan, clientId, e) {
+  e = e || {};
+  const week = Number(e.week), day = String(e.day === undefined || e.day === null ? '' : e.day).trim();
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  const rows = []; (plan || []).forEach((r, i) => { if (lc(r.klient) === clientId && Number(r.tydzien) === week && String(r.jednostka).trim() === day) rows.push({ r, i }); });
+  if (!(week >= 0) || !day || !rows.some(x => !removed_(x.r))) return { error: 'Nie ma takiej jednostki w planie.' };
+  const t = String(e.title === undefined || e.title === null ? '' : e.title).replace(/\s+/g, ' ').trim();
+  if (t.length > TR_TITLE_MAX) return { error: 'Nazwa: najwyżej ' + TR_TITLE_MAX + ' znaków.' };
+  const own = rows.some(x => own_(x.r)), title = own ? 'Własny' + (t ? ' · ' + t : '') : t;
+  return { set: rows.filter(x => String(x.r.tytul === undefined || x.r.tytul === null ? '' : x.r.tytul).trim() !== title).map(x => [x.i, { tytul: title }]), title: title, own: own };
+}
+
+/** Nowa nazwa sesji klienta (trTitle_) → Plan.tytul wszystkich wierszy jednostki. */
+function trTytul(id, e) {
+  id = String(id || '').trim().toLowerCase();
+  trRow_(id);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const res = trTitle_(tableOf_('Plan'), id, e);
+    if (res.error) throw new Error(res.error);
+    trPlanSet_(res.set);
+    return { title: res.title, n: res.set.length };
+  } finally { lock.releaseLock(); }
 }
 
 /* ---------- filmy w panelu: odtwarzacz i komentarz do serii ----------
