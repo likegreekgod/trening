@@ -680,7 +680,7 @@ test('ownRows_: walidacja i wiersze Planu własnej jednostki', () => {
   assert.equal(C.ownRows_('anna', Object.assign({}, u, { day: 'W1' }), [{ klient: 'anna', tydzien: 2, jednostka: 'W1' }]).error, 'Ta jednostka jest w planie trenera.');
   assert.equal(C.ownRows_('anna', Object.assign({}, u, { exercises: Array(21).fill({ name: 'X', sets: 1, reps: 1 }) }), plan).error, 'Najwyżej 20 ćwiczeń.');
   assert.ok(C.API_FNS.addOwnUnit);
-  assert.deepEqual(Array.from(C.PLAN_HEADERS.slice(-6)), ['zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod', 'uwagi_jedn']);   // nowe kolumny na końcu
+  assert.deepEqual(Array.from(C.PLAN_HEADERS.slice(-7)), ['zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod', 'uwagi_jedn', 'sekcja']);   // nowe kolumny na końcu
 });
 
 test('unitsDone_: zrobiona = Sesje albo seria A/B z ✓ lub FAIL; korekcja K, rozgrzewka, pominięcie i wyzerowana seria się nie liczą', () => {
@@ -1003,7 +1003,7 @@ test('obwod: walidacja planu (litera, ≥ 2 ćwiczenia po sobie, bez EMOM) i wł
   assert.match(C.validatePlan_([R(1, { obwod: 'AB' }), R(2, { obwod: 'AB' })])[0], /jedna litera/);
   assert.match(C.validatePlan_([R(1, { obwod: 'A', tryb: 'EMOM' }), R(2, { obwod: 'A' })])[0], /EMOM/);
   assert.deepEqual(Array.from(C.validatePlan_([R(1, { obwod: 'A' }), R(2, { obwod: 'A' }), R(1, { jednostka: 'T2', obwod: 'A' }), R(2, { jednostka: 'T2', obwod: 'A' })])), []);   // litera liczy się w obrębie jednostki
-  assert.equal(C.PLAN_HEADERS[C.PLAN_HEADERS.length - 2], 'obwod');                // nowe kolumny na końcu (potem uwagi_jedn)
+  assert.equal(C.PLAN_HEADERS[C.PLAN_HEADERS.length - 3], 'obwod');                // nowe kolumny na końcu (potem uwagi_jedn, sekcja)
   assert.deepEqual(['a', 'B ', 'AB', '', null, 1].map(C.circuit_), ['A', 'B', '', '', '', '']);
   const E = (name, circuit) => ({ name, sets: 3, reps: '10', kg: '', circuit });
   const own = C.ownRows_('robert', { week: 1, day: 'W1', date: d(1, 0), exercises: [E('Pompki', 'A'), E('Wiosłowanie', 'a'), E('Plank', 'B'), E('Curl'), E('Dipy', 'x1')] }, []);
@@ -2722,4 +2722,49 @@ test('rozmiarOpis_: komórki, największe zakładki, ścieżki i czas wczytania'
   assert.ok(out[out.length - 1].includes('(Ania, 4 100 serii): 5,2 s – do obserwacji'), out.join('\n'));
   assert.ok(C.rozmiarOpis_({ tabs: [], pathKb: 0, time: { client: 'B', ms: 900, logRows: 10 } }).slice(-1)[0].includes('0,9 s – dobrze'));
   assert.equal(C.rozmiarOpis_({ tabs: [], pathKb: 0, time: null }).length, 1);
+});
+
+test('sekcja: walidacja planu (R/G/K), obwód w jednej sekcji, ostrzeżenia o pseudo-ćwiczeniach, Biblioteka bez „Rozgrzewki”', () => {
+  const R = (nr, x) => Object.assign({ klient: 'robert', tydzien: 1, jednostka: 'T1', tytul: 'A', nr, cwiczenie: 'Ćw ' + nr, prio: 'B', serie: 3, powt: '10' }, x || {});
+  assert.equal(C.PLAN_HEADERS[C.PLAN_HEADERS.length - 1], 'sekcja');               // nowa kolumna na końcu
+  assert.deepEqual(['R', 'g', ' k ', 'rozgrzewka', 'Główne', 'korekcyjne', ''].map(C.sekcja_), ['R', 'G', 'K', 'R', 'G', 'K', '']);
+  assert.equal(C.sekcja_('X'), null);
+  assert.deepEqual(Array.from(C.validatePlan_([R(1, { sekcja: 'R', prio: 'K' }), R(2, { sekcja: 'G' }), R(3, { sekcja: 'k' }), R(4)])), []);   // ze sekcją i bez niej
+  assert.match(C.validatePlan_([R(1, { sekcja: 'X' })])[0], /sekcja tylko R/);
+  // obwód przez dwie sekcje = błąd; puste pole liczy się jak G (A/B) albo K (prio K)
+  assert.match(C.validatePlan_([R(1, { sekcja: 'R', obwod: 'A' }), R(2, { obwod: 'A' })]).join(' '), /dwie sekcje/);
+  assert.match(C.validatePlan_([R(1, { obwod: 'A' }), R(2, { prio: 'K', obwod: 'A' }), R(3, { sekcja: 'G' })]).join(' '), /dwie sekcje/);
+  assert.deepEqual(Array.from(C.validatePlan_([R(1, { obwod: 'A' }), R(2, { prio: 'K', obwod: 'A' })])), []);   // stary plan bez sekcji: obwód A + K dalej dozwolony
+  assert.deepEqual(Array.from(C.validatePlan_([R(1, { sekcja: 'R', obwod: 'A' }), R(2, { sekcja: 'R', obwod: 'A' }), R(3, { obwod: 'B' }), R(4, { sekcja: 'G', obwod: 'B' })])), []);
+  // ostrzeżenia (nie błędy): nazwa „Rozgrzewka…” / „Aktywacja…” albo 1 × „1” spoza bazy
+  const dict = [{ cwiczenie: 'Rwanie', aliasy: '', grupa: 'R' }];
+  const w = C.planWarnings_([R(1, { cwiczenie: 'Rozgrzewka + aktywacja pośladków', serie: 1, powt: '1' }), R(2, { cwiczenie: 'Aktywacja pośladków' }),
+    R(3, { cwiczenie: 'Mobilizacja X', serie: 1, powt: '1' }), R(4, { cwiczenie: 'Rwanie', serie: 1, powt: '1' }), R(5, { cwiczenie: 'Glute Bridge', serie: 2, powt: '12' })], dict);
+  assert.equal(w.length, 3);
+  assert.match(w[0], /^wiersz 1: .*opis bloku.*sekcja=R/);
+  assert.match(w[2], /^wiersz 3:/);
+  assert.deepEqual(Array.from(C.validatePlan_([R(1, { cwiczenie: 'Rozgrzewka + aktywacja pośladków', serie: 1, powt: '1' })])), []);   // nie blokuje importu
+  // Biblioteka i „Uzupełnij listę ćwiczeń” pomijają dawne pseudo-ćwiczenia
+  const kl = [{ klient_id: 'robert', aktywny: 'TAK' }];
+  const res = C.trCwiczenia_([{ klient: 'robert', cwiczenie: 'Rozgrzewka + aktywacja pośladków' }, { klient: 'robert', cwiczenie: 'Rozgrzewka' }, { klient: 'robert', cwiczenie: 'Hip Airplane' }], [], kl, []);
+  assert.deepEqual(res.missing.map(m => m.name), ['Hip Airplane']);
+  assert.deepEqual(Array.from(C.missingExercises_([{ cwiczenie: 'Rozgrzewka' }, { cwiczenie: 'Hip Airplane' }], [])), ['Hip Airplane']);
+  assert.equal(C.sekcjaNazwa_('Rozgrzewka barków z gumą'), false);              // zwykła nazwa zaczynająca się od słowa zostaje ćwiczeniem
+});
+
+test('sekcja Rozgrzewka: wykonanie planu tak, tonaż, serie, partie i e1RM nie (decyzja 27.11)', () => {
+  const P = (nr, cw, prio, x) => Object.assign({ klient: 'robert', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr, cwiczenie: cw, prio, serie: 2, powt: '10', kg: 20 }, x || {});
+  const L = (nr, cw, s, x) => Object.assign({ klient: 'robert', tydzien: 1, jednostka: 'T1', data: d(1, 0), nr_cw: nr, cwiczenie: cw, seria: s, kg: 20, powt: 10, rpe: 8, wykonane: 'TAK', typ: '' }, x || {});
+  const mk = sek => {
+    const plan = [P(1, 'Przysiad tylny', 'K', { sekcja: sek }), P(2, 'Przysiad tylny', 'A', { kg: 100, powt: '5' })];
+    const log = [L(1, 'Przysiad tylny', 1), L(1, 'Przysiad tylny', 2), L(2, 'Przysiad tylny', 1, { kg: 100, powt: 5 }), L(2, 'Przysiad tylny', 2, { kg: 100, powt: 5 })];
+    return { s: C.computeSummary_(plan, log, [], []), parts: C.computeParts_(plan, log, [], CW) };
+  };
+  const H = C.SUM_HEADERS, col = (r, k) => r.s.rows[0][H.indexOf(k)];
+  const warm = mk('R'), main = mk('');
+  assert.equal(col(main, 'tonaz_kg'), 1400); assert.equal(col(warm, 'tonaz_kg'), 1000);       // 2 × 10 × 20 kg rozgrzewki poza tonażem
+  assert.equal(col(main, 'serie_twarde'), 4); assert.equal(col(warm, 'serie_twarde'), 2);
+  assert.equal(col(warm, 'wykonanie_%'), col(main, 'wykonanie_%'));                   // wykonanie planu bez zmian (po prio)
+  assert.equal(col(warm, 'wykonanie_%'), 100);
+  assert.equal(plain(warm.parts)[0][3], 2); assert.equal(plain(main.parts)[0][3], 4);   // serie na partię
 });

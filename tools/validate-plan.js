@@ -8,6 +8,10 @@ let rows = JSON.parse(fs.readFileSync(file, 'utf8'));
 if (!Array.isArray(rows)) rows = rows.rows;
 const errs = C.validatePlan_(rows);
 if (errs.length) { console.error('BŁĘDY (' + errs.length + '):\n- ' + Array.from(errs).join('\n- ')); process.exit(1); }
+// ostrzeżenia (nie błędy): pseudo-ćwiczenie zamiast wierszy z sekcją; baza = to, co wczytuje „Wczytaj bazę ćwiczeń”
+const dict = C.cwBaza_(C.CW_BAZA, C.CW_ALIASY, C.CW_DODATKI, C.CW_FEDB, C.CW_SCALONE).map(b => ({ cwiczenie: b[0], aliasy: b[3], instruktaz: b[1] ? 'x' : '', partia: b[2] }));
+const warn = C.planWarnings_(rows, dict);
+if (warn.length) console.warn('UWAGI (' + warn.length + '):\n- ' + Array.from(warn).join('\n- '));
 const by = {};
 rows.forEach(r => { const k = String(r.klient).toLowerCase(); by[k] = by[k] || new Set(); by[k].add(r.tydzien + '|' + r.jednostka); });
 const zast = {};
