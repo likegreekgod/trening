@@ -29,6 +29,7 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trDysk,
   trFilm,
   trImport,
+  trKalendarz,
   trKlienci,
   trKlient,
   trKlientEksport,
@@ -275,6 +276,58 @@ function trDzis_(klienci, plan, log, ses, today, d10) {
   });
   const rank = { live: 0, wait: 1, done: 2 };
   return out.sort((a, b) => rank[a.st] - rank[b.st] || a.name.localeCompare(b.name, 'pl') || a.week - b.week || a.day.localeCompare(b.day));
+}
+
+/* ---------- panel v2 → Kalendarz (27.11.2026): jednostki wszystkich aktywnych klientów w zakresie dat ----------
+ * Dzień jednostki: Sesje.start, inaczej pierwsza zapisana seria, inaczej data z planu. Stan: done (Sesja albo serie w minionym dniu),
+ * live (serie dziś, bez Sesji), late (data z planu minęła, nic nie zapisane), wait. Bez daty: niezrobione jednostki trenera bez daty
+ * z najniższego takiego tygodnia klienta (dalsze tygodnie bez dat pokażą się po kolei). Tylko odczyt.
+ */
+const TR_KAL_DNI = 62;          // najdłuższy zakres jednego zapytania (miesiąc z marginesem tygodni)
+/** Czysta funkcja: → {from, to, today, units: [{id, name, week, day, title, block, date, plan, own, led, ex, sets, done, st, rpe, min}], undated: […]} */
+function trKalendarz_(klienci, plan, log, ses, from, to, today, d10) {
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase(), names = {};
+  (klienci || []).forEach(k => { if (!blank_(k.klient_id) && String(k.aktywny || '').trim().toUpperCase() !== 'NIE') names[lc(k.klient_id)] = String(k.imie || k.klient_id).trim(); });
+  const key = r => lc(r.klient) + '|' + Number(r.tydzien) + '|' + String(r.jednostka === undefined || r.jednostka === null ? '' : r.jednostka).trim();
+  const U = {}, unit = r => { const k = key(r); return U[k] = U[k] || { id: lc(r.klient), week: Number(r.tydzien), day: String(r.jednostka).trim(), title: '', block: '', own: false,
+    names: {}, sets: 0, done: 0, first: '', plan: '', rows: 0, ses: null }; };
+  (plan || []).forEach(r => {
+    if (names[lc(r.klient)] === undefined || blank_(r.jednostka) || removed_(r) || added_(r)) return;
+    const u = unit(r); u.rows++;
+    u.title = u.title || String(r.tytul || '').trim(); u.block = u.block || String(r.blok || '').trim(); u.own = u.own || own_(r);
+    if (!blank_(r.cwiczenie)) u.names[String(r.cwiczenie).trim()] = 1;
+    u.sets += Number(r.serie) || 0;
+    if (!blank_(r.data) && (!u.plan || d10(r.data) < u.plan)) u.plan = d10(r.data);
+  });
+  (log || []).forEach(l => {
+    if (!U[key(l)] || !trLogged_(l) || !/^\d+$/.test(String(l.seria).trim())) return;
+    const u = U[key(l)], d = blank_(l.zapisano) ? '' : d10(l.zapisano);
+    u.done++; if (d && (!u.first || d < u.first)) u.first = d;
+  });
+  (ses || []).forEach(x => { if (U[key(x)]) U[key(x)].ses = x; });
+  const num = v => { const x = blank_(v) ? NaN : n_(v); return isFinite(x) ? x : null; };
+  const all = Object.keys(U).map(k => {
+    const u = U[k], s = u.ses, date = s && !blank_(s.start) ? d10(s.start) : u.first || u.plan;
+    const st = s || (u.done && date && date < today) ? 'done' : u.done ? 'live' : u.plan && u.plan < today ? 'late' : 'wait';
+    return { id: u.id, name: names[u.id], week: u.week, day: u.day, title: u.title || (u.own ? 'Własny trening' : 'Trening ' + u.day), block: u.block, date: date || '', plan: u.plan,
+      own: u.own, led: !!(s && lc(s.prowadzil) === 'trener'), ex: Object.keys(u.names).length, sets: u.sets, done: u.done, st,
+      rpe: s ? num(s.rpe_sesji) : null, min: s ? num(s.czas_min) : null };
+  });
+  const order = (a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, 'pl') || a.week - b.week || a.day.localeCompare(b.day);
+  const units = all.filter(u => u.date && u.date >= from && u.date <= to && !(u.own && u.st === 'wait')).sort(order);
+  const low = {}; all.forEach(u => { if (!u.date && !u.own && u.week > 0 && (low[u.id] === undefined || u.week < low[u.id])) low[u.id] = u.week; });
+  const undated = all.filter(u => !u.date && !u.own && u.week === low[u.id]).sort(order);
+  return { from, to, today, units, undated };
+}
+function trKalendarz(from, to) {
+  const ok = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+  if (!ok(from) || !ok(to) || to < from) throw new Error('Zły zakres dat kalendarza.');
+  if ((day_(to) - day_(from)) / 864e5 > TR_KAL_DNI) throw new Error('Za długi zakres kalendarza (najwyżej ' + TR_KAL_DNI + ' dni).');
+  const tz = Session.getScriptTimeZone(), localDay = t => Utilities.formatDate(new Date(t), tz, 'yyyy-MM-dd');
+  const d10 = v => blank_(v) ? '' : v instanceof Date ? localDay(v.toISOString()) : /T/.test(String(v)) ? localDay(String(v)) : String(v).slice(0, 10);
+  return trKalendarz_(tableOf_('Klienci'), pgTable_('Plan', ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'cwiczenie', 'serie', 'zrodlo', 'blok']),
+    pgTable_('Log', ['klient', 'tydzien', 'jednostka', 'seria', 'zapisano', 'wykonane', 'kg', 'powt', 'film_link', 'typ']),
+    pgTable_('Sesje', ['klient', 'tydzien', 'jednostka', 'start', 'czas_min', 'rpe_sesji', 'prowadzil']), from, to, today_(), d10);
 }
 
 /** Karta klienta: to samo co getData klienta (bez klucza), plus jego Bloki z wnioskami i tygodnie z Podsumowania. */
