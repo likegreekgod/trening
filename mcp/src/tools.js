@@ -4,6 +4,8 @@
  * Odpowiedzi są skracane (bez linków z kluczami klientów, bez ścieżek VBT), żeby Claude dostawał tylko to, co potrzebne do decyzji.
  */
 
+import { UI_DZIS } from './ui.js';
+
 const ST_DZIS = { wait: 'czeka', live: 'w trakcie', done: 'zrobione' };
 const SEKCJA = { R: 'Rozgrzewka', G: 'Główne', K: 'Korekcyjne' };   // kolumna Planu `sekcja` (litera), jak SEKCJE w Code.gs
 const ST_KAL = { wait: 'zaplanowana', live: 'w trakcie', done: 'zrobiona', late: 'zaległa' };
@@ -138,8 +140,8 @@ const RW = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, 
 
 export const TOOLS = [
   { name: 'dzis', title: 'Dziś',
-    description: 'Ekran Dziś panelu trenera: kto dziś trenuje (czeka / w trakcie / zrobione), czerwone i pomarańczowe sygnały klientów, propozycje i zgłoszenia asystentów AI klientów (z pid do decyzji), zmiany zrobione samodzielnie przez boty, filmy bez komentarza, bloki do zamknięcia, odpowiedzi klientów. Zacznij od tego, gdy trener pyta „co dziś?”.',
-    inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: RO },
+    description: 'Ekran Dziś panelu trenera: kto dziś trenuje (czeka / w trakcie / zrobione), czerwone i pomarańczowe sygnały klientów, propozycje i zgłoszenia asystentów AI klientów (z pid do decyzji), zmiany zrobione samodzielnie przez boty, filmy bez komentarza, bloki do zamknięcia, odpowiedzi klientów. Zacznij od tego, gdy trener pyta „co dziś?” albo „kto dziś trenuje?”. Trener widzi wynik jako kartę z przyciskami Zatwierdź / Odrzuć przy propozycjach asystentów, więc nie powtarzaj całej listy: podsumuj w 2–3 zdaniach, co najważniejsze.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: RO, _meta: { ui: { resourceUri: UI_DZIS } } },
   { name: 'klienci', title: 'Klienci',
     description: 'Aktywni klienci z identyfikatorami (id do innych narzędzi), sygnałami, ostatnim treningiem, wykonaniem tygodnia i końcem planu. Najpilniejsi pierwsi.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: RO },

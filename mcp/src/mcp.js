@@ -1,11 +1,13 @@
 /**
- * Serwer MCP bez stanu (Streamable HTTP, same odpowiedzi JSON, bez SSE i bez sesji): initialize, ping, tools/list, tools/call.
+ * Serwer MCP bez stanu (Streamable HTTP, same odpowiedzi JSON, bez SSE i bez sesji): initialize, ping, tools/list, tools/call,
+ * resources/list i resources/read (karty MCP Apps z src/ui.js).
  * Czysta obsługa jednego komunikatu JSON-RPC; transport HTTP i logowanie są w src/index.js.
  */
 import { TOOLS, run } from './tools.js';
+import { RESOURCES, readResource } from './ui.js';
 
 export const VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'];
-export const SERVER = { name: 'sila-z-ruchu-trener', title: 'Siła z Ruchu – trener', version: '1.0.0' };
+export const SERVER = { name: 'sila-z-ruchu-trener', title: 'Siła z Ruchu – trener', version: '1.1.0' };
 export const INSTRUCTIONS = [
   'Dane z panelu trenera „Siła z Ruchu” (aplikacja treningowa dla klientów trenera personalnego Damiana). Odpowiadaj po polsku, zwięźle.',
   'Zacznij od „dzis” albo „klienci”, żeby poznać identyfikatory klientów (id) i pid propozycji asystentów.',
@@ -28,10 +30,16 @@ export async function handle(msg, ctx) {
   switch (method) {
     case 'initialize': {
       const v = VERSIONS.indexOf(p.protocolVersion) >= 0 ? p.protocolVersion : VERSIONS[0];
-      return res(id, { protocolVersion: v, capabilities: { tools: { listChanged: false } }, serverInfo: SERVER, instructions: INSTRUCTIONS });
+      return res(id, { protocolVersion: v, capabilities: { tools: { listChanged: false }, resources: { listChanged: false } }, serverInfo: SERVER, instructions: INSTRUCTIONS });
     }
     case 'ping': return res(id, {});
     case 'tools/list': return res(id, { tools: TOOLS });
+    case 'resources/list': return res(id, { resources: RESOURCES });
+    case 'resources/templates/list': return res(id, { resourceTemplates: [] });
+    case 'resources/read': {
+      const r = readResource(p.uri);
+      return r ? res(id, r) : err(id, -32002, 'Resource not found: ' + p.uri);
+    }
     case 'tools/call': {
       const t = TOOLS.find(x => x.name === p.name);
       if (!t) return err(id, -32602, 'Nieznane narzędzie: ' + p.name);
