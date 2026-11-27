@@ -239,11 +239,21 @@ function asyItem(x){
   return '<div class="api" data-asy="' + pid + '"><div class="aph"><a href="' + kHref(x.id) + '"><b>' + esc(x.name) + '</b></a><span class="muted">' + esc(meta) + '</span>' + tag + '</div>' +
     '<p class="apw">' + what + '</p>' + (x.why ? '<p class="apr">Powód klienta: „' + esc(x.why) + '”</p>' : '') + act + (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') + '</div>';
 }
+/** „Zrobił sam”: zmiana planu zrobiona przez bota bez czekania (Agent.gs skroc / zamien, status „auto”), z Cofnij (trPropozycja mode cofnij) */
+function asyAutoItem(x){
+  const st = ASY[x.pid] || {}, dis = st.busy ? ' disabled' : '', pid = esc(x.pid);
+  const meta = [dowDm(x.at.slice(0, 10)) + (x.at.length > 10 ? ' ' + mailAt(x.at).split(' ').pop() : ''), x.week ? 'tydz. ' + x.week + ' · ' + x.day : ''].filter(Boolean).join(' · ');
+  return '<div class="api" data-asy="' + pid + '"><div class="aph"><a href="' + kHref(x.id) + '"><b>' + esc(x.name) + '</b></a><span class="muted">' + esc(meta) + '</span><span class="atag">' + (x.typ === 'skrot' ? 'skrócony' : 'zamiana') + '</span></div>' +
+    '<p class="apw">' + esc(x.text) + '</p>' + (x.why ? '<p class="apr">Powód klienta: „' + esc(x.why) + '”</p>' : '') +
+    '<div class="row2"><button class="cp" type="button" data-asy-undo="' + pid + '"' + dis + '>' + (st.busy ? 'Cofam…' : st.sure ? 'Na pewno cofnąć?' : '↶ Cofnij') + '</button></div>' +
+    (st.err ? '<p class="err" role="alert">' + esc(st.err) + '</p>' : '') + '</div>';
+}
 function asyCard(){
-  const list = PUL.agent || [], odrz = PUL.agentOdrz || [];
-  if (!list.length && !odrz.length && !ASYM) return '';
+  const list = PUL.agent || [], odrz = PUL.agentOdrz || [], auto = PUL.agentAuto || [];
+  if (!list.length && !odrz.length && !auto.length && !ASYM) return '';
   return '<div class="card asy" id="asy"><h2>Od asystenta AI · ' + list.length + '</h2>' + (ASYM ? '<p class="saved" role="status">' + esc(ASYM) + '</p>' : '') +
     (list.length ? list.map(asyItem).join('') : '<p class="muted">Nic nie czeka na decyzję.</p>') +
+    (auto.length ? '<div class="sec asec">Zrobił sam · 7 dni</div>' + auto.map(asyAutoItem).join('') : '') +
     (odrz.length ? '<details class="aodrz"><summary class="muted">Odrzucone przez serwer · ' + odrz.length + '</summary><ul>' + odrz.map(r => '<li><b>' + esc(r.name) + '</b>, ' + esc(dowDm(r.at)) + ': ' + esc(r.text) + (r.uwaga ? ' <span class="muted">· ' + esc(r.uwaga) + '</span>' : '') + '</li>').join('') + '</ul></details>' : '') +
     '<p class="legend">Bot dostaje Twoje ostatnie decyzje u klienta (z powodem), więc nie proponuje drugi raz tego samego. „Zapamiętaj” dopisuje decyzję do ograniczeń klienta.</p></div>';
 }
@@ -251,18 +261,20 @@ function asyBind(){
   const re = () => { const el = document.getElementById('asy'), h = asyCard(); if (el) { if (h) el.outerHTML = h; else el.remove(); asyBind(); } };
   const st = pid => ASY[pid] = ASY[pid] || {};
   const send = async (pid, mode) => {
-    const s = st(pid), x = (PUL.agent || []).find(a => a.pid === pid); if (!x || s.busy) return;
+    const s = st(pid), x = (mode === 'cofnij' ? PUL.agentAuto || [] : PUL.agent || []).find(a => a.pid === pid); if (!x || s.busy) return;
     if (mode === 'nie' && !String(s.why || '').trim()) { s.err = 'Napisz powód: asystent przekaże go klientowi.'; return re(); }
     s.busy = true; s.err = ''; re();
     try {
-      const r = await guard(api('trPropozycja', pid, { mode, why: mode === 'nie' ? s.why : '', zasada: !!s.mem && mode !== 'czytane' }));
-      PUL.agent = PUL.agent.filter(a => a.pid !== pid); delete ASY[pid];
-      ASYM = x.name + ': ' + (mode === 'tak' ? (r.rows ? 'zatwierdzone, plan zmieniony' : 'zgoda zapisana') : mode === 'nie' ? 'odrzucone, powód pójdzie do klienta' : 'zgłoszenie przeczytane') +
+      const r = await guard(api('trPropozycja', pid, { mode, why: mode === 'nie' ? s.why : '', zasada: !!s.mem && mode !== 'czytane' && mode !== 'cofnij' }));
+      if (mode === 'cofnij') PUL.agentAuto = PUL.agentAuto.filter(a => a.pid !== pid); else PUL.agent = PUL.agent.filter(a => a.pid !== pid);
+      delete ASY[pid];
+      ASYM = x.name + ': ' + (mode === 'tak' ? (r.rows ? 'zatwierdzone, plan zmieniony' : 'zgoda zapisana') : mode === 'nie' ? 'odrzucone, powód pójdzie do klienta' : mode === 'cofnij' ? 'cofnięte, plan jak przed zmianą' : 'zgłoszenie przeczytane') +
         (r.memo ? ' · dopisane do ograniczeń' : '') + (r.memoErr ? ' · nie dopisano do ograniczeń: ' + r.memoErr : '') + '.';
       if (mode === 'czytane' && x.pilne) return renderDzis();   // czerwona flaga znika też z „Wymaga uwagi”
-    } catch (e) { s.busy = false; s.err = e.auth ? '' : e.message; }
+    } catch (e) { s.busy = false; s.sure = false; s.err = e.auth ? '' : e.message; }
     re();
   };
+  document.querySelectorAll('[data-asy-undo]').forEach(b => b.onclick = () => { const s = st(b.dataset.asyUndo); if (!s.sure) { s.sure = true; s.err = ''; return re(); } send(b.dataset.asyUndo, 'cofnij'); });   // drugie dotknięcie
   document.querySelectorAll('[data-asy-ok]').forEach(b => b.onclick = () => send(b.dataset.asyOk, 'tak'));
   document.querySelectorAll('[data-asy-read]').forEach(b => b.onclick = () => send(b.dataset.asyRead, 'czytane'));
   document.querySelectorAll('[data-asy-nogo]').forEach(b => b.onclick = () => send(b.dataset.asyNogo, 'nie'));
@@ -738,12 +750,12 @@ function zasadyBind(){
     if (location.hash.startsWith('#ustawienia')) renderUstawienia();
   };
 }
-const AG_F = ['read', 'write', 'prop', 'limit', 'ogr'];
+const AG_F = ['read', 'write', 'prop', 'auto', 'limit', 'ogr'];
 function agentCard(k){
   const a = AGS[k.id], m = AGM.id === k.id ? AGM : { busy: '', ok: '', err: '', sure: '', key: '', cp: '' }, dis = m.busy ? ' disabled' : '';
   const h = '<div class="card" id="agent"><h2>Asystent AI klienta (API)</h2>';
   if (!a) return h + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '<p class="muted">Ładowanie…</p>') + '</div>';
-  const d = AGD[k.id] = AGD[k.id] || { read: a.read, write: a.write, prop: a.prop, limit: a.limit, ogr: a.ogr }, ch = AG_F.some(f => d[f] !== a[f]);
+  const d = AGD[k.id] = AGD[k.id] || { read: a.read, write: a.write, prop: a.prop, auto: !!a.auto, limit: a.limit, ogr: a.ogr }, ch = AG_F.some(f => d[f] !== a[f]);
   const stat = a.on ? 'Włączony · klucz …' + esc(a.end) + (a.at ? ' od ' + esc(dm(a.at.slice(0, 10))) : '') + ' · dziś ' + a.dzis + ' z ' + a.limit + ' zapytań' : 'Wyłączony: bot klienta nie ma dostępu.';
   const url = String(window.API_URL || '');
   return h + '<p class="kstat"><span class="dot' + (a.on ? ' on' : '') + '"></span><span>' + stat + '</span></p>' +
@@ -755,6 +767,7 @@ function agentCard(k){
     frH('Odczyt', 'Zasady, plan, historia serii, ciężar na dziś. Bez bólu i dyspozycji.', agSwH('read', d.read, 'Odczyt')) +
     frH('Zapis', 'Serie z planu i własne treningi (jak w aplikacji).', agSwH('write', d.write, 'Zapis')) +
     frH('Propozycje zmian planu', 'Zamiana, ciężar, serie, dodatkowy trening: czekają na Ciebie, plan bez zmian.', agSwH('prop', d.prop, 'Propozycje zmian planu')) +
+    frH('Sam skraca i zamienia', 'Bez czekania na Ciebie: skraca trening (najpierw B od końca, A i K zostają) i zamienia ćwiczenie w ramach ustawienia „Zamiana” (bez bojów). Widzisz to na ekranie Dziś w „Zrobił sam” z przyciskiem Cofnij.', agSwH('auto', d.auto, 'Sam skraca i zamienia')) +
     frH('Zapytania dziennie', 'Wszystkie akcje bota tego klienta razem.', agNumH('limit', d.limit)) + '</div>' +
     '<div class="agta"><label for="ag-ogr">Ograniczenia tego klienta (jego część sekcji 5)</label><textarea id="ag-ogr" rows="4"' + dis + '>' + esc(d.ogr) + '</textarea></div>' +
     '<p class="legend">To dane o zdrowiu: widzi je tylko bot tego klienta, zostają w arkuszu.</p>' +
@@ -790,7 +803,11 @@ function agentBind(k, re){
     catch (e) { set({ err: e.auth ? '' : e.message }); }
   };
 }
-/* czat „Wypróbuj asystenta” (trAsystent, apps-script/Agent.gs): trener pisze jako klient; rozmowa tylko w pamięci strony */
+/* czat „Wypróbuj asystenta” (trAsystent, apps-script/Agent.gs): trener pisze jako klient; rozmowa tylko w pamięci strony.
+   Mikrofon: rozpoznawanie mowy przeglądarki (Web Speech API, pl-PL), bez nowych adresów; gdzie go nie ma, przycisku też nie ma. */
+const SPEECH = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+const MIC_ICO = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>';
+let MICR = null;
 let ACH = { id: '', msgs: [], busy: false, err: '', real: false, draft: '', cost: 0 };
 function agChatCard(k){
   const c = ACH.id === k.id ? ACH : { msgs: [], busy: false, err: '', real: false, draft: '', cost: 0 }, dis = c.busy ? ' disabled' : '';
@@ -805,7 +822,9 @@ function agChatCard(k){
     '<div class="acl" id="ach-list" aria-live="polite">' + (c.msgs.length ? c.msgs.map(bub).join('') : '<p class="muted">Napisz np. „Co mam dziś?”, „Zrobiłem 3×5 po 100 kg, ciężko” albo „Boli mnie kolano”.</p>') +
     (c.busy ? '<p class="muted acw">Asystent myśli…</p>' : '') + '</div>' +
     (c.err ? '<p class="err" role="alert">' + esc(c.err) + '</p>' : '') +
-    '<div class="agta"><label for="ach-in">Wiadomość od klienta</label><textarea id="ach-in" rows="3"' + dis + '>' + esc(c.draft) + '</textarea></div>' +
+    '<div class="agta"><label for="ach-in">Wiadomość od klienta</label><div class="acin"><textarea id="ach-in" rows="3"' + dis + '>' + esc(c.draft) + '</textarea>' +
+    (SPEECH ? '<button class="mic' + (c.mic ? ' on' : '') + '" type="button" id="ach-mic" aria-label="' + (c.mic ? 'Zatrzymaj dyktowanie' : 'Dyktuj') + '" aria-pressed="' + !!c.mic + '"' + dis + '>' + MIC_ICO + '</button>' : '') + '</div>' +
+    (c.mic ? '<p class="legend acmic" role="status">● Słucham… mów, tekst wpisuje się sam</p>' : '') + '</div>' +
     '<div class="row2" style="margin-top:10px"><button class="b p" type="button" id="ach-go"' + (c.busy || !c.draft.trim() ? ' disabled' : '') + '>Wyślij</button>' +
     (c.msgs.length ? '<button class="cp" type="button" id="ach-clr"' + dis + '>Nowa rozmowa</button>' : '') +
     (c.cost ? '<span class="legend">Koszt rozmowy ok. ' + esc(pl(Math.round(c.cost * 100) / 100)) + ' USD</span>' : '') + '</div></details>';
@@ -817,9 +836,20 @@ function agChatBind(k, re){
   const l = $('#ach-list'); if (l) l.scrollTop = l.scrollHeight;
   const t = $('#ach-in'); if (t) t.oninput = () => { ACH.draft = t.value; const b = $('#ach-go'); if (b) b.disabled = ACH.busy || !t.value.trim(); };
   const rl = $('#ach-real'); if (rl) rl.onclick = () => { ACH.real = !ACH.real; re(); };
+  const mic = $('#ach-mic'); if (mic) mic.onclick = () => {
+    if (MICR) { MICR.stop(); return; }
+    const r = new SPEECH(), base = ACH.draft ? ACH.draft.replace(/\s*$/, ' ') : '';
+    r.lang = 'pl-PL'; r.interimResults = true; r.continuous = false;
+    r.onresult = ev => { let t = ''; for (let i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript;
+      ACH.draft = base + t.trim(); const ta = $('#ach-in'); if (ta) { ta.value = ACH.draft; const b = $('#ach-go'); if (b) b.disabled = ACH.busy || !ACH.draft.trim(); } };
+    r.onerror = ev => { ACH.err = ev.error === 'not-allowed' ? 'Przeglądarka nie pozwoliła na mikrofon: zezwól w ustawieniach strony.' : ev.error === 'no-speech' ? '' : 'Dyktowanie nie zadziałało (' + ev.error + ').'; };
+    r.onend = () => { MICR = null; ACH.mic = false; if (ACH.id === id) re(); };
+    try { r.start(); MICR = r; ACH.mic = true; ACH.err = ''; re(); } catch (e) { MICR = null; ACH.err = 'Dyktowanie nie zadziałało.'; re(); }
+  };
   const cl = $('#ach-clr'); if (cl) cl.onclick = () => { ACH = { id, msgs: [], busy: false, err: '', real: ACH.real, draft: '', cost: 0, open: true }; re(); };
   const go = $('#ach-go'); if (go) go.onclick = async () => {
     const txt = ACH.draft.trim(); if (!txt || ACH.busy) return;
+    if (MICR) MICR.stop();
     ACH.msgs.push({ role: 'user', text: txt }); ACH.draft = ''; ACH.busy = true; ACH.err = ''; re();
     try {
       const r = await guard(api('trAsystent', id, ACH.msgs.map(m => ({ role: m.role, text: m.text, steps: m.steps })), { real: ACH.real }));
