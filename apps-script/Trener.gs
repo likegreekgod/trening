@@ -190,7 +190,7 @@ function trProwadzone_(ses, klienci, plan, mies, today, localDay) {
   const led = [];
   (ses || []).forEach(s => {
     if (lc(s.prowadzil) !== 'trener') return;
-    const st = s.start instanceof Date ? s.start.toISOString() : String(s.start || ''), d0 = s.data instanceof Date ? s.data.toISOString().slice(0, 10) : String(s.data || '').slice(0, 10);
+    const st = s.start instanceof Date ? s.start.toISOString() : String(s.start || ''), d0 = s.data instanceof Date ? (localDay || localDayDefault_)(s.data.toISOString()) : String(s.data || '').slice(0, 10);   // data z arkusza jako Date = północ w Polsce, toISOString dawało dzień wcześniej
     const date = /^\d{4}-\d{2}-\d{2}T/.test(st) ? (localDay || localDayDefault_)(st) : /^\d{4}-\d{2}-\d{2}$/.test(d0) ? d0 : '';
     if (!date) return;
     const id = lc(s.klient), m = Number(s.czas_min);

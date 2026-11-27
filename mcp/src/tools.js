@@ -13,7 +13,13 @@ export const ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarz
 
 const s = v => (v === undefined || v === null ? '' : String(v)).trim();
 const num = v => { const x = typeof v === 'number' ? v : parseFloat(s(v).replace(',', '.')); return isFinite(x) ? x : null; };
-const d10 = v => s(v).slice(0, 10);
+/**
+ * Dzień RRRR-MM-DD w strefie trenera (Europe/Warsaw). Znacznik czasu z Apps Script przychodzi jako ISO w UTC
+ * („2026-11-26T23:00:00.000Z” = 27.11, 0:00 w Polsce; tak wraca też data z arkusza zamieniona w datę), więc samo slice(0, 10)
+ * dawało dzień wcześniej. Wartość bez godziny („2026-11-27”) przechodzi bez zmian.
+ */
+const DAY_PL = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Warsaw' });
+export const d10 = v => { const t = s(v); if (!/^\d{4}-\d\d-\d\dT\d/.test(t)) return t.slice(0, 10); const ms = Date.parse(t); return isNaN(ms) ? t.slice(0, 10) : DAY_PL.format(ms); };
 const nz = o => { Object.keys(o).forEach(k => { const v = o[k]; if (v === '' || v === null || v === undefined || (Array.isArray(v) && !v.length)) delete o[k]; }); return o; };
 
 /** Światło z RPE (jak w aplikacji, lib `lightOf`): ≤ 7,5 🟢, 8–8,5 🟡, ≥ 9 🔴, FAIL ✖, puste = bez oceny. */
@@ -136,7 +142,7 @@ export function e1rm(kg, reps, rpe) {
 
 /** Sygnały, liczby i siła do karty klienta. today = RRRR-MM-DD (strefa trenera). */
 export function karta(d, today, next, done) {
-  today = today || new Date().toISOString().slice(0, 10);
+  today = today || DAY_PL.format(new Date());
   const logs = d.logs || [], ses = d.sessions || [], plan = d.plan || [];
   const work = l => /^\d+$/.test(s(l.seria)) && s(l.seria) !== '0' && s(l.wykonane) === 'TAK' && !/FAIL/.test(s(l.typ));
   const sygnaly = [];

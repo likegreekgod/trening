@@ -362,7 +362,8 @@ function agZglos_(z, today) {
   return { typ: 'zgloszenie:' + temat, opis: opis, stan: (temat === 'bol' || temat === 'czerwona_flaga') && place ? { date: today, place: place, side: side, score: score, context: '', note: opis.slice(0, 300) } : null };
 }
 
-const agD10_ = v => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || '').slice(0, 10);
+// dzień w strefie trenera: Date i ISO z godziną przez localDayDefault_ (toISOString().slice dawało dzień wcześniej między 0:00 a 1:00 / 2:00)
+const agD10_ = v => v instanceof Date ? localDayDefault_(v.toISOString()) : /^\d{4}-\d\d-\d\dT/.test(String(v || '')) ? localDayDefault_(String(v)) : String(v || '').slice(0, 10);
 const agTresc_ = r => { try { return JSON.parse(String(r.tresc || '{}')) || {}; } catch (e) { return {}; } };
 /** Czysta: krótki opis wiersza Propozycji (co bot proponuje albo zgłasza). */
 function agWhat_(r) {

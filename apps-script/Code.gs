@@ -593,12 +593,23 @@ function deleteSet(key, s) {
   return { ok: true };
 }
 
+/**
+ * Czysta: Sesje.start. Jednostka zamknięta bez żadnego wpisu (np. w „Prowadź”, serie dopisane później) przychodzi bez startu;
+ * wtedy start = koniec − czas_min, sam koniec albo chwila zapisu. Bez tego dzień jednostki brał się z Sesje.data, którą arkusz
+ * zamienia w datę o północy, i narzędzia MCP pokazywały dzień wcześniej (27.11.2026).
+ */
+function sesStart_(s, now) {
+  const st = String(s.start || '').trim(); if (st) return st;
+  const end = Date.parse(String(s.end || '')), at = isNaN(end) ? now.getTime() : end, m = Number(s.minutes);
+  return new Date(isFinite(m) && m > 0 ? at - m * 60000 : at).toISOString();
+}
+
 /** Zapis jednostki. Ból: liczba 0–10 lub '' (nie zgłoszono); bol = „miejsce:0–10; …”, bol_max = najwyższa ocena. Czas liczony w aplikacji: od pierwszego wpisu do „Zakończ”. */
 function logSession(key, s) {
   const client = mustClient_(key);
   const id = [client.id, s.week, s.day].join('|');
   upsert_('Sesje', SES_HEADERS, id, [id, new Date(), client.id, s.week, s.day, s.date || today_(),
-    s.knee, s.shoulder, s.feel, s.minutes, s.note || '', s.start || '', s.end || '', s.pain || '', s.painMax === undefined ? '' : s.painMax, s.rpeSession === undefined ? '' : s.rpeSession]);
+    s.knee, s.shoulder, s.feel, s.minutes, s.note || '', sesStart_(s, new Date()), s.end || '', s.pain || '', s.painMax === undefined ? '' : s.painMax, s.rpeSession === undefined ? '' : s.rpeSession]);
   if (LIVE_) cellSet_('Sesje', SES_HEADERS, id, 'prowadzil', 'trener');      // trening prowadzony przez trenera
   if (LIVE_ && s.pkg !== undefined) pkgSession_(client.id, s);              // „Zdejmij z pakietu” (Pakiety.gs)
   return { ok: true };

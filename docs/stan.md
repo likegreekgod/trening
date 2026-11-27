@@ -143,6 +143,7 @@ Wcześniejsze próby i sprawdzenia (v39, obwód, SKILL.md i ZIP, skala snu, iPho
 - Czas ładowania przy rosnącym Logu (pole `ms`).
 - Reakcje klientów na zakładkę Trener i Postęp → Tydzień (czy czegoś brakuje, czy coś myli).
 - Zakładka Błędy i kolumna `bledy_7dni` w Przeglądzie: po kilku dniach zdecydować, czy dać sygnał.
+- Data sesji w Claude (27.11, `docs/zmiany/2026-11-27-data-sesji-strefa.md`): po wdrożeniu `jednostka` / `klient` u Maćka (tydz. 1, S1) mają pokazywać 27.11, tak jak `kalendarz`.
 
 ## Propozycje (do wyboru)
 
