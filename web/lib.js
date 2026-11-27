@@ -253,8 +253,12 @@
     const s = String(ex.section || '').toUpperCase();
     return /^[RGK]$/.test(s) ? s : String(ex.prio || '').toUpperCase() === 'K' ? 'K' : 'G';
   };
-  /** → [{i, sec, name, orders}] po kolei wg planu; nagłówek tam, gdzie sekcja się zmienia; jedna sekcja w jednostce = [] (bez nagłówków) */
+  /**
+   * → [{i, sec, name, orders}] po kolei wg planu; nagłówek tam, gdzie sekcja się zmienia. Bez nagłówków ([]), gdy żadne ćwiczenie
+   * nie ma wpisanej sekcji (stary plan, także z K między innymi) albo jednostka ma jedną sekcję.
+   */
   L.sectionRuns = exs => {
+    if (!(exs || []).some(ex => !ex.own && /^[RGK]$/i.test(String(ex.section || '')))) return [];
     const out = []; let prev = null;
     (exs || []).forEach(ex => {
       const c = /^EMOM$/i.test(String(ex.mode || '')) ? '' : String(ex.circuit || '');

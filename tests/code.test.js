@@ -2705,7 +2705,8 @@ test('sekcja: walidacja planu (R/G/K), obwód w jednej sekcji, ostrzeżenia o ps
   assert.match(C.validatePlan_([R(1, { sekcja: 'X' })])[0], /sekcja tylko R/);
   // obwód przez dwie sekcje = błąd; puste pole liczy się jak G (A/B) albo K (prio K)
   assert.match(C.validatePlan_([R(1, { sekcja: 'R', obwod: 'A' }), R(2, { obwod: 'A' })]).join(' '), /dwie sekcje/);
-  assert.match(C.validatePlan_([R(1, { obwod: 'A' }), R(2, { prio: 'K', obwod: 'A' })]).join(' '), /dwie sekcje/);
+  assert.match(C.validatePlan_([R(1, { obwod: 'A' }), R(2, { prio: 'K', obwod: 'A' }), R(3, { sekcja: 'G' })]).join(' '), /dwie sekcje/);
+  assert.deepEqual(Array.from(C.validatePlan_([R(1, { obwod: 'A' }), R(2, { prio: 'K', obwod: 'A' })])), []);   // stary plan bez sekcji: obwód A + K dalej dozwolony
   assert.deepEqual(Array.from(C.validatePlan_([R(1, { sekcja: 'R', obwod: 'A' }), R(2, { sekcja: 'R', obwod: 'A' }), R(3, { obwod: 'B' }), R(4, { sekcja: 'G', obwod: 'B' })])), []);
   // ostrzeżenia (nie błędy): nazwa „Rozgrzewka…” / „Aktywacja…” albo 1 × „1” spoza bazy
   const dict = [{ cwiczenie: 'Rwanie', aliasy: '', grupa: 'R' }];

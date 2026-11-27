@@ -2815,7 +2815,7 @@ function validatePlan_(rows) {
   rows.forEach((r, i) => {
     const w = 'wiersz ' + (i + 1) + ': ';
     const uk = [String(r.klient).toLowerCase(), r.tydzien, r.jednostka].join('|');
-    (units[uk] || (units[uk] = [])).push({ nr: Number(r.nr), c: blank_(r.obwod) ? '' : String(r.obwod).trim().toUpperCase(), s: sekcja_(r.sekcja) || (String(r.prio) === 'K' ? 'K' : 'G'), i: i + 1 });
+    (units[uk] || (units[uk] = [])).push({ nr: Number(r.nr), c: blank_(r.obwod) ? '' : String(r.obwod).trim().toUpperCase(), s: sekcja_(r.sekcja) || (String(r.prio) === 'K' ? 'K' : 'G'), x: !!sekcja_(r.sekcja), i: i + 1 });
     if (!blank_(r.obwod) && !circuit_(r.obwod)) e.push(w + 'obwod jako jedna litera A–Z (albo puste)');
     if (!blank_(r.sekcja) && !sekcja_(r.sekcja)) e.push(w + 'sekcja tylko R (rozgrzewka) / G (główne) / K (korekcyjne) albo puste');
     if (!blank_(r.obwod) && !blank_(r.tryb)) e.push(w + 'obwod i tryb EMOM nie łączą się w jednym ćwiczeniu');
@@ -2846,13 +2846,13 @@ function validatePlan_(rows) {
   });
   // obwód: co najmniej 2 ćwiczenia jednostki pod tą samą literą, kolejne po sobie (wg nr)
   Object.keys(units).forEach(uk => {
-    const u = units[uk].slice().sort((a, b) => a.nr - b.nr), by = {};
+    const u = units[uk].slice().sort((a, b) => a.nr - b.nr), by = {};           // x = sekcja wpisana; bez żadnej w jednostce obwód A + K jak dotąd
     u.forEach((x, pos) => { if (circuit_(x.c)) (by[x.c] || (by[x.c] = [])).push(pos); });
     Object.keys(by).forEach(c => {
       const p = by[c], w = 'wiersz ' + u[p[0]].i + ': ';
       if (p.length < 2) e.push(w + 'obwod ' + c + ' ma jedno ćwiczenie w jednostce (potrzeba co najmniej 2)');
       else if (p[p.length - 1] - p[0] !== p.length - 1) e.push(w + 'ćwiczenia obwodu ' + c + ' muszą iść po sobie (kolejne nr)');
-      if (p.some(k => u[k].s !== u[p[0]].s)) e.push(w + 'obwod ' + c + ' przechodzi przez dwie sekcje: cały obwód w jednej sekcji');
+      if (u.some(x => x.x) && p.some(k => u[k].s !== u[p[0]].s)) e.push(w + 'obwod ' + c + ' przechodzi przez dwie sekcje: cały obwód w jednej sekcji');
     });
   });
   return e;

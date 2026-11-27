@@ -1170,6 +1170,7 @@ test('sekcje jednostki: sectionOf i sectionRuns (bez sortowania, jedna sekcja = 
   assert.deepEqual([E(1, 'A', ''), E(2, 'K', ''), E(3, 'K', 'R'), E(4, 'B', 'g'), E(5, 'K', '', { own: true })].map(L.sectionOf), ['G', 'K', 'R', 'G', 'G']);
   assert.deepEqual(L.sectionRuns([E(1, 'A', ''), E(2, 'B', '')]), []);                           // stary plan: bez nagłówków
   assert.deepEqual(L.sectionRuns([E(1, 'K', 'K'), E(2, 'K', '')]), []);                          // jedna sekcja K: też bez
+  assert.deepEqual(L.sectionRuns([E(1, 'K', ''), E(2, 'A', ''), E(3, 'K', '')]), []);            // stary plan z K bez pola sekcja: wygląda jak dotąd
   const r = L.sectionRuns([E(1, 'K', 'R'), E(2, 'K', 'R'), E(3, 'A', ''), E(4, 'K', ''), E(5, 'B', '')]);
   assert.deepEqual(r.map(x => [x.sec, x.name, x.orders]), [['R', 'Rozgrzewka', [1, 2]], ['G', 'Główne', [3]], ['K', 'Korekcyjne', [4]], ['G', 'Główne', [5]]]);   // kolejność planu, nagłówek przy zmianie
   const c = L.sectionRuns([E(1, 'K', 'R'), E(2, 'B', '', { circuit: 'A' }), E(3, 'K', '', { circuit: 'A' })]);
