@@ -44,3 +44,16 @@ Co idzie do AI (`trSzkicCtx_`): tryb i skala, jednostka (plan i wykonane serie b
 ## Testy
 
 `tests/trener.test.js` (Playwright): logowanie przez atrapę Google, pulpit, karta klienta, filmy, bloki, wygasły bilet, brak konfiguracji, komentarz do sesji ze szkicem AI (atrapa `trSzkic`, bez prawdziwego API); zrzuty 1440×900 i 390×844, jasny i ciemny motyw (`tests/screens/trener-*.png`, poza repo). Logika serwera: `tests/code.test.js` (`trTokenOk_`, rozdział akcji trenera i klientów w `doPost`, `trPulpit_`).
+
+## Panel v2 (27.11.2026)
+
+Szkice i analiza: dokument „Panel trenera v2: porządek, kalendarz, okno jednostki” i `panel-v2-szkic/` w plikach projektu. Ustalone 27.11: każdy klient ma swój kolor w kalendarzu, tabela klientów przechodzi z „Dziś” do Klientów, kolejność PR-ów jak niżej.
+
+| PR | Zakres | Stan |
+|---|---|---|
+| v2-1 | Porządek: menu (Dziś, Klienci, Filmy, Warsztat: Biblioteka, Rozliczenia), Skrzynka z filtrami na „Dziś”, tabela klientów i obciążenie na ekranie Klienci, ustawienia klienta jako zakładka karty w sekcjach, Ustawienia panelu w sekcjach, przekierowania starych adresów | zrobione, PR |
+| v2-2 | Kalendarz wszystkich klientów (tydzień, miesiąc, dzień; filtr; „Bez daty”; kolor klienta) i okno jednostki do czytania (zrobiona: wyniki, komentarz, szkic AI; niezrobiona: plan); `trKalendarz` | czeka |
+| v2-3 | Edycja w oknie jednostki: kolejność (przeciąganie, Alt + ↑ ↓), dodawanie z bazy, usuwanie, prio, obwody, notatka, zmiana dnia, „też kolejne tygodnie bloku”; `trJednostka`, `trPrzesun` | czeka |
+| v2-4 | Plan klienta jako siatka tygodnie × dni, przeciąganie jednostek, nowa jednostka (pusta, z szablonu, kopia), „Kopiuj tydzień”, „+ Tydzień”; `trKopiuj` | czeka |
+| v2-5 | Biblioteka: szablony; Rozliczenia: pakiety wszystkich klientów; maksy i start (Klienci Q–S) w ustawieniach klienta | czeka |
+
