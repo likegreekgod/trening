@@ -24,7 +24,7 @@ const KLIENT = {
   plan: [
     { week: 3, day: 'A', title: 'Góra', date: '2026-11-25', order: 1, name: 'Wyciskanie', prio: 'A', sets: 3, reps: '5', kg: 50, pct: null, rpe: 8, note: '' },
     { week: 3, day: 'B', title: 'Dół', date: '2026-11-27', order: 1, name: 'Przysiad', prio: 'A', sets: 4, reps: '5', kg: 80, pct: 0.75, rpe: 8, note: '', unote: 'Spokojnie' },
-    { week: 3, day: 'B', title: 'Dół', date: '2026-11-27', order: 2, name: 'Wykroki', prio: 'B', sets: 3, reps: '8/str', kg: 'BW', pct: null, rpe: null, note: '' },
+    { week: 3, day: 'B', title: 'Dół', date: '2026-11-27', order: 2, name: 'Wykroki', prio: 'B', sets: 3, reps: '8/str', kg: 'BW', pct: null, rpe: null, note: '', section: 'G' },
     { week: 4, day: 'A', title: 'Góra', date: '', order: 1, name: 'Wyciskanie', prio: 'A', sets: 3, reps: '5', kg: 52.5, pct: null, rpe: 8, note: '' },
     { week: 3, day: 'W1', title: 'Własny', date: '2026-11-24', order: 1, name: 'Bieg', prio: 'A', sets: 1, reps: '20 s', own: true },
   ],
@@ -64,6 +64,7 @@ test('klient: nadchodzące niezrobione jednostki, ostatnie sesje bez rozgrzewki'
   const k = klient(KLIENT, { today: '2026-11-27' });
   assert.deepEqual(k.nadchodzace_jednostki.map(u => u.tydzien + u.jednostka), ['3B', '4A'], 'bez zrobionej 3A i bez własnego W1');
   assert.equal(k.nadchodzace_jednostki[0].notatka_do_jednostki, 'Spokojnie');
+  assert.equal(k.nadchodzace_jednostki[0].cwiczenia[1].sekcja, 'Główne');
   assert.deepEqual(k.nadchodzace_jednostki[0].cwiczenia[0], { nr: 1, cwiczenie: 'Przysiad', prio: 'A', serie: 4, powt: '5', kg: 80, procent: '75%', rpe_max: 8 });
   const s = k.ostatnie_sesje[0];
   assert.equal(s.tytul, 'Góra'); assert.equal(s.data, '2026-11-25'); assert.equal(s.bol, 'bark:2');
@@ -84,12 +85,12 @@ test('jednostka i kalendarz', () => {
 test('run: zapisy przekładają się na funkcje panelu', async () => {
   const calls = [], api = async (fn, ...args) => { calls.push([fn, ...args]); return fn === 'trPrzesun' ? { date: args[1].date, n: 3 } : fn === 'trPlan' ? { n: 2, weeks: [3] } : {}; };
   assert.deepEqual(await run('przesun', { id: 'Ania', tydzien: 3, jednostka: 'B', data: '2026-11-28' }, api), { zapisano: true, nowa_data: '2026-11-28', wierszy: 3 });
-  await run('zmien_plan', { id: 'ania', tydzien: 3, jednostka: 'B', zmiany: [{ nr: 1, kg: '82.5' }, { nr: 2, serie: 2, uwagi: '' }], kolejne_tygodnie: true }, api);
+  await run('zmien_plan', { id: 'ania', tydzien: 3, jednostka: 'B', zmiany: [{ nr: 1, kg: '82.5', sekcja: 'Rozgrzewka' }, { nr: 2, serie: 2, uwagi: '' }], kolejne_tygodnie: true }, api);
   await run('decyzja_asystent', { pid: 'ania|a|9', decyzja: 'cofnij', zasada: true }, api);
   await run('komentarz_sesji', { id: 'ania', tydzien: 3, jednostka: 'A', tekst: 'Dobra robota' }, api);
   assert.deepEqual(calls, [
     ['trPrzesun', 'ania', { week: 3, day: 'B', date: '2026-11-28' }],
-    ['trPlan', 'ania', { week: 3, day: 'B', ex: [{ order: 1, kg: '82.5' }, { order: 2, sets: '2', note: '' }], next: true }],
+    ['trPlan', 'ania', { week: 3, day: 'B', ex: [{ order: 1, kg: '82.5', section: 'Rozgrzewka' }, { order: 2, sets: '2', note: '' }], next: true }],
     ['trPropozycja', 'ania|a|9', { mode: 'cofnij', why: '', zasada: false }],
     ['trKomentarz', 'ania', 3, 'A', 'Dobra robota'],
   ]);

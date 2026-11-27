@@ -5,6 +5,7 @@
  */
 
 const ST_DZIS = { wait: 'czeka', live: 'w trakcie', done: 'zrobione' };
+const SEKCJA = { R: 'Rozgrzewka', G: 'Główne', K: 'Korekcyjne' };   // kolumna Planu `sekcja` (litera), jak SEKCJE w Code.gs
 const ST_KAL = { wait: 'zaplanowana', live: 'w trakcie', done: 'zrobiona', late: 'zaległa' };
 export const ZAPIS = ['trJednostka', 'trKomentarz', 'trPlan', 'trPropozycja', 'trPrzesun'];   // zapisy: serwer wpisuje je do zakładki API
 
@@ -73,7 +74,7 @@ function doneSet(d) {
   return out;
 }
 const exRow = r => nz({ nr: r.order, cwiczenie: r.name, prio: r.prio, serie: r.sets, powt: r.reps, kg: r.kg, procent: r.pct !== null && r.pct !== undefined ? Math.round(r.pct * 1000) / 10 + '%' : '',
-  rpe_max: r.rpe, uwagi: r.note, obwod: r.circuit, tryb: r.mode, od_trenera_na_zywo: r.coach || '', dodane_przez_klienta: r.added || '' });
+  rpe_max: r.rpe, uwagi: r.note, sekcja: SEKCJA[r.section] || '', obwod: r.circuit, tryb: r.mode, od_trenera_na_zywo: r.coach || '', dodane_przez_klienta: r.added || '' });
 
 /** Wykonanie jednostki z Logu: ćwiczenia po numerze, serie w skrócie (bez rozgrzewki). */
 function doneEx(logs) {
@@ -157,10 +158,11 @@ export const TOOLS = [
     inputSchema: { type: 'object', properties: { id: ID, tydzien: WEEK, jednostka: DAY, data: { type: 'string', description: 'nowy dzień RRRR-MM-DD' } }, required: ['id', 'tydzien', 'jednostka', 'data'], additionalProperties: false },
     annotations: RW },
   { name: 'zmien_plan', title: 'Zmień plan jednostki',
-    description: 'Zmienia ćwiczenia w niezrobionej jednostce (jak „Edytuj” w zakładce Plan panelu): serie, powt., kg, % maksa, RPE max, uwagi; opcjonalnie notatka do całej jednostki i to samo w kolejnych tygodniach tej jednostki w bloku (kg i % o tę samą różnicę). Puste pole = bez zmian. Konwencje trenera: kg w dół do 2,5 kg, RPE max to sufit.',
+    description: 'Zmienia ćwiczenia w niezrobionej jednostce (jak „Edytuj” w zakładce Plan panelu): serie, powt., kg, % maksa, RPE max, uwagi, sekcja (Rozgrzewka / Główne / Korekcyjne; Rozgrzewka nie liczy się do tonażu); opcjonalnie notatka do całej jednostki i to samo w kolejnych tygodniach tej jednostki w bloku (kg i % o tę samą różnicę). Puste pole = bez zmian. Konwencje trenera: kg w dół do 2,5 kg, RPE max to sufit.',
     inputSchema: { type: 'object', properties: { id: ID, tydzien: WEEK, jednostka: DAY,
       zmiany: { type: 'array', items: { type: 'object', properties: { nr: { type: 'integer' }, serie: { type: 'integer' }, powt: { type: 'string' }, kg: { type: 'string', description: 'liczba albo BW / guma' },
-        procent: { type: 'number', description: '% maksa, np. 75' }, rpe_max: { type: 'number' }, uwagi: { type: 'string' } }, required: ['nr'], additionalProperties: false } },
+        procent: { type: 'number', description: '% maksa, np. 75' }, rpe_max: { type: 'number' }, uwagi: { type: 'string' },
+        sekcja: { type: 'string', enum: ['Rozgrzewka', 'Główne', 'Korekcyjne', ''], description: 'sekcja w jednostce (nagłówek grupy w aplikacji); pusta = bez sekcji' } }, required: ['nr'], additionalProperties: false } },
       notatka_do_jednostki: { type: 'string' }, kolejne_tygodnie: { type: 'boolean' } }, required: ['id', 'tydzien', 'jednostka'], additionalProperties: false },
     annotations: RW },
   { name: 'decyzja_asystent', title: 'Decyzja o propozycji asystenta',
@@ -194,6 +196,7 @@ export async function run(name, a, api, o) {
       const ex = (a.zmiany || []).map(z => { const x = nz({ order: Number(z.nr), sets: z.serie === undefined ? '' : String(z.serie), reps: z.powt === undefined ? '' : String(z.powt),
         kg: z.kg === undefined ? '' : String(z.kg), pct: z.procent === undefined ? '' : String(z.procent), rpe: z.rpe_max === undefined ? '' : String(z.rpe_max) });
         if (z.uwagi !== undefined) x.note = String(z.uwagi);              // pusty tekst = wyczyść uwagi
+        if (z.sekcja !== undefined) x.section = String(z.sekcja);          // pusty = bez sekcji
         return x; });
       ex.forEach(x => { if (!x.order) throw new Error('Każda zmiana potrzebuje numeru ćwiczenia „nr”.'); });
       const e = { week: Number(need(a, 'tydzien')), day: s(need(a, 'jednostka')), ex };

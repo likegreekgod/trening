@@ -44,7 +44,7 @@ function trCwiczenia_(plan, cw, klienci, martwe) {
   const ix = exIndex_(cw), M = {}, use = {};
   (plan || []).forEach(r => {
     const id = cwLc_(r.klient), raw = exStr_(r.cwiczenie).trim().replace(/\s+/g, ' ');
-    if (!act[id] || !raw || /^usuniete/.test(cwLc_(r.zrodlo))) return;
+    if (!act[id] || !raw || /^usuniete/.test(cwLc_(r.zrodlo)) || sekcjaNazwa_(raw)) return;   // dawne pseudo-ćwiczenie „Rozgrzewka + …” to nie ćwiczenie do filmu
     const whole = exFind_(ix, raw), parts = whole ? [{ e: whole, n: raw }] : raw.split(/\s\+\s/).map(p => ({ e: exFind_(ix, p), n: p.trim() }));
     const day = cwDay_(r.data);
     parts.forEach(p => {

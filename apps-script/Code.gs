@@ -232,7 +232,7 @@ function clientData_(client, t0) {
       group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
       swaps: own.length ? own : dx.swaps, infos: dx.infos, fx: dx.fx || [], parts: dx.parts, own: src(r) === 'klient', added: src(r) === 'dodane', coach: src(r) === 'trener',
       mode: opt(r, 'tryb').toUpperCase(), cut: Number(opt(r, 'ciecie')) || null, setsMin: opt(r, 'serie_min') === '' ? null : Number(opt(r, 'serie_min')),
-      circuit: circuit_(opt(r, 'obwod')), unote: opt(r, 'uwagi_jedn')
+      circuit: circuit_(opt(r, 'obwod')), unote: opt(r, 'uwagi_jedn'), section: sekcja_(opt(r, 'sekcja')) || ''
     }; });
   lap('wiersze');
   const sessions = readRows_('Sesje', SES_HEADERS, client.id), logs = readRows_('Log', LOG_HEADERS, client.id); lap('log');
@@ -1532,7 +1532,7 @@ function computeSummary_(plan, log, ses, klienci, opts) {
     const a = acc(c, w), k = key(c, r.tydzien, r.jednostka, r.nr); a.planW[r.tydzien] = 1;
     if (optB_(r)) a.optPlan++;
     if (!(optB_(r) && k in SK)) a.planned += n_(r.serie) || 0;              // pominięte / skrócone opcjonalne poza wykonaniem
-    const pk = n_(r.kg), pr = timed_(r.powt) ? 0 : repsOf_(r.powt);       // na czas: bez tonażu
+    const pk = n_(r.kg), pr = timed_(r.powt) || warmEx_(r) ? 0 : repsOf_(r.powt);   // na czas i sekcja Rozgrzewka: bez tonażu
     if (pk > 0 && pr > 0) a.planTon += (n_(r.serie) || 0) * pr * pk;
   });
 
@@ -1552,6 +1552,11 @@ function computeSummary_(plan, log, ses, klienci, opts) {
     if (!c || !w || /^R/i.test(s)) return;                                   // rozgrzewka poza objętością
     const pk = key(c, l.tydzien, l.jednostka, l.nr_cw), pr = P[pk] || {};
     const a = acc(c, w), name = String(l.cwiczenie);
+    if (warmEx_(pr)) {                                                       // sekcja Rozgrzewka: tylko wykonanie planu
+      if (optB_(pr) && !offPlan_(pr)) a.optDone[pk] = 1;
+      if (!offPlan_(pr) && !(optB_(pr) && pk in SK) && /^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) a.donePlanned++;
+      return;
+    }
     const x = exOf(a, name);
     if (optB_(pr) && !offPlan_(pr)) a.optDone[pk] = 1;
     const typ = String(l.typ || ''), fail = /FAIL/.test(typ), drop = /DROP/.test(typ) || /^D/i.test(s);
@@ -1791,6 +1796,7 @@ function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
     const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
     const fail = /FAIL/.test(String(l.typ || '')), kg = n_(l.kg), reps = timed_(pr.powt) ? 0 : n_(l.powt), rpe = n_(l.rpe);
     if (!offPlan_(pr) && !(optB_(pr) && key(c, l.tydzien, l.jednostka, l.nr_cw) in SK) && /^\d+$/.test(s) && +s <= (n_(pr.serie) || 0)) x.donePlanned++;
+    if (warmEx_(pr)) return;                                                 // sekcja Rozgrzewka: bez tonażu i e1RM
     if (kg > 0 && reps > 0) x.ton += kg * reps;
     const name = String(l.cwiczenie), grp = groupOf_(pr.grupa, name);
     if ((grp === 'R' || grp === 'P') && !fail && kg > x.best[grp][0]) x.best[grp] = [kg, name];
@@ -1941,7 +1947,7 @@ function exInfo_(ix, name) {
 /** Czysta funkcja: nazwy ćwiczeń z Planu, których nie da się dopasować do bazy (do dopisania albo aliasu), alfabetycznie. */
 function missingExercises_(plan, dictRows) {
   const ix = exIndex_(dictRows), seen = {}, out = [];
-  (plan || []).forEach(r => { const k = exKey_(r.cwiczenie); if (k && !seen[k]) { seen[k] = 1; if (!exInfo_(ix, r.cwiczenie).found) out.push(exStr_(r.cwiczenie).trim().replace(/\s+/g, ' ')); } });
+  (plan || []).forEach(r => { const k = exKey_(r.cwiczenie); if (k && !seen[k] && !sekcjaNazwa_(r.cwiczenie)) { seen[k] = 1; if (!exInfo_(ix, r.cwiczenie).found) out.push(exStr_(r.cwiczenie).trim().replace(/\s+/g, ' ')); } });
   return out.sort((a, b) => a.localeCompare(b, 'pl'));
 }
 
@@ -2039,6 +2045,7 @@ function computeParts_(plan, log, ses, dictRows, opts) {
     const c = String(l.klient).toLowerCase(), s = String(l.seria), w = weekOf_(AD[key(c, l.tydzien, l.jednostka)] || l.data);
     if (!c || !w || /^R/i.test(s)) return;
     const pr = P[key(c, l.tydzien, l.jednostka, l.nr_cw)] || {};
+    if (warmEx_(pr)) return;                                                 // sekcja Rozgrzewka poza seriami na partię
     let parts = partsOf(l.cwiczenie); if (!parts.length) parts = partsOf(pr.cwiczenie);
     const typ = String(l.typ || ''), kg = n_(l.kg), reps = timed_(pr.powt) ? 0 : n_(l.powt), rpe = n_(l.rpe);
     parts.forEach(part => {
@@ -2715,7 +2722,40 @@ function przeglad() {
  */
 const PLAN_HEADERS = ['klient', 'tydzien', 'jednostka', 'tytul', 'data', 'nr', 'cwiczenie', 'prio', 'serie', 'powt',
   'procent', 'kg', 'rpe_max', 'uwagi', 'dod_serie', 'drop', 'grupa', 'zamienniki', 'blok', 'zrodlo', 'tryb', 'ciecie', 'serie_min', 'obwod',
-  'uwagi_jedn'];
+  'uwagi_jedn', 'sekcja'];
+/**
+ * Sekcja ćwiczenia w jednostce (kolumna `sekcja`): R = Rozgrzewka, G = Główne, K = Korekcyjne; w pliku i arkuszu litera albo
+ * słowo („rozgrzewka”, „główne”, „korekcyjne”). Pusta = bez sekcji; aplikacja grupuje dopiero, gdy jakieś ćwiczenie jednostki ma sekcję
+ * (puste wtedy: prio K → Korekcyjne, reszta → Główne). Sekcja to nagłówek grupy, nigdy nazwa ćwiczenia (`sekcjaNazwa_`).
+ */
+const SEKCJE = { R: 'Rozgrzewka', G: 'Główne', K: 'Korekcyjne' };
+const sekcja_ = v => {
+  const t = String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  if (!t) return '';
+  if (/^(r|rozgrzewka)$/.test(t)) return 'R';
+  if (/^(g|główne|glowne|główna|glowna)$/.test(t)) return 'G';
+  if (/^(k|korekcyjne|korekcja|korekcyjna)$/.test(t)) return 'K';
+  return null;                                                         // nieznana: błąd walidacji, w getData puste
+};
+/** ćwiczenie z sekcji Rozgrzewka (decyzja Damiana 27.11): liczy się do wykonania planu jak dotąd (po prio), ale nie do objętości:
+ *  tonażu, serii (też twardych), NL, e1RM i partii, tak jak serie rozgrzewkowe R1… */
+const warmEx_ = r => !!r && sekcja_(r.sekcja) === 'R';
+/** nazwa sekcji wpisana jako ćwiczenie („Rozgrzewka”, „Rozgrzewka + aktywacja pośladków”, „Korekcyjne: …”) */
+const sekcjaNazwa_ = n => /^\s*(rozgrzewka|główne|glowne|część główna|korekcyjne|korekcja|ćwiczenia korekcyjne|schłodzenie|warm[ -]?up|cool[ -]?down)\s*($|[+:(–—-])/i.test(String(n === undefined || n === null ? '' : n));
+/**
+ * Czysta funkcja: ostrzeżenia (nie błędy) o pseudo-ćwiczeniach w pliku planu: nazwa zaczyna się od „Rozgrzewka” / „Aktywacja”
+ * albo 1 × „1” przy ćwiczeniu spoza bazy (dictRows = wiersze Ćwiczeń). → ['wiersz n: …']
+ */
+function planWarnings_(rows, dictRows) {
+  const ix = exIndex_(dictRows || []), out = [];
+  (rows || []).forEach((r, i) => {
+    const n = exStr_(r.cwiczenie).trim();
+    if (!n) return;
+    const one = Number(r.serie) === 1 && String(r.powt === undefined || r.powt === null ? '' : r.powt).trim() === '1' && !exInfo_(ix, n).found;
+    if (/^(rozgrzewka|aktywacja)/i.test(n) || one) out.push('wiersz ' + (i + 1) + ': „' + n + '” to wygląda na opis bloku, a nie ćwiczenie; rozbij na wiersze i ustaw sekcja=R');
+  });
+  return out;
+}
 /** obwód / superseria: jedna litera A–Z, inaczej brak */
 const circuit_ = v => { const t = String(v === undefined || v === null ? '' : v).trim().toUpperCase(); return /^[A-Z]$/.test(t) ? t : ''; };
 const PLAN_REQUIRED = ['klient', 'tydzien', 'jednostka', 'nr', 'cwiczenie', 'serie', 'powt'];
@@ -2761,6 +2801,7 @@ function importPlanFile_(f, dir) {
   }
   // taper przed startem (Klienci „start”): ostrzeżenie w Import, import idzie dalej
   try { m.warnings = taperImport_(rows, tableOf_('Klienci'), today_()).concat(m.warnings); } catch (e) { Logger.log('taper: ' + e); }
+  try { m.warnings = m.warnings.concat(planWarnings_(rows, cwRowsCached_())); } catch (e) { Logger.log('pseudo-ćwiczenia: ' + e); }
   writePlanRows_(m.rows);
   f.moveTo(ok);
   const msg = m.removed.map(g => g.text).concat(m.notes, m.warnings.slice(0, 10)).join(' | ');
@@ -2776,8 +2817,9 @@ function validatePlan_(rows) {
   rows.forEach((r, i) => {
     const w = 'wiersz ' + (i + 1) + ': ';
     const uk = [String(r.klient).toLowerCase(), r.tydzien, r.jednostka].join('|');
-    (units[uk] || (units[uk] = [])).push({ nr: Number(r.nr), c: blank_(r.obwod) ? '' : String(r.obwod).trim().toUpperCase(), i: i + 1 });
+    (units[uk] || (units[uk] = [])).push({ nr: Number(r.nr), c: blank_(r.obwod) ? '' : String(r.obwod).trim().toUpperCase(), s: sekcja_(r.sekcja) || (String(r.prio) === 'K' ? 'K' : 'G'), x: !!sekcja_(r.sekcja), i: i + 1 });
     if (!blank_(r.obwod) && !circuit_(r.obwod)) e.push(w + 'obwod jako jedna litera A–Z (albo puste)');
+    if (!blank_(r.sekcja) && !sekcja_(r.sekcja)) e.push(w + 'sekcja tylko R (rozgrzewka) / G (główne) / K (korekcyjne) albo puste');
     if (!blank_(r.obwod) && !blank_(r.tryb)) e.push(w + 'obwod i tryb EMOM nie łączą się w jednym ćwiczeniu');
     PLAN_REQUIRED.forEach(k => { if (r[k] === undefined || r[k] === null || r[k] === '') e.push(w + 'brak „' + k + '”'); });
     if (r.data && !/^\d{4}-\d{2}-\d{2}$/.test(String(r.data))) e.push(w + 'data nie w formacie RRRR-MM-DD');
@@ -2806,12 +2848,13 @@ function validatePlan_(rows) {
   });
   // obwód: co najmniej 2 ćwiczenia jednostki pod tą samą literą, kolejne po sobie (wg nr)
   Object.keys(units).forEach(uk => {
-    const u = units[uk].slice().sort((a, b) => a.nr - b.nr), by = {};
+    const u = units[uk].slice().sort((a, b) => a.nr - b.nr), by = {};           // x = sekcja wpisana; bez żadnej w jednostce obwód A + K jak dotąd
     u.forEach((x, pos) => { if (circuit_(x.c)) (by[x.c] || (by[x.c] = [])).push(pos); });
     Object.keys(by).forEach(c => {
       const p = by[c], w = 'wiersz ' + u[p[0]].i + ': ';
       if (p.length < 2) e.push(w + 'obwod ' + c + ' ma jedno ćwiczenie w jednostce (potrzeba co najmniej 2)');
       else if (p[p.length - 1] - p[0] !== p.length - 1) e.push(w + 'ćwiczenia obwodu ' + c + ' muszą iść po sobie (kolejne nr)');
+      if (u.some(x => x.x) && p.some(k => u[k].s !== u[p[0]].s)) e.push(w + 'obwod ' + c + ' przechodzi przez dwie sekcje: cały obwód w jednej sekcji');
     });
   });
   return e;

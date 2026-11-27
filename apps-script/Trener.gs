@@ -1318,7 +1318,7 @@ function trMailProba(id) {
  * next = także kolejne tygodnie tej jednostki w tym samym bloku, niezrobione (ćwiczenie po nazwie):
  * kg i % o tę samą różnicę (gdy obie wartości są liczbami), pozostałe pola tak samo. Notatka do jednostki tylko w tym tygodniu.
  */
-const TR_PLAN_F = { sets: 'serie', reps: 'powt', kg: 'kg', pct: 'procent', rpe: 'rpe_max', note: 'uwagi', prio: 'prio', circuit: 'obwod' };
+const TR_PLAN_F = { sets: 'serie', reps: 'powt', kg: 'kg', pct: 'procent', rpe: 'rpe_max', note: 'uwagi', prio: 'prio', circuit: 'obwod', section: 'sekcja' };
 const TR_UNOTE_MAX = 500;
 
 /** Czysta funkcja: wartość z panelu → {v: do arkusza, c: do wiersza planu w panelu} albo {error}. */
@@ -1333,6 +1333,7 @@ function trPlanVal_(f, raw) {
   if (f === 'rpe') { if (!t) return { v: '', c: '' }; return x >= 5 && x <= 10 && Math.round(x * 2) === x * 2 ? { v: x, c: x } : { error: 'RPE: 5–10 co 0,5 albo puste.' }; }
   if (f === 'note') return t.length <= 300 ? { v: t, c: t } : { error: 'Uwagi: najwyżej 300 znaków.' };
   if (f === 'prio') return /^[ABK]$/i.test(t) ? { v: t.toUpperCase(), c: t.toUpperCase() } : { error: 'Priorytet: A, B albo K.' };
+  if (f === 'section') { const x = sekcja_(t); return x === null ? { error: 'Sekcja: Rozgrzewka, Główne, Korekcyjne albo puste.' } : { v: x, c: x }; }
   if (f === 'circuit') return !t || /^[A-Z]$/i.test(t) ? { v: t.toUpperCase(), c: t.toUpperCase() } : { error: 'Obwód: jedna litera A–Z albo puste.' };
   return { error: 'Nieznane pole: ' + f };
 }

@@ -802,6 +802,7 @@ Komunikacja ekranu z mózgiem przez jedną funkcję `call()`: POST typu text/pla
 
 ### Odrzucone i dlaczego
 
+- Rozgrzewka albo inna część jednostki jako jedno pseudo-ćwiczenie („Rozgrzewka + aktywacja pośladków”, 1 × 1, opis w uwagach; 27.11): nie ma filmu ani partii, trafia do bazy i Biblioteki jako „nowe ćwiczenie”. Zamiast tego zwykłe ćwiczenia z kolumną `sekcja` (R / G / K), `docs/zmiany/2026-11-27-sekcje-cwiczen.md`.
 - Ikona będąca wycinkiem toru z animacji otwarcia (v55 „Duet” i jej pogrubiona wersja, 18.11): poza animacją nie widać, co przedstawia. Ikona ma od razu mówić, czym jest, także w 16 px.
 - Zmiany UI pod konkretnego klienta: Index jest wspólny; różnice flagami w zakładce Klienci i kolumnami planu.
 - ACWR w wariancie EWMA: przy 3 jednostkach w tygodniu zbyt tłumiony (podwojone obciążenie dało ~1,15).
