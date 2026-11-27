@@ -197,7 +197,7 @@
   .pv .mk button::after{content:"";position:absolute;left:6.5px;top:0;width:3px;height:10px;border-radius:2px;background:var(--primary)}
   .pv .btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .ib{min-width:48px;height:48px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);font:600 14px/1 var(--f-body);display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:0 10px;color:var(--ink)}
-  .ib:disabled{opacity:.45}
+  .ib:disabled{opacity:.45}.b:disabled{opacity:.5;cursor:default}
   .ib.big{min-width:64px;background:var(--primary);color:var(--on-primary);border:0;font-size:18px}
   .ib[aria-pressed=true]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
   .spd{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}.spd .ib{border:0;border-radius:0;min-width:46px}
@@ -504,9 +504,21 @@
     .stats.kws{grid-template-columns:repeat(3,minmax(0,1fr))}.kws .st:nth-child(4){border-left:0}.kws .st:nth-child(n+4){border-top:1px solid var(--line)}
     .kwf{flex-wrap:wrap}.kwf .b{flex:1;font-size:13px}
   }
+  /* ---------- karta klienta → Plan jako siatka bloku (panel v2 PR 4) ---------- */
+  .pgt{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:var(--gap)}.pgt .chips{margin:0}.pgt .seg button{min-width:72px}
+  .pgf{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:var(--gap)}.pgf label{display:flex;align-items:center;gap:6px;font-weight:600;font-size:14px}
+  .pgf select,.pgf input{min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:0 10px;font:500 15px var(--f-mono);width:84px}.pgf .hint{flex:1 1 260px}
+  .pgg{overflow-x:auto;padding:12px}
+  .pgw{display:grid;grid-template-columns:96px repeat(7,minmax(118px,1fr));gap:6px;min-width:940px;margin-top:6px}
+  .pgg.und .pgw{grid-template-columns:96px repeat(8,minmax(112px,1fr));min-width:1020px}
+  .pgw.pgh{margin-top:0;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}.pgw.pgh span{padding:0 4px}
+  .pgl{display:flex;flex-direction:column;gap:2px;padding:6px 2px;font-size:12px;color:var(--muted)}.pgl b{font:800 20px/1 var(--f-display);color:var(--ink);text-transform:uppercase}
+  .pgc{min-height:76px;border-radius:var(--r);border:1px dashed var(--line);padding:4px;display:flex;flex-direction:column;gap:4px}
+  .pgc:not(.empty){border-color:transparent;background:color-mix(in srgb,var(--surface-2) 40%,transparent)}.pgc.t{outline:2px solid var(--accent);outline-offset:-2px}
+  .pgc .ku{--c:inherit}.pgc .ku .kt b{font-size:13px}
   /* ---------- edycja jednostki w oknie i przeciąganie w kalendarzu (panel v2 PR 3) ---------- */
   .ku[draggable=true]{cursor:grab}.ku.drag{opacity:.45}.kdrop{outline:2px dashed var(--accent)!important;outline-offset:-2px}
-  .kmsg{margin:0 0 var(--gap);font-size:14px}
+  .kmsg{margin:0 0 var(--gap);font-size:14px}#kmsg:empty{display:none}
   .kwdt{display:flex;align-items:center;gap:8px}.kwgo [data-kwedit]{white-space:nowrap}.kwdt .lb{margin:0}.kwdt input{min-height:44px;width:auto}
   .ked{display:grid;gap:0}
   .kedt{display:grid;grid-template-columns:170px minmax(0,1fr);gap:12px;align-items:start;margin-bottom:8px}.kedt .pun{margin:0}.kedt .pun textarea{display:block;width:100%;margin-top:4px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:8px 12px;font-size:14.5px;line-height:1.45;resize:vertical}

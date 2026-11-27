@@ -1187,7 +1187,7 @@ function kRange(a, b){
   return a.slice(0, 7) === b.slice(0, 7) ? +a.slice(8) + '–' + +b.slice(8) + ' ' + MIESD[m] + ' ' + a.slice(0, 4) : +a.slice(8) + ' ' + MIESD[m] + ' – ' + +b.slice(8) + ' ' + MIESD[n] + ' ' + b.slice(0, 4);
 }
 async function renderKalendarz(a, b){
-  KARGS = [a, b];
+  KARGS = [a, b]; KREDRAW = () => renderKalendarz(a, b);
   const today = PUL.today, month = a === 'm';
   let from, to, mm = '', anchor = today;
   if (month) {
@@ -1313,7 +1313,7 @@ document.addEventListener('keydown', e => {
  * serie, powt., kg, %, RPE, uwagi, obwód „⛓ Połącz zaznaczone”), notatka do jednostki, dzień, „także kolejne tygodnie” → trJednostka.
  * Przeciągnięcie jednostki na inny dzień kalendarza albo pole dnia w oknie → trPrzesun. Szkic (KE) i baza nazw (CWN) tylko w pamięci strony.
  */
-let KE = null, CWN = null, KE_UID = 0, KDRAG = null, KEDRAG = null, KMSG = null, KARGS = [];
+let KE = null, CWN = null, KE_UID = 0, KDRAG = null, KEDRAG = null, KMSG = null, KARGS = [], KREDRAW = () => {};
 const KE_F = [['sets', 'Serie'], ['reps', 'Powt.'], ['kg', 'kg'], ['pct', '%'], ['rpe', 'RPE ≤'], ['note', 'Uwagi']];
 const kKey = u => u.id + '|' + uKey(u.week, u.day);
 const kMovable = u => !u.own && (u.st === 'wait' || u.st === 'late');
@@ -1472,7 +1472,7 @@ document.addEventListener('click', async e => {
       KMSG = { ok: '✓ Zapisano ' + r.n + ' ' + plN(r.n, 'zmianę', 'zmiany', 'zmian') + (r.weeks && r.weeks.length > 1 ? ' w tyg. ' + r.weeks.join(', ') : '') + ' · klient zobaczy je przy następnym otwarciu aplikacji' };
       if (KE === s) KE = null;
       if (KW) KW.k = s.k;
-      await renderKalendarz(...KARGS);
+      await KREDRAW();
     } catch (err) { s.busy = false; if (!err.auth) s.err = err.message; if (KE === s) keDraw(); }
   }
 });
@@ -1491,7 +1491,7 @@ document.addEventListener('dragstart', e => {
   const h = e.target.closest && e.target.closest('#kw [data-kedrag]');
   if (h && KE) { KEDRAG = keRow(h); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'ke'); const r = h.closest('.ke'); r.classList.add('drag'); try { e.dataTransfer.setDragImage(r, 20, 20); } catch (x) {} return; }
   const k = e.target.closest && e.target.closest('[data-ku][draggable="true"]');
-  if (k) { KDRAG = +k.dataset.ku; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'ku'); k.classList.add('drag'); }
+  if (k) { KDRAG = +k.dataset.ku; e.dataTransfer.effectAllowed = 'copyMove'; e.dataTransfer.setData('text/plain', 'ku'); k.classList.add('drag'); }
 });
 document.addEventListener('dragover', e => {
   if (KEDRAG !== null) { const r = e.target.closest && e.target.closest('#kw .ke[data-ke]'); if (r) { e.preventDefault(); document.querySelectorAll('#kw .ke.over').forEach(x => x !== r && x.classList.remove('over')); r.classList.add('over'); } return; }
@@ -1502,7 +1502,12 @@ document.addEventListener('drop', e => {
     if (r && KE) { e.preventDefault(); const to = +r.dataset.ke; if (to !== from) { const [x] = KE.items.splice(from, 1); KE.items.splice(to, 0, x); KE.err = ''; } keDraw(); } return; }
   if (KDRAG !== null) { const d = e.target.closest && e.target.closest('[data-kday]'); const u = KLIST[KDRAG]; KDRAG = null;
     document.querySelectorAll('.kdrop,.ku.drag').forEach(x => x.classList.remove('kdrop', 'drag'));
-    if (d && u) { e.preventDefault(); kMove(u, d.dataset.kday); } }
+    if (d && u) { e.preventDefault();
+      if (d.dataset.kweek === undefined) kMove(u, d.dataset.kday);
+      else if (e.shiftKey) pgCopy([u], +d.dataset.kweek, d.dataset.kday);
+      else if (+d.dataset.kweek !== u.week) { KMSG = { err: 'Inny tydzień: przytrzymaj Shift przy upuszczeniu, żeby skopiować jednostkę.' }; kMsgDraw(); }
+      else if (!kMovable(u)) { KMSG = { err: 'Zrobiona jednostka zostaje w swoim dniu (z Shift: kopia).' }; kMsgDraw(); }
+      else kMove(u, d.dataset.kday); } }
 });
 document.addEventListener('dragend', () => { KEDRAG = null; KDRAG = null; document.querySelectorAll('.kdrop,.ku.drag,#kw .ke.drag,#kw .ke.over').forEach(x => x.classList.remove('kdrop', 'drag', 'over')); });
 /** jednostka na inny dzień (trPrzesun); okno zostaje otwarte, jeśli jednostka dalej jest w widoku */
@@ -1515,7 +1520,7 @@ async function kMove(u, date){
     delete CK[u.id]; Object.keys(KAL).forEach(k => delete KAL[k]);
     KMSG = { ok: '✓ ' + lbl + ' → ' + dowDm(date) + ' · klient zobaczy nowy dzień przy następnym otwarciu aplikacji' };
     if (KW && $('#kw')) KW.k = kKey(u);
-    await renderKalendarz(...KARGS);
+    await KREDRAW();
   } catch (err) { KMSG = err.auth ? null : { err: lbl + ': ' + err.message }; kMsgDraw(); }
 }
 const kMsgHtml = () => !KMSG ? '' : '<p class="kmsg ' + (KMSG.err ? 'err' : KMSG.busy ? 'muted' : 'saved') + '" role="status">' + esc(KMSG.err || KMSG.busy || KMSG.ok) + '</p>';
@@ -1567,12 +1572,13 @@ async function renderKlient(id, tab){
   const rd = (d.readiness || []).slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).pop();
   let body = '';
   if (tab === 'sesje') body = sesList(d, dates, 0);
-  else if (tab === 'plan') body = planList(d, dates, today);
+  else if (tab === 'plan') body = planView(d, dates, today);
   else if (tab === 'bloki') body = blokList(d);
   else if (tab === 'dyspozycja') body = dyspList(d);
   else body = przeglad(d, c, sets, dates, today, rd);
   $('#main').innerHTML = khHtml(id, tab) + '<div class="pg">' + body + '</div>';
   pkgBind(id);
+  if (tab === 'plan' && pgOn()) { KREDRAW = () => renderKlient(id, 'plan'); if (KW) { const j = KLIST.findIndex(u => kKey(u) === KW.k); if (KLIST[j]) kwOpen(j); else kwClose(); } }
 }
 /* ---------- pakiet treningów personalnych (apps-script/Pakiety.gs) ----------
  * Zakładka Pakiety = księga: zakup (+n), trening (−1, z sesji „Prowadź”), korekta (±1, trening poza aplikacją albo zwrot).
@@ -2036,6 +2042,87 @@ function peChanges(x, st){
   x.rows.forEach(r => { const v = (st.v || {})[r.order] || {}; Object.keys(v).forEach(f => { if (String(v[f]).trim() !== peTxt(r, f)) out.push([r.order, f]); }); });
   return out;
 }
+/* ---------- karta klienta → Plan jako siatka bloku (panel v2 PR 4, 27.11.2026) ----------
+ * Wiersz = tydzień bloku, kolumny Pn–Nd (+ „bez dnia”), jednostka = karta jak w kalendarzu: klik = okno jednostki (podgląd, edycja),
+ * przeciągnięcie w tym samym tygodniu = nowy dzień (trPrzesun), z Shift = kopia (trKopiuj, też do innego tygodnia).
+ * „+ Tydzień” kopiuje ostatni tydzień bloku do następnego numeru, „Kopiuj tydzień…” dowolny tydzień do wybranego.
+ * Na telefonie lista (planList). Wybór widoku i bloku, formularz kopii tylko w pamięci strony.
+ */
+let PGV = 'siatka', PGC = null;
+const PGB = {};                                   // klient → wybrany blok
+const pgPhone = () => window.matchMedia('(max-width:760px)').matches;
+const pgOn = () => PGV === 'siatka' && !pgPhone();
+function pgUnits(d, dates, today){
+  return planUnits(d, dates).map(x => { const s = (d.sessions || []).find(z => uKey(z.tydzien, z.jednostka) === x.u), sets = x.rows.reduce((a, r) => a + (Number(r.sets) || 0), 0);
+    return { id: d.cfg.id, name: d.cfg.name, week: x.week, day: x.day, title: x.title || '', block: x.block || '', date: x.date || '', plan: (x.rows.find(r => r.date) || {}).date || '', own: false,
+      led: !!s && s.prowadzil === 'trener', ex: x.rows.length, sets, done: x.done ? sets : 0, st: x.done ? 'done' : x.date && x.date < today ? 'late' : 'wait', rpe: s && s.rpe_sesji !== '' ? s.rpe_sesji : null, min: s ? s.czas_min : null }; });
+}
+function planView(d, dates, today){
+  const seg = '<div class="seg pgv" role="group" aria-label="Widok planu"><button type="button" data-pgv="siatka" aria-pressed="' + (PGV === 'siatka') + '">Siatka</button><button type="button" data-pgv="lista" aria-pressed="' + (PGV === 'lista') + '">Lista</button></div>';
+  if (!pgOn()) return (pgPhone() ? '' : '<div class="pgt"><span class="sp"></span>' + seg + '</div>') + planList(d, dates, today);
+  const all = pgUnits(d, dates, today);
+  if (!all.length) { KLIST = []; return '<div class="pgt"><span class="sp"></span>' + seg + '</div>' + planList(d, dates, today); }
+  const blocks = [...new Set(all.map(u => u.block))];
+  const cur = all.find(u => u.st === 'wait' || (u.st === 'late' && u.date >= TL.addDays(today, -PE_OLD))), id = d.cfg.id;
+  let b = PGB[id] !== undefined && blocks.includes(PGB[id]) ? PGB[id] : cur ? cur.block : blocks[blocks.length - 1];
+  const units = all.filter(u => u.block === b), weeks = [...new Set(units.map(u => u.week))].sort((x, y) => x - y);
+  KLIST = units.slice().sort((x, y) => x.week - y.week || String(x.date || '9').localeCompare(String(y.date || '9')) || String(x.day).localeCompare(String(y.day)));
+  const bl = x => { const us = all.filter(u => u.block === x), ws = [...new Set(us.map(u => u.week))], dn = us.filter(u => u.st === 'done').length;
+    return (x || 'bez bloku') + ' · ' + (dn === us.length ? 'zrobiony' : ws.length + ' tyg. · ' + dn + ' z ' + us.length + ' zrobione'); };
+  const chips = '<div class="chips">' + blocks.map(x => '<button class="chip" type="button" data-pgb="' + esc(x) + '" aria-pressed="' + (x === b) + '">' + esc(bl(x)) + '</button>').join('') + '</div>';
+  const last = weeks[weeks.length - 1], usedNext = (d.plan || []).some(r => r.week === last + 1);
+  const bar = '<div class="pgt">' + chips + '<span class="sp"></span>' +
+    '<button class="b" type="button" data-pgadd' + (usedNext ? ' disabled title="Tydzień ' + (last + 1) + ' jest już w planie: użyj „Kopiuj tydzień…”"' : '') + '>+ Tydzień ' + (last + 1) + '</button>' +
+    '<button class="b" type="button" data-pgcp>Kopiuj tydzień…</button>' + seg + '</div>';
+  const maxW = Math.max(...(d.plan || []).map(r => r.week)), c = PGC && PGC.id === id ? PGC : null;
+  const form = c ? '<div class="card pgf"><label>Kopiuj tydzień <select id="pg-from">' + weeks.map(w => '<option value="' + w + '"' + (w === c.from ? ' selected' : '') + '>' + w + '</option>').join('') + '</select></label>' +
+    '<label>do tygodnia <input id="pg-to" type="number" min="1" max="200" inputmode="numeric" value="' + esc(c.to) + '"></label>' +
+    '<span class="hint">Wszystkie jednostki trenera z tego tygodnia, daty o tyle tygodni dalej. Zajęty dzień (np. T1) dostaje następny numer.</span><span class="sp"></span>' +
+    '<button class="b" type="button" data-pgcpx>Anuluj</button><button class="b p" type="button" data-pgcpgo' + (c.busy ? ' disabled' : '') + '>' + (c.busy ? 'Kopiuję…' : 'Kopiuj') + '</button></div>' : '';
+  const hasUnd = units.some(u => !u.date), DN = ['pn', 'wt', 'śr', 'cz', 'pt', 'sb', 'nd'];
+  let prevMon = '';
+  const rows = weeks.map(w => {
+    const us = units.filter(u => u.week === w), ds = us.map(u => u.date).filter(Boolean).sort();
+    const mon = ds.length ? TL.mondayOf(ds[0]) : prevMon ? TL.addDays(prevMon, 7) : ''; prevMon = mon || prevMon;
+    const dn = us.filter(u => u.st === 'done').length;
+    const cell = (k, date) => { const here = us.filter(u => (date ? u.date === date : !u.date));
+      return '<div class="pgc' + (date === today ? ' t' : '') + (here.length ? '' : ' empty') + '"' + (date ? ' data-kday="' + date + '" data-kweek="' + w + '"' : '') + (date ? ' aria-label="' + esc(DOWL[(k + 1) % 7] + ' ' + dm(date)) + '"' : '') + '>' +
+        here.map(u => pgCard(u, KLIST.indexOf(u))).join('') + '</div>'; };
+    return '<div class="pgw"><div class="pgl"><b>Tydz. ' + w + '</b><span>' + (mon ? 'od ' + dm(mon) : 'bez dat') + '</span><span>' + dn + ' z ' + us.length + '</span></div>' +
+      DN.map((x, k) => cell(k, mon ? TL.addDays(mon, k) : '')).join('') + (hasUnd ? cell(7, '') : '') + '</div>';
+  }).join('');
+  const head = '<div class="pgw pgh"><span></span>' + DN.map(x => '<span>' + x + '</span>').join('') + (hasUnd ? '<span>bez dnia</span>' : '') + '</div>';
+  return bar + '<div id="kmsg">' + kMsgHtml() + '</div>' + form + '<div class="card pgg' + (hasUnd ? ' und' : '') + '" style="--c:' + kColor(id) + '">' + head + rows + '</div>' +
+    '<p class="legend">Klik = okno jednostki (podgląd i „✎ Edytuj”). Przeciągnij niezrobioną jednostkę na inny dzień tego tygodnia; z Shift = kopia, także do innego tygodnia. Zrobione jednostki stoją.</p>';
+}
+const pgCard = (u, i) => '<button type="button" class="ku st-' + u.st + '" data-ku="' + i + '" draggable="true"><span class="kt"><b>' + esc(pgDay(u.day)) + (u.title ? ' · ' + esc(u.title) : '') + '</b>' + kBadge(u) + '</span><small>' + esc(kMeta(u)) + '</small></button>';
+const pgDay = d => TL.dayLabel(d);
+async function pgCopy(us, toWeek, date){
+  if (!us.length || !CID) return;
+  const id = CID, lbl = us.length === 1 ? us[0].day + (us[0].title ? ' ' + us[0].title : '') : 'tydz. ' + us[0].week;
+  KMSG = { busy: 'Kopiuję: ' + lbl + '…' }; kMsgDraw();
+  try {
+    const r = await guard(api('trKopiuj', id, Object.assign({ units: us.map(u => ({ week: u.week, day: u.day })), toWeek }, date ? { date } : {})));
+    CK[id] = await guard(api('trKlient', id)); Object.keys(KAL).forEach(k => delete KAL[k]);
+    KMSG = { ok: '✓ Skopiowano ' + lbl + ' → tydz. ' + toWeek + ': ' + r.made.map(m => m.day + (m.date ? ' ' + dowDm(m.date) : '')).join(', ') + ' · klient zobaczy je przy następnym otwarciu aplikacji' };
+    PGC = null;
+    if (CID === id) await KREDRAW();
+  } catch (err) { KMSG = err.auth ? null : { err: lbl + ': ' + err.message }; if (PGC) PGC.busy = false; if (CID === id) { if (PGC) renderKlient(id, 'plan'); else kMsgDraw(); } }
+}
+document.addEventListener('click', e => {
+  const t = e.target;
+  const v = t.closest('[data-pgv]'); if (v) { PGV = v.dataset.pgv; KMSG = null; renderKlient(CID, 'plan'); return; }
+  const b = t.closest('[data-pgb]'); if (b) { PGB[CID] = b.dataset.pgb; KMSG = null; renderKlient(CID, 'plan'); return; }
+  if (t.closest('[data-pgadd]')) { const w = Math.max(...KLIST.map(u => u.week)); pgCopy(KLIST.filter(u => u.week === w), w + 1); return; }
+  if (t.closest('[data-pgcp]')) { const ws = KLIST.map(u => u.week), mx = Math.max(...(CUR.plan || []).map(r => r.week)); PGC = { id: CID, from: Math.max(...ws), to: mx + 1 }; renderKlient(CID, 'plan'); return; }
+  if (t.closest('[data-pgcpx]')) { PGC = null; renderKlient(CID, 'plan'); return; }
+  if (t.closest('[data-pgcpgo]') && PGC) {
+    const from = +$('#pg-from').value, to = Math.round(+$('#pg-to').value);
+    if (!(to >= 1 && to <= 200) || to === from) { KMSG = { err: 'Podaj inny tydzień docelowy (1–200).' }; kMsgDraw(); return; }
+    Object.assign(PGC, { from, to, busy: true }); renderKlient(CID, 'plan');
+    pgCopy(KLIST.filter(u => u.week === from), to);
+  }
+});
 function planList(d, dates, today){
   // niezrobione; opuszczone dawniej niż 14 dni temu pomijamy (już ich nikt nie zrobi); zrobione z tych samych tygodni jako jedna linia
   const units = planUnits(d, dates), open = units.filter(x => !x.done && !(x.date && x.date < TL.addDays(today, -PE_OLD)));

@@ -1529,6 +1529,34 @@ test('trUnitEdit_, trMove_: cała jednostka z okna kalendarza (kolejność, nowe
   assert.ok(C.TR_FNS.trJednostka && C.TR_FNS.trPrzesun && C.TR_FNS.trCwNazwy && !C.API_FNS.trJednostka);
 });
 
+test('trCopy_: kopia jednostki i tygodnia w planie bloku (nowy tydzień, data, wolny kod dnia)', () => {
+  const R = (w, d, nr, name, o) => Object.assign({ klient: 'ania', tydzien: w, jednostka: d, tytul: 'Góra', data: '', nr, cwiczenie: name, prio: 'A', serie: 4, powt: '5', kg: 60, procent: '', rpe_max: 8, uwagi: '', blok: 'B2', zrodlo: '', obwod: '', uwagi_jedn: '' }, o);
+  const plan = [
+    R(9, 'T1', 1, 'Przysiad', { data: '2026-11-09', tytul: 'Nogi', uwagi_jedn: 'pauza' }), R(9, 'T1', 2, 'RDL', { data: '2026-11-09', tytul: 'Nogi' }), R(9, 'T1', 51, 'Pompki', { zrodlo: 'dodane', data: '2026-11-09' }),
+    R(9, 'T1', 3, 'Wykroki', { zrodlo: 'usuniete', data: '2026-11-09' }),
+    R(9, 'T2', 1, 'Wyciskanie', { data: '2026-11-11' }),
+    R(10, 'T1', 1, 'Przysiad', { data: '2026-11-16' }), R(10, 'T3', 1, 'Martwy', { data: '2026-11-18' }),
+    R(9, 'W1', 1, 'Bieg', { zrodlo: 'klient' }), R(9, 'T1', 1, 'Przysiad', { klient: 'bartek' })];
+  const cp = e => JSON.parse(JSON.stringify(C.trCopy_(plan, 'ania', e)));
+  // jedna jednostka do nowego tygodnia: data + 7 dni, bez usuniętych i dodanych przez klienta, notatka do jednostki zostaje
+  let r = cp({ units: [{ week: 9, day: 'T1' }], toWeek: 11 });
+  assert.deepEqual(r.made, [{ week: 11, day: 'T1', from: '9|T1', date: '2026-11-23' }]);
+  assert.deepEqual(r.rows.map(x => [x.tydzien, x.jednostka, x.nr, x.cwiczenie, x.data, x.tytul, x.blok, x.uwagi_jedn, x.kg]), [[11, 'T1', 1, 'Przysiad', '2026-11-23', 'Nogi', 'B2', 'pauza', 60], [11, 'T1', 2, 'RDL', '2026-11-23', 'Nogi', 'B2', '', 60]]);
+  // zajęty kod dnia → następny wolny numer; własna data
+  r = cp({ units: [{ week: 9, day: 'T1' }], toWeek: 10, date: '2026-11-20' });
+  assert.deepEqual(r.made, [{ week: 10, day: 'T4', from: '9|T1', date: '2026-11-20' }]);
+  // cały tydzień z przesunięciem
+  r = cp({ units: [{ week: 9, day: 'T1' }, { week: 9, day: 'T2' }], toWeek: 12, shift: 21 });
+  assert.deepEqual(r.made.map(x => [x.day, x.date]), [['T1', '2026-11-30'], ['T2', '2026-12-02']]);
+  // błędy
+  assert.match(cp({ units: [{ week: 9, day: 'W1' }], toWeek: 10 }).error, /Własnego/);
+  assert.match(cp({ units: [{ week: 9, day: 'T9' }], toWeek: 10 }).error, /Nie ma jednostki T9/);
+  assert.match(cp({ units: [], toWeek: 10 }).error, /Wybierz/);
+  assert.match(cp({ units: [{ week: 9, day: 'T1' }], toWeek: 0 }).error, /tydzień/);
+  assert.match(cp({ units: [{ week: 9, day: 'T1' }, { week: 9, day: 'T2' }], toWeek: 10, date: '2026-11-20' }).error, /Zła data/);
+  assert.ok(C.TR_FNS.trKopiuj && !C.API_FNS.trKopiuj);
+});
+
 // --- zapis do arkusza: tekst zostaje tekstem ---
 test('plain_: tekst zaczynający się jak formuła dostaje apostrof, liczby i zwykły tekst zostają bez zmian', () => {
   for (const v of ['=1+1', '=IMPORTRANGE("x";"Klienci!A:C")', ' =A1', '\t=A1', '\n=A1', '+SUM(A1)', '-A1', '- bolało kolano', '+48 600 100 200', '@x', '--', '-%'])
