@@ -1,9 +1,9 @@
 // Testy pośrednika MCP (czyste funkcje, dane syntetyczne): node --test mcp/test/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS, karta, e1rm } from '../src/tools.js';
+import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS, karta, e1rm, filmy, filmRef, refParse } from '../src/tools.js';
 import { handle, handleBody, VERSIONS } from '../src/mcp.js';
-import { UI_DZIS, UI_KLIENT, KLIENT_HTML } from '../src/ui.js';
+import { UI_DZIS, UI_KLIENT, UI_FILM, KLIENT_HTML, FILM_HTML } from '../src/ui.js';
 
 const PULPIT = {
   today: '2026-11-27', at: '2026-11-27T06:00:00Z',
@@ -134,7 +134,7 @@ test('karty MCP Apps: zasób ui:// z kartą Dziś, narzędzie „dzis” wskazuj
   const init = await handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25' } }, ctx);
   assert.ok(init.result.capabilities.resources);
   const list = await handle({ jsonrpc: '2.0', id: 2, method: 'resources/list' }, ctx);
-  assert.deepEqual(list.result.resources.map(r => [r.uri, r.mimeType]), [[UI_DZIS, 'text/html;profile=mcp-app'], [UI_KLIENT, 'text/html;profile=mcp-app']]);
+  assert.deepEqual(list.result.resources.map(r => [r.uri, r.mimeType]), [[UI_DZIS, 'text/html;profile=mcp-app'], [UI_FILM, 'text/html;profile=mcp-app'], [UI_KLIENT, 'text/html;profile=mcp-app']]);
   const read = await handle({ jsonrpc: '2.0', id: 3, method: 'resources/read', params: { uri: UI_DZIS } }, ctx);
   const c = read.result.contents[0];
   assert.equal(c.mimeType, 'text/html;profile=mcp-app');
@@ -186,4 +186,48 @@ test('karta klienta: sygnały, liczby tygodnia, siła z e1RM ćwiczeń A', () =>
   assert.match(KLIENT_HTML, /ui\/open-link/);
   assert.deepEqual(KLIENT_HTML.match(/https?:\/\/[^'"\s]+/g).filter(u => !/www\.w3\.org/.test(u)), ['https://likegreekgod.github.io/trening/trener.html']);
   new Function(KLIENT_HTML.match(/<script>([\s\S]*)<\/script>/)[1]);
+});
+
+test('filmy: lista bez linków, karta filmu z biletem tylko dla karty, klatki jako zdjęcia, komentarz', async () => {
+  const V = { id: 'ola', name: 'Ola', at: '2026-11-25', week: 9, day: 'A', order: 1, ex: 'Przysiad', set: '4', kg: 95, reps: '5', rpe: 9, typ: '', note: 'kolano', swap: '',
+    file: 'FILE_abcdefghijklmnopqrstuv', link: 'https://drive.google.com/file/d/FILE_abcdefghijklmnopqrstuv/view', kom: '', komT: '', komD: '', rep: '' };
+  const V2 = Object.assign({}, V, { set: '3', kom: 'ok', komT: 'ok' }), P = { videos: [V, V2, Object.assign({}, V, { id: 'ewa', name: 'Ewa' })] };
+  const f = filmy(P, 'ola');
+  assert.deepEqual(f, { filmy: [{ ref: 'ola|9|A|1|4', klient: 'Ola', data: '2026-11-25', cwiczenie: 'Przysiad', seria: '4', wykonanie: '95×5 🔴', uwagi_klienta: 'kolano' }], razem: 1 });
+  assert.equal(filmy(P, '', true).razem, 3);
+  assert.doesNotMatch(JSON.stringify(filmy(P, '', true)), /drive|FILE_/);
+  assert.deepEqual(refParse('ola|9|A|1|4'), { id: 'ola', week: 9, day: 'A', order: 1, set: '4' });
+  assert.throws(() => refParse('ola|9|A'), /Zły identyfikator/);
+  assert.equal(filmRef(V), 'ola|9|A|1|4');
+  // film: bilet przez o.ticket, w treści dla Claude bez adresu
+  const calls = [], api = async (fn, ...a) => { calls.push([fn, ...a]); return fn === 'trPulpit' ? P : fn === 'trFilm' ? { token: 'TOK' } : { text: a[5] }; };
+  const store = {}, ctx = { api, today: '2026-11-27', origin: 'https://p.example', ticket: async (file, tok) => 'https://p.example/film/' + file + '/' + tok,
+    store: async x => { store.k = x; return 'a'.repeat(32); }, load: async k => (k === 'a'.repeat(32) ? store.k : null) };
+  const r = await handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'film', arguments: { ref: 'ola|9|A|1|4' } } }, ctx);
+  assert.equal(r.result.structuredContent._ui.src, 'https://p.example/film/FILE_abcdefghijklmnopqrstuv/TOK');
+  assert.doesNotMatch(r.result.content[0].text, /p\.example|TOK|FILE_/);
+  assert.match((await handle({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'film', arguments: { ref: 'ola|1|A|1|1' } } }, ctx)).result.content[0].text, /Nie ma filmu/);
+  // klatki: zapis (tylko karta) → odczyt jako zdjęcia
+  const jpg = Buffer.from('jpeg').toString('base64');
+  const z = await handle({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'klatki_zapisz', arguments: { ref: 'ola|9|A|1|4', klatki: [{ t: 4.234, jpg }, { t: 5, jpg }] } } }, ctx);
+  assert.equal(z.result.structuredContent.klatki_id, 'a'.repeat(32));
+  assert.match((await handle({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'klatki_zapisz', arguments: { ref: 'ola|9|A|1|4', klatki: [{ t: 1, jpg: '<script>' }] } } }, ctx)).result.content[0].text, /base64/);
+  const k = await handle({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'klatki', arguments: { klatki_id: 'a'.repeat(32) } } }, ctx);
+  const imgs = k.result.content.filter(c => c.type === 'image');
+  assert.equal(imgs.length, 2); assert.equal(imgs[0].mimeType, 'image/jpeg'); assert.equal(imgs[0].data, jpg);
+  assert.match(k.result.content[0].text, /Przysiad/); assert.deepEqual(k.result.structuredContent.chwile_s, [4.23, 5]);
+  assert.match((await handle({ jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'klatki', arguments: { klatki_id: 'b'.repeat(32) } } }, ctx)).result.content[0].text, /wygasły/);
+  // komentarz → trKomentarzFilm (zapis w dzienniku API)
+  await handle({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'komentarz_filmu', arguments: { ref: 'ola|9|A|1|4', tekst: '0:05,0 kolano' } } }, ctx);
+  assert.deepEqual(calls[calls.length - 1], ['trKomentarzFilm', 'ola', 9, 'A', 1, '4', '0:05,0 kolano']);
+  assert.ok(ZAPIS.includes('trKomentarzFilm'));
+  // narzędzia i karta
+  const T = n => TOOLS.find(t => t.name === n);
+  assert.equal(T('film')._meta.ui.resourceUri, UI_FILM);
+  assert.deepEqual(T('klatki_zapisz')._meta.ui.visibility, ['app']);
+  const rr = await handle({ jsonrpc: '2.0', id: 8, method: 'resources/read', params: { uri: UI_FILM } }, ctx);
+  assert.deepEqual(rr.result.contents[0]._meta.ui.csp.resourceDomains, ['https://p.example']);
+  assert.match(FILM_HTML, /klatki_zapisz/); assert.match(FILM_HTML, /ui\/message/); assert.match(FILM_HTML, /komentarz_filmu/);
+  assert.doesNotMatch(FILM_HTML, /https?:\/\/(?!www\.w3)/);
+  new Function(FILM_HTML.match(/<script>([\s\S]*)<\/script>/)[1]);
 });

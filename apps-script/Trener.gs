@@ -73,7 +73,7 @@ const TR_ODP_DNI = 14;                // odpowiedzi klientów na komentarze na p
  * Pośrednik woła te same TR_FNS z biletem trenera i dopisuje src: 'mcp'. Zapisy z tej listy trafiają do zakładki API
  * (jak akcje botów klientów), żeby było widać, co zmienił Claude. Odczyty nie są zapisywane.
  */
-const TR_MCP_ZAPIS = ['trJednostka', 'trKomentarz', 'trPlan', 'trPropozycja', 'trPrzesun'];   // = ZAPIS w mcp/src/tools.js
+const TR_MCP_ZAPIS = ['trJednostka', 'trKomentarz', 'trKomentarzFilm', 'trPlan', 'trPropozycja', 'trPrzesun'];   // = ZAPIS w mcp/src/tools.js
 /** Czysta: zapytanie → wiersz dziennika API [klient, akcja, ok, opis] albo null (nie z Claude albo odczyt). */
 function mcpLogRow_(req, ok, why) {
   if (!req || req.src !== 'mcp' || TR_MCP_ZAPIS.indexOf(req.fn) < 0) return null;

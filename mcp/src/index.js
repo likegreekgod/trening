@@ -66,7 +66,11 @@ const McpApi = {
     let body;
     try { body = await request.json(); } catch (e) { return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { status: 400 }); }
     try {
-      const out = await handleBody(body, { api: apiFor(env, ctx.props), today: today() });
+      const origin = new URL(request.url).origin;
+      const out = await handleBody(body, { api: apiFor(env, ctx.props), today: today(), origin,
+        ticket: async (file, token) => { const k = rnd(); await env.OAUTH_KV.put('film:' + k, JSON.stringify({ file, token }), { expirationTtl: FILM_TTL }); return origin + '/film/' + k; },
+        store: async x => { const k = rnd(); await env.OAUTH_KV.put('klatki:' + k, JSON.stringify(x), { expirationTtl: KLATKI_TTL }); return k; },
+        load: async k => (/^[0-9a-f]{32}$/.test(k) ? env.OAUTH_KV.get('klatki:' + k, 'json') : null) });
       return out === null ? new Response(null, { status: 202 }) : Response.json(out);
     } catch (e) {
       if (e && e.auth) return unauthorized();
@@ -74,6 +78,26 @@ const McpApi = {
     }
   },
 };
+
+/* ---------- film dla karty (D3): bilet w KV (losowy, 45 min) → plik z Dysku z biletem skryptu (trFilm), Range i CORS dla <video> i klatek w canvas ---------- */
+
+const FILM_TTL = 45 * 60, KLATKI_TTL = 3600;
+const rnd = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Range', 'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges' };
+
+async function film(request, env, k) {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  const x = /^[0-9a-f]{32}$/.test(k) ? await env.OAUTH_KV.get('film:' + k, 'json') : null;
+  if (!x || !/^[\w-]{20,}$/.test(x.file)) return new Response('Bilet filmu wygasł. Otwórz film jeszcze raz w Claude.', { status: 404, headers: CORS });
+  const h = { Authorization: 'Bearer ' + x.token }, range = request.headers.get('Range');
+  if (range) h.Range = range;
+  const r = await fetch((env.DRIVE_URL || 'https://www.googleapis.com/drive/v3/files/') + x.file + '?alt=media', { headers: h });
+  const out = new Headers(CORS);
+  ['Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges'].forEach(n => { const v = r.headers.get(n); if (v) out.set(n, v); });
+  out.set('Cache-Control', 'private, max-age=600');
+  if (!r.ok && r.status !== 206) return new Response('Dysk odpowiedział ' + r.status + (r.status === 404 ? ': filmu nie ma już na Dysku.' : '.'), { status: r.status, headers: CORS });
+  return new Response(r.body, { status: r.status, headers: out });
+}
 
 /* ---------- strony logowania (zgoda → Google → powrót) ---------- */
 
@@ -123,6 +147,8 @@ const Default = {
         headers.set('Location', redirectTo);
         return new Response(null, { status: 302, headers });
       }
+      const fm = /^\/film\/([0-9a-f]{32})$/.exec(url.pathname);
+      if (fm) return film(request, env, fm[1]);
       if (url.pathname === '/') return page(SERVER.title, '<h1>' + esc(SERVER.title) + '</h1><p>Serwer MCP panelu trenera. Adres do dodania w claude.ai → Ustawienia → Konektory: <code>' + esc(url.origin) + '/mcp</code></p>');
       return new Response('Nie ma takiej strony.', { status: 404 });
     } catch (e) {

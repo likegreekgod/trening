@@ -2,7 +2,8 @@
 // Uruchom: node test/karta.mjs [katalog_na_zrzuty]   (potrzebny Playwright z przeglądarką; nie jest częścią npm test)
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
-import { DZIS_HTML, KLIENT_HTML } from '../src/ui.js';
+import { DZIS_HTML, KLIENT_HTML, FILM_HTML } from '../src/ui.js';
+import { readFileSync } from 'node:fs';
 import { dzis, klient } from '../src/tools.js';
 const { chromium } = createRequire(import.meta.url)('playwright');
 
@@ -25,9 +26,11 @@ window.addEventListener('message', e => { const m = e.data; if (e.source !== f.c
   const reply = r => f.contentWindow.postMessage({ jsonrpc: '2.0', id: m.id, result: r }, '*');
   if (m.method === 'ui/initialize') reply({ protocolVersion: '2026-01-26', hostInfo: { name: 'atrapa', version: '1' }, hostCapabilities: {}, hostContext: CTX });
   if (m.method === 'ui/notifications/initialized') f.contentWindow.postMessage({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [{ type: 'text', text: 'x' }], structuredContent: DATA } }, '*');
-  if (m.method === 'ui/open-link') reply({});
+  if (m.method === 'ui/open-link' || m.method === 'ui/message') reply({});
   if (m.method === 'ui/notifications/size-changed') f.style.height = m.params.height + 'px';
-  if (m.method === 'tools/call') reply(m.params.arguments.pid === 'olek|z|2' ? { content: [{ type: 'text', text: 'Nie ma już tej propozycji.' }], isError: true } : { content: [{ type: 'text', text: '{}' }], structuredContent: { zapisano: true } });
+  if (m.method === 'tools/call' && m.params.name === 'klatki_zapisz') reply({ content: [{ type: 'text', text: '{}' }], structuredContent: { klatki_id: 'c'.repeat(32), ile: m.params.arguments.klatki.length } });
+  else if (m.method === 'tools/call' && m.params.name === 'komentarz_filmu') reply({ content: [{ type: 'text', text: '{}' }], structuredContent: { zapisano: true } });
+  else if (m.method === 'tools/call') reply(m.params.arguments.pid === 'olek|z|2' ? { content: [{ type: 'text', text: 'Nie ma już tej propozycji.' }], isError: true } : { content: [{ type: 'text', text: '{}' }], structuredContent: { zapisano: true } });
 });
 f.srcdoc = HTML;
 </script>`;
@@ -124,5 +127,49 @@ for (const theme of ['light', 'dark']) {
     await page.close();
   }
 }
+// Karta filmu: syntetyczny film przez atrapę pośrednika (CORS), klatki → klatki_zapisz → ui/message, komentarz
+{
+  const webm = readFileSync(new URL('../../tests/fixtures/film.webm', import.meta.url));
+  const fd = { ref: 'ola|9|A|1|4', klient: 'Ola', data: '2026-11-25', cwiczenie: 'Przysiad', seria: '4', wykonanie: '95×5 🔴', uwagi_klienta: 'kolano przy 3. serii', _ui: { src: 'https://p.example/film/' + 'd'.repeat(32) } };
+  for (const [theme, w] of [['light', 640], ['dark', 640], ['telefon', 380]]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 1000 }, colorScheme: theme === 'dark' ? 'dark' : 'light' });
+    const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+    await page.route('https://p.example/**', r => {           // jak Dysk przez pośrednika: Range → 206
+      const m = /bytes=(\d+)-(\d*)/.exec(r.request().headers().range || ''), H = { 'Content-Type': 'video/webm', 'Access-Control-Allow-Origin': '*', 'Accept-Ranges': 'bytes' };
+      if (!m) return r.fulfill({ status: 200, body: webm, headers: H });
+      const a = +m[1], b = m[2] ? +m[2] : webm.length - 1;
+      return r.fulfill({ status: 206, body: webm.subarray(a, b + 1), headers: Object.assign(H, { 'Content-Range': 'bytes ' + a + '-' + b + '/' + webm.length }) });
+    });
+    await page.setContent(HOST.replace('BG', theme === 'dark' ? '#262624' : '#faf9f5').replace('CTXJSON', JSON.stringify({ theme: theme === 'dark' ? 'dark' : 'light' }))
+      .replace('DATA', JSON.stringify(fd)).replace('HTML', () => JSON.stringify(FILM_HTML).replace(/</g, '\\u003c')));
+    const fr = page.frameLocator('#f');
+    await fr.getByText('Ola · Przysiad · seria 4').waitFor();
+    await fr.locator('video').evaluate(v => new Promise(ok => (v.readyState >= 1 ? ok() : v.addEventListener('loadedmetadata', ok))));
+    if (theme !== 'dark') {
+      await fr.getByRole('button', { name: '⇤ Początek tu' }).click();
+      await fr.getByRole('button', { name: /Pokaż Claude/ }).click();
+      await fr.getByText('✓ Klatki są u Claude').waitFor({ timeout: 20000 });
+      assert.equal(await fr.locator('.fr img').count(), 8);
+    }
+    if (theme === 'light') {
+      const log = await page.evaluate(() => LOG);
+      const z = log.find(m => m.params && m.params.name === 'klatki_zapisz').params.arguments;
+      assert.equal(z.ref, 'ola|9|A|1|4'); assert.equal(z.klatki.length, 8); assert.match(z.klatki[0].jpg, /^\/9j\//, 'JPEG');
+      assert.ok(new Set(z.klatki.map(k => k.jpg)).size >= 6, 'klatki z różnych chwil');
+      const um = log.find(m => m.method === 'ui/message');
+      assert.match(um.params.content.text, new RegExp('klatkach ' + 'c'.repeat(32)));
+      await fr.locator('textarea').fill('kolano do środka');
+      await fr.getByRole('button', { name: '⏱ Wstaw chwilę' }).click();
+      await fr.getByRole('button', { name: 'Zapisz komentarz' }).click();
+      await fr.getByText('✓ Zapisane').waitFor();
+      const k = (await page.evaluate(() => LOG)).filter(m => m.params && m.params.name === 'komentarz_filmu').map(m => m.params.arguments);
+      assert.equal(k.length, 1); assert.match(k[0].tekst, /^\d:\d\d,\d kolano do środka$/);
+    }
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: out + '/karta-film-' + theme + '.png', fullPage: true });
+    assert.deepEqual(errs, []);
+    await page.close();
+  }
+}
 await browser.close();
-console.log('karty Dziś i klient: ok');
+console.log('karty Dziś, klient i film: ok');
