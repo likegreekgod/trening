@@ -63,31 +63,34 @@ function route(){
   document.body.classList.remove('pvfs');
   let h = (location.hash || '#dzis').slice(1).split('/'), v = h[0];
   if (v === 'prowadz' && h[1]) { location.replace(liveHref(decodeURIComponent(h[1]))); return; }   // powrót z aplikacji po ponownym zalogowaniu
+  // stare adresy (v81–v102) → nowe miejsca (zakładki w przeglądarce, linki z alertu)
+  const old = v === 'cwiczenia' ? '#biblioteka' : v === 'prowadzone' ? '#rozliczenia' + (h[1] ? '/' + h[1] : '')
+    : v === 'klienci' && h[1] && h[1] !== 'nowy' ? kHref(decodeURIComponent(h[1]), 'ustawienia') : '';
+  if (old) { location.replace(old); return; }
   if (v === 'pulpit' || !v) v = 'dzis';                          // stary adres pulpitu = ekran Dziś
   const kid = v === 'k' ? decodeURIComponent(h[1] || '') : '';
   const sec = v === 'k' ? 'klienci' : v;                         // karta klienta należy do „Klienci”
-  document.querySelectorAll('#nav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === sec ? 'page' : 'false'));
+  document.querySelectorAll('#nav a, #nav2 a').forEach(a => a.setAttribute('aria-current', a.dataset.v === sec ? 'page' : 'false'));
   $('#set').setAttribute('aria-current', v === 'ustawienia' ? 'page' : 'false');
-  $('#prow').setAttribute('aria-current', v === 'prowadzone' ? 'page' : 'false');
-  document.querySelectorAll('#bnav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === (['wiecej', 'bloki', 'ustawienia', 'prowadzone', 'cwiczenia'].includes(v) ? 'wiecej' : sec) ? 'page' : 'false'));
+  document.querySelectorAll('#bnav a').forEach(a => a.setAttribute('aria-current', a.dataset.v === (WIECEJ.includes(v) ? 'wiecej' : sec) ? 'page' : 'false'));
   const nv = PUL.videos.filter(x => !x.kom).length || '';
   $('#n-filmy').textContent = nv; $('#n-filmy-m').textContent = nv;
-  $('#n-bloki').textContent = PUL.blocks.length || '';
   railDraw(kid);
   const t = PUL.at ? new Date(PUL.at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '';
   $('#at').textContent = PUL.at ? 'dane z ' + (PUL.at.slice(0, 10) === PUL.today ? '' : dowDm(PUL.at.slice(0, 10)) + ', ') + t : 'jeszcze nie przeliczone';
   $('#at-m').textContent = PUL.at ? (PUL.at.slice(0, 10) === PUL.today ? t : dm(PUL.at.slice(0, 10))) : '–';
   $('#av').textContent = meInit();
-  if (v === 'k') return renderKlient(kid, h[2] || 'przeglad');
+  if (v === 'k') return renderKlient(kid, h[2] || 'przeglad', decodeURIComponent(h[3] || ''));
   if (v === 'filmy') return renderFilmy(h[1] || '');
   if (v === 'bloki') return renderBloki();
-  if (v === 'ustawienia') return renderUstawienia();
+  if (v === 'ustawienia') return renderUstawienia(h[1] || '');
   if (v === 'klienci') return renderKlienci(decodeURIComponent(h[1] || ''));
   if (v === 'wiecej') return renderWiecej();
-  if (v === 'prowadzone') return renderProwadzone(decodeURIComponent(h[1] || ''));
-  if (v === 'cwiczenia') return renderCwiczenia();
+  if (v === 'rozliczenia') return renderProwadzone(decodeURIComponent(h[1] || ''));
+  if (v === 'biblioteka') return renderCwiczenia();
   renderDzis();
 }
+const WIECEJ = ['wiecej', 'bloki', 'ustawienia', 'rozliczenia', 'biblioteka'];   // ekrany z „Więcej” na telefonie
 /** lista klientów w menu po lewej (komputer): kropka = najpilniejszy sygnał, alfabetycznie */
 function railDraw(kid){
   const cl = PUL.clients.slice().sort((a, b) => a.name.localeCompare(b.name, 'pl'));
@@ -155,23 +158,23 @@ const DOWL = ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'pi�
 /** „Wymaga uwagi” na ekranie Dziś: czerwone sygnały, filmy bez komentarza, bloki do zamknięcia, koniec planu (odpowiedzi klientów: osobna karta pod spodem) */
 function todoItems(){
   const out = [];
-  const dy = PUL.dysk; if (dy && dy.low) out.push({ o: 0, lv: 'lv-bad', t: 'Na Dysku zostało ' + gb(dy.free) + ' GB', d: 'pełny Dysk = filmy i kopie przestają się zapisywać', a: go('#ustawienia', 'Sprawdź') });
-  PUL.clients.forEach(c => c.signals.filter(s => s.lv === 'bad').forEach(s => out.push({ o: 0, lv: 'lv-bad', t: c.name + ': ' + s.t, d: 'czerwony sygnał', a: go(kHref(c.id), 'Otwórz') })));
+  const dy = PUL.dysk; if (dy && dy.low) out.push({ k: 'sig', o: 0, lv: 'lv-bad', t: 'Na Dysku zostało ' + gb(dy.free) + ' GB', d: 'pełny Dysk = filmy i kopie przestają się zapisywać', a: go('#ustawienia/dane', 'Sprawdź') });
+  PUL.clients.forEach(c => c.signals.filter(s => s.lv === 'bad').forEach(s => out.push({ k: 'sig', o: 0, lv: 'lv-bad', t: c.name + ': ' + s.t, d: 'czerwony sygnał', a: go(kHref(c.id), 'Otwórz') })));
   const nv = {}; PUL.videos.filter(v => !v.kom).forEach(v => { (nv[v.id] = nv[v.id] || []).push(v); });
   PUL.clients.forEach(c => { const v = nv[c.id]; if (!v) return;
     const ex = [...new Set(v.map(x => x.ex))], od = v.map(x => x.at).sort()[0];
-    out.push({ o: 1, lv: 'lv-warn', t: c.name + ': ' + v.length + ' ' + plN(v.length, 'film', 'filmy', 'filmów') + ' bez komentarza', d: ex.slice(0, 2).join(', ') + (ex.length > 2 ? ' i inne' : '') + ' · od ' + dowDm(od), a: go('#filmy/' + encodeURIComponent(c.id), 'Filmy') }); });
+    out.push({ k: 'film', o: 1, lv: 'lv-warn', t: c.name + ': ' + v.length + ' ' + plN(v.length, 'film', 'filmy', 'filmów') + ' bez komentarza', d: ex.slice(0, 2).join(', ') + (ex.length > 2 ? ' i inne' : '') + ' · od ' + dowDm(od), a: go('#filmy/' + encodeURIComponent(c.id), 'Filmy') }); });
   PUL.clients.forEach(c => { const k = c.pkg; if (!k) return;   // pakiet treningów: kończy się, wygasa albo trening poza pakietem
     const ref = go(kHref(c.id), 'Pakiet'), info = 'kupiony ' + dm(k.from) + (k.to ? ' · ważny do ' + dm(k.to) : '');
-    if (k.left < 0) out.push({ o: 0, lv: 'lv-bad', t: c.name + ': ' + -k.left + ' ' + plN(-k.left, 'trening', 'treningi', 'treningów') + ' poza pakietem', d: 'pakiet ' + k.n + ' wykorzystany · czas na nowy', a: ref });
-    else if (k.left === 0) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': pakiet wykorzystany', d: 'wszystkie ' + k.n + ' treningów · ' + info, a: ref });
-    else if (k.to && k.to < PUL.today) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': pakiet wygasł ' + dm(k.to), d: 'niewykorzystane: ' + k.left + ' z ' + k.n, a: ref });
-    else if (k.left <= PKG_LOW) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': ' + (k.left === 1 ? 'został 1 trening' : 'zostały ' + k.left + ' treningi') + ' z pakietu', d: info, a: ref });
-    else if (k.to && k.to <= TL.addDays(PUL.today, PKG_DAYS)) out.push({ o: 2, lv: 'lv-warn', t: c.name + ': pakiet ważny do ' + dowDm(k.to), d: 'zostało ' + k.left + ' z ' + k.n + ' treningów', a: ref }); });
-  (PUL.agent || []).filter(x => x.pilne).forEach(x => out.push({ o: 0, lv: 'lv-bad', t: x.name + ': ' + (AG_TEMAT[x.typ] || 'zgłoszenie') + ' od asystenta AI',
+    if (k.left < 0) out.push({ k: 'pkg', o: 0, lv: 'lv-bad', t: c.name + ': ' + -k.left + ' ' + plN(-k.left, 'trening', 'treningi', 'treningów') + ' poza pakietem', d: 'pakiet ' + k.n + ' wykorzystany · czas na nowy', a: ref });
+    else if (k.left === 0) out.push({ k: 'pkg', o: 2, lv: 'lv-warn', t: c.name + ': pakiet wykorzystany', d: 'wszystkie ' + k.n + ' treningów · ' + info, a: ref });
+    else if (k.to && k.to < PUL.today) out.push({ k: 'pkg', o: 2, lv: 'lv-warn', t: c.name + ': pakiet wygasł ' + dm(k.to), d: 'niewykorzystane: ' + k.left + ' z ' + k.n, a: ref });
+    else if (k.left <= PKG_LOW) out.push({ k: 'pkg', o: 2, lv: 'lv-warn', t: c.name + ': ' + (k.left === 1 ? 'został 1 trening' : 'zostały ' + k.left + ' treningi') + ' z pakietu', d: info, a: ref });
+    else if (k.to && k.to <= TL.addDays(PUL.today, PKG_DAYS)) out.push({ k: 'pkg', o: 2, lv: 'lv-warn', t: c.name + ': pakiet ważny do ' + dowDm(k.to), d: 'zostało ' + k.left + ' z ' + k.n + ' treningów', a: ref }); });
+  (PUL.agent || []).filter(x => x.pilne).forEach(x => out.push({ k: 'sig', o: 0, lv: 'lv-bad', t: x.name + ': ' + (AG_TEMAT[x.typ] || 'zgłoszenie') + ' od asystenta AI',
     d: x.text + ' · ' + dowDm(x.at), a: '<button class="sb" type="button" data-asygo>Otwórz</button>' }));   // Agent.gs: czerwona flaga od bota; reszta spraw w karcie „Od asystenta AI” (asyCard)
-  PUL.blocks.forEach(b => out.push({ o: 3, lv: 'lv-warn', t: b.name + ': blok ' + b.block + ' do zamknięcia', d: (b.to < PUL.today ? 'skończył się ' : 'kończy się ') + dowDm(b.to) + ' · brak wniosków', a: go(kHref(b.id, 'bloki'), 'Zamknij') }));
-  PUL.clients.forEach(c => { if (c.planLeft !== null && c.planLeft >= 0 && c.planLeft <= 7) out.push({ o: 4, lv: 'lv-warn', t: c.name + ': plan kończy się ' + (c.planLeft === 0 ? 'dziś' : 'za ' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni')), d: 'czas na kolejny blok', a: go(kHref(c.id, 'bloki'), 'Następny') }); });
+  PUL.blocks.forEach(b => out.push({ k: 'blok', o: 3, lv: 'lv-warn', t: b.name + ': blok ' + b.block + ' do zamknięcia', d: (b.to < PUL.today ? 'skończył się ' : 'kończy się ') + dowDm(b.to) + ' · brak wniosków', a: go(kHref(b.id, 'bloki'), 'Zamknij') }));
+  PUL.clients.forEach(c => { if (c.planLeft !== null && c.planLeft >= 0 && c.planLeft <= 7) out.push({ k: 'blok', o: 4, lv: 'lv-warn', t: c.name + ': plan kończy się ' + (c.planLeft === 0 ? 'dziś' : 'za ' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni')), d: 'czas na kolejny blok', a: go(kHref(c.id, 'bloki'), 'Następny') }); });
   return out.sort((a, b) => a.o - b.o);
 }
 /** „Dziś trenują”: jednostki z datą na dziś albo zaczęte dziś (trPulpit_ → dzis), w trakcie na górze */
@@ -187,6 +190,8 @@ function dzisRow(u){
   return '<div class="dr" data-dz="' + esc(u.id + '|' + u.week + '|' + u.day) + '"><span class="ini ' + lvOf(c) + '">' + esc((u.name || '?')[0].toUpperCase()) + '<i></i></span>' +
     '<div class="tx"><b>' + esc(u.name) + '</b><small>' + esc(sub) + '</small>' + bar + '</div>' + act + '</div>';
 }
+let SKF = 'all';                                 // filtr Skrzynki na „Dziś” (tylko w pamięci strony)
+const SK = [['all', 'Wszystko'], ['sig', 'Sygnały'], ['film', 'Filmy'], ['odp', 'Odpowiedzi'], ['blok', 'Bloki i plany'], ['pkg', 'Pakiety']];
 function renderDzis(){
   const cl = PUL.clients, wk = cl.reduce((a, c) => { const f = frac(c.week); return [a[0] + f[0], a[1] + f[1]]; }, [0, 0]);
   const red = cl.reduce((a, c) => a + c.red, 0), nov = PUL.videos.filter(v => !v.kom).length, idle = cl.filter(c => c.ago !== null && c.ago >= 7).length;
@@ -200,28 +205,16 @@ function renderDzis(){
   const dz = PUL.dzis || [];
   const today = '<div class="card dz-tr"><h2>Dziś trenują · ' + dz.length + '</h2>' + (dz.length ? '<div class="drs">' + dz.map(dzisRow).join('') + '</div>'
     : '<p class="muted">Nikt nie ma dziś treningu w planie i nikt jeszcze nic nie zapisał.</p>') + '</div>';
-  const td = todoItems(), todo = '<div class="card todo"><h2>Wymaga uwagi · ' + td.length + '</h2>' + (td.length ? td.map(t =>
-    '<div class="it"><span class="dot ' + t.lv + '"></span><div class="tx"><b>' + esc(t.t) + '</b><small>' + esc(t.d) + '</small></div>' + t.a + '</div>').join('') : '<p class="muted">Nic pilnego.</p>') + '</div>';
-  const rows = cl.map(c => {
-    const f = frac(c.week), sg = (c.status && stLv(c.status) !== 'lv-ok' ? '<span class="pill ' + stLv(c.status) + '">' + esc(c.status) + '</span>' : '') +
-      c.signals.slice(0, 3).map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('') +
-      (c.signals.length > 3 ? '<span class="pill">+' + (c.signals.length - 3) + '</span>' : '');
-    return '<tr class="row" data-k="' + esc(c.id) + '"><td><a class="who ' + lvOf(c) + '" href="' + kHref(c.id) + '"><span class="dot"></span>' + esc(c.name) + '</a></td>' +
-      '<td class="nw hide-m">' + agoTxt(c) + '</td>' +
-      '<td class="nw"><span class="prog"><i style="width:' + (f[1] ? Math.round(f[0] / f[1] * 100) : 0) + '%"></i></span><span class="mono">' + esc(c.week || '–') + '</span></td>' +
-      '<td class="sigs">' + (sg || '<span class="pill lv-ok">bez sygnałów</span>') + '</td>' +
-      '<td class="nw hide-m">' + (c.planLeft === null ? '–' : c.planLeft < 0 ? 'skończony' : 'za ' + c.planLeft + ' dni') + '</td></tr>';
-  }).join('');
-  const table = '<div class="card"><h2>Klienci · najpilniejsi na górze</h2><div class="tw"><table class="kt"><thead><tr><th>Klient</th><th class="hide-m">Ostatnio</th><th>Ten tydzień</th><th>Sygnały</th><th class="hide-m">Koniec planu</th></tr></thead><tbody>' +
-    (rows || '<tr><td colspan="5" class="muted">Brak aktywnych klientów w Przeglądzie. Użyj „przelicz”.</td></tr>') + '</tbody></table></div></div>';
-  const heat = '<details class="card heatc"><summary><h2>Obciążenie · 12 tygodni</h2></summary><div class="heat" role="img" aria-label="sRPE tygodnia każdego klienta w ostatnich 12 tygodniach">' + cl.map(c => {
-    const mx = Math.max(0, ...c.load.map(x => x.srpe || 0));
-    return '<span title="' + esc(c.name) + '">' + esc(c.name) + '</span>' + c.load.map(x => { const v = x.srpe || 0, lv = !mx || !v ? '' : 'h' + Math.min(4, Math.ceil(v / mx * 4));
-      return '<i class="' + lv + '" title="' + esc(c.name + ' · tydz. od ' + dm(x.week) + ': ' + (x.srpe === null ? 'brak' : x.srpe + ' AU') + (x.status ? ' · ' + x.status : '')) + '"></i>'; }).join('');
-  }).join('') + '</div><div class="legend">sRPE tygodnia względem najcięższego tygodnia tej osoby; puste = brak danych. Od ' + esc(dm(PUL.weeks[0])) + ' do ' + esc(dm(PUL.weeks[11])) + '.</div></details>';
+  const td = todoItems(), nRep = (PUL.replies || []).length, f = SKF;
+  const n = k => k === 'all' ? td.length + nRep : k === 'odp' ? nRep : td.filter(t => t.k === k).length;
+  const chips = SK.filter(([k]) => k === 'all' || n(k)).map(([k, t]) => '<button type="button" class="chip" data-skf="' + k + '" aria-pressed="' + (k === f) + '">' + t + ' <i>' + n(k) + '</i></button>').join('');
+  const items = f === 'odp' ? [] : td.filter(t => f === 'all' || t.k === f);
+  const todo = '<div class="card todo"><h2>Skrzynka · ' + n('all') + '</h2>' + (n('all') ? '<div class="chips" role="group" aria-label="Pokaż">' + chips + '</div>' : '') + (items.length ? items.map(t =>
+    '<div class="it"><span class="dot ' + t.lv + '"></span><div class="tx"><b>' + esc(t.t) + '</b><small>' + esc(t.d) + '</small></div>' + t.a + '</div>').join('') : f === 'odp' ? '' : '<p class="muted">Nic pilnego.</p>') + '</div>';
   const d = new Date(PUL.today + 'T12:00:00Z');
   $('#main').innerHTML = head(DOWL[d.getUTCDay()] + ' ' + dm(PUL.today) + ' · tydzień ' + dm(PUL.weeks[11]) + '–' + dm(TL.addDays(PUL.weeks[11], 6)), 'Dziś') +
-    '<div class="pg">' + stats + '<div class="dz"><div class="stack dz-l">' + today + table + heat + '</div><div class="stack dz-r">' + todo + asyCard() + repliesCard() + '</div></div></div>';
+    '<div class="pg">' + stats + '<div class="dz"><div class="stack dz-l">' + today + '</div><div class="stack dz-r">' + todo + (f === 'all' || f === 'sig' ? asyCard() : '') + (f === 'all' || f === 'odp' ? repliesCard() : '') + '</div></div></div>';
+  document.querySelectorAll('[data-skf]').forEach(b => b.onclick = () => { SKF = b.dataset.skf; renderDzis(); });
   document.querySelectorAll('[data-rvk]').forEach(a => a.onclick = () => { VALL = true; VSEL = a.dataset.rvk; });   // skomentowany film: lista „Wszystkie”, od razu ten film
   document.querySelectorAll('[data-asygo]').forEach(b => b.onclick = () => { const c = document.getElementById('asy'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   asyBind();
@@ -276,13 +269,14 @@ function asyBind(){
   document.querySelectorAll('[data-asy-why]').forEach(t => t.oninput = () => { st(t.dataset.asyWhy).why = t.value; });
   document.querySelectorAll('[data-asy-mem]').forEach(c => c.onchange = () => { st(c.dataset.asyMem).mem = c.checked; });
 }
+const BLOKI_ICO = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 10h16M10 10v10"/></svg>';
 /** „Więcej” (telefon): bloki, ustawienia, mój trening, przeliczenie, wylogowanie */
 function renderWiecej(){
-  const ic = n => document.querySelector('#nav a[data-v="' + n + '"] svg, #' + n + ' svg') ? document.querySelector('#nav a[data-v="' + n + '"] svg, #' + n + ' svg').outerHTML : '';
+  const ic = n => { const e = document.querySelector('aside a[data-v="' + n + '"] svg, #' + n + ' svg'); return e ? e.outerHTML : n === 'bloki' ? BLOKI_ICO : ''; };
   $('#main').innerHTML = head('Panel trenera', 'Więcej') + '<div class="pg"><div class="card mo">' +
+    '<a href="#biblioteka">' + ic('biblioteka') + 'Biblioteka<small>ćwiczenia bez filmu</small></a>' +
+    '<a href="#rozliczenia">' + ic('rozliczenia') + 'Rozliczenia<small>prowadzone treningi</small></a>' +
     '<a href="#bloki">' + ic('bloki') + 'Bloki do zamknięcia<em>' + (PUL.blocks.length || '') + '</em></a>' +
-    '<a href="#prowadzone">' + ic('prow') + 'Prowadzone treningi</a>' +
-    '<a href="#cwiczenia">' + ic('cwiczenia') + 'Ćwiczenia bez filmu</a>' +
     '<a href="#ustawienia">' + ic('set') + 'Ustawienia</a>' +
     '<a href="./">' + ic('mine') + 'Mój trening ›</a>' +
     '<button type="button" id="recalc-w">' + $('#recalc-m svg').outerHTML + 'Przelicz dane teraz<small>' + esc($('#at').textContent) + '</small></button>' +
@@ -571,18 +565,18 @@ async function renderProwadzone(mies){
   const k = mies || '_';
   if (!PRW[k]) { $('#main').innerHTML = head('Panel trenera', 'Prowadzone treningi') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
     try { PRW[k] = await guard(api('trProwadzone', mies)); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Prowadzone treningi') + errBox(e); return; }
-    if (!location.hash.startsWith('#prowadzone')) return; }
+    if (!location.hash.startsWith('#rozliczenia')) return; }
   const r = PRW[k];
   const rows = r.clients.map(c => '<tr class="row" data-k="' + esc(c.id) + '"><td><a class="who" href="#k/' + encodeURIComponent(c.id) + '/sesje">' + esc(c.name) + '</a></td><td class="mono">' + c.n + '</td><td class="nw">' + (c.min ? esc(hMin(c.min)) : '–') + '</td>' +
     '<td><div class="pw-d">' + c.items.map(i => '<span title="' + esc(i.title + ' · tydz. ' + i.week) + '">' + esc(dowDm(i.date)) + (i.min ? ' · ' + i.min + ' min' : '') + '</span>').join('') + '</div></td></tr>').join('');
-  $('#main').innerHTML = head('Treningi zapisane w trybie „Prowadź”', 'Prowadzone treningi') + '<div class="pg"><div class="card">' +
+  $('#main').innerHTML = head('Rozliczenia · treningi zapisane w trybie „Prowadź”', 'Prowadzone treningi') + '<div class="pg"><div class="card">' +
     '<div class="pw-f"><label>Miesiąc<select id="pw-m">' + r.months.map(m => '<option value="' + m + '"' + (m === r.mies ? ' selected' : '') + '>' + esc(miesTxt(m)) + '</option>').join('') + '</select></label>' +
     (r.n ? '<button class="b" type="button" id="pw-csv">Pobierz CSV</button>' : '') + '</div>' +
     (r.n ? '<p class="kstat" id="pw-sum"><b>' + r.n + ' ' + plN(r.n, 'trening', 'treningi', 'treningów') + '</b> · ' + esc(hMin(r.min)) + ' · ' + r.clients.length + ' ' + plN(r.clients.length, 'klient', 'klientów', 'klientów') + '</p>' +
       '<div class="tw"><table><thead><tr><th>Klient</th><th>Treningi</th><th>Czas</th><th>Daty</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<p class="legend">Liczą się treningi zakończone w trybie „Prowadź” (Sesje: prowadził = trener), dzień według startu treningu. Czas to minuty zapisane w podsumowaniu jednostki.</p>'
       : '<div class="es"><b>Brak prowadzonych treningów</b>W ' + esc(miesTxt(r.mies)) + ' nie zakończyłeś żadnego treningu w trybie „Prowadź”.</div>') + '</div></div>';
-  $('#pw-m').onchange = e => { location.hash = '#prowadzone/' + e.target.value; };
+  $('#pw-m').onchange = e => { location.hash = '#rozliczenia/' + e.target.value; };
   const cb = $('#pw-csv'); if (cb) cb.onclick = () => {
     const q = v => { const t = String(v); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
     const lines = [['klient', 'data', 'tydzien', 'jednostka', 'tytul', 'minuty']].concat(...r.clients.map(c => c.items.map(i => [c.name, i.date, i.week, i.day, i.title, i.min || ''])), [['RAZEM', r.mies, '', '', r.n + ' treningów', r.min]]);
@@ -598,7 +592,7 @@ const cwOkUrl = u => /^https?:\/\/[^\s"<>]+$/i.test(u) && u.length <= 500;
 async function renderCwiczenia(){
   if (!CW) { $('#main').innerHTML = head('Panel trenera', 'Ćwiczenia') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
     try { CW = await guard(api('trCwiczenia')); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ćwiczenia') + errBox(e); return; }
-    if (!location.hash.startsWith('#cwiczenia')) return; }
+    if (!location.hash.startsWith('#biblioteka')) return; }
   cwDraw();
 }
 function cwRow(x, k, dead){
@@ -621,7 +615,7 @@ function cwDraw(){
     (r.trigger === false ? ' Cotygodniowe sprawdzanie wyłączone.' : ' Samo sprawdza co poniedziałek ok. 4:00.') + '</small></div>' +
     '<button class="b" type="button" id="cw-chk"' + (CWM.chk ? ' disabled' : '') + '>' + (CWM.chk ? 'Sprawdzam… (do 2 min)' : 'Sprawdź teraz') + '</button></div>' +
     (CWM.chkErr ? '<p class="err" role="alert">' + esc(CWM.chkErr) + '</p>' : '');
-  $('#main').innerHTML = head('Filmy „Jak wykonać” do ćwiczeń z planów', 'Ćwiczenia') + '<div class="pg"><div class="stack" style="max-width:820px">' +
+  $('#main').innerHTML = head('Biblioteka · filmy „Jak wykonać” do ćwiczeń z planów', 'Ćwiczenia') + '<div class="pg"><div class="stack" style="max-width:820px">' +
     '<div class="card"><div class="pw-f"><label>Szukaj<input type="search" id="cw-q" value="' + esc(CWQ) + '" placeholder="nazwa ćwiczenia" autocomplete="off"></label></div>' +
     '<p id="cw-sum" style="margin:0 0 4px;font-size:15px"><b>' + nm + ' ' + plN(nm, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń') + ' bez filmu</b> · ' + nd + ' ' + plN(nd, 'martwy link', 'martwe linki', 'martwych linków') + ' · ' + r.links + ' z filmem w bazie</p>' + chk + '</div>' +
     (r.dead.length ? '<div class="card" id="cw-dead"><h2>Martwe linki</h2><ul class="cwl">' + (dead.length ? dead.map(x => cwRow(x, 'd:' + x.name, x)).join('') : '<li class="legend">Nic nie pasuje do wyszukiwania.</li>') + '</ul>' +
@@ -640,7 +634,7 @@ function cwDraw(){
   $('#cw-chk').onclick = async () => {
     CWM.chk = true; CWM.chkErr = ''; cwDraw();
     try { CW = await guard(api('trCwSprawdz')); } catch (e) { if (e.auth) return; CWM.chkErr = e.message; }
-    CWM.chk = false; if (location.hash.startsWith('#cwiczenia')) cwDraw();
+    CWM.chk = false; if (location.hash.startsWith('#biblioteka')) cwDraw();
   };
 }
 async function cwSave(k){
@@ -652,24 +646,30 @@ async function cwSave(k){
     CW = r; if (keep) { const L = k[0] === 'd' ? CW.dead : CW.missing; if (!L.some(x => x.name === name)) L.unshift(Object.assign({}, keep, { done: true })); }
     CWM.ok[k] = '✓ Zapisano. Klient zobaczy film przy następnym otwarciu planu.'; delete CWD[k];
   } catch (e) { if (e.auth) { CWM.busy = ''; return; } CWM.err[k] = e.message; }
-  CWM.busy = ''; if (location.hash.startsWith('#cwiczenia')) cwDraw();
+  CWM.busy = ''; if (location.hash.startsWith('#biblioteka')) cwDraw();
 }
 
 /* ---------- ustawienia: klucz Claude API (trAI, trUstawAI); panel widzi tylko końcówkę klucza ---------- */
 let AIS = null, AIM = { ok: '', err: '', busy: false, del: false };
+/** Ustawienia panelu w sekcjach (#ustawienia/<ai|maile|dane>) */
+const US = [['ai', 'Asystent AI', 'klucz Claude API i zasady'], ['maile', 'Maile', 'godzina i wyniki'], ['dane', 'Dane i kopie', 'Dysk, kopia arkusza']];
+const usSec = () => { const s = location.hash.split('/')[1] || ''; return US.some(u => u[0] === s) ? s : 'ai'; };
+const usNav = sec => '<nav class="snav" aria-label="Ustawienia panelu">' + US.map(u => '<a href="#ustawienia/' + u[0] + '" aria-current="' + (u[0] === sec ? 'page' : 'false') + '">' + u[1] + '<small>' + u[2] + '</small></a>').join('') + '</nav>';
 async function renderUstawienia(){
   if (!AIS) { $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
     try { [AIS, MS, DY, ZS] = await Promise.all([guard(api('trAI')), guard(api('trMail')), guard(api('trDysk')), guard(api('trZasady'))]); ZD = null; } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + errBox(e); return; }
     if (!location.hash.startsWith('#ustawienia')) return; }
   const a = AIS, m = AIM, dis = m.busy ? ' disabled' : '';
-  $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="card" id="aikey-card" style="max-width:640px"><h2>Szkic AI · klucz Claude API</h2>' +
+  const sec = usSec(), aiCard = '<div class="card" id="aikey-card" style="max-width:640px"><h2>Szkic AI · klucz Claude API</h2>' +
     '<p class="kstat"><span class="dot' + (a.set ? ' on' : '') + '"></span>' + (a.set ? '<span>Klucz ustawiony <span class="mono">' + esc(a.end) + '</span> · dziś ' + a.n + ' z ' + a.limit + ' szkiców</span>' : '<span>Brak klucza: „✦ Szkic AI” jest wyłączony.</span>') + '</p>' +
     '<div class="keyf"><label for="aikey">' + (a.set ? 'Nowy klucz (zastąpi obecny)' : 'Klucz') + '</label><input id="aikey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"' + dis + '></div>' +
     '<div class="row"><button class="b p" type="button" id="aikey-save"' + dis + '>' + (m.busy ? 'Sprawdzam klucz…' : 'Zapisz klucz') + '</button>' +
     (a.set ? '<button class="b" type="button" id="aikey-del"' + dis + '>' + (m.del ? 'Na pewno usunąć?' : 'Usuń klucz') + '</button>' : '') + '</div>' +
     (m.ok ? '<p class="saved" role="status">' + esc(m.ok) + '</p>' : '') + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '') +
     '<p class="legend">Klucz założysz na <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> → API Keys → Create Key. Przed zapisem sprawdzam go w Anthropic (bez opłaty). ' +
-    'Klucz trafia do ustawień skryptu arkusza, nie do arkusza ani do tej strony: tutaj widać tylko 4 ostatnie znaki.</p></div>' + zasadyCard() + mailCard() + dyskCard() + '</div>';
+    'Klucz trafia do ustawień skryptu arkusza, nie do arkusza ani do tej strony: tutaj widać tylko 4 ostatnie znaki.</p></div>' + '';
+  const body = sec === 'maile' ? mailCard() : sec === 'dane' ? dyskCard() : aiCard + zasadyCard();
+  $('#main').innerHTML = head('Panel trenera', 'Ustawienia') + '<div class="pg"><div class="sgrid">' + usNav(sec) + '<div class="stack" id="us-' + sec + '">' + body + '</div></div></div>';
   const save = async key => {
     Object.assign(AIM, { busy: true, ok: '', err: '', del: false }); renderUstawienia();
     try { const r = await guard(api('trUstawAI', key)); AIS = r;
@@ -677,9 +677,9 @@ async function renderUstawienia(){
     catch (e) { if (!e.auth) AIM.err = e.message; }
     AIM.busy = false; if (location.hash.startsWith('#ustawienia')) renderUstawienia();
   };
-  $('#aikey-save').onclick = () => { const k = $('#aikey').value.trim(); if (!k) { Object.assign(AIM, { err: 'Wklej klucz.', ok: '' }); renderUstawienia(); return; } save(k); };
+  if ($('#aikey-save')) $('#aikey-save').onclick = () => { const k = $('#aikey').value.trim(); if (!k) { Object.assign(AIM, { err: 'Wklej klucz.', ok: '' }); renderUstawienia(); return; } save(k); };
   const del = $('#aikey-del'); if (del) del.onclick = () => { if (!AIM.del) { Object.assign(AIM, { del: true, ok: '', err: '' }); renderUstawienia(); return; } save(''); };
-  zasadyBind();
+  if (sec === 'ai') zasadyBind();
   const kb = $('#kopia-go'); if (kb) kb.onclick = async () => {
     if (DYM.busy) return; DYM = { busy: true, ok: '', err: '' }; renderUstawienia();
     try { DY = await guard(api('trKopia')); DYM = { busy: false, ok: '✓ Kopia zapisana.', err: '' }; }
@@ -887,10 +887,11 @@ async function copyTxt(t){
 }
 const cpBtn = (k, cls) => k.link ? '<button class="cp' + (KLC === k.id ? ' done' : '') + (cls || '') + '" type="button" data-copy="' + esc(k.id) + '">' + (KLC === k.id ? '✓ Skopiowano' : '⧉ Kopiuj link') + '</button>' +
   (navigator.share ? '<button class="cp" type="button" data-share="' + esc(k.id) + '">↗ Wyślij…</button>' : '') : '';
-function klBind(){
+function klBind(redraw){
+  redraw = redraw || (() => { if (location.hash.startsWith('#klienci')) renderKlienci(curSub()); });
   document.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
     const k = KL.find(x => x.id === b.dataset.copy); if (!k) return;
-    if (await copyTxt(k.link)) { KLC = k.id; renderKlienci(curSub()); setTimeout(() => { if (KLC === k.id) { KLC = ''; if (location.hash.startsWith('#klienci')) renderKlienci(curSub()); } }, 2500); }
+    if (await copyTxt(k.link)) { KLC = k.id; redraw(); setTimeout(() => { if (KLC === k.id) { KLC = ''; redraw(); } }, 2500); }
     else alertBox(new Error('Nie udało się skopiować. Zaznacz link i skopiuj ręcznie: ' + k.link));
   });
   document.querySelectorAll('[data-share]').forEach(b => b.onclick = () => {
@@ -899,27 +900,45 @@ function klBind(){
   });
 }
 const curSub = () => decodeURIComponent((location.hash.split('/')[1]) || '');
+/** sygnały klienta z Przeglądu jako pigułki (status tygodnia + do 3 sygnałów) */
+function sigPills(c){
+  const sg = (c.status && stLv(c.status) !== 'lv-ok' ? '<span class="pill ' + stLv(c.status) + '">' + esc(c.status) + '</span>' : '') +
+    c.signals.slice(0, 3).map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('') +
+    (c.signals.length > 3 ? '<span class="pill">+' + (c.signals.length - 3) + '</span>' : '');
+  return sg || '<span class="pill lv-ok">bez sygnałów</span>';
+}
+/** obciążenie 12 tygodni (sRPE tygodnia) każdego aktywnego klienta; pod listą klientów */
+function heatCard(){
+  const cl = PUL.clients;
+  return '<details class="card heatc"><summary><h2>Obciążenie · 12 tygodni</h2></summary><div class="heat" role="img" aria-label="sRPE tygodnia każdego klienta w ostatnich 12 tygodniach">' + cl.map(c => {
+    const mx = Math.max(0, ...c.load.map(x => x.srpe || 0));
+    return '<span title="' + esc(c.name) + '">' + esc(c.name) + '</span>' + c.load.map(x => { const v = x.srpe || 0, lv = !mx || !v ? '' : 'h' + Math.min(4, Math.ceil(v / mx * 4));
+      return '<i class="' + lv + '" title="' + esc(c.name + ' · tydz. od ' + dm(x.week) + ': ' + (x.srpe === null ? 'brak' : x.srpe + ' AU') + (x.status ? ' · ' + x.status : '')) + '"></i>'; }).join('');
+  }).join('') + '</div><div class="legend">sRPE tygodnia względem najcięższego tygodnia tej osoby; puste = brak danych. Od ' + esc(dm(PUL.weeks[0])) + ' do ' + esc(dm(PUL.weeks[11])) + '.</div></details>';
+}
 async function renderKlienci(sub){
   if (!KL) { $('#main').innerHTML = head('Panel trenera', 'Klienci') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
     try { KL = await guard(api('trKlienci')); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Klienci') + errBox(e); return; }
     if (!location.hash.startsWith('#klienci')) return; }
   if (sub === 'nowy') return renderNowyKlient();
-  if (sub) return renderKlientUst(sub);
+  if (sub) { location.replace(kHref(sub, 'ustawienia')); return; }
   const gone = KLM.gone ? KLM.ok : '';                                 // komunikat po usunięciu danych klienta (RODO)
   NK = null; KLD = {}; KLM = { ok: '', err: '', busy: false, rekey: '' };
   const on = KL.filter(k => k.on).length, off = KL.length - on;
-  const rows = KL.slice().sort((a, b) => (b.on - a.on) || a.name.localeCompare(b.name, 'pl')).map(k => {
+  const urg = k => { const i = PUL.clients.findIndex(c => c.id === k.id); return i < 0 ? 999 : i; };   // aktywni: najpilniejsi na górze (kolejność Przeglądu)
+  const rows = KL.slice().sort((a, b) => (b.on - a.on) || (a.on && urg(a) - urg(b)) || a.name.localeCompare(b.name, 'pl')).map(k => {
     const c = PUL.clients.find(x => x.id === k.id);
-    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="' + (k.on ? kHref(k.id) : '#klienci/' + encodeURIComponent(k.id)) + '"><span class="dot ' + (k.on ? 'lv-ok' : '') + '"></span>' + esc(k.name) + '</a><div class="flags mono">' + esc(k.id) + '</div>' + (k.on ? '<div class="seen">' + seenTxt(k) + '</div>' : '') +
-      (k.on ? '<div class="km">Ostatni trening: <b>' + (c ? agoTxt(c) : '–') + '</b>' + (c && c.planLeft !== null ? ' · plan ' + (c.planLeft < 0 ? '<b>skończony</b>' : 'jeszcze <b>' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni') + '</b>') : '') + '</div>' : '') + '</td>' +
+    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="' + kHref(k.id, k.on ? '' : 'ustawienia') + '"><span class="dot ' + (k.on ? (c ? lvOf(c) : 'lv-ok') : '') + '"></span>' + esc(k.name) + '</a><div class="flags mono">' + esc(k.id) + '</div>' + (k.on ? '<div class="seen">' + seenTxt(k) + '</div>' : '') +
+      (k.on && c ? '<div class="kpl ksg">' + sigPills(c) + '</div>' : '') +
+      (k.on ? '<div class="km">Ostatni trening: <b>' + (c ? agoTxt(c) : '–') + '</b>' + (c && c.week ? ' · ten tydzień <b>' + esc(c.week) + '</b>' : '') + (c && c.planLeft !== null ? ' · plan ' + (c.planLeft < 0 ? '<b>skończony</b>' : 'jeszcze <b>' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni') + '</b>') : '') + '</div>' : '') + '</td>' +
       '<td class="flags">' + klFlagsH(k) + '</td>' +
-      '<td class="nw hide-m">' + (c ? agoTxt(c) : '–') + '</td><td class="nw hide-m">' + (!c || c.planLeft === null ? '–' : c.planLeft < 0 ? 'skończony' : 'za ' + c.planLeft + ' dni') + '</td>' +
-      '<td class="nw"><span class="lk">' + (k.on ? cpBtn(k) : '') + '<a class="cp" href="#klienci/' + encodeURIComponent(k.id) + '">Ustawienia ›</a></span></td></tr>';
+      '<td class="nw hide-m">' + (c ? agoTxt(c) : '–') + '</td><td class="nw hide-m mono">' + (c && c.week ? esc(c.week) : '–') + '</td><td class="nw hide-m">' + (!c || c.planLeft === null ? '–' : c.planLeft < 0 ? 'skończony' : 'za ' + c.planLeft + ' dni') + '</td>' +
+      '<td class="nw"><span class="lk">' + (k.on ? cpBtn(k) : '') + '<a class="cp" href="' + kHref(k.id, 'ustawienia') + '">Ustawienia ›</a></span></td></tr>';
   }).join('');
   $('#main').innerHTML = head(on + ' ' + (on === 1 ? 'aktywny' : 'aktywnych') + (off ? ' · ' + off + ' ' + (off === 1 ? 'nieaktywny' : 'nieaktywnych') : ''), 'Klienci', '<a class="b p" ' + klLink + ' href="#klienci/nowy">+ Nowy klient</a>') +
-    '<div class="pg">' + (gone ? '<div class="card"><p class="saved" role="status" id="kl-gone" style="margin:0">' + esc(gone) + '</p></div>' : '') + '<div class="card">' + (rows ? '<div class="tw"><table class="kl"><thead><tr><th>Klient</th><th>Ustawienia</th><th class="hide-m">Ostatni trening</th><th class="hide-m">Koniec planu</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="pg">' + (gone ? '<div class="card"><p class="saved" role="status" id="kl-gone" style="margin:0">' + esc(gone) + '</p></div>' : '') + '<div class="card">' + (rows ? '<div class="tw"><table class="kl"><thead><tr><th>Klient</th><th>Ustawienia</th><th class="hide-m">Ostatni trening</th><th class="hide-m">Ten tydzień</th><th class="hide-m">Koniec planu</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<p class="legend">Imię otwiera kartę klienta (plan, sesje, bloki). „Kopiuj link” kopiuje link do aplikacji tej osoby, gotowy do wklejenia w SMS albo WhatsApp. Nieaktywny klient nie wejdzie do aplikacji, ale jego dane zostają.</p>'
-      : '<div class="es"><b>Nie ma jeszcze klientów</b>Dodaj pierwszego przyciskiem „+ Nowy klient”.</div>') + '</div></div>';
+      : '<div class="es"><b>Nie ma jeszcze klientów</b>Dodaj pierwszego przyciskiem „+ Nowy klient”.</div>') + '</div>' + (PUL.clients.length ? heatCard() : '') + '</div>';
   klBind();
 }
 const segH = (f, opts, v) => '<div class="seg" role="group">' + opts.map(([k, t]) => '<button type="button" data-seg="' + f + '" data-val="' + k + '" aria-pressed="' + (k === v) + '">' + t + '</button>').join('') + '</div>';
@@ -940,51 +959,75 @@ function mailTestH(k, ch){   // „Wyślij próbny do mnie” (zapisany adres, b
     (t.err ? '<p class="err" role="alert">' + esc(t.err) + '</p>' : '') +
     (last ? '<div class="mstat">Ostatnio wysłany: <b>' + esc(mailAt(last.at)) + (last.title ? ' (' + esc(last.title) + ')' : '') + '</b></div>' : '') + '</div>';
 }
-function renderKlientUst(id){
-  const k = KL.find(x => x.id === id);
+/** ustawienia klienta = zakładka karty klienta (#k/<id>/ustawienia/<sekcja>); sekcje formularza (aplikacja, zmiany, maile) mają wspólny szkic KLD i jeden zapis */
+const UST = [['aplikacja', 'Aplikacja klienta', 'Klient'], ['zmiany', 'Co klient może zmieniać', 'Klient'], ['maile', 'Maile', 'Klient'], ['link', 'Link i telefony', 'Klient'],
+  ['asystent', 'Asystent AI', 'Zaawansowane'], ['import', 'Historia z innej aplikacji', 'Zaawansowane'], ['rodo', 'Dane klienta (RODO)', 'Zaawansowane']];
+const UST_FORM = { aplikacja: ['on', 'mode', 'scale', 'pain', 'body', 'masters', 'oly'], zmiany: ['swap', 'edit', 'own', 'extra'], maile: ['email', 'mail', 'mailKom'] };
+const ustOn = id => location.hash.startsWith(kHref(id, 'ustawienia'));
+const ustSec = () => { const s = decodeURIComponent(location.hash.split('/')[3] || ''); return UST.some(u => u[0] === s) ? s : 'aplikacja'; };
+const ustSum = (k, s) => s === 'aplikacja' ? [k.on ? '' : 'nieaktywny', k.mode === 'PROSTY' ? 'Prosty' : 'PRO', k.mode === 'PRO' ? k.scale : ''].filter(Boolean).join(' · ')
+  : s === 'zmiany' ? (k.swap === 'DOWOLNA' ? 'zamiana dowolna' : k.swap === 'TRENER' ? 'zamiana od trenera' : 'bez zamiany')
+  : s === 'maile' ? (k.mail || k.mailKom ? [k.mail ? 'rano' : '', k.mailKom ? 'po komentarzu' : ''].filter(Boolean).join(' · ') : 'wyłączone')
+  : s === 'link' && k.devs ? k.devs + ' ' + plN(k.devs, 'telefon', 'telefony', 'telefonów') : '';
+async function renderKlientUst(id){
+  if (!KL) { $('#main').innerHTML = khHtml(id, 'ustawienia') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
+    try { KL = await guard(api('trKlienci')); } catch (e) { if (!e.auth) $('#main').innerHTML = khHtml(id, 'ustawienia') + errBox(e); return; }
+    if (!ustOn(id)) return; }
+  const k = KL.find(x => x.id === id), sec = ustSec();
   if (!k) { $('#main').innerHTML = head('Klienci', 'Nie ma klienta') + '<div class="pg"><div class="card es"><b>Nie ma klienta „' + esc(id) + '”</b><a href="#klienci">Wróć do listy</a></div></div>'; return; }
   const d = KLD[id] = KLD[id] || Object.assign({}, k), m = KLM, ch = KL_F.filter(f => d[f] !== k[f]).length, dis = m.busy ? ' disabled' : '';
-  const f = '<div class="frm">' +
+  const chIn = s => KL_F.filter(f => d[f] !== k[f] && !(UST_FORM[s] || []).includes(f)).length;   // zmiany w innych sekcjach (zapis bierze cały szkic)
+  const save = '<div class="row2" style="margin-top:14px"><button class="b p" type="button" id="kl-save"' + (ch && !m.busy ? '' : ' disabled') + '>' + (m.busy === 'save' ? 'Zapisuję…' : 'Zapisz zmiany') + '</button>' +
+    (ch ? '<button class="b" type="button" id="kl-undo"' + dis + '>Cofnij</button><span class="hint">Zmienione: ' + ch + (chIn(sec) ? ' (też w innych sekcjach)' : '') + '</span>' : m.ok ? '<span class="saved" role="status">' + esc(m.ok) + '</span>' : '') + '</div>' +
+    (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '');
+  const form = (t, rows) => '<div class="card" id="kl-form"><h2>' + t + '</h2><div class="frm">' + rows + '</div>' + save + '</div>';
+  let body = '';
+  if (sec === 'aplikacja') body = form('Aplikacja klienta',
     frH('Aktywny', 'Wyłączony nie wejdzie do aplikacji. Dane i historia zostają.', swH('on', d.on, 'Aktywny')) +
-    '<div class="sec">Wygląd aplikacji</div>' +
     frH('Tryb', 'Prosty: słowa i duże przyciski, bez % i prędkości. PRO: liczby RPE, % i VBT.', segH('mode', [['PROSTY', 'Prosty'], ['PRO', 'PRO']], d.mode)) +
     frH('Skala wysiłku', 'Tylko widok w PRO. Arkusz zawsze zapisuje RPE.', segH('scale', [['RPE', 'RPE'], ['RIR', 'RIR']], d.scale)) +
     frH('Ból zawsze widoczny', 'Pytanie o ból przy każdym podsumowaniu treningu.', swH('pain', d.pain, 'Ból zawsze widoczny')) +
     frH('Pomiary ciała', 'Postęp → Ciało: masa i obwody (talia, biodra, klatka, ramię, udo) raz w tygodniu, z wykresem. Dla klientów sylwetkowych; widzisz je w karcie klienta.', swH('body', d.body, 'Pomiary ciała')) +
-    '<div class="sec">Co klient może zmieniać</div>' +
+    '<div class="sec">Obciążenie</div>' +
+    frH('Masters', 'Ostrzejsze progi „za dużo / uwaga” w podsumowaniu.', swH('masters', d.masters, 'Masters')) +
+    frH('Sufit w bojach', 'O ile ponad plan (w % maksa) klient może pójść w rwaniu i podrzucie.', numH('oly', d.oly, 0, 20, 2.5, '%')));
+  else if (sec === 'zmiany') body = form('Co klient może zmieniać',
     frH('Zamiana ćwiczenia', 'Od trenera: tylko zamienniki z planu i bazy. Dowolna: cała baza i własna nazwa.', segH('swap', [['NIE', 'Nie'], ['TRENER', 'Od trenera'], ['DOWOLNA', 'Dowolna']], d.swap)) +
     frH('Zmiany w treningu trenera', 'Dodanie i usunięcie ćwiczenia w Twojej jednostce, też na stałe.', swH('edit', d.edit, 'Zmiany w treningu trenera')) +
     frH('Własne treningi', 'Kreator własnego treningu poza planem.', swH('own', d.own, 'Własne treningi')) +
-    frH('Dodatkowe serie', 'Ile serii ponad plan klient może dodać w ćwiczeniu (gdy plan nie mówi inaczej).', numH('extra', d.extra, 0, 5, 1)) +
-    '<div class="sec">Obciążenie</div>' +
-    frH('Masters', 'Ostrzejsze progi „za dużo / uwaga” w podsumowaniu.', swH('masters', d.masters, 'Masters')) +
-    frH('Sufit w bojach', 'O ile ponad plan (w % maksa) klient może pójść w rwaniu i podrzucie.', numH('oly', d.oly, 0, 20, 2.5, '%')) +
-    '<div class="sec">Maile do klienta</div>' +
+    frH('Dodatkowe serie', 'Ile serii ponad plan klient może dodać w ćwiczeniu (gdy plan nie mówi inaczej).', numH('extra', d.extra, 0, 5, 1)));
+  else if (sec === 'maile') body = form('Maile do klienta',
     '<div class="fr fr1"><div><b>E-mail klienta</b><small>Tylko do maili z aplikacji (poranny, po komentarzu). Zostaje w arkuszu (zakładka Klienci), nie w aplikacji.</small></div>' +
     '<input class="inp" id="kl-email" type="email" autocomplete="off" spellcheck="false" placeholder="adres@przyklad.pl" value="' + esc(d.email || '') + '"' + dis + '></div>' +
     frH('Mail w dniu treningu', 'Ok. ' + mailHour() + ':00, gdy plan ma na dziś trening z datą, a klient go jeszcze nie zaczął. Bez daty w planie, w dni wolne i przy własnych treningach mail nie idzie.', swH('mail', d.mail, 'Mail w dniu treningu')) +
     mailTestH(k, ch) +
-    frH('Mail po komentarzu', 'Ok. 20:00, gdy tego dnia skomentowałeś jego trening (sesja, ćwiczenie, film): pierwsze zdanie i przycisk do zakładki Trener. Najwyżej jeden dziennie.', swH('mailKom', d.mailKom, 'Mail po komentarzu')) + '</div>' +
-    '<div class="row2" style="margin-top:14px"><button class="b p" type="button" id="kl-save"' + (ch && !m.busy ? '' : ' disabled') + '>' + (m.busy === 'save' ? 'Zapisuję…' : 'Zapisz zmiany') + '</button>' +
-    (ch ? '<button class="b" type="button" id="kl-undo"' + dis + '>Cofnij</button><span class="hint">Zmienione: ' + ch + '</span>' : m.ok ? '<span class="saved" role="status">' + esc(m.ok) + '</span>' : '') + '</div>' +
-    (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '');
-  const side = '<div class="card"><h2>Link do aplikacji</h2>' + (k.link ? '<div class="linkbox mono" id="kl-link">' + esc(k.link) + '</div><div class="row2">' + cpBtn(k) + '</div>' +
+    frH('Mail po komentarzu', 'Ok. 20:00, gdy tego dnia skomentowałeś jego trening (sesja, ćwiczenie, film): pierwsze zdanie i przycisk do zakładki Trener. Najwyżej jeden dziennie.', swH('mailKom', d.mailKom, 'Mail po komentarzu')));
+  else if (sec === 'link') body = '<div class="card" id="kl-linkc"><h2>Link do aplikacji</h2>' + (k.link ? '<div class="linkbox mono" id="kl-link">' + esc(k.link) + '</div><div class="row2">' + cpBtn(k) + '</div>' +
       '<p class="mstat" id="kl-seen">' + seenTxt(k) + '</p>' +
       '<p class="legend">„Wyślij…” (na telefonie) otwiera SMS, WhatsApp albo mail. Na iPhonie klient po dodaniu aplikacji do ekranu głównego wkleja ten link jeszcze raz.</p>'
       : '<p class="muted">Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL.</p>') +
     '<div class="sec" style="border:0">Nowy link</div><p class="legend" style="font-size:13px">Gdy link trafił do niewłaściwej osoby. Stary link przestaje działać, a klient musi dostać nowy. Treningi i historia zostają.</p>' +
-    '<button class="cp danger" type="button" id="kl-rekey"' + dis + '>' + (m.busy === 'rekey' ? 'Generuję…' : m.rekey === id ? 'Na pewno? Stary link przestanie działać' : 'Wygeneruj nowy link') + '</button></div>' +
-    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>' + importCard(k) + agentCard(k) + agChatCard(k) + rodoCard(k);
-  $('#main').innerHTML = head('<a href="#klienci" style="color:inherit">Klienci</a> › ustawienia', k.name, '<a class="b" ' + klLink + ' href="#k/' + encodeURIComponent(id) + '">Karta klienta ›</a>') +
-    '<div class="pg"><div class="kgrid"><div class="card" id="kl-form">' + f + '</div><div class="stack">' + side + '</div></div></div>';
+    '<button class="cp danger" type="button" id="kl-rekey"' + dis + '>' + (m.busy === 'rekey' ? 'Generuję…' : m.rekey === id ? 'Na pewno? Stary link przestanie działać' : 'Wygeneruj nowy link') + '</button>' +
+    (m.ok ? '<p class="saved" role="status">' + esc(m.ok) + '</p>' : '') + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '') + '</div>' +
+    '<div class="card"><h2>W planach JSON</h2><p class="legend" style="font-size:13px;margin-top:0">„klient”: <span class="mono">"' + esc(k.id) + '"</span></p></div>';
+  else if (sec === 'asystent') body = agentCard(k) + agChatCard(k);
+  else if (sec === 'import') body = importCard(k);
+  else body = rodoCard(k);
+  let g = '';
+  const nav = '<nav class="snav" aria-label="Ustawienia klienta">' + UST.map(u => { const gh = u[2] !== g ? '<div class="g">' + (g = u[2]) + '</div>' : '', sm = ustSum(k, u[0]);
+    return gh + '<a href="' + kHref(id, 'ustawienia') + '/' + u[0] + '" aria-current="' + (u[0] === sec ? 'page' : 'false') + '">' + u[1] + (sm ? '<small>' + esc(sm) + '</small>' : '') + '</a>'; }).join('') + '</nav>';
+  $('#main').innerHTML = khHtml(id, 'ustawienia') + '<div class="pg"><div class="sgrid">' + nav + '<div class="stack" id="ust-' + sec + '">' + body + '</div></div></div>';
   const re = () => { KLM = { ok: '', err: '', busy: false, rekey: '' }; renderKlientUst(id); };
-  klCtl(d, re); klBind(); importBind(k, () => { if (location.hash === '#klienci/' + encodeURIComponent(id)) renderKlientUst(id); });
-  const agRe = () => { const el = document.getElementById('agent'); if (!el || location.hash !== '#klienci/' + encodeURIComponent(id)) return;   // tylko ta karta: formularz klienta obok zostaje
-    el.outerHTML = agentCard(k); agentBind(k, agRe); };
-  agentBind(k, agRe);
-  const achRe = () => { const el = document.getElementById('agchat'); if (!el || location.hash !== '#klienci/' + encodeURIComponent(id)) return;
-    el.outerHTML = agChatCard(k); agChatBind(k, achRe); };
-  agChatBind(k, achRe);
+  klCtl(d, re); klBind(() => { if (ustOn(id)) renderKlientUst(id); });
+  if (sec === 'import') importBind(k, () => { if (ustOn(id)) renderKlientUst(id); });
+  if (sec === 'asystent') {
+    const agRe = () => { const el = document.getElementById('agent'); if (!el || !ustOn(id)) return;   // tylko ta karta: czat obok zostaje
+      el.outerHTML = agentCard(k); agentBind(k, agRe); };
+    agentBind(k, agRe);
+    const achRe = () => { const el = document.getElementById('agchat'); if (!el || !ustOn(id)) return;
+      el.outerHTML = agChatCard(k); agChatBind(k, achRe); };
+    agChatBind(k, achRe);
+  }
   const em = $('#kl-email');
   if (em) em.oninput = () => { d.email = em.value.trim(); const n = KL_F.filter(f => d[f] !== k[f]).length, sv = $('#kl-save'); if (sv && !KLM.busy) sv.disabled = !n; };
   const mt = $('#kl-mailtest');
@@ -992,25 +1035,25 @@ function renderKlientUst(id){
     MT = { id, busy: true, ok: '', err: '' }; renderKlientUst(id);
     try { const r = await guard(api('trMailProba', id)); MT = { id, busy: false, ok: '✓ Wysłano do Ciebie: ' + r.title + ' (' + dm(r.day) + ').', err: '' }; }
     catch (e) { MT = { id, busy: false, ok: '', err: e.auth ? '' : e.message }; }
-    if (location.hash.startsWith('#klienci/')) renderKlientUst(id);
+    if (ustOn(id)) renderKlientUst(id);
   };
-  if (!MS) guard(api('trMail')).then(r => { MS = r; if (location.hash === '#klienci/' + encodeURIComponent(id)) renderKlientUst(id); }).catch(() => {});
+  if (!MS && sec === 'maile') guard(api('trMail')).then(r => { MS = r; if (ustOn(id)) renderKlientUst(id); }).catch(() => {});
   const u = $('#kl-undo'); if (u) u.onclick = () => { KLD[id] = Object.assign({}, k); re(); };
-  $('#kl-save').onclick = async () => {
+  const sv = $('#kl-save'); if (sv) sv.onclick = async () => {
     KLM = { ok: '', err: '', busy: 'save', rekey: '' }; renderKlientUst(id);
     try { const r = await guard(api('trKlientUstaw', id, d)); KL[KL.indexOf(k)] = r; KLD[id] = Object.assign({}, r); delete CK[id];
       KLM = { ok: '✓ Zapisano. Klient zobaczy zmiany przy następnym otwarciu aplikacji.', err: '', busy: false, rekey: '' }; }
     catch (e) { KLM = { ok: '', err: e.auth ? '' : e.message, busy: false, rekey: '' }; }
-    if (location.hash.startsWith('#klienci/')) renderKlientUst(id);
+    if (ustOn(id)) renderKlientUst(id);
   };
-  rodoBind(k);
-  $('#kl-rekey').onclick = async () => {
+  if (sec === 'rodo') rodoBind(k);
+  const rk = $('#kl-rekey'); if (rk) rk.onclick = async () => {
     if (KLM.rekey !== id) { KLM = { ok: '', err: '', busy: false, rekey: id }; renderKlientUst(id); return; }
     KLM = { ok: '', err: '', busy: 'rekey', rekey: '' }; renderKlientUst(id);
     try { const r = await guard(api('trKlientLink', id)); KL[KL.findIndex(x => x.id === id)] = r; KLC = '';
-      KLM = { ok: 'Nowy link gotowy. Stary już nie działa: wyślij klientowi ten z prawej.', err: '', busy: false, rekey: '' }; }
+      KLM = { ok: 'Nowy link gotowy. Stary już nie działa: wyślij klientowi ten wyżej.', err: '', busy: false, rekey: '' }; }
     catch (e) { KLM = { ok: '', err: e.auth ? '' : e.message, busy: false, rekey: '' }; }
-    if (location.hash.startsWith('#klienci/')) renderKlientUst(id);
+    if (ustOn(id)) renderKlientUst(id);
   };
 }
 /* ---------- historia z innej aplikacji: plik CSV czytany w przeglądarce (lib importParse / importPick), dopasowanie do bazy i zapis w skrypcie (trImport) ---------- */
@@ -1101,7 +1144,7 @@ function rodoCard(k){
     (r.ok ? '<p class="saved" role="status">' + esc(r.ok) + '</p>' : '') + (r.err ? '<p class="err" role="alert">' + esc(r.err) + '</p>' : '') + '</div>';
 }
 function rodoBind(k){
-  const id = k.id, re = () => { if (location.hash.startsWith('#klienci/')) renderKlientUst(id); };
+  const id = k.id, re = () => { if (ustOn(id)) renderKlientUst(id); };
   if (RD.id !== id) RD = { id, busy: '', ok: '', err: '', open: false, name: '' };
   $('#rodo-dl').onclick = async () => {
     Object.assign(RD, { busy: 'dl', ok: '', err: '' }); re();
@@ -1138,7 +1181,7 @@ function renderNowyKlient(){
       (k.link ? '<span class="lab">Link do aplikacji</span><div class="linkbox mono" id="kl-link">' + esc(k.link) + '</div><div class="row2">' + cpBtn(k) + '</div>' : '<p class="err">Brak adresu aplikacji: ustaw właściwość skryptu PWA_URL, potem link będzie w ustawieniach klienta.</p>') +
       '<div class="sec" style="border:0">Co dalej</div><ol class="steps"><li>Wyślij link (' + esc(k.name) + ' otwiera go na telefonie i dodaje aplikację do ekranu głównego).</li><li>Przygotuj plan z „klient”: "' + esc(k.id) + '".</li>' +
       '<li>Do czasu planu aplikacja pokazuje „Jeszcze nie masz planu”. Na pulpicie osoba pojawi się po „Przelicz teraz”.</li></ol>' +
-      '<div class="row2" style="margin-top:14px"><a class="b" ' + klLink + ' href="#klienci/' + encodeURIComponent(k.id) + '">Ustawienia: ' + esc(k.name) + ' ›</a><button class="b" type="button" id="kl-next">Dodaj kolejnego</button></div></div></div>';
+      '<div class="row2" style="margin-top:14px"><a class="b" ' + klLink + ' href="' + kHref(k.id, 'ustawienia') + '">Ustawienia: ' + esc(k.name) + ' ›</a><button class="b" type="button" id="kl-next">Dodaj kolejnego</button></div></div></div>';
     klBind(); $('#kl-next').onclick = () => { NK = null; renderNowyKlient(); };
     return;
   }
@@ -1168,7 +1211,37 @@ function renderNowyKlient(){
 /* ---------- karta klienta (v87: nagłówek z sygnałami i „Prowadź trening”, przegląd jak na telefonie) ---------- */
 /** faktyczny dzień jednostki z Sesje.start (klucz tydzień|jednostka) */
 function sesDates(d){ const o = {}; (d.sessions || []).forEach(s => { if (/T/.test(String(s.start || ''))) o[uKey(s.tydzien, s.jednostka)] = TL.localDate(new Date(s.start)); }); return o; }
+/** nagłówek karty klienta z zakładkami; pełny po trKlient (CK), lekki z listy klientów (ustawienia bez wczytywania karty, też nieaktywny klient) */
+function khHtml(id, tab){
+  const c = PUL.clients.find(x => x.id === id), d = CK[id], k = KL && KL.find(x => x.id === id), today = PUL.today;
+  let eb = '', pills = '', name = (d && d.cfg.name) || (k && k.name) || (c && c.name) || id;
+  if (d) {
+    const dates = sesDates(d);
+    const cur = (d.plan || []).filter(r => !r.own).map(r => ({ r, dt: dates[uKey(r.week, r.day)] || r.date })).filter(x => x.dt && x.dt <= today).sort((a, b) => a.dt.localeCompare(b.dt)).pop();
+    const blk = cur && cur.r.block, bw = blk ? [...new Set((d.plan || []).filter(r => r.block === blk && !r.own).map(r => r.week))].sort((a, b) => a - b) : [];
+    eb = [blk ? 'Blok ' + esc(blk) + ' · tydz. ' + (bw.indexOf(cur.r.week) + 1) + ' z ' + bw.length : 'Bez bloku', d.cfg.simple ? 'Prosty' : 'PRO']
+      .concat(!d.cfg.simple && d.cfg.scale === 'RIR' ? ['RIR'] : []).concat(d.cfg.masters ? ['masters'] : []).concat(d.cfg.active === false ? ['nieaktywny'] : []).join(' · ');
+    // sygnały z Przeglądu + dyspozycja z ostatnich 3 dni, gdy nie „OK”
+    const rd = (d.readiness || []).slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).pop();
+    const rdOn = rd && String(rd.data).slice(0, 10) >= TL.addDays(today, -2) && /uwaga|zmęcz/i.test(rd.werdykt || '');
+    pills = ((c && c.signals) || []).map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('') +
+      (rdOn ? '<span class="pill ' + (/zmęcz/i.test(rd.werdykt) ? 'lv-bad' : 'lv-warn') + '">dyspozycja: ' + esc(String(rd.werdykt).toLowerCase()) + '</span>' : '') +
+      (d.pkg ? '<a class="pill pkp ' + pkgLv(d.pkg) + '" href="#pakiet" data-pkgo>pakiet ' + pkgLeft(d.pkg) + '</a>' : '');
+  } else {
+    eb = k ? [k.mode === 'PROSTY' ? 'Prosty' : 'PRO', k.mode === 'PRO' && k.scale === 'RIR' ? 'RIR' : '', k.masters ? 'masters' : '', k.on ? '' : 'nieaktywny'].filter(Boolean).join(' · ') : 'Klient';
+    pills = ((c && c.signals) || []).map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('');
+  }
+  const on = !!c || !!(k && k.on), nv = PUL.videos.filter(v => v.id === id && !v.kom).length;
+  // bez konkretnej jednostki: na treningu personalnym często robimy coś innego niż w planie (jednostkę z planu otwiera „▶ Prowadź” w zakładce Plan)
+  const live = on ? '<a class="kgo" href="' + liveHref(id) + '"><span>▶ Prowadź trening</span></a>' : '';
+  const T = (on ? [['przeglad', 'Przegląd'], ['plan', 'Plan'], ['sesje', 'Sesje'], ['bloki', 'Bloki'], ['dyspozycja', 'Dyspozycja']] : []).concat([['ustawienia', 'Ustawienia']]);
+  const tabs = '<nav class="tabs" aria-label="Karta klienta">' + T.map(t => '<a href="' + kHref(id, t[0]) + '" aria-current="' + (t[0] === tab ? 'page' : 'false') + '">' + t[1] + '</a>').join('') +
+    (on ? '<a href="#filmy/' + encodeURIComponent(id) + '" data-kf aria-current="false">Filmy' + (nv ? ' · ' + nv : '') + '</a>' : '') + '</nav>';
+  return '<div class="kh"><a class="kback" href="#klienci">‹ Klienci</a><div class="kht"><div class="eb">' + eb + '</div><h1>' + esc(name) + '</h1>' +
+    (pills ? '<div class="kpl">' + pills + '</div>' : '') + '</div>' + (live ? '<div class="kha">' + live + '</div>' : '') + '</div>' + tabs;
+}
 async function renderKlient(id, tab){
+  if (tab === 'ustawienia') return renderKlientUst(id);
   const c = PUL.clients.find(x => x.id === id) || { id, name: id, signals: [], load: [], week: '' };
   if (CID !== id || !CK[id]) {
     $('#main').innerHTML = head('Klient', c.name) + '<div class="pg"><div class="es">Ładowanie…</div></div>';
@@ -1179,31 +1252,14 @@ async function renderKlient(id, tab){
   CUR = CK[id];
   const d = CUR, today = PUL.today, dates = sesDates(d);
   const sets = TL.doneSets(d.logs || [], d.plan || [], dates);
-  const cur = (d.plan || []).filter(r => !r.own).map(r => ({ r, dt: dates[uKey(r.week, r.day)] || r.date })).filter(x => x.dt && x.dt <= today).sort((a, b) => a.dt.localeCompare(b.dt)).pop();
-  const blk = cur && cur.r.block, bw = blk ? [...new Set((d.plan || []).filter(r => r.block === blk && !r.own).map(r => r.week))].sort((a, b) => a - b) : [];
-  const eb = [blk ? 'Blok ' + esc(blk) + ' · tydz. ' + (bw.indexOf(cur.r.week) + 1) + ' z ' + bw.length : 'Bez bloku', d.cfg.simple ? 'Prosty' : 'PRO']
-    .concat(!d.cfg.simple && d.cfg.scale === 'RIR' ? ['RIR'] : []).concat(d.cfg.masters ? ['masters'] : []).concat(d.cfg.active === false ? ['nieaktywny'] : []).join(' · ');
-  // sygnały z Przeglądu + dyspozycja z ostatnich 3 dni, gdy nie „OK”
   const rd = (d.readiness || []).slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).pop();
-  const rdOn = rd && String(rd.data).slice(0, 10) >= TL.addDays(today, -2) && /uwaga|zmęcz/i.test(rd.werdykt || '');
-  const pills = (c.signals || []).map(s => '<span class="pill ' + (s.lv === 'bad' ? 'lv-bad' : 'lv-warn') + '">' + esc(s.t) + '</span>').join('') +
-    (rdOn ? '<span class="pill ' + (/zmęcz/i.test(rd.werdykt) ? 'lv-bad' : 'lv-warn') + '">dyspozycja: ' + esc(String(rd.werdykt).toLowerCase()) + '</span>' : '') +
-    (d.pkg ? '<a class="pill pkp ' + pkgLv(d.pkg) + '" href="#pakiet" data-pkgo>pakiet ' + pkgLeft(d.pkg) + '</a>' : '');
-  const nv = PUL.videos.filter(v => v.id === id && !v.kom).length;
-  // bez konkretnej jednostki: na treningu personalnym często robimy coś innego niż w planie (jednostkę z planu otwiera „▶ Prowadź” w zakładce Plan)
-  const live = '<a class="kgo" href="' + liveHref(id) + '"><span>▶ Prowadź trening</span></a>';
-  const kh = '<div class="kh"><a class="kback" href="#klienci">‹ Klienci</a><div class="kht"><div class="eb">' + eb + '</div><h1>' + esc(d.cfg.name || c.name) + '</h1>' +
-    (pills ? '<div class="kpl">' + pills + '</div>' : '') + '</div><div class="kha">' + live + '<div class="khs">' +
-    go('#filmy/' + encodeURIComponent(id), 'Filmy' + (nv ? ' · ' + nv : '')) + go('#klienci/' + encodeURIComponent(id), 'Ustawienia') + '</div></div></div>';
-  const T = [['przeglad', 'Przegląd'], ['plan', 'Plan'], ['sesje', 'Sesje'], ['bloki', 'Bloki'], ['dyspozycja', 'Dyspozycja']];
-  const tabs = '<nav class="tabs" aria-label="Karta klienta">' + T.map(t => '<a href="#k/' + encodeURIComponent(id) + '/' + t[0] + '" aria-current="' + (t[0] === tab ? 'page' : 'false') + '">' + t[1] + '</a>').join('') + '</nav>';
   let body = '';
   if (tab === 'sesje') body = sesList(d, dates, 0);
   else if (tab === 'plan') body = planList(d, dates, today);
   else if (tab === 'bloki') body = blokList(d);
   else if (tab === 'dyspozycja') body = dyspList(d);
   else body = przeglad(d, c, sets, dates, today, rd);
-  $('#main').innerHTML = kh + tabs + '<div class="pg">' + body + '</div>';
+  $('#main').innerHTML = khHtml(id, tab) + '<div class="pg">' + body + '</div>';
   pkgBind(id);
 }
 /* ---------- pakiet treningów personalnych (apps-script/Pakiety.gs) ----------
@@ -1246,7 +1302,7 @@ function pkgCard(d){
 function pkgBind(id){
   const re = () => renderKlient(id, 'przeglad');
   document.querySelectorAll('[data-pkf]').forEach(b => b.onclick = () => { PKF = { id, mode: b.dataset.pkf, n: 10, k: '-1' }; re(); });
-  document.querySelectorAll('[data-pkgo]').forEach(a => a.onclick = e => { e.preventDefault(); const c = $('#pakiet'); if (c) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+  document.querySelectorAll('[data-pkgo]').forEach(a => a.onclick = e => { e.preventDefault(); const c = $('#pakiet'); if (c) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); else location.hash = kHref(id); });
   const sh = $('#pk-show');   // licznik u klienta (zakładka Trener): kolumna „widoczny” w wierszu zakupu
   if (sh) sh.onclick = async () => { const on = sh.getAttribute('aria-checked') !== 'true'; sh.disabled = true;
     try { CK[id].pkg = await guard(api('trPakiet', id, { mode: 'widok', show: on })); re(); }
