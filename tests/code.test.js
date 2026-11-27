@@ -2424,3 +2424,18 @@ test('czat „Wypróbuj asystenta”: narzędzia, historia, pętla akcji, instru
   assert.match(C.agChatSystem_({}), /nie wkleił jeszcze zasad/);
   assert.ok(C.TR_FNS.trAsystent);
 });
+
+test('textCols_, frac_: „zrobione/plan” zostaje tekstem (Arkusze robiły z „1/4” datę), stara data w odczycie = puste', () => {
+  assert.deepEqual(Array.from(C.textCols_([['anna', 3, '1/4', '', '2026-11-23'], ['ola', 0, '', '0/2', 'x/y']])), [2, 3]);
+  assert.deepEqual(Array.from(C.textCols_([])), []);
+  assert.deepEqual(Array.from(C.textCols_([['6-8', '1+1', 12.5, '1/4/2026']])), []);
+  const fmt = [];
+  const sh = { clear() {}, setFrozenRows() {}, getRange: (r, c, nr, nc) => ({ setValues() { return this; }, setFontWeight() { return this; }, setNumberFormat(f) { fmt.push([r, c, nr, f]); return this; } }) };
+  const S = require('./load-code')();
+  S.SpreadsheetApp = { getActive: () => ({ getSheetByName: () => sh }) };
+  S.writeTable_('Przegląd', ['klient', 'ten_tydzien'], [['anna', '1/4'], ['ola', '2/3']]);
+  assert.deepEqual(fmt, [[2, 2, 2, '@']]);
+  assert.equal(C.frac_(new Date(2026, 0, 4)), '');
+  assert.equal(C.frac_('1/4'), '1/4');
+  assert.equal(C.frac_(null), '');
+});
