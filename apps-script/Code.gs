@@ -607,6 +607,17 @@ function logSession(key, s) {
 /** Start wgrywania filmu: tworzy sesję resumable w Drive, zwraca uploadId. */
 function startUpload(key, meta) {
   const client = mustClient_(key);
+  const location = uploadInit_(client, meta);
+  const uploadId = Utilities.getUuid();
+  CacheService.getScriptCache().put('up_' + uploadId, location, 21600);
+  return { uploadId: uploadId, chunk: CHUNK, url: meta.origin ? location : null };
+}
+
+/**
+ * Sesja resumable na Dysku w folderze klienta („<Imię>/<data>_<jednostka>/”, CMJ: „<Imię>/Dyspozycja/<data>/”) → adres sesji.
+ * meta.origin = adres strony, która wyśle plik prosto do Google (CORS); wspólne dla aplikacji (startUpload) i panelu (trFilmWgraj).
+ */
+function uploadInit_(client, meta) {
   const bad = filmOk_(meta); if (bad) throw new Error(bad);          // limit 1 GB i tylko filmy (Kopia.gs)
   meta.date = meta.date || today_();
   const folder = meta.kind === 'cmj' ? readyFolder_(client, meta.date) : sessionFolder_(client, meta.date, meta.day);
@@ -628,10 +639,7 @@ function startUpload(key, meta) {
     muteHttpExceptions: true
   });
   if (res.getResponseCode() !== 200) throw new Error('Drive init ' + res.getResponseCode() + ': ' + res.getContentText());
-  const location = res.getHeaders()['Location'] || res.getHeaders()['location'];
-  const uploadId = Utilities.getUuid();
-  CacheService.getScriptCache().put('up_' + uploadId, location, 21600);
-  return { uploadId: uploadId, chunk: CHUNK, url: meta.origin ? location : null };
+  return res.getHeaders()['Location'] || res.getHeaders()['location'];
 }
 
 /** Wysyła jeden fragment (base64). Zwraca {done:false} lub {done:true, link}. */

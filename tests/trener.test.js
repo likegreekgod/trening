@@ -135,6 +135,9 @@ const GSI = `window.google = { accounts: { id: {
   prompt(){}, disableAutoSelect(){ window.__noauto = true; } } } };`;
 
 // klient nagrał / wpisał serie dzisiejszej sesji, ale żadnej nie odhaczył (wykonane puste, jak po samym filmie)
+// tor sztangi z filmu (Log vbt_ms, wysokosc_cm, sciezka) w przysiadzie: 4 tygodnie, 2. seria, prędkość rośnie, tor coraz bliżej pionu
+const vbtLogs = d => { d.logs.filter(l => l.cwiczenie === 'Przysiad tylny' && l.seria === 2).slice(-4).forEach((l, i) => Object.assign(l, { vbt_ms: [0.52, 0.55, 0.57, 0.61][i], vbt_peak: [0.9, 0.95, 0.98, 1.04][i], wysokosc_cm: 58,
+  sciezka: JSON.stringify(Array.from({ length: 12 }, (_, k) => [Math.round(Math.sin(k / 3) * (4 - i) * 10) / 10, k * 5])), notatka_trenera: i === 3 ? 'Kolana mniej do środka.' : '' })); return d; };
 const untick = d => { d.logs.forEach(l => { if (l.data === TODAY) { l.wykonane = ''; if (l.film_link) { l.kg = ''; l.powt = ''; l.rpe = ''; } } }); return d; };
 // syntetyczny fragment „moov” MP4: tabela stsd z jednym wpisem wideo (fourcc, szerokość, wysokość), opcjonalnie hvcC (profil) i colr nclx (krzywa)
 const mp4Stsd = (cc, w, h, prof, tr) => {
@@ -170,7 +173,7 @@ async function page(calls, opt = {}) {
         else if (f.mode === 'korekta') { const d = Number(f.k); k.left += d; k.used -= d; k.hist.unshift({ date: f.date || TODAY, typ: 'korekta', d, txt: (f.note || 'trening') + ' · dopisany ręcznie' }); }
         else k.show = !!f.show;
         out = { ok: true, result: st.pkg }; } }
-    else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: Object.assign(opt.noSets ? Object.assign(klient(), { logs: [] }) : opt.unticked ? untick(klient()) : klient(), opt.pkg ? { pkg: PKG.ania } : {}) } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
+    else if (b.fn === 'trKlient') out = b.args[0] === 'ania' ? { ok: true, result: Object.assign(opt.noSets ? Object.assign(klient(), { logs: [] }) : opt.unticked ? untick(klient()) : opt.vbt ? vbtLogs(klient()) : klient(), opt.pkg ? { pkg: PKG.ania } : {}) } : { ok: false, error: 'Nie ma klienta: ' + b.args[0] };
     else if (b.fn === 'trTytul') { await new Promise(res => setTimeout(res, 100)); const t = String(b.args[1].title).replace(/\s+/g, ' ').trim();
       out = t.length > 40 ? { ok: false, error: 'Nazwa: najwyżej 40 znaków.' } : { ok: true, result: { title: t, n: 2 } }; }
     else if (b.fn === 'trKomentarz') out = { ok: true, result: { text: String(b.args[3]).trim(), at: TODAY + 'T19:52:00.000Z' } };
@@ -186,6 +189,8 @@ async function page(calls, opt = {}) {
       else { st.key = k; out = { ok: true, result: Object.assign(k ? { set: true, end: '…' + k.slice(-4), limit: 30, n: 0 } : { set: false, end: '', limit: 30, n: 0 }, { checked: true }) }; } }
     else if (b.fn === 'trFilm') { st.nFilm = (st.nFilm || 0) + 1; if (st.nFilm > 1) st.fresh = true; out = { ok: true, result: { token: 'tok-film', exp: Date.now() + 3e6 } }; }
     else if (b.fn === 'trKomentarzFilm') { await new Promise(res => setTimeout(res, 100)); out = { ok: true, result: { text: String(b.args[5]).trim(), at: TODAY + 'T20:00:00.000Z' } }; }
+    else if (b.fn === 'trFilmWgraj') { st.wg = b.args; out = { ok: true, result: { url: 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=test-wg' } }; }
+    else if (b.fn === 'trFilmSeria') { await new Promise(res => setTimeout(res, 60)); (st.fs = st.fs || []).push(b.args); out = { ok: true, result: { id: b.args[0] + '|x', added: false } }; }
     else if (b.fn === 'trKalendarz') out = { ok: true, result: kalendarz(b.args[0], b.args[1]) };
     else if (b.fn === 'trCwNazwy') out = { ok: true, result: [['Wyciskanie hantli nad głowę', 'https://example.com/v', 'barki; triceps', 'wycisk nad głowę'], ['Wyciskanie żołnierskie', '', 'barki', 'OHP'], ['Face pull', '', 'barki', '']] };
     else if (b.fn === 'trJednostka') { await new Promise(res => setTimeout(res, 100)); out = /^X/.test(b.args[1].items[0].name) ? { ok: false, error: 'Lista ćwiczeń się zmieniła – odśwież i spróbuj jeszcze raz.' } : { ok: true, result: { n: 4, weeks: b.args[1].next ? [12, 13] : [12] } }; }
@@ -287,6 +292,14 @@ async function page(calls, opt = {}) {
     if (!m) return r.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes', 'Content-Length': String(FILM.length) }, body: FILM });
     const a = Number(m[1]), b = m[2] ? Math.min(Number(m[2]), FILM.length - 1) : FILM.length - 1;
     return r.fulfill({ status: 206, headers: { ...cors, 'Content-Type': 'video/webm', 'Accept-Ranges': 'bytes', 'Content-Range': 'bytes ' + a + '-' + b + '/' + FILM.length, 'Content-Length': String(b - a + 1) }, body: FILM.subarray(a, b + 1) });
+  });
+  await ctx.route('https://www.googleapis.com/upload/drive/v3/files**', async r => {   // wysyłka filmu z panelu prosto na Dysk (sesja resumable)
+    const h = r.request().headers(), m = /bytes (\d+)-(\d+)\/(\d+)/.exec(h['content-range'] || ''), cors = { 'Access-Control-Allow-Origin': '*' };
+    if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { ...cors, 'Access-Control-Allow-Methods': 'PUT', 'Access-Control-Allow-Headers': 'content-range' } });
+    (st.put = st.put || []).push(h['content-range']);
+    if (!m) return r.fulfill({ status: 400, headers: cors, body: '' });
+    if (Number(m[2]) + 1 < Number(m[3])) return r.fulfill({ status: 308, headers: cors, body: '' });
+    return r.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: 'wgfilm', webViewLink: 'https://drive.google.com/file/d/wgfilm/view' }) });
   });
   await ctx.route('https://drive.google.com/**', r => r.fulfill({ status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' }, body: '<body style="margin:0;background:#222;color:#bbb;font:14px sans-serif;display:grid;place-items:center;height:100vh">podgląd filmu (atrapa)</body>' }));
   const exp = Math.floor(Date.now() / 1000) + 3600;
@@ -1638,6 +1651,68 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   await p.click('#ach-clr'); assert.equal(await p.$$eval('#agchat .acm', a => a.length), 0);
   await p.click('#ag-off'); await p.click('#ag-off'); await p.waitForFunction(() => /Wyłączony/.test(document.querySelector('#agent .kstat').textContent));
   assert.equal(await p.$('#ag-key'), null, 'klucz znika po wyłączeniu');
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('panel: Filmy → Wgraj z komputera (osoba, trening, seria, tor sztangi, wnioski, wysyłka na Dysk, postęp)', async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, { loggedIn: true, vbt: true });
+  await p.goto(base + 'trener.html#filmy'); await p.waitForSelector('.vi');
+  await p.click('.wgb'); await p.waitForSelector('#wg-drop');
+  await p.setInputFiles('#wg-file', { name: 'DJI_0042_przysiad.webm', mimeType: 'video/webm', buffer: FILM });
+  await p.waitForSelector('#wgv');
+  assert.match(await p.textContent('.wgl'), /DJI_0042_przysiad\.webm/);
+  assert.match(await p.textContent('.wgl'), /Tor sztangi policzysz po wybraniu ćwiczenia/);
+  await p.selectOption('#wg-who', 'ania'); await p.waitForSelector('#wg-u');
+  const units = await p.$$eval('#wg-u option', o => o.map(x => x.textContent));
+  assert.match(units[1], /Nogi · tydz\. 12/);                                       // najnowszy trening na górze, bez przyszłych
+  assert.ok(!units.some(u => /Góra · tydz\. 12/.test(u)));
+  await p.selectOption('#wg-u', '12|T1'); await p.selectOption('#wg-ex', '1');
+  assert.equal(await p.$$eval('.wgs', b => b.length), 4);                              // 3 serie z planu + nowa
+  assert.match(await p.textContent('.wgs[data-wgs="2"]'), /84 kg × 5 · RPE 8 · 0,61 m\/s/);
+  // postęp ćwiczenia: wykres prędkości, tory, tabela
+  assert.match(await p.textContent('.wgp'), /Postęp: Przysiad tylny/);
+  assert.equal(await p.$$eval('.wgp svg.path path', a => a.length), 4);
+  assert.match(await p.textContent('.wgp table'), /0,61/);
+  assert.match(await p.textContent('.wgp .wgleg'), /84 kg/);
+  // nowa seria: kg / powt. / RPE
+  await p.click('.wgs[data-wgs="4"]');
+  assert.equal(await p.isDisabled('#wg-go'), true);
+  await p.fill('#wg-kg', '90'); await p.fill('#wg-reps', '3');
+  assert.equal(await p.isDisabled('#wg-go'), false);
+  // tor sztangi: kadr, środek i krawędź talerza, analiza w przeglądarce
+  await p.click('#wg-tor summary'); await p.waitForSelector('.torc');
+  await p.waitForFunction(() => document.querySelector('#wgv').readyState >= 2);
+  const box = await p.$('.torc'); await box.scrollIntoViewIfNeeded(); const bb = await box.boundingBox();
+  await p.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
+  await p.mouse.click(bb.x + bb.width / 2 + 40, bb.y + bb.height / 2);
+  assert.match(await p.textContent('.tor-h'), /px = 450 mm/);
+  await p.click('[data-tor="go"]');
+  await p.waitForFunction(() => /Gotowe|przerwana/.test(document.querySelector('.tor-h').textContent), null, { timeout: 30000 });
+  // wynik z ruchu wzorcowego (film testowy nie ma talerza): tak, jak gdyby analiza wykryła jedno powtórzenie
+  await p.evaluate(() => { const pts = Array.from({ length: 40 }, (_, k) => ({ t: k / 30, x: 0, y: k < 30 ? 0.6 * (1 - Math.cos(Math.PI * k / 30)) / 2 : 0.6 })); WG.res = TL.analyse(pts, ''); });
+  await p.fill('#wg-note', 'Kolana mniej do środka, tor prosty.');
+  await p.fill('#wg-fc', 'Dobra seria!');
+  await p.click('.wgs[data-wgs="4"]');                                                // przerysowanie z wynikiem toru (pola zostają)
+  assert.match(await p.textContent('#wg-go'), /Wyślij film i zapisz tor/);
+  assert.equal(await p.inputValue('#wg-kg'), '90');
+  assert.equal(await p.inputValue('#wg-note'), 'Kolana mniej do środka, tor prosty.');
+  await shot(p, 'trener-wgraj-jasny.png');
+  await p.click('#wg-go');
+  await p.waitForSelector('.wgok');
+  assert.match(await p.textContent('.wgok'), /Przysiad tylny, seria 4, tor i prędkość, wnioski/);
+  const wg = p.st.wg; assert.equal(wg[0], 'ania');
+  assert.deepEqual([wg[1].week, wg[1].day, wg[1].order, wg[1].set, wg[1].size, wg[1].origin], [12, 'T1', 1, '4', FILM.length, new URL(base).origin]);
+  assert.deepEqual(p.st.put, ['bytes 0-' + (FILM.length - 1) + '/' + FILM.length]);   // plik prosto na Dysk (bez serwera skryptu)
+  const fs1 = p.st.fs[0][1];
+  assert.equal(fs1.link, 'https://drive.google.com/file/d/wgfilm/view');
+  assert.deepEqual([fs1.kg, fs1.reps, fs1.note, fs1.forClient, fs1.set], ['90', '3', 'Kolana mniej do środka, tor prosty.', 'Dobra seria!', '4']);
+  assert.ok(fs1.vbt > 0.4 && fs1.height >= 59 && JSON.parse(fs1.path).length > 5, JSON.stringify(fs1).slice(0, 200));
+  // film od razu na liście Filmy
+  await p.goto(base + 'trener.html#filmy'); await p.waitForSelector('.vi');
+  await p.click('[data-vall="1"]');
+  assert.match(await p.textContent('.vlist'), /Przysiad tylny.*seria 4/);
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });

@@ -9,6 +9,7 @@ export const UI_MIME = 'text/html;profile=mcp-app';
 export const UI_DZIS = 'ui://sila-z-ruchu/dzis.html';
 export const UI_KLIENT = 'ui://sila-z-ruchu/klient.html';
 export const UI_FILM = 'ui://sila-z-ruchu/film.html';
+export const UI_TOR = 'ui://sila-z-ruchu/tor.html';
 export const PANEL = 'https://likegreekgod.github.io/trening/trener.html';   // panel trenera (GitHub Pages), linki z kart przez ui/open-link
 
 const CSS = `
@@ -395,6 +396,70 @@ function draw(){
 }
 `;
 
+/* Karta toru sztangi (część 3): wykres najlepszej prędkości dnia i do 4 nałożonych torów (najnowszy akcentem), tabela serii. Bez sieci. */
+const CSS_TOR = `
+.ch{width:100%;height:auto;display:block}.ch text{font:11px ui-monospace,monospace;fill:var(--tx2)}
+.trs{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:12px;align-items:center}
+@media (max-width:520px){.trs{grid-template-columns:1fr}}
+.leg{font-size:12px;color:var(--tx2);text-align:center}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:4px 6px;border-top:1px solid var(--bd);text-align:left}th{font-size:11px;color:var(--tx2);font-weight:600;border-top:0}
+.nt{font-size:12px;color:var(--tx2)}
+`;
+const JS_TOR = `
+var NS = 'http://www.w3.org/2000/svg';
+function sv(t, a){ var e = document.createElementNS(NS, t); for (var k in a) e.setAttribute(k, a[k]); return e; }
+function pl(n){ return String(n).replace('.', ','); }
+function dm(d){ var m = /^(\\d{4})-(\\d\\d)-(\\d\\d)/.exec(d || ''); return m ? (+m[3]) + '.' + m[2] : ''; }
+function chart(dni){
+  var w = 320, h = 140, s = sv('svg', {viewBox: '0 0 ' + w + ' ' + h, 'class': 'ch', role: 'img', 'aria-label': 'Prędkość w kolejnych dniach'});
+  if (dni.length < 2) { var t = sv('text', {x: 10, y: 20}); t.textContent = dni.length ? 'Jeden pomiar: ' + pl(dni[0].v) + ' m/s' : ''; s.appendChild(t); return s; }
+  var vs = dni.map(function(x){ return x.v; }), mx = Math.max.apply(null, vs), mn = Math.min.apply(null, vs);
+  var X = function(i){ return 18 + i * (w - 36) / (dni.length - 1); }, Y = function(v){ return h - 24 - (v - mn) / (mx - mn || 1) * (h - 56); };
+  s.appendChild(sv('polyline', {fill: 'none', stroke: 'var(--ac)', 'stroke-width': 2.5, points: dni.map(function(x, i){ return X(i).toFixed(1) + ',' + Y(x.v).toFixed(1); }).join(' ')}));
+  dni.forEach(function(x, i){ s.appendChild(sv('circle', {cx: X(i).toFixed(1), cy: Y(x.v).toFixed(1), r: 3, fill: 'var(--ac)'})); });
+  var l = dni[dni.length - 1], a = sv('text', {x: w - 18, y: Math.max(12, Y(l.v) - 9), 'text-anchor': 'end'}); a.textContent = pl(l.v) + ' m/s'; s.appendChild(a);
+  var b = sv('text', {x: 18, y: h - 5}); b.textContent = dm(dni[0].data); s.appendChild(b);
+  var c = sv('text', {x: w - 18, y: h - 5, 'text-anchor': 'end'}); c.textContent = dm(l.data); s.appendChild(c);
+  return s;
+}
+function paths(tory){
+  var all = [].concat.apply([], tory.map(function(t){ return t.p; })); if (!all.length) return el('div', 'nt', 'Bez zapisanego toru.');
+  var xs = all.map(function(p){ return p[0] * 2; }), ys = all.map(function(p){ return p[1]; });
+  var pad = 18, H = 220, minx = Math.min.apply(null, xs.concat(-10)), maxx = Math.max.apply(null, xs.concat(10)), miny = Math.min.apply(null, ys), maxy = Math.max.apply(null, ys);
+  var sc = (H - 2 * pad) / Math.max(1, maxy - miny), W = Math.max(160, Math.min(300, (maxx - minx) * sc + 2 * pad + 20)), cx = W / 2 - ((minx + maxx) / 2) * sc;
+  var X = function(v){ return cx + v * sc; }, Y = function(v){ return H - pad - (v - miny) * sc; };
+  var s = sv('svg', {viewBox: '0 0 ' + W.toFixed(0) + ' ' + H, 'class': 'ch', role: 'img', 'aria-label': 'Tory sztangi'});
+  s.style.maxWidth = W.toFixed(0) + 'px'; s.style.margin = '0 auto';
+  s.appendChild(sv('line', {x1: X(0), x2: X(0), y1: pad - 6, y2: H - pad + 4, stroke: 'var(--tx2)', 'stroke-dasharray': '3 4'}));
+  tory.forEach(function(t, i){ var last = i === tory.length - 1;
+    s.appendChild(sv('path', {d: t.p.map(function(p, k){ return (k ? 'L' : 'M') + X(p[0] * 2).toFixed(1) + ',' + Y(p[1]).toFixed(1); }).join(''), fill: 'none',
+      stroke: last ? 'var(--ac)' : 'var(--tx2)', 'stroke-opacity': last ? 1 : (0.3 + 0.5 * i / Math.max(1, tory.length - 1)).toFixed(2), 'stroke-width': last ? 2.5 : 1.5, 'stroke-linejoin': 'round'})); });
+  var w = el('div'); w.appendChild(s);
+  w.appendChild(el('div', 'leg', tory.map(function(t){ return dm(t.data) + (t.kg ? ' ' + pl(t.kg) + ' kg' : ''); }).join(' · ') + ' (najnowszy akcentem) · poziom ×2'));
+  return w;
+}
+function draw(){
+  var app = document.getElementById('app'); app.textContent = '';
+  if (!D) { app.appendChild(el('div', 'empty', 'Wczytuję dane z panelu…')); size(); return; }
+  if (D.blad) { app.appendChild(el('div', 'err', D.blad)); size(); return; }
+  add(app, add(el('div', 'hd'), el('b', '', (D.klient ? D.klient + ' · ' : '') + (D.cwiczenie || 'Tor sztangi')), D.miara ? el('span', '', D.miara.split(',')[0]) : null));
+  if (!D.serie || !D.serie.length) {
+    app.appendChild(el('div', 'empty', D.uwaga || 'Brak analizy toru.'));
+    (D.cwiczenia || []).forEach(function(c){ app.appendChild(el('div', 'row', c.cwiczenie + ' · ' + c.analiz + ' analiz · ostatnia ' + dm(c.ostatnia))); });
+    size(); return;
+  }
+  var u = D._ui || {};
+  app.appendChild(add(el('div', 'card trs'), add(el('div'), el('h3', '', 'Najlepsza seria dnia'), chart(u.dni || [])), add(el('div'), el('h3', '', 'Tory'), paths(u.tory || []))));
+  var t = el('table'), hr = el('tr'); ['Dzień', 'Seria', 'Ciężar', 'm/s', u.oly ? 'Uniesienie' : 'Zakres', 'Od pionu'].forEach(function(x){ hr.appendChild(el('th', '', x)); }); t.appendChild(hr);
+  D.serie.slice().reverse().slice(0, 10).forEach(function(r){ var tr = el('tr');
+    [dm(r.data), r.seria, (r.kg !== undefined ? pl(r.kg) + ' kg' : '') + (r.powt ? ' × ' + r.powt : ''), r.predkosc_ms !== undefined ? pl(r.predkosc_ms) : '', r.uniesienie_cm !== undefined ? pl(r.uniesienie_cm) + ' cm' : '', r.odchylenie_toru_cm !== undefined ? pl(r.odchylenie_toru_cm) + ' cm' : ''].forEach(function(x){ tr.appendChild(el('td', '', x)); });
+    t.appendChild(tr); if (r.wnioski_trenera) { var n = el('tr'), c = el('td', 'nt', '✎ ' + r.wnioski_trenera); c.colSpan = 6; n.appendChild(c); t.appendChild(n); } });
+  app.appendChild(add(el('div', 'card'), t));
+  size();
+}
+`;
+export const TOR_HTML = page('Tor sztangi', 'sila-z-ruchu-tor', CSS_TOR, JS_TOR);
+
 export const FILM_HTML = page('Film', 'sila-z-ruchu-film', CSS_FILM, JS_FILM);
 export const KLIENT_HTML = page('Klient', 'sila-z-ruchu-klient', CSS_KLIENT, JS_KLIENT);
 
@@ -402,6 +467,7 @@ export const KLIENT_HTML = page('Klient', 'sila-z-ruchu-klient', CSS_KLIENT, JS_
 export const RESOURCES = [
   { uri: UI_DZIS, name: 'karta-dzis', title: 'Dziś w panelu', description: 'Karta ekranu Dziś: kto trenuje, decyzje o propozycjach asystentów AI, co wymaga uwagi.', mimeType: UI_MIME },
   { uri: UI_FILM, name: 'karta-film', title: 'Film serii', description: 'Odtwarzacz filmu serii (¼× / ½×, klatka po klatce), klatki dla Claude, komentarz dla klienta.', mimeType: UI_MIME },
+  { uri: UI_TOR, name: 'karta-tor', title: 'Tor sztangi', description: 'Postęp prędkości i toru sztangi w ćwiczeniu: wykres najlepszej serii dnia, nałożone tory, serie z wnioskami.', mimeType: UI_MIME },
   { uri: UI_KLIENT, name: 'karta-klient', title: 'Karta klienta', description: 'Karta klienta: sygnały, liczby tygodnia, siła, ostatnie sesje, najbliższe jednostki.', mimeType: UI_MIME },
 ];
 const META = { ui: { prefersBorder: true, csp: { connectDomains: [], resourceDomains: [], frameDomains: [], baseUriDomains: [] } } };
@@ -412,6 +478,7 @@ const metaFilm = origin => ({ ui: { prefersBorder: true, csp: { connectDomains: 
 export function readResource(uri, origin) {
   if (uri === UI_FILM) return { contents: [{ uri: UI_FILM, mimeType: UI_MIME, text: FILM_HTML, _meta: metaFilm(origin) }] };
   if (uri === UI_DZIS) return { contents: [{ uri: UI_DZIS, mimeType: UI_MIME, text: DZIS_HTML, _meta: META }] };
+  if (uri === UI_TOR) return { contents: [{ uri: UI_TOR, mimeType: UI_MIME, text: TOR_HTML, _meta: META }] };
   if (uri === UI_KLIENT) return { contents: [{ uri: UI_KLIENT, mimeType: UI_MIME, text: KLIENT_HTML, _meta: META }] };
   return null;
 }

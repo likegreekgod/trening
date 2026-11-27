@@ -3,7 +3,7 @@
 // więc każda publikacja ma nową pamięć i telefony pobierają nową wersję. Nie zmieniaj ręcznie.
 const VERSION = 'dev';
 const CACHE = 'trening-' + VERSION;
-const SHELL = ['./', 'index.html', 'config.js', 'lib.js', 'app.js', 'intro.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon.svg', 'icons/favicon-32.png',
+const SHELL = ['./', 'index.html', 'config.js', 'lib.js', 'vbt.js', 'app.js', 'intro.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/favicon.svg', 'icons/favicon-32.png',
   'icons/apple-touch-icon.png', 'icons/icon-maskable-192.png', 'icons/icon-maskable-512.png', 'icons/icon-mono.svg',
   'cw/opisy.json',   // opisy ćwiczeń bez filmu (zdjęcia w cw/<id>/ dochodzą do pamięci przy pierwszym otwarciu)
   // czcionki lokalne (OFL) – bez nich offline wróciłyby systemowe

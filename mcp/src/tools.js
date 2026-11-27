@@ -4,7 +4,7 @@
  * Odpowiedzi są skracane (bez linków z kluczami klientów, bez ścieżek VBT), żeby Claude dostawał tylko to, co potrzebne do decyzji.
  */
 
-import { UI_DZIS, UI_KLIENT, UI_FILM } from './ui.js';
+import { UI_DZIS, UI_KLIENT, UI_FILM, UI_TOR } from './ui.js';
 
 const ST_DZIS = { wait: 'czeka', live: 'w trakcie', done: 'zrobione' };
 const SEKCJA = { R: 'Rozgrzewka', G: 'Główne', K: 'Korekcyjne' };   // kolumna Planu `sekcja` (litera), jak SEKCJE w Code.gs
@@ -281,6 +281,40 @@ TOOLS.push(
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } },
 );
 
+TOOLS.push(
+  { name: 'tor', title: 'Tor sztangi i prędkość',
+    description: 'Postęp prędkości i toru sztangi w jednym ćwiczeniu klienta (z analiz filmów w aplikacji i w panelu): dzień, seria, ciężar, prędkość (MCV albo v max w bojach), uniesienie, odchylenie toru od pionu startu, wnioski trenera. Karta rysuje wykres prędkości i nałożone tory. Bez nazwy ćwiczenia: lista ćwiczeń z analizą.',
+    inputSchema: { type: 'object', properties: { id: ID, cwiczenie: { type: 'string', description: 'nazwa jak w planie; puste = lista ćwiczeń z analizą toru' } }, required: ['id'], additionalProperties: false },
+    annotations: RO, _meta: { ui: { resourceUri: UI_TOR } } },
+);
+
+const OLY_RE = /rwani|podrzut|zarzut|snatch|clean|jerk|ciąg rwan|ciąg podrz/i;
+/** Czysta: Log klienta (trKlient) → postęp prędkości i toru ćwiczenia. Tory (cm, co 2 klatki) tylko w _ui dla karty, Claude dostaje liczby. */
+export function tor(d, nazwa) {
+  const logs = (d.logs || []).filter(l => num(l.vbt_ms) > 0 && s(l.seria) !== '0');
+  const by = {}; logs.forEach(l => { const n = s(l.cwiczenie); (by[n.toLowerCase()] = by[n.toLowerCase()] || { n, ile: 0, ost: '' }).ile++; const dd = d10(l.data); if (dd > by[n.toLowerCase()].ost) by[n.toLowerCase()].ost = dd; });
+  const lista = Object.values(by).sort((a, b) => b.ost.localeCompare(a.ost)).map(x => ({ cwiczenie: x.n, analiz: x.ile, ostatnia: x.ost }));
+  const head = { klient: s(d.cfg && d.cfg.name) };
+  if (!s(nazwa)) return Object.assign(head, { cwiczenia: lista, uwaga: lista.length ? 'Podaj „cwiczenie”, żeby zobaczyć postęp.' : 'Klient nie ma jeszcze analizy toru z filmu.' });
+  const key = s(nazwa).toLowerCase(), oly = OLY_RE.test(key);
+  const rows = logs.filter(l => s(l.cwiczenie).toLowerCase() === key).map(l => {
+    let p = []; try { p = JSON.parse(s(l.sciezka) || '[]'); } catch (e) { p = []; }
+    p = Array.isArray(p) ? p.filter(q => Array.isArray(q) && isFinite(q[0]) && isFinite(q[1])) : [];
+    const dev = p.length ? Math.max(...p.map(q => Math.abs(q[0]))) : null;
+    return { l, p, dev, data: d10(l.data) || d10(l.zapisano) };
+  }).sort((a, b) => a.data.localeCompare(b.data) || s(a.l.seria).localeCompare(s(b.l.seria)));
+  if (!rows.length) return Object.assign(head, { cwiczenie: s(nazwa), serie: [], uwaga: 'Brak analizy toru dla tego ćwiczenia.', cwiczenia: lista });
+  const serie = rows.map(r => nz({ data: r.data, tydzien: r.l.tydzien, jednostka: s(r.l.jednostka), seria: s(r.l.seria), kg: num(r.l.kg) === null ? s(r.l.kg) : num(r.l.kg), powt: s(r.l.powt),
+    predkosc_ms: num(r.l.vbt_ms), szczyt_ms: num(r.l.vbt_peak), uniesienie_cm: num(r.l.wysokosc_cm), odchylenie_toru_cm: r.dev === null ? '' : Math.round(r.dev * 10) / 10,
+    wnioski_trenera: s(r.l.notatka_trenera), film: s(r.l.film_link) ? 'tak' : '' }));
+  const byDay = {}; rows.forEach(r => { const v = num(r.l.vbt_ms); if (!byDay[r.data] || v > byDay[r.data].v) byDay[r.data] = { data: r.data, v, kg: num(r.l.kg) }; });
+  const dni = Object.values(byDay).sort((a, b) => a.data.localeCompare(b.data));
+  const tory = rows.filter(r => r.p.length > 1).slice(-4).map(r => ({ data: r.data, kg: num(r.l.kg), p: r.p.filter((q, i) => i % Math.ceil(r.p.length / 60) === 0) }));
+  return Object.assign(head, { cwiczenie: s(rows[rows.length - 1].l.cwiczenie), miara: oly ? 'v max (m/s), boje: szczytowa prędkość ciągu' : 'MCV (m/s), średnia prędkość koncentryczna',
+    serie: serie.slice(-20), najlepsza_dnia: dni.slice(-12).map(x => nz({ data: x.data, predkosc_ms: x.v, kg: x.kg })),
+    _ui: { tory, dni: dni.slice(-12), oly } });
+}
+
 export const KLATKI_MAX = 24, KLATKA_MAX = 400000;   // klatek w paczce, znaków base64 na klatkę (~300 kB)
 
 const need = (a, k) => { if (a[k] === undefined || a[k] === null || s(a[k]) === '') throw new Error('Brak pola „' + k + '”.'); return a[k]; };
@@ -323,6 +357,7 @@ export async function run(name, a, api, o) {
       await api('trKomentarz', cid(a), Number(need(a, 'tydzien')), s(need(a, 'jednostka')), String(a.tekst === undefined ? '' : a.tekst));
       return { zapisano: true };
     }
+    case 'tor': return tor(await api('trKlient', cid(a)), s(a.cwiczenie));
     case 'filmy': return filmy(await api('trPulpit'), a.id ? cid(a) : '', !!a.wszystkie);
     case 'film': {
       const r = refParse(need(a, 'ref')), p = await api('trPulpit');
