@@ -2597,6 +2597,8 @@ test('asystent: decyzje trenera (zatwierdź zmienia plan, odrzuć, pamięć decy
   const o = plain(C.agOpen_(rows, { ania: 'Ania' }, '2026-11-26', 7));
   assert.deepEqual(o.map(x => [x.pid, x.typ, x.kg, x.week, x.day, x.nr, x.why]), [['ania|p|1', 'ciezar', 82.5, 12, 'D1', 1, 'lekko']]);
   assert.deepEqual(plain(C.agOdrz_(rows, { ania: 'Ania' }, '2026-11-26', 7)), [{ name: 'Ania', at: '2026-11-26', text: 'Wyciskanie leżąc: 5 serie', uwaga: 'Najwyżej 1 seria więcej (reguła 1.8)' }]);
+  assert.equal(C.agD10_('2026-11-26T23:30:00.000Z'), '2026-11-27', 'zapis tuż po północy w Polsce = ten dzień, nie poprzedni (UTC)');
+  assert.equal(C.agD10_('2026-11-26'), '2026-11-26');
   // pamięć bota: decyzje trenera i czekające, bez odrzuconych przez serwer i bez zgłoszeń, najstarsze pierwsze
   const d = plain(C.agDecyzje_(rows, 'ania', 20));
   assert.deepEqual(d, [{ data: '2026-11-24', co: 'Przysiad tylny: 80 kg', status: 'zatwierdzona przez trenera' },
@@ -2858,6 +2860,14 @@ test('sekcja Rozgrzewka: wykonanie planu tak, tonaż, serie, partie i e1RM nie (
   assert.equal(col(warm, 'wykonanie_%'), col(main, 'wykonanie_%'));                   // wykonanie planu bez zmian (po prio)
   assert.equal(col(warm, 'wykonanie_%'), 100);
   assert.equal(plain(warm.parts)[0][3], 2); assert.equal(plain(main.parts)[0][3], 4);   // serie na partię
+});
+
+test('sesStart_: jednostka zamknięta bez startu dostaje start z końca i czasu, nie północ z daty planu', () => {
+  const now = new Date('2026-11-27T19:00:00.000Z');
+  assert.equal(C.sesStart_({ start: '2026-11-27T17:00:00.000Z', end: '2026-11-27T18:00:00.000Z', minutes: 60 }, now), '2026-11-27T17:00:00.000Z', 'start z aplikacji bez zmian');
+  assert.equal(C.sesStart_({ start: '', end: '2026-11-27T18:00:00.000Z', minutes: 45 }, now), '2026-11-27T17:15:00.000Z', 'koniec − czas_min');
+  assert.equal(C.sesStart_({ start: '', end: '2026-11-27T18:00:00.000Z', minutes: '' }, now), '2026-11-27T18:00:00.000Z', 'bez czasu = koniec');
+  assert.equal(C.sesStart_({}, now), '2026-11-27T19:00:00.000Z', 'bez końca = chwila zapisu');
 });
 
 test('trFilmSeria_: film z komputera trenera do serii (link, tor sztangi, wnioski; tylko przysłane kolumny)', () => {

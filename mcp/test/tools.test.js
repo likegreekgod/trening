@@ -1,7 +1,7 @@
 // Testy pośrednika MCP (czyste funkcje, dane syntetyczne): node --test mcp/test/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS, klientNowy, karta, e1rm, filmy, filmRef, refParse, tor } from '../src/tools.js';
+import { TOOLS, run, d10, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS, klientNowy, karta, e1rm, filmy, filmRef, refParse, tor } from '../src/tools.js';
 import { handle, handleBody, VERSIONS, rec } from '../src/mcp.js';
 import { UI_DZIS, UI_KLIENT, UI_FILM, UI_TOR, KLIENT_HTML, FILM_HTML, TOR_HTML } from '../src/ui.js';
 
@@ -81,6 +81,20 @@ test('jednostka i kalendarz', () => {
   const k = kalendarz({ from: '2026-11-23', to: '2026-11-29', today: '2026-11-27', units: [{ date: '2026-11-25', name: 'Ania', id: 'ania', week: 3, day: 'A', title: 'Góra', st: 'late', ex: 1, done: 0, sets: 3, rpe: null }], undated: [] });
   assert.equal(k.jednostki[0].stan, 'zaległa');
   assert.equal(k.bez_daty, undefined);
+});
+
+test('data sesji w strefie trenera (Europe/Warsaw), nie UTC', () => {
+  assert.equal(d10('2026-11-26T23:00:00.000Z'), '2026-11-27', 'północ w Polsce = 23:00 UTC dnia wcześniej');
+  assert.equal(d10('2026-11-27T22:30:00.000Z'), '2026-11-27', '23:30 w Polsce zostaje tym samym dniem');
+  assert.equal(d10('2026-06-30T22:30:00.000Z'), '2026-07-01', 'czas letni: UTC+2');
+  assert.equal(d10('2026-11-27'), '2026-11-27', 'data bez godziny bez zmian');
+  assert.equal(d10(''), ''); assert.equal(d10(null), '');
+  // Maciek, tydz. 1, S1: sesja zamknięta bez startu, data z arkusza jako północ → klient i jednostka pokazują 27.11
+  const d = Object.assign({}, KLIENT, { sessions: [{ tydzien: 3, jednostka: 'A', start: '', data: '2026-11-26T23:00:00.000Z', rpe_sesji: 8 }] });
+  assert.equal(jednostka(d, 3, 'A').sesja.data, '2026-11-27');
+  assert.equal(klient(d, { today: '2026-11-28' }).ostatnie_sesje[0].data, '2026-11-27');
+  d.sessions = [{ tydzien: 3, jednostka: 'A', start: '2026-11-26T23:00:00.000Z', data: '2026-11-25' }];
+  assert.equal(jednostka(d, 3, 'A').sesja.data, '2026-11-27', 'start ma pierwszeństwo przed datą z planu');
 });
 
 test('run: zapisy przekładają się na funkcje panelu', async () => {
