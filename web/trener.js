@@ -885,9 +885,10 @@ function agentCard(k){
   return h + '<p class="kstat"><span class="dot' + (a.on ? ' on' : '') + '"></span><span>' + stat + '</span></p>' +
     (m.key ? '<div class="okbox" role="status"><b>Klucz dla bota ' + esc(k.name) + '</b>Pokazuję go tylko teraz. Klient wpisuje go w ustawieniach swojego bota (nie w czacie).' +
       '<div class="linkbox mono agkey" id="ag-key">' + esc(m.key) + '</div><button class="cp' + (m.cp === 'key' ? ' done' : '') + '" type="button" id="ag-cpkey">' + (m.cp === 'key' ? '✓ Skopiowano' : '⧉ Kopiuj klucz') + '</button></div>' : '') +
-    '<div class="row2"><button class="cp" type="button" id="ag-new"' + dis + '>' + (m.busy === 'nowy' ? 'Tworzę…' : m.sure === 'nowy' ? 'Na pewno? Stary klucz przestanie działać' : a.has ? 'Nowy klucz' : 'Utwórz klucz i włącz') + '</button>' +
+    '<div class="row2"><button class="' + (a.on ? 'cp' : 'b p') + '" type="button" id="ag-new"' + dis + '>' + (m.busy === 'nowy' ? 'Tworzę…' : m.sure === 'nowy' ? 'Na pewno? Stary klucz przestanie działać' : a.on ? 'Nowy klucz' : 'Utwórz klucz i włącz') + '</button>' +
     (a.has ? '<button class="cp danger" type="button" id="ag-off"' + dis + '>' + (m.busy === 'wylacz' ? 'Wyłączam…' : m.sure === 'wylacz' ? 'Na pewno wyłączyć?' : 'Wyłącz dostęp') + '</button>' : '') + '</div>' +
-    '<div class="frm">' +
+    (a.on ? '' : '<p class="agoffn" id="ag-offn">Zadziała po utworzeniu klucza. Bez klucza bot nie ma żadnego dostępu.</p>') +
+    '<fieldset class="agset' + (a.on ? '' : ' off') + '"' + (a.on ? '' : ' disabled') + '><div class="frm">' +   // bez klucza wszystko wyszarzone: przełączniki to tylko ustawienia na potem
     frH('Odczyt', 'Zasady, plan, historia serii, ciężar na dziś. Bez bólu i dyspozycji.', agSwH('read', d.read, 'Odczyt')) +
     frH('Zapis', 'Serie z planu i własne treningi (jak w aplikacji).', agSwH('write', d.write, 'Zapis')) +
     frH('Propozycje zmian planu', 'Zamiana, ciężar, serie, dodatkowy trening: czekają na Ciebie, plan bez zmian.', agSwH('prop', d.prop, 'Propozycje zmian planu')) +
@@ -895,8 +896,8 @@ function agentCard(k){
     frH('Zapytania dziennie', 'Wszystkie akcje bota tego klienta razem.', agNumH('limit', d.limit)) + '</div>' +
     '<div class="agta"><label for="ag-ogr">Ograniczenia tego klienta (jego część sekcji 5)</label><textarea id="ag-ogr" rows="4"' + dis + '>' + esc(d.ogr) + '</textarea></div>' +
     '<p class="legend">To dane o zdrowiu: widzi je tylko bot tego klienta, zostają w arkuszu.</p>' +
-    '<div class="row2" style="margin-top:10px"><button class="b p" type="button" id="ag-save"' + (ch && !m.busy ? '' : ' disabled') + '>' + (m.busy === 'save' ? 'Zapisuję…' : 'Zapisz') + '</button>' +
-    (m.ok ? '<span class="saved" role="status">' + esc(m.ok) + '</span>' : '') + '</div>' + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '') +
+    (a.on ? '<div class="row2" style="margin-top:10px"><button class="b p" type="button" id="ag-save"' + (ch && !m.busy ? '' : ' disabled') + '>' + (m.busy === 'save' ? 'Zapisuję…' : 'Zapisz') + '</button></div>' : '') + '</fieldset>' +
+    (m.ok ? '<p class="saved" role="status">' + esc(m.ok) + '</p>' : '') + (m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '') +
     '<div class="sec" style="border:0">Dla bota</div><div class="row2"><button class="cp' + (m.cp === 'ins' ? ' done' : '') + '" type="button" id="ag-ins">' + (m.cp === 'ins' ? '✓ Skopiowano' : '⧉ Kopiuj instrukcję dla bota') + '</button>' +
     '<a class="cp" ' + klLink + ' id="ag-oapi" download="sila-z-ruchu-api.json" href="data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(TL.agOpenApi(url), null, 2)) + '">⇩ Opis API (OpenAPI)</a></div>' +
     '<p class="legend">Klucz idzie w adresie (?api=…), bo skrypt Google nie czyta nagłówków. Wystarczy to botom pisanym samodzielnie i automatyzacjom (Make, n8n). ChatGPT i Claude jako „narzędzie” dojdą w następnym kroku.</p>' +
@@ -914,6 +915,7 @@ function agentBind(k, re){
     if ((mode === 'wylacz' || AGS[id].has) && !(AGM.id === id && AGM.sure === mode)) return set({ sure: mode });   // drugie dotknięcie
     set({ busy: mode, key: '' });
     try { const r = await guard(api('trAgentKlucz', id, mode)); AGS[id] = r; delete AGD[id];
+      const kk = (KL || []).find(x => x.id === id); if (kk) kk.ai = !!r.on;   // znacznik AI na liście klientów
       set({ key: r.key || '', ok: mode === 'wylacz' ? 'Dostęp wyłączony. Bot klienta dostaje teraz „Brak dostępu”.' : '' }); }
     catch (e) { set({ err: e.auth ? '' : e.message }); }
   };
@@ -1084,7 +1086,7 @@ async function renderKlienci(sub){
   const urg = k => { const i = PUL.clients.findIndex(c => c.id === k.id); return i < 0 ? 999 : i; };   // aktywni: najpilniejsi na górze (kolejność Przeglądu)
   const rows = KL.slice().sort((a, b) => (b.on - a.on) || (a.on && urg(a) - urg(b)) || a.name.localeCompare(b.name, 'pl')).map(k => {
     const c = PUL.clients.find(x => x.id === k.id);
-    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="' + kHref(k.id, k.on ? '' : 'ustawienia') + '"><span class="dot ' + (k.on ? (c ? lvOf(c) : 'lv-ok') : '') + '"></span>' + esc(k.name) + '</a><div class="flags mono">' + esc(k.id) + '</div>' + (k.on ? '<div class="seen">' + seenTxt(k) + '</div>' : '') +
+    return '<tr class="' + (k.on ? '' : 'off') + '"><td><a class="who" href="' + kHref(k.id, k.on ? '' : 'ustawienia') + '"><span class="dot ' + (k.on ? (c ? lvOf(c) : 'lv-ok') : '') + '"></span>' + esc(k.name) + (k.ai ? ' <span class="aitag" title="Asystent AI włączony: bot klienta ma klucz">' + SPARK + 'AI</span>' : '') + '</a><div class="flags mono">' + esc(k.id) + '</div>' + (k.on ? '<div class="seen">' + seenTxt(k) + '</div>' : '') +
       (k.on && c ? '<div class="kpl ksg">' + sigPills(c) + '</div>' : '') +
       (k.on ? '<div class="km">Ostatni trening: <b>' + (c ? agoTxt(c) : '–') + '</b>' + (c && c.week ? ' · ten tydzień <b>' + esc(c.week) + '</b>' : '') + (c && c.planLeft !== null ? ' · plan ' + (c.planLeft < 0 ? '<b>skończony</b>' : 'jeszcze <b>' + c.planLeft + ' ' + plN(c.planLeft, 'dzień', 'dni', 'dni') + '</b>') : '') + '</div>' : '') + '</td>' +
       '<td class="flags">' + klFlagsH(k) + '</td>' +

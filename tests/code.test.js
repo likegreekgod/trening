@@ -266,7 +266,13 @@ test('trKlientOf_ i trKlientVals_: klienci w panelu trenera (ustawienia ↔ wier
   const row = ['kabc', 'Ania', 'Ania', '', 'stary-link', 'tak', 'PROSTY', 2, 'TAK', 'TAK', 'RIR', 0.075, '', 'TAK'];
   const k = C.trKlientOf_(row, 'https://x.github.io/trening/');
   assert.deepEqual(JSON.parse(JSON.stringify(k)), { id: 'ania', name: 'Ania', on: true, mode: 'PROSTY', scale: 'RIR', swap: 'TRENER', pain: true, masters: true,
-    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc', email: '', mail: false, mailKom: false, seen: '', devs: 0, body: false, snatch: '', cj: '', start: '' });
+    extra: 2, oly: 7.5, own: true, edit: true, link: 'https://x.github.io/trening/?k=kabc', email: '', mail: false, mailKom: false, seen: '', devs: 0, body: false, snatch: '', cj: '', start: '', ai: false });
+  // znacznik AI na liście: tylko klucz (hash w X) i włączony w Y; same ustawienia bez klucza = brak
+  const ag = (h, u) => C.trKlientOf_(row.concat(Array(23 - row.length).fill(''), [h, u]), '').ai;
+  assert.equal(ag('a'.repeat(64), JSON.stringify({ on: true })), true);
+  assert.equal(ag('', JSON.stringify({ on: true, read: true })), false, 'bez klucza nie ma AI');
+  assert.equal(ag('a'.repeat(64), JSON.stringify({ on: false })), false);
+  assert.equal(ag('', ''), false);
   // pusty wiersz = wartości domyślne; bez adresu aplikacji link z kolumny E
   const d = C.trKlientOf_(['k1', 'bo', 'Bo', 'NIE', 'link-E'], '');
   assert.equal(d.on, false); assert.equal(d.mode, 'PRO'); assert.equal(d.swap, 'NIE'); assert.equal(d.oly, 5); assert.equal(d.own, true); assert.equal(d.link, 'link-E');

@@ -53,11 +53,11 @@ export function dzis(p) {
   });
 }
 
-/** Lista aktywnych klientów z sygnałami (z Przeglądu). */
+/** Lista aktywnych klientów z sygnałami (z Przeglądu). Obiekt, nie tablica: structuredContent MCP musi być obiektem. */
 export function klienci(p) {
-  return ((p && p.clients) || []).map(c => nz({ id: c.id, klient: c.name, pilnosc: c.urg, sygnaly: (c.signals || []).map(x => (x.lv === 'bad' ? '🔴 ' : '🟠 ') + x.t),
+  return { klienci: ((p && p.clients) || []).map(c => nz({ id: c.id, klient: c.name, pilnosc: c.urg, sygnaly: (c.signals || []).map(x => (x.lv === 'bad' ? '🔴 ' : '🟠 ') + x.t),
     ostatni_trening: c.last, ten_tydzien: c.week, zalegle: c.late, koniec_planu_dni: c.planLeft, status_tygodnia: c.status, uwagi_klienta: c.note,
-    filmy_bez_komentarza: c.filmsNew, pakiet_zostalo: c.pkg ? c.pkg.left : null }));
+    filmy_bez_komentarza: c.filmsNew, pakiet_zostalo: c.pkg ? c.pkg.left : null })) };
 }
 
 /** Kalendarz: jednostki aktywnych klientów w zakresie dat. k = wynik trKalendarz. */

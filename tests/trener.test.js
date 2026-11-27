@@ -1606,7 +1606,16 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   // ustawienia klienta: klucz pokazany raz, uprawnienia, ograniczenia, instrukcja i OpenAPI
   await p.goto(base + 'trener.html#k/ania/ustawienia/asystent'); await p.waitForSelector('#agent #ag-new');
   assert.match(await p.textContent('#agent .kstat'), /Wyłączony/);
+  // bez klucza (brak api_ustawienia): przełączniki, limit i ograniczenia wyszarzone z dopiskiem, „Utwórz klucz i włącz” jako przycisk główny
+  assert.match(await p.textContent('#ag-offn'), /Zadziała po utworzeniu klucza\. Bez klucza bot nie ma żadnego dostępu\./);
+  assert.ok(await p.$eval('#agent fieldset.agset', f => f.disabled && f.classList.contains('off')));
+  for (const sel of ['[data-agsw="read"]', '[data-agsw="write"]', '[data-agsw="prop"]', '[data-agnum="limit"][data-d="10"]', '#ag-ogr']) assert.ok(await p.isDisabled(sel), sel);
+  assert.equal(await p.$('#ag-save'), null, 'bez klucza nie ma czego zapisać');
+  assert.equal(await p.getAttribute('#ag-new', 'class'), 'b p'); assert.equal(await p.textContent('#ag-new'), 'Utwórz klucz i włącz');
+  await shot(p, 'trener-agent-ai-bez-klucza.png');
   await p.click('#ag-new'); await p.waitForSelector('#ag-key');
+  assert.equal(await p.$('#ag-offn'), null); assert.ok(!(await p.isDisabled('[data-agsw="read"]')), 'po utworzeniu klucza przełączniki działają');
+  assert.equal(await p.getAttribute('#ag-new', 'class'), 'cp');
   assert.equal(await p.textContent('#ag-key'), 'sz_' + '0123456789abcdef'.repeat(2));
   assert.match(await p.textContent('#agent .kstat'), /Włączony · klucz …cdef/);
   assert.match(await p.textContent('#agent .aglog'), /zaproponuj\s*odmowa · Najwyżej \+2,5 kg/);
@@ -1621,6 +1630,10 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   const oa = JSON.parse(decodeURIComponent((await p.getAttribute('#ag-oapi', 'href')).split(',')[1]));
   assert.equal(oa.openapi, '3.1.0'); assert.ok(oa.paths['/ciezarNaDzis'].get);
   await shot(p, 'trener-agent-ai.png');
+  // lista klientów: znacznik AI tylko przy kliencie z włączonym asystentem
+  await p.evaluate(() => { location.hash = '#klienci'; }); await p.waitForSelector('table.kl');
+  assert.deepEqual(await p.$$eval('table.kl tr', t => t.filter(r => r.querySelector('.aitag')).map(r => r.querySelector('.who').textContent.trim())), ['Ania AI']);
+  await p.evaluate(() => { location.hash = '#k/ania/ustawienia/asystent'; }); await p.waitForSelector('#agent #ag-new'); await p.waitForSelector('#agchat');
   // czat „Wypróbuj asystenta”: domyślnie próba, historia idzie w całości, kroki pod odpowiedzią, błąd przywraca wiadomość
   assert.equal(await p.$eval('#agchat', d => d.open), false, 'czat próbny zwinięty');
   await p.click('#agchat summary');

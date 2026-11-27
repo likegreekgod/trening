@@ -1256,7 +1256,8 @@ function trKlientOf_(r, base) {
     pain: c.pain, masters: up(8) === 'TAK', extra: c.extra, oly: Math.round(c.olyCeil * 1000) / 10, own: c.own, edit: c.edit,
     link: base && c.key ? base + '?k=' + c.key : String(r[4] || '').trim(), email: String(r[14] === undefined || r[14] === null ? '' : r[14]).trim(), mail: up(15) === 'TAK',
     mailKom: up(KL_KOM) === 'TAK', seen: r[20] instanceof Date ? r[20].toISOString() : String(r[20] === undefined || r[20] === null ? '' : r[20]).trim(), devs: devsOf_(r[21]), body: up(KL_CIALO) === 'TAK',
-    snatch: klKg_(r[16]), cj: klKg_(r[17]), start: dayStr_(r[18]) || '' };
+    snatch: klKg_(r[16]), cj: klKg_(r[17]), start: dayStr_(r[18]) || '',
+    ai: agUst_(r[AG_COL.ust], /^[0-9a-f]{64}$/.test(String(r[AG_COL.hash] || '').trim())).on };   // asystent AI: tylko z kluczem i włączony (Agent.gs)
 }
 /** Czysta: maks z kolumny Q / R → liczba kg albo '' (pusto, zero i tekst = brak). */
 function klKg_(v) { const x = n_(v); return x > 0 ? Math.round(x * 10) / 10 : ''; }
