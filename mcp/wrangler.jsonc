@@ -1,0 +1,15 @@
+// Pośrednik MCP „Siła z Ruchu – trener” (mcp/README.md). Sekrety: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, TRENER_EMAIL
+// (wpisuje je GitHub Actions z sekretów repozytorium, .github/workflows/mcp.yml), nigdy w tym pliku.
+{
+  "name": "trening-mcp",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": true,
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+  "vars": {
+    // ten sam adres /exec co web/config.js (jest publiczny w aplikacji klientów)
+    "API_URL": "https://script.google.com/macros/s/AKfycbytLlGPXhIFGc4pdvb-aoi0o1aO5mOnQrRA02JVYlbeQdEujd8GayRdSahrh9th3sTwsQ/exec"
+  },
+  "observability": { "enabled": true }
+}
