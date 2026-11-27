@@ -825,16 +825,22 @@ function templates_() {
 function saveTemplate(key, t) {
   if (!LIVE_) throw new Error('Brak dostępu.');
   mustClient_(key);
+  return tplSave_(t);
+}
+/** Zapis szablonu (tryb „Prowadź” i panel → Biblioteka, trSzablon): ta sama nazwa zastępuje, del = usunięcie, old = poprzednia nazwa (zmiana nazwy). */
+function tplSave_(t) {
   const name = String(t && t.name || '').replace(/\s+/g, ' ').trim(), res = t && t.del ? { name: name, rows: [] } : tplRows_(t, new Date().toISOString());
   if (res.error) throw new Error(res.error);
   if (!name) throw new Error('Nazwa szablonu: 1–40 znaków.');
+  const drop = [name.toLowerCase()], old = String(t && t.old || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (old && !t.del) drop.push(old);
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     const sh = sheet_('Szablony', SZ_HEADERS), n = sh.getLastRow() - 1;
     if (n > 0) {
       const v = sh.getRange(2, 1, n, 1).getValues();
-      for (let i = n - 1; i >= 0; i--) if (String(v[i][0]).trim().toLowerCase() === name.toLowerCase()) sh.deleteRow(i + 2);
+      for (let i = n - 1; i >= 0; i--) if (drop.indexOf(String(v[i][0]).trim().toLowerCase()) >= 0) sh.deleteRow(i + 2);
     }
     if (res.rows.length) {
       const start = sh.getLastRow() + 1;

@@ -88,8 +88,8 @@ function route(){
   if (v === 'ustawienia') return renderUstawienia(h[1] || '');
   if (v === 'klienci') return renderKlienci(decodeURIComponent(h[1] || ''));
   if (v === 'wiecej') return renderWiecej();
-  if (v === 'rozliczenia') return renderProwadzone(decodeURIComponent(h[1] || ''));
-  if (v === 'biblioteka') return renderCwiczenia();
+  if (v === 'rozliczenia') return h[1] === 'pakiety' ? renderPakiety() : renderProwadzone(decodeURIComponent(h[1] || ''));
+  if (v === 'biblioteka') return h[1] === 'szablony' ? renderSzablony() : renderCwiczenia();
   renderDzis();
 }
 const WIECEJ = ['wiecej', 'bloki', 'ustawienia', 'rozliczenia', 'biblioteka'];   // ekrany z „Więcej” na telefonie
@@ -113,7 +113,7 @@ document.addEventListener('click', e => {
   const r = e.target.closest('tr.row[data-k]'); if (r && !e.target.closest('a,button')) location.hash = '#k/' + encodeURIComponent(r.dataset.k);
   if (e.target.closest('[data-retry]')) start();
 });
-async function recalc(){ try { PUL = await guard(api('trPrzelicz')); Object.keys(CK).forEach(k => delete CK[k]); Object.keys(KAL).forEach(k => delete KAL[k]); route(); } catch (e) { if (!e.auth) alertBox(e); } }
+async function recalc(){ try { PUL = await guard(api('trPrzelicz')); Object.keys(CK).forEach(k => delete CK[k]); Object.keys(KAL).forEach(k => delete KAL[k]); PKA = null; SZ = null; route(); } catch (e) { if (!e.auth) alertBox(e); } }
 function logout(){ tokenSet(''); try { google.accounts.id.disableAutoSelect(); } catch (e) {} PUL = null; login('Wylogowano.'); }
 $('#recalc').onclick = recalc; $('#recalc-m').onclick = recalc; $('#logout').onclick = logout;
 function alertBox(e){ const d = document.createElement('div'); d.className = 'card err'; d.textContent = e.message; $('#main').prepend(d); setTimeout(() => d.remove(), 6000); }
@@ -288,8 +288,8 @@ const BLOKI_ICO = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect
 function renderWiecej(){
   const ic = n => { const e = document.querySelector('aside a[data-v="' + n + '"] svg, #' + n + ' svg'); return e ? e.outerHTML : n === 'bloki' ? BLOKI_ICO : ''; };
   $('#main').innerHTML = head('Panel trenera', 'Więcej') + '<div class="pg"><div class="card mo">' +
-    '<a href="#biblioteka">' + ic('biblioteka') + 'Biblioteka<small>ćwiczenia bez filmu</small></a>' +
-    '<a href="#rozliczenia">' + ic('rozliczenia') + 'Rozliczenia<small>prowadzone treningi</small></a>' +
+    '<a href="#biblioteka">' + ic('biblioteka') + 'Biblioteka<small>ćwiczenia bez filmu, szablony</small></a>' +
+    '<a href="#rozliczenia">' + ic('rozliczenia') + 'Rozliczenia<small>prowadzone treningi, pakiety</small></a>' +
     '<a href="#bloki">' + ic('bloki') + 'Bloki do zamknięcia<em>' + (PUL.blocks.length || '') + '</em></a>' +
     '<a href="#ustawienia">' + ic('set') + 'Ustawienia</a>' +
     '<a href="./">' + ic('mine') + 'Mój trening ›</a>' +
@@ -570,6 +570,12 @@ function renderBloki(){
       : '<div class="es"><b>Wszystkie bloki zamknięte</b>Wnioski są wpisane.</div>') + '</div></div>';
 }
 
+/* ---------- Warsztat: zakładki Biblioteki (Ćwiczenia / Szablony) i Rozliczeń (Prowadzone / Pakiety), v2 PR 5 ---------- */
+const BIB_T = [['', 'Ćwiczenia'], ['szablony', 'Szablony']], ROZ_T = [['', 'Prowadzone'], ['pakiety', 'Pakiety']];
+const subTabs = (base, T, cur, lbl) => '<nav class="tabs" aria-label="' + lbl + '">' + T.map(t => '<a href="#' + base + (t[0] ? '/' + t[0] : '') + '" aria-current="' + (t[0] === cur ? 'page' : 'false') + '">' + t[1] + '</a>').join('') + '</nav>';
+const onCw = () => /^#biblioteka\/?$/.test(location.hash);
+const onPrw = () => location.hash.startsWith('#rozliczenia') && !location.hash.startsWith('#rozliczenia/pakiety');
+
 /* ---------- Więcej → Prowadzone (punkt 16 przeglądu v80): treningi z trybu „Prowadź” w miesiącu, CSV do rozliczeń (trProwadzone) ---------- */
 const PRW = {};   // miesiąc → odpowiedź trProwadzone, tylko w pamięci strony
 const hMin = m => m >= 60 ? Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '') : m + ' min';
@@ -579,11 +585,11 @@ async function renderProwadzone(mies){
   const k = mies || '_';
   if (!PRW[k]) { $('#main').innerHTML = head('Panel trenera', 'Prowadzone treningi') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
     try { PRW[k] = await guard(api('trProwadzone', mies)); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Prowadzone treningi') + errBox(e); return; }
-    if (!location.hash.startsWith('#rozliczenia')) return; }
+    if (!onPrw()) return; }
   const r = PRW[k];
   const rows = r.clients.map(c => '<tr class="row" data-k="' + esc(c.id) + '"><td><a class="who" href="#k/' + encodeURIComponent(c.id) + '/sesje">' + esc(c.name) + '</a></td><td class="mono">' + c.n + '</td><td class="nw">' + (c.min ? esc(hMin(c.min)) : '–') + '</td>' +
     '<td><div class="pw-d">' + c.items.map(i => '<span title="' + esc(i.title + ' · tydz. ' + i.week) + '">' + esc(dowDm(i.date)) + (i.min ? ' · ' + i.min + ' min' : '') + '</span>').join('') + '</div></td></tr>').join('');
-  $('#main').innerHTML = head('Rozliczenia · treningi zapisane w trybie „Prowadź”', 'Prowadzone treningi') + '<div class="pg"><div class="card">' +
+  $('#main').innerHTML = head('Rozliczenia · treningi zapisane w trybie „Prowadź”', 'Prowadzone treningi') + subTabs('rozliczenia', ROZ_T, '', 'Rozliczenia') + '<div class="pg"><div class="card">' +
     '<div class="pw-f"><label>Miesiąc<select id="pw-m">' + r.months.map(m => '<option value="' + m + '"' + (m === r.mies ? ' selected' : '') + '>' + esc(miesTxt(m)) + '</option>').join('') + '</select></label>' +
     (r.n ? '<button class="b" type="button" id="pw-csv">Pobierz CSV</button>' : '') + '</div>' +
     (r.n ? '<p class="kstat" id="pw-sum"><b>' + r.n + ' ' + plN(r.n, 'trening', 'treningi', 'treningów') + '</b> · ' + esc(hMin(r.min)) + ' · ' + r.clients.length + ' ' + plN(r.clients.length, 'klient', 'klientów', 'klientów') + '</p>' +
@@ -606,7 +612,7 @@ const cwOkUrl = u => /^https?:\/\/[^\s"<>]+$/i.test(u) && u.length <= 500;
 async function renderCwiczenia(){
   if (!CW) { $('#main').innerHTML = head('Panel trenera', 'Ćwiczenia') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
     try { CW = await guard(api('trCwiczenia')); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Panel trenera', 'Ćwiczenia') + errBox(e); return; }
-    if (!location.hash.startsWith('#biblioteka')) return; }
+    if (!onCw()) return; }
   cwDraw();
 }
 function cwRow(x, k, dead){
@@ -629,7 +635,7 @@ function cwDraw(){
     (r.trigger === false ? ' Cotygodniowe sprawdzanie wyłączone.' : ' Samo sprawdza co poniedziałek ok. 4:00.') + '</small></div>' +
     '<button class="b" type="button" id="cw-chk"' + (CWM.chk ? ' disabled' : '') + '>' + (CWM.chk ? 'Sprawdzam… (do 2 min)' : 'Sprawdź teraz') + '</button></div>' +
     (CWM.chkErr ? '<p class="err" role="alert">' + esc(CWM.chkErr) + '</p>' : '');
-  $('#main').innerHTML = head('Biblioteka · filmy „Jak wykonać” do ćwiczeń z planów', 'Ćwiczenia') + '<div class="pg"><div class="stack" style="max-width:820px">' +
+  $('#main').innerHTML = head('Biblioteka · filmy „Jak wykonać” do ćwiczeń z planów', 'Ćwiczenia') + subTabs('biblioteka', BIB_T, '', 'Biblioteka') + '<div class="pg"><div class="stack" style="max-width:820px">' +
     '<div class="card"><div class="pw-f"><label>Szukaj<input type="search" id="cw-q" value="' + esc(CWQ) + '" placeholder="nazwa ćwiczenia" autocomplete="off"></label></div>' +
     '<p id="cw-sum" style="margin:0 0 4px;font-size:15px"><b>' + nm + ' ' + plN(nm, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń') + ' bez filmu</b> · ' + nd + ' ' + plN(nd, 'martwy link', 'martwe linki', 'martwych linków') + ' · ' + r.links + ' z filmem w bazie</p>' + chk + '</div>' +
     (r.dead.length ? '<div class="card" id="cw-dead"><h2>Martwe linki</h2><ul class="cwl">' + (dead.length ? dead.map(x => cwRow(x, 'd:' + x.name, x)).join('') : '<li class="legend">Nic nie pasuje do wyszukiwania.</li>') + '</ul>' +
@@ -648,7 +654,7 @@ function cwDraw(){
   $('#cw-chk').onclick = async () => {
     CWM.chk = true; CWM.chkErr = ''; cwDraw();
     try { CW = await guard(api('trCwSprawdz')); } catch (e) { if (e.auth) return; CWM.chkErr = e.message; }
-    CWM.chk = false; if (location.hash.startsWith('#biblioteka')) cwDraw();
+    CWM.chk = false; if (onCw()) cwDraw();
   };
 }
 async function cwSave(k){
@@ -660,7 +666,118 @@ async function cwSave(k){
     CW = r; if (keep) { const L = k[0] === 'd' ? CW.dead : CW.missing; if (!L.some(x => x.name === name)) L.unshift(Object.assign({}, keep, { done: true })); }
     CWM.ok[k] = '✓ Zapisano. Klient zobaczy film przy następnym otwarciu planu.'; delete CWD[k];
   } catch (e) { if (e.auth) { CWM.busy = ''; return; } CWM.err[k] = e.message; }
-  CWM.busy = ''; if (location.hash.startsWith('#biblioteka')) cwDraw();
+  CWM.busy = ''; if (onCw()) cwDraw();
+}
+
+/* ---------- Biblioteka → Szablony (v2 PR 5): te same szablony co „⋯ → Zapisz jako szablon” w „Prowadź” (trSzablony, trSzablon) ----------
+ * Szablon = nazwa i ćwiczenia (serie, powt., obwód), bez kg: w „Prowadź” → Nowa jednostka aplikacja dobiera ciężar z historii klienta.
+ * Lista (SZ), szkic edycji (SZE) i stan (SZM) tylko w pamięci strony. */
+let SZ = null, SZE = null, SZM = { busy: '', ok: '', err: '', del: '' };
+const SZ_MAXEX = 20, szOn = () => location.hash.startsWith('#biblioteka/szablony');
+const szRow = () => ({ name: '', sets: 3, reps: '8', circuit: '' });
+async function renderSzablony(){
+  if (!SZ) { $('#main').innerHTML = head('Biblioteka', 'Szablony') + subTabs('biblioteka', BIB_T, 'szablony', 'Biblioteka') + '<div class="pg"><div class="es">Ładowanie…</div></div>';
+    try { SZ = await guard(api('trSzablony')); } catch (e) { if (!e.auth) $('#main').innerHTML = head('Biblioteka', 'Szablony') + errBox(e); return; }
+    if (!szOn()) return; }
+  if (!CWN) api('trCwNazwy').then(x => { CWN = x || []; const dl = $('#sz-dl'); if (dl) dl.innerHTML = szDl(); }).catch(() => { CWN = []; });
+  szDraw();
+}
+const szDl = () => (CWN || []).slice(0, 2000).map(x => '<option value="' + esc(Array.isArray(x) ? x[0] : x) + '">').join('');
+const szLine = e => esc(e.name) + ' <span class="mono">' + e.sets + ' × ' + esc(e.reps) + '</span>' + (e.circuit ? ' <span class="pill">obwód ' + esc(e.circuit) + '</span>' : '');
+/** Czysta (jak tplRows_): błąd szkicu albo '' */
+function szBad(e, list){
+  const name = String(e.name || '').replace(/\s+/g, ' ').trim(), ex = e.ex.filter(x => String(x.name || '').trim());
+  if (!name || name.length > 40) return 'Nazwa szablonu: 1–40 znaków.';
+  if ((list || []).some(t => t.name.toLowerCase() === name.toLowerCase() && t.name.toLowerCase() !== String(e.old || '').toLowerCase())) return 'Szablon „' + name + '” już jest. Zmień nazwę albo edytuj tamten.';
+  if (!ex.length) return 'Dodaj co najmniej jedno ćwiczenie.';
+  if (ex.some(x => !(Number(x.sets) >= 1 && Number(x.sets) <= 40 && Number.isInteger(Number(x.sets))))) return 'Serie: 1–40 przy każdym ćwiczeniu.';
+  if (ex.some(x => !String(x.reps || '').trim())) return 'Powtórzenia przy każdym ćwiczeniu (np. 8, 6-8, 30 s).';
+  return '';
+}
+function szForm(){
+  const e = SZE, busy = SZM.busy === 'save', dis = busy ? ' disabled' : '';
+  const rows = e.ex.map((x, i) => '<div class="szr" data-szi="' + i + '"><span class="szn">' + (i + 1) + '</span>' +
+    '<input class="inp" list="sz-dl" data-szf="name" aria-label="Ćwiczenie ' + (i + 1) + '" placeholder="Ćwiczenie" value="' + esc(x.name) + '" autocomplete="off"' + dis + '>' +
+    '<label class="szs"><span>serie</span><input class="inp" type="number" min="1" max="40" inputmode="numeric" data-szf="sets" value="' + esc(x.sets) + '"' + dis + '></label>' +
+    '<label class="szs"><span>powt.</span><input class="inp" data-szf="reps" value="' + esc(x.reps) + '" placeholder="8" autocomplete="off"' + dis + '></label>' +
+    '<label class="szs szc"><span>obwód</span><input class="inp" data-szf="circuit" maxlength="1" value="' + esc(x.circuit) + '" placeholder="–" autocomplete="off" title="Ta sama litera przy sąsiednich ćwiczeniach = robione na zmianę"' + dis + '></label>' +
+    '<span class="szm"><button class="cp" type="button" data-szmv="-1" aria-label="W górę"' + (i ? '' : ' disabled') + dis + '>↑</button><button class="cp" type="button" data-szmv="1" aria-label="W dół"' + (i < e.ex.length - 1 ? '' : ' disabled') + dis + '>↓</button>' +
+    '<button class="cp danger" type="button" data-szx aria-label="Usuń ćwiczenie"' + (e.ex.length > 1 ? '' : ' disabled') + dis + '>✕</button></span></div>').join('');
+  return '<div class="card" id="sz-form"><h2>' + (e.old ? 'Edytuj szablon' : 'Nowy szablon') + '</h2>' +
+    '<label class="szl">Nazwa<input class="inp" id="sz-name" maxlength="40" value="' + esc(e.name) + '" placeholder="np. Full body A" autocomplete="off"' + dis + '></label>' +
+    '<div class="szrs">' + rows + '</div><datalist id="sz-dl">' + szDl() + '</datalist>' +
+    '<button class="cp" type="button" id="sz-add"' + (e.ex.length >= SZ_MAXEX ? ' disabled' : '') + dis + '>+ Ćwiczenie</button>' +
+    '<div class="row2" style="margin-top:14px"><button class="b p" type="button" id="sz-save"' + dis + '>' + (busy ? 'Zapisuję…' : 'Zapisz szablon') + '</button><button class="b" type="button" id="sz-cancel"' + dis + '>Anuluj</button></div>' +
+    (SZM.err ? '<p class="err" role="alert">' + esc(SZM.err) + '</p>' : '') +
+    '<p class="legend">Bez kg: w „Prowadź” → ⋯ → Nowa jednostka → szablon aplikacja wpisze ciężar z historii klienta. Nazwy ćwiczeń podpowiada baza.</p></div>';
+}
+function szDraw(){
+  const L = SZ || [], m = SZM;
+  const list = L.length ? '<ul class="szlst">' + L.map(t => '<li data-szt="' + esc(t.name) + '"><div class="szh"><b>' + esc(t.name) + '</b><small>' + t.ex.length + ' ' + plN(t.ex.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń') + ' · ' + t.ex.reduce((a, x) => a + x.sets, 0) + ' serii</small>' +
+      '<span class="szb"><button class="cp" type="button" data-szed' + (m.busy ? ' disabled' : '') + '>✎ Edytuj</button><button class="cp danger" type="button" data-szdel' + (m.busy ? ' disabled' : '') + '>' +
+      (m.busy === 'del:' + t.name ? 'Usuwam…' : m.del === t.name ? 'Na pewno usunąć?' : 'Usuń') + '</button></span></div>' +
+      '<ol class="szex">' + t.ex.map(e => '<li>' + szLine(e) + '</li>').join('') + '</ol></li>').join('') + '</ul>'
+    : '<div class="es"><b>Nie masz jeszcze szablonów</b>Zapisz jednostkę w „Prowadź” (⋯ → Zapisz jako szablon) albo dodaj szablon tutaj.</div>';
+  $('#main').innerHTML = head('Biblioteka · jednostki do szybkiego startu w „Prowadź”', 'Szablony', SZE ? '' : '<button class="b p" type="button" id="sz-new"' + (m.busy ? ' disabled' : '') + '>+ Nowy szablon</button>') +
+    subTabs('biblioteka', BIB_T, 'szablony', 'Biblioteka') + '<div class="pg"><div class="stack" style="max-width:820px">' + (SZE ? szForm() : '') +
+    (m.ok ? '<p class="saved" role="status" id="sz-ok">' + esc(m.ok) + '</p>' : '') + (!SZE && m.err ? '<p class="err" role="alert">' + esc(m.err) + '</p>' : '') +
+    '<div class="card" id="sz-list"><h2>Twoje szablony' + (L.length ? ' · ' + L.length : '') + '</h2>' + list +
+    '<p class="legend">Szablony są wspólne dla wszystkich klientów i nie mają imion ani kg. Ta sama nazwa zastępuje szablon (także zapis z „Prowadź”). Najwyżej 30 szablonów.</p></div></div></div>';
+  szBind();
+}
+function szBind(){
+  const re = () => { if (szOn()) szDraw(); };
+  const nw = $('#sz-new'); if (nw) nw.onclick = () => { SZE = { name: '', old: '', ex: [szRow()] }; SZM = { busy: '', ok: '', err: '', del: '' }; re(); const n = $('#sz-name'); if (n) n.focus(); };
+  document.querySelectorAll('[data-szed]').forEach(b => b.onclick = () => { const t = SZ.find(x => x.name === b.closest('[data-szt]').dataset.szt); if (!t) return;
+    SZE = { name: t.name, old: t.name, ex: t.ex.map(e => ({ name: e.name, sets: e.sets, reps: e.reps, circuit: e.circuit })) }; SZM = { busy: '', ok: '', err: '', del: '' }; re(); scrollTo(0, 0); });
+  document.querySelectorAll('[data-szdel]').forEach(b => b.onclick = async () => { const name = b.closest('[data-szt]').dataset.szt;
+    if (SZM.del !== name) { SZM = { busy: '', ok: '', err: '', del: name }; re(); return; }
+    SZM = { busy: 'del:' + name, ok: '', err: '', del: '' }; re();
+    try { SZ = await guard(api('trSzablon', { name, del: true })); SZM = { busy: '', ok: '✓ Usunięto szablon „' + name + '”.', err: '', del: '' }; }
+    catch (e) { SZM = { busy: '', ok: '', err: e.auth ? '' : e.message, del: '' }; }
+    re(); });
+  if (!SZE) return;
+  const e = SZE;
+  $('#sz-name').oninput = ev => { e.name = ev.target.value; };
+  document.querySelectorAll('[data-szi] [data-szf]').forEach(i => i.oninput = () => { const x = e.ex[+i.closest('[data-szi]').dataset.szi], f = i.dataset.szf;
+    x[f] = f === 'circuit' ? i.value.trim().toUpperCase().replace(/[^A-Z]/g, '') : i.value; if (f === 'circuit' && i.value !== x[f]) i.value = x[f]; });
+  document.querySelectorAll('[data-szmv]').forEach(b => b.onclick = () => { const i = +b.closest('[data-szi]').dataset.szi, j = i + Number(b.dataset.szmv);
+    if (j < 0 || j >= e.ex.length) return; [e.ex[i], e.ex[j]] = [e.ex[j], e.ex[i]]; re(); });
+  document.querySelectorAll('[data-szx]').forEach(b => b.onclick = () => { if (e.ex.length > 1) { e.ex.splice(+b.closest('[data-szi]').dataset.szi, 1); re(); } });
+  $('#sz-add').onclick = () => { if (e.ex.length < SZ_MAXEX) { const last = e.ex[e.ex.length - 1]; e.ex.push(Object.assign(szRow(), last ? { sets: last.sets, reps: last.reps } : {})); re();
+    const ins = document.querySelectorAll('[data-szf="name"]'); if (ins.length) ins[ins.length - 1].focus(); } };
+  $('#sz-cancel').onclick = () => { SZE = null; SZM = { busy: '', ok: '', err: '', del: '' }; re(); };
+  $('#sz-save').onclick = async () => {
+    const bad = szBad(e, SZ); if (bad) { SZM.err = bad; re(); return; }
+    const t = { name: e.name.replace(/\s+/g, ' ').trim(), old: e.old, ex: e.ex.filter(x => String(x.name || '').trim()).map(x => ({ name: x.name.trim(), sets: Number(x.sets), reps: String(x.reps).trim(), circuit: x.circuit || '' })) };
+    SZM = { busy: 'save', ok: '', err: '', del: '' }; re();
+    try { SZ = await guard(api('trSzablon', t)); SZE = null; SZM = { busy: '', ok: '✓ Zapisano szablon „' + t.name + '”. W „Prowadź” jest od następnego otwarcia treningu.', err: '', del: '' }; }
+    catch (er) { SZM = { busy: '', ok: '', err: er.auth ? '' : er.message, del: '' }; }
+    re();
+  };
+}
+
+/* ---------- Rozliczenia → Pakiety (v2 PR 5): pakiety wszystkich klientów (trPakiety, pkgList_), najmniej zostało na górze ---------- */
+let PKA = null;   // odpowiedź trPakiety, tylko w pamięci strony
+async function renderPakiety(){
+  const top = head('Rozliczenia · pakiety treningów personalnych', 'Pakiety') + subTabs('rozliczenia', ROZ_T, 'pakiety', 'Rozliczenia');
+  if (!PKA) { $('#main').innerHTML = top + '<div class="pg"><div class="es">Ładowanie…</div></div>';
+    try { PKA = await guard(api('trPakiety')); } catch (e) { if (!e.auth) $('#main').innerHTML = top + errBox(e); return; }
+    if (!location.hash.startsWith('#rozliczenia/pakiety')) return; }
+  const L = PKA.list || [], on = L.filter(x => x.on), warn = on.filter(x => pkgLv(x) !== 'lv-ok');
+  const val = on.reduce((a, x) => a + (x.price && x.n ? x.price / x.n * Math.max(0, x.left) : 0), 0);
+  const row = x => '<tr class="row' + (x.on ? '' : ' off') + '" data-pk="' + esc(x.id) + '"><td><a class="who" href="' + kHref(x.id, 'przeglad') + '">' + esc(x.name) + '</a>' + (x.on ? '' : ' <span class="muted">nieaktywny</span>') + '</td>' +
+    '<td><span class="pill ' + pkgLv(x) + '">' + esc(pkgLeft(x)) + '</span></td>' +
+    '<td class="mono">' + x.used + ' / ' + x.n + '</td>' +
+    '<td class="nw">' + (x.to ? (x.to < PKA.today ? '<span class="bad">wygasł ' + esc(dm(x.to)) + '</span>' : esc(dm(x.to))) : '<span class="muted">bez terminu</span>') + '</td>' +
+    '<td class="nw">' + (x.price ? esc(zl(x.price)) + '<small class="muted"> · ' + esc(zl(x.price / x.n)) + '/tr.</small>' : '–') + '</td>' +
+    '<td class="nw">' + (x.last ? esc(dowDm(x.last)) : '–') + '</td><td class="nw muted">' + esc(dm(x.from)) + (x.show ? '' : ' · <span title="Klient nie widzi licznika w aplikacji">ukryty</span>') + '</td></tr>';
+  $('#main').innerHTML = top + '<div class="pg"><div class="card" id="pk-all">' +
+    (L.length ? '<p class="pks" id="pk-sum"><b>' + on.length + ' ' + plN(on.length, 'aktywny pakiet', 'aktywne pakiety', 'aktywnych pakietów') + '</b>' +
+      (warn.length ? ' · <span class="warn">' + warn.length + ' do odnowienia</span>' : '') + (val ? ' · niewykorzystane ok. ' + esc(zl(Math.round(val))) : '') + '</p>' +
+      '<div class="tw"><table class="pkt"><thead><tr><th>Klient</th><th>Zostało</th><th>Wykorzystane</th><th>Ważny do</th><th>Cena</th><th>Ostatni trening</th><th>Kupiony</th></tr></thead><tbody>' + L.map(row).join('') + '</tbody></table></div>' +
+      '<p class="legend">Od ostatniego zakupu: trening zakończony w „Prowadź” z „Zdejmij z pakietu” albo korekta w karcie klienta zdejmuje 1 wejście. Pomarańczowe: zostały ' + PKG_LOW + ' lub mniej albo ważność kończy się w ' + PKG_DAYS + ' dni; czerwone: treningi poza pakietem. Nowy pakiet i korekty dodasz w karcie klienta (klik w imię).</p>'
+      : '<div class="es"><b>Żaden klient nie ma pakietu</b>Pakiet dodasz w karcie klienta → Przegląd → „+ Nowy pakiet”.</div>') + '</div></div>';
 }
 
 /* ---------- ustawienia: klucz Claude API (trAI, trUstawAI); panel widzi tylko końcówkę klucza ---------- */
@@ -898,11 +1015,11 @@ let MS = null, MT = { id: '', busy: false, ok: '', err: '' };   // poranny mail:
 const mailAt = iso => { const d = new Date(iso); return isNaN(d) ? '' : DOW[d.getDay()] + ' ' + d.getDate() + '.' + String(d.getMonth() + 1).padStart(2, '0') + ', ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
 const mailHour = () => MS ? MS.hour : 6;
 const slug = s => String(s || '').replace(/[łŁ]/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-const KL_F = ['on', 'mode', 'scale', 'swap', 'pain', 'masters', 'extra', 'oly', 'own', 'edit', 'email', 'mail', 'mailKom', 'body'];
+const KL_F = ['on', 'mode', 'scale', 'swap', 'pain', 'masters', 'extra', 'oly', 'own', 'edit', 'email', 'mail', 'mailKom', 'body', 'snatch', 'cj', 'start'];
 const klLink = 'style="display:inline-flex;align-items:center;text-decoration:none"';
 const klFlags = k => [k.mode === 'PROSTY' ? 'Prosty' : 'PRO', k.mode === 'PRO' && k.scale === 'RIR' ? 'RIR' : '', k.swap === 'DOWOLNA' ? 'zamiana dowolna' : k.swap === 'TRENER' ? 'zamiana od trenera' : '',
   k.edit ? 'zmiany w treningu' : '', k.masters ? 'masters' : '', k.pain ? 'ból zawsze' : '', k.extra ? '+' + k.extra + (k.extra === 1 ? ' seria' : ' serie') : '', k.own ? '' : 'bez własnych',
-  k.oly !== 5 ? 'sufit ' + pl(k.oly) + '%' : '', k.mail ? 'mail rano' : '', k.mailKom ? 'mail po komentarzu' : '', k.body ? 'pomiary ciała' : ''].filter(Boolean).join(' · ');
+  k.oly !== 5 ? 'sufit ' + pl(k.oly) + '%' : '', k.mail ? 'mail rano' : '', k.mailKom ? 'mail po komentarzu' : '', k.body ? 'pomiary ciała' : '', k.start ? 'start ' + dm(k.start) : ''].filter(Boolean).join(' · ');
 /** „ostatnio otwarta” (Klienci U/V, punkt 13 przeglądu v80): kiedy klient otworzył aplikację i na ilu telefonach (60 dni); 3+ = uwaga */
 function seenTxt(k){
   if (!k.seen) return '<span class="muted">aplikacja: brak danych o otwarciu</span>';
@@ -976,6 +1093,9 @@ async function renderKlienci(sub){
 const segH = (f, opts, v) => '<div class="seg" role="group">' + opts.map(([k, t]) => '<button type="button" data-seg="' + f + '" data-val="' + k + '" aria-pressed="' + (k === v) + '">' + t + '</button>').join('') + '</div>';
 const swH = (f, v, lbl) => '<button type="button" class="sw" role="switch" data-sw="' + f + '" aria-checked="' + !!v + '" aria-label="' + esc(lbl) + '"></button>';
 const numH = (f, v, mn, mx, st, u) => '<div class="num"><button type="button" data-num="' + f + '" data-d="-' + st + '"' + (v <= mn ? ' disabled' : '') + ' aria-label="mniej">−</button><output>' + pl(v) + (u || '') + '</output><button type="button" data-num="' + f + '" data-d="' + st + '"' + (v >= mx ? ' disabled' : '') + ' aria-label="więcej">+</button></div>';
+const kgInH = (f, v, lbl, dis) => '<input class="inp kin" type="text" inputmode="decimal" autocomplete="off" data-kin="' + f + '" aria-label="' + esc(lbl) + '" placeholder="–" value="' + esc(v === '' || v === undefined || v === null ? '' : pl(v)) + '"' + (dis || '') + '>';
+/** pole kg (Q–S): '' = puste, liczba = kg, inny tekst zostaje tekstem (serwer odpowie błędem) */
+const kinVal = t => { t = String(t || '').trim().replace(',', '.'); return !t ? '' : isFinite(Number(t)) ? Number(t) : t; };
 const frH = (t, d, ctl) => '<div class="fr"><div><b>' + t + '</b><small>' + d + '</small></div>' + ctl + '</div>';
 const KL_LIM = { extra: [0, 5, 1], oly: [0, 20, 2.5] };
 function klCtl(st, re){   // przełączniki formularza zmieniają stan st i rysują stronę od nowa
@@ -994,7 +1114,7 @@ function mailTestH(k, ch){   // „Wyślij próbny do mnie” (zapisany adres, b
 /** ustawienia klienta = zakładka karty klienta (#k/<id>/ustawienia/<sekcja>); sekcje formularza (aplikacja, zmiany, maile) mają wspólny szkic KLD i jeden zapis */
 const UST = [['aplikacja', 'Aplikacja klienta', 'Klient'], ['zmiany', 'Co klient może zmieniać', 'Klient'], ['maile', 'Maile', 'Klient'], ['link', 'Link i telefony', 'Klient'],
   ['asystent', 'Asystent AI', 'Zaawansowane'], ['import', 'Historia z innej aplikacji', 'Zaawansowane'], ['rodo', 'Dane klienta (RODO)', 'Zaawansowane']];
-const UST_FORM = { aplikacja: ['on', 'mode', 'scale', 'pain', 'body', 'masters', 'oly'], zmiany: ['swap', 'edit', 'own', 'extra'], maile: ['email', 'mail', 'mailKom'] };
+const UST_FORM = { aplikacja: ['on', 'mode', 'scale', 'pain', 'body', 'masters', 'oly', 'snatch', 'cj', 'start'], zmiany: ['swap', 'edit', 'own', 'extra'], maile: ['email', 'mail', 'mailKom'] };
 const ustOn = id => location.hash.startsWith(kHref(id, 'ustawienia'));
 const ustSec = () => { const s = decodeURIComponent(location.hash.split('/')[3] || ''); return UST.some(u => u[0] === s) ? s : 'aplikacja'; };
 const ustSum = (k, s) => s === 'aplikacja' ? [k.on ? '' : 'nieaktywny', k.mode === 'PROSTY' ? 'Prosty' : 'PRO', k.mode === 'PRO' ? k.scale : ''].filter(Boolean).join(' · ')
@@ -1022,7 +1142,13 @@ async function renderKlientUst(id){
     frH('Pomiary ciała', 'Postęp → Ciało: masa i obwody (talia, biodra, klatka, ramię, udo) raz w tygodniu, z wykresem. Dla klientów sylwetkowych; widzisz je w karcie klienta.', swH('body', d.body, 'Pomiary ciała')) +
     '<div class="sec">Obciążenie</div>' +
     frH('Masters', 'Ostrzejsze progi „za dużo / uwaga” w podsumowaniu.', swH('masters', d.masters, 'Masters')) +
-    frH('Sufit w bojach', 'O ile ponad plan (w % maksa) klient może pójść w rwaniu i podrzucie.', numH('oly', d.oly, 0, 20, 2.5, '%')));
+    frH('Sufit w bojach', 'O ile ponad plan (w % maksa) klient może pójść w rwaniu i podrzucie.', numH('oly', d.oly, 0, 20, 2.5, '%')) +
+    '<div class="sec">Ciężarowiec: maksy i zawody</div>' +
+    frH('Max rwanie', 'kg. Z obu maksów arkusz liczy K-value w Podsumowanie_OLY. Puste = nie liczy.', kgInH('snatch', d.snatch, 'Max rwanie w kg', dis)) +
+    frH('Max podrzut', 'kg (podrzut z dwoma ruchami, „clean &amp; jerk”).', kgInH('cj', d.cj, 'Max podrzut w kg', dis)) +
+    frH('Start', 'Dzień zawodów (przy dwudniowych pierwszy). Na 28 dni przed startem arkusz pilnuje taperu: za ciężkie R/P to czerwony sygnał i uwaga przy imporcie planu.',
+      '<input class="inp kin" id="kl-start" type="date" aria-label="Dzień startu" value="' + esc(d.start || '') + '"' + dis + '>') +
+    (d.start && d.start < PUL.today ? '<p class="hint">Start już minął: wyczyść pole albo wpisz następne zawody.</p>' : ''));
   else if (sec === 'zmiany') body = form('Co klient może zmieniać',
     frH('Zamiana ćwiczenia', 'Od trenera: tylko zamienniki z planu i bazy. Dowolna: cała baza i własna nazwa.', segH('swap', [['NIE', 'Nie'], ['TRENER', 'Od trenera'], ['DOWOLNA', 'Dowolna']], d.swap)) +
     frH('Zmiany w treningu trenera', 'Dodanie i usunięcie ćwiczenia w Twojej jednostce, też na stałe.', swH('edit', d.edit, 'Zmiany w treningu trenera')) +
@@ -1060,8 +1186,11 @@ async function renderKlientUst(id){
       el.outerHTML = agChatCard(k); agChatBind(k, achRe); };
     agChatBind(k, achRe);
   }
+  const chSave = () => { const n = KL_F.filter(f => d[f] !== k[f]).length, sv = $('#kl-save'); if (sv && !KLM.busy) sv.disabled = !n; };
   const em = $('#kl-email');
-  if (em) em.oninput = () => { d.email = em.value.trim(); const n = KL_F.filter(f => d[f] !== k[f]).length, sv = $('#kl-save'); if (sv && !KLM.busy) sv.disabled = !n; };
+  if (em) em.oninput = () => { d.email = em.value.trim(); chSave(); };
+  document.querySelectorAll('[data-kin]').forEach(i => i.oninput = () => { d[i.dataset.kin] = kinVal(i.value); chSave(); });
+  const ks = $('#kl-start'); if (ks) ks.onchange = () => { d.start = ks.value; re(); };
   const mt = $('#kl-mailtest');
   if (mt) mt.onclick = async () => {
     MT = { id, busy: true, ok: '', err: '' }; renderKlientUst(id);
@@ -1707,14 +1836,14 @@ function pkgBind(id){
   document.querySelectorAll('[data-pkgo]').forEach(a => a.onclick = e => { e.preventDefault(); const c = $('#pakiet'); if (c) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); else location.hash = kHref(id); });
   const sh = $('#pk-show');   // licznik u klienta (zakładka Trener): kolumna „widoczny” w wierszu zakupu
   if (sh) sh.onclick = async () => { const on = sh.getAttribute('aria-checked') !== 'true'; sh.disabled = true;
-    try { CK[id].pkg = await guard(api('trPakiet', id, { mode: 'widok', show: on })); re(); }
+    try { CK[id].pkg = await guard(api('trPakiet', id, { mode: 'widok', show: on })); PKA = null; re(); }
     catch (e) { sh.disabled = false; if (!e.auth) pkgErr(e); } };
   if (!PKF || PKF.id !== id) return;
   const keep = () => ['from', 'to', 'price', 'note', 'date'].forEach(f => { const el = $('#pk-' + f); if (el) PKF[f] = el.value; });
   document.querySelectorAll('[data-seg^="pk-"]').forEach(b => b.onclick = () => { keep(); PKF[b.dataset.seg.slice(3)] = b.dataset.val; if (b.dataset.seg === 'pk-n') PKF.n = +b.dataset.val; re(); });
   const x = $('#pk-x'); if (x) x.onclick = () => { PKF = null; re(); };
   const sv = $('#pk-save'); if (sv) sv.onclick = async () => { keep(); sv.disabled = true; sv.textContent = 'Zapisuję…';
-    try { const r = await guard(api('trPakiet', id, Object.assign({}, PKF, { id: undefined }))); CK[id].pkg = r; PKF = null; re(); }
+    try { const r = await guard(api('trPakiet', id, Object.assign({}, PKF, { id: undefined }))); CK[id].pkg = r; PKF = null; PKA = null; re(); }
     catch (e) { sv.disabled = false; sv.textContent = 'Zapisz'; if (!e.auth) pkgErr(e); } };
 }
 const pkgErr = e => { const c = $('#pakiet'); if (c) c.insertAdjacentHTML('beforeend', '<p class="err" role="alert">' + esc(e.message) + '</p>'); };

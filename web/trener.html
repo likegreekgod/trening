@@ -297,6 +297,19 @@
   .fr.fr1{grid-template-columns:minmax(0,1fr)}.fr .inp{width:100%;min-height:44px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);padding:10px 12px;font-size:15px}
   .mrow{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center}.mstat{font-size:13px;color:var(--muted);margin-top:8px}.mstat b{color:var(--ink);font-weight:600}
   #mail-card{margin-top:var(--gap)}#mail-card .seg button{min-width:56px}
+  .fr .inp.kin{width:120px;text-align:right;font:500 15px var(--f-mono)}.fr .inp#kl-start{width:170px;text-align:left}
+  /* Biblioteka → Szablony, Rozliczenia → Pakiety (v2 PR 5) */
+  .szlst{list-style:none;margin:0;padding:0}.szlst > li{padding:12px 0;border-top:1px solid var(--line)}.szlst > li:first-child{border-top:0}
+  .szh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}.szh b{font-size:16px}.szh small{color:var(--muted);font-size:13px}.szb{margin-left:auto;display:flex;gap:8px}
+  .szex{margin:8px 0 0;padding-left:22px;font-size:14px;color:var(--ink-2);line-height:1.6}.szex .mono{color:var(--muted);font-size:13px}
+  .szl{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:12px;max-width:420px}
+  .szrs{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+  .szr{display:grid;grid-template-columns:22px minmax(0,1fr) 80px 90px 70px auto;gap:8px;align-items:end}
+  .szn{font:600 13px var(--f-mono);color:var(--muted);padding-bottom:13px;text-align:right}
+  .szs{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--muted)}.szs .inp{padding:10px 8px}.szc .inp{text-align:center;text-transform:uppercase}
+  .szm{display:flex;gap:4px}.szm .cp{min-width:40px;justify-content:center;min-height:44px}
+  .pkt tr.off td{color:var(--muted)}.pkt small{font-size:12px}.pks{margin:0 0 8px;font-size:15px;line-height:1.5}
+  @media (max-width:760px){.szr{grid-template-columns:22px repeat(3,minmax(0,1fr));}.szr > .inp{grid-column:2 / -1}.szr .szs:first-of-type{grid-column:2}.szm{grid-column:1 / -1;justify-content:flex-end}.szb{margin-left:0}}
   .fr b{font-weight:650;font-size:15px}.fr small{display:block;color:var(--muted);font-size:13px;line-height:1.35;margin-top:2px}
   .seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
   .seg button{min-height:44px;border:0;background:none;padding:0 14px;font-weight:600;font-size:13.5px;border-left:1px solid var(--line)}
