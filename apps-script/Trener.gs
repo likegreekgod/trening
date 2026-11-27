@@ -65,6 +65,24 @@ const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
 const TR_TYG = 12;                     // obciążenie na pulpicie: 12 tygodni
 const TR_ODP_DNI = 14;                // odpowiedzi klientów na komentarze na pulpicie: ostatnie 14 dni
 
+/* ---------- panel w Claude (pośrednik MCP na Cloudflare, mcp/, 27.11.2026) ----------
+ * Pośrednik woła te same TR_FNS z biletem trenera i dopisuje src: 'mcp'. Zapisy z tej listy trafiają do zakładki API
+ * (jak akcje botów klientów), żeby było widać, co zmienił Claude. Odczyty nie są zapisywane.
+ */
+const TR_MCP_ZAPIS = ['trJednostka', 'trKomentarz', 'trPlan', 'trPropozycja', 'trPrzesun'];   // = ZAPIS w mcp/src/tools.js
+/** Czysta: zapytanie → wiersz dziennika API [klient, akcja, ok, opis] albo null (nie z Claude albo odczyt). */
+function mcpLogRow_(req, ok, why) {
+  if (!req || req.src !== 'mcp' || TR_MCP_ZAPIS.indexOf(req.fn) < 0) return null;
+  const a = Array.isArray(req.args) ? req.args : [], id = String(a[0] === undefined || a[0] === null ? '' : a[0]).split('|')[0].toLowerCase();
+  let opis = String(why || '');
+  if (!opis) { try { opis = JSON.stringify(a.slice(1)); } catch (e) { opis = ''; } }
+  return [id, 'claude: ' + req.fn, !!ok, opis.slice(0, 200)];
+}
+function mcpLog_(req, ok, why) {
+  const r = mcpLogRow_(req, ok, why);
+  if (r) agLog_(r[0], r[1], r[2], r[3]);
+}
+
 /** Ustawienia panelu z właściwości skryptu. */
 function trCfg_() {
   const p = PropertiesService.getScriptProperties();
@@ -1300,7 +1318,7 @@ function trMailProba(id) {
  * next = także kolejne tygodnie tej jednostki w tym samym bloku, niezrobione (ćwiczenie po nazwie):
  * kg i % o tę samą różnicę (gdy obie wartości są liczbami), pozostałe pola tak samo. Notatka do jednostki tylko w tym tygodniu.
  */
-const TR_PLAN_F = { sets: 'serie', reps: 'powt', kg: 'kg', pct: 'procent', rpe: 'rpe_max', note: 'uwagi', prio: 'prio', circuit: 'obwod' };
+const TR_PLAN_F = { sets: 'serie', reps: 'powt', kg: 'kg', pct: 'procent', rpe: 'rpe_max', note: 'uwagi', prio: 'prio', circuit: 'obwod', section: 'sekcja' };
 const TR_UNOTE_MAX = 500;
 
 /** Czysta funkcja: wartość z panelu → {v: do arkusza, c: do wiersza planu w panelu} albo {error}. */
@@ -1315,6 +1333,7 @@ function trPlanVal_(f, raw) {
   if (f === 'rpe') { if (!t) return { v: '', c: '' }; return x >= 5 && x <= 10 && Math.round(x * 2) === x * 2 ? { v: x, c: x } : { error: 'RPE: 5–10 co 0,5 albo puste.' }; }
   if (f === 'note') return t.length <= 300 ? { v: t, c: t } : { error: 'Uwagi: najwyżej 300 znaków.' };
   if (f === 'prio') return /^[ABK]$/i.test(t) ? { v: t.toUpperCase(), c: t.toUpperCase() } : { error: 'Priorytet: A, B albo K.' };
+  if (f === 'section') { const x = sekcja_(t); return x === null ? { error: 'Sekcja: Rozgrzewka, Główne, Korekcyjne albo puste.' } : { v: x, c: x }; }
   if (f === 'circuit') return !t || /^[A-Z]$/i.test(t) ? { v: t.toUpperCase(), c: t.toUpperCase() } : { error: 'Obwód: jedna litera A–Z albo puste.' };
   return { error: 'Nieznane pole: ' + f };
 }

@@ -1,0 +1,51 @@
+name: Wdrożenie pośrednika MCP (panel w Claude)
+# Po scaleniu zmian w mcp/ do main: testy → wrangler deploy na Cloudflare (mcp/README.md).
+# Sekrety repozytorium (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   token Cloudflare z szablonu „Edit Cloudflare Workers”
+#   CLOUDFLARE_ACCOUNT_ID  Cloudflare → Workers & Pages → Account ID (prawa kolumna)
+#   GOOGLE_CLIENT_ID       ten sam identyfikator klienta OAuth co panel trenera (TRENER_CLIENT_ID)
+#   GOOGLE_CLIENT_SECRET   „Tajny klucz klienta” tego klienta OAuth w Google Cloud
+#   TRENER_EMAIL           adres Google trenera (kilka po przecinku)
+# Bez sekretów Cloudflare wdrożenie jest pomijane (testy dalej działają).
+on:
+  push:
+    branches: [main]
+    paths: ['mcp/**', '.github/workflows/mcp.yml']
+  pull_request:
+    paths: ['mcp/**', '.github/workflows/mcp.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mcp
+  cancel-in-progress: false
+defaults:
+  run:
+    working-directory: mcp
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: bash test/e2e.sh
+      - name: Wdrożenie
+        if: github.event_name != 'pull_request'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          TRENER_EMAIL: ${{ secrets.TRENER_EMAIL }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then echo "Brak sekretów Cloudflare: pomijam wdrożenie."; exit 0; fi
+          for v in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET TRENER_EMAIL; do [ -n "${!v}" ] || { echo "Brak sekretu $v"; exit 1; }; done
+          node tools/kv-id.mjs
+          npx wrangler deploy
+          node -e 'process.stdout.write(JSON.stringify({GOOGLE_CLIENT_ID:process.env.GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET:process.env.GOOGLE_CLIENT_SECRET,TRENER_EMAIL:process.env.TRENER_EMAIL}))' | npx wrangler secret bulk

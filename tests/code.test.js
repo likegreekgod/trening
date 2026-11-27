@@ -1758,6 +1758,9 @@ test('Prowadź trening: ćwiczenie i jednostka trenera w planie (zrodlo „trene
   assert.deepEqual(plain(C.trPlanVal_('prio', 'k')), { v: 'K', c: 'K' });
   assert.equal(C.trPlanVal_('prio', 'X').error, 'Priorytet: A, B albo K.');
   assert.deepEqual(plain(C.trPlanVal_('circuit', '')), { v: '', c: '' });
+  assert.deepEqual(plain(C.trPlanVal_('section', 'Rozgrzewka')), { v: 'R', c: 'R' });
+  assert.deepEqual(plain(C.trPlanVal_('section', '')), { v: '', c: '' });
+  assert.match(C.trPlanVal_('section', 'cardio').error, /Sekcja/);
   assert.ok(C.trPlanVal_('circuit', 'AB').error);
   // nowa jednostka trenera: T<n>, zwykły tytuł, zrodlo „trener”; nie nadpisze jednostki z planu, ponowny zapis własnej tak
   const u = { week: 1, day: 'T2', date: '2026-11-22', title: ' Pośladki ', exercises: [{ name: 'Hip thrust', sets: 3, reps: 10, kg: 60 }] };
@@ -2694,6 +2697,19 @@ test('rozmiarOpis_: komórki, największe zakładki, ścieżki i czas wczytania'
   assert.ok(out[out.length - 1].includes('(Ania, 4 100 serii): 5,2 s – do obserwacji'), out.join('\n'));
   assert.ok(C.rozmiarOpis_({ tabs: [], pathKb: 0, time: { client: 'B', ms: 900, logRows: 10 } }).slice(-1)[0].includes('0,9 s – dobrze'));
   assert.equal(C.rozmiarOpis_({ tabs: [], pathKb: 0, time: null }).length, 1);
+});
+
+test('mcpLogRow_: zapisy z Claude (pośrednik MCP) do dziennika API, odczyty i panel pominięte', () => {
+  assert.equal(C.mcpLogRow_({ fn: 'trPrzesun', args: ['ania', {}] }, true, ''), null, 'panel bez src');
+  assert.equal(C.mcpLogRow_({ src: 'mcp', fn: 'trPulpit', args: [] }, true, ''), null, 'odczyt');
+  assert.deepEqual(C.mcpLogRow_({ src: 'mcp', fn: 'trPrzesun', args: ['Ania', { week: 3, day: 'B', date: '2026-11-28' }] }, true, ''),
+    ['ania', 'claude: trPrzesun', true, '[{"week":3,"day":"B","date":"2026-11-28"}]']);
+  assert.deepEqual(C.mcpLogRow_({ src: 'mcp', fn: 'trPropozycja', args: ['ania|p|1', { mode: 'tak' }] }, false, 'Nie ma już tej propozycji.'),
+    ['ania', 'claude: trPropozycja', false, 'Nie ma już tej propozycji.']);
+  // lista zapisów serwera = lista w pośredniku
+  const mcp = require('fs').readFileSync(require('path').join(__dirname, '..', 'mcp', 'src', 'tools.js'), 'utf8');
+  const z = JSON.parse(mcp.match(/export const ZAPIS = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
+  assert.deepEqual(z, C.TR_MCP_ZAPIS);
 });
 
 test('sekcja: walidacja planu (R/G/K), obwód w jednej sekcji, ostrzeżenia o pseudo-ćwiczeniach, Biblioteka bez „Rozgrzewki”', () => {
