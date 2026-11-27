@@ -1145,25 +1145,30 @@ const SUMX_HEADERS = ['klient', 'tydzien_od', 'cwiczenie', 'serie', 'tonaz_kg', 
 const STATUS_BG = { '🔴 za dużo': '#f8c9c4', '🟠 uwaga': '#fde2b8', '🟢 OK': '#cdebd3', '🔵 za lekko': '#cfe0fb', '– za mało danych': '#eeeeee' };
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu('Trening')
-    .addItem('Przegląd klientów', 'przeglad')
-    .addItem('Wczytaj plany z Drive', 'wczytajPlany')
-    .addItem('Odśwież podsumowanie', 'podsumowanie')
-    .addItem('Pobierz komentarze do filmów', 'pobierzKomentarze')
+  // 27.11.2026: grupy zamiast 16 pozycji w jednym rzędzie (Arkusz.gs, docs/zmiany/2026-11-27-porzadek-w-arkuszu.md)
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('Trening')
+    .addItem('Przelicz podsumowanie i pokaż Przegląd', 'przeglad')
+    .addItem('Wczytaj plany z Dysku teraz', 'menuPlany')
+    .addItem('Pobierz komentarze do filmów teraz', 'pobierzKomentarze')
     .addSeparator()
-    .addItem('Dodaj klienta', 'dodajKlienta')
-    .addItem('Odśwież linki klientów', 'menuLinki')
-    .addSeparator()
-    .addItem('Wczytaj bazę ćwiczeń', 'wczytajBazeCwiczen')
-    .addItem('Uzupełnij listę ćwiczeń', 'uzupelnijCwiczenia')
     .addItem('Sprawdź arkusz', 'sprawdzArkusz')
-    .addItem('Usuń plany bez klienta', 'usunPlanyBezKlienta')
-    .addItem('Uzupełnij puste bloki', 'uzupelnijBloki')
-    .addItem('Zainstaluj wyzwalacze', 'menuWyzwalacze')
     .addItem('Zrób kopię arkusza teraz', 'menuKopia')
-    .addItem('Ustaw adres alertu', 'ustawAlert')
-    .addItem('Ustaw panel trenera', 'ustawPanel')
-    .addItem('Ustaw klucz Claude API', 'ustawAI')
+    .addItem('Uporządkuj zakładki', 'uporzadkujZakladki')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('Baza ćwiczeń')
+      .addItem('Wczytaj bazę ćwiczeń', 'wczytajBazeCwiczen')
+      .addItem('Uzupełnij listę ćwiczeń', 'uzupelnijCwiczenia'))
+    .addSubMenu(ui.createMenu('Ustawienia (raz)')
+      .addItem('Zainstaluj albo napraw wyzwalacze', 'menuWyzwalacze')
+      .addItem('Ustaw panel trenera', 'ustawPanel')
+      .addItem('Ustaw adres alertu', 'ustawAlert')
+      .addItem('Ustaw klucz Claude API', 'ustawAI'))
+    .addSubMenu(ui.createMenu('Naprawy (rzadko)')
+      .addItem('Dodaj klienta', 'dodajKlienta')
+      .addItem('Odśwież linki klientów', 'menuLinki')
+      .addItem('Uzupełnij puste bloki', 'uzupelnijBloki')
+      .addItem('Usuń plany bez klienta', 'usunPlanyBezKlienta'))
     .addToUi();
 }
 
@@ -1191,7 +1196,8 @@ function menuLinki() {
 
 function menuWyzwalacze() {
   instalujWyzwalacze();
-  alert_('Wyzwalacze', 'Zainstalowano: podsumowanie i przegląd codziennie ok. 5:00, plany z Drive co 15 min, poranny mail do klientów ok. ' + mailGodz_() + ':00 (tylko klienci z włączonym mailem w panelu → Klienci), kopia arkusza w niedzielę ok. 3:00 (folder „' + ROOT_FOLDER_NAME + '/' + KOPIE_FOLDER + '”, ' + KOPIE_ILE + ' ostatnich).');
+  alert_('Wyzwalacze', 'Zadania, które skrypt robi sam:\n' + wyzwalaczeOpis_(ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()), mailGodz_()).join('\n') +
+    '\n\nMaile idą tylko do klientów z włączoną opcją w panelu → Klienci → Ustawienia.');
 }
 
 function menuKopia() {
@@ -1208,17 +1214,17 @@ function diagnose_(d) {
   const out = [], lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
   const add = (lvl, txt) => out.push([lvl, txt]);
   if (!String(d.pwaUrl || '').trim()) add('błąd', 'Brak właściwości skryptu PWA_URL: linki klientów nie prowadzą do aplikacji.');
-  ['podsumowanie', 'wczytajPlany'].forEach(fn => { if ((d.triggers || []).indexOf(fn) < 0) add('błąd', 'Brak wyzwalacza „' + fn + '”: menu Trening → Zainstaluj wyzwalacze.'); });
+  ['podsumowanie', 'wczytajPlany'].forEach(fn => { if ((d.triggers || []).indexOf(fn) < 0) add('błąd', 'Brak wyzwalacza „' + fn + '”: Trening → Ustawienia (raz) → Zainstaluj albo napraw wyzwalacze.'); });
   const active = (d.klienci || []).filter(k => !blank_(k.klient_id) && String(k.aktywny).toUpperCase() !== 'NIE');
   const ids = {};
   (d.klienci || []).forEach(k => { if (!blank_(k.klient_id)) ids[lc(k.klient_id)] = (ids[lc(k.klient_id)] || 0) + 1; });
   Object.keys(ids).forEach(id => { if (ids[id] > 1) add('błąd', 'Powtórzone klient_id „' + id + '” w zakładce Klienci (' + ids[id] + ' wiersze).'); });
   const mailOn = active.filter(k => String(k.mail_rano || '').trim().toUpperCase() === 'TAK');
-  if (d.triggers && d.triggers.indexOf('kopiaArkusza') < 0) add('uwaga', 'Brak cotygodniowej kopii arkusza: menu Trening → Zainstaluj wyzwalacze.');
-  if (mailOn.length && d.triggers && (d.triggers || []).indexOf('porannyMail') < 0) add('błąd', 'Brak wyzwalacza „porannyMail”: poranny mail nie wyjdzie (menu Trening → Zainstaluj wyzwalacze).');
+  if (d.triggers && d.triggers.indexOf('kopiaArkusza') < 0) add('uwaga', 'Brak cotygodniowej kopii arkusza: Trening → Ustawienia (raz) → Zainstaluj albo napraw wyzwalacze.');
+  if (mailOn.length && d.triggers && (d.triggers || []).indexOf('porannyMail') < 0) add('błąd', 'Brak wyzwalacza „porannyMail”: poranny mail nie wyjdzie (Trening → Ustawienia (raz) → Zainstaluj albo napraw wyzwalacze).');
   mailOn.forEach(k => { if (!mailOk_(k.email)) add('uwaga', lc(k.klient_id) + ': poranny mail włączony, ale brak poprawnego adresu w kolumnie email.'); });
   const komOn = active.filter(k => String(k.mail_kom || '').trim().toUpperCase() === 'TAK');
-  if (komOn.length && d.triggers && d.triggers.indexOf('wieczornyMail') < 0) add('błąd', 'Brak wyzwalacza „wieczornyMail”: mail po komentarzu nie wyjdzie (menu Trening → Zainstaluj wyzwalacze).');
+  if (komOn.length && d.triggers && d.triggers.indexOf('wieczornyMail') < 0) add('błąd', 'Brak wyzwalacza „wieczornyMail”: mail po komentarzu nie wyjdzie (Trening → Ustawienia (raz) → Zainstaluj albo napraw wyzwalacze).');
   komOn.forEach(k => { if (!mailOk_(k.email)) add('uwaga', lc(k.klient_id) + ': mail po komentarzu włączony, ale brak poprawnego adresu w kolumnie email.'); });
   active.forEach(k => {
     const id = lc(k.klient_id);
@@ -1253,7 +1259,7 @@ function diagnose_(d) {
       '. Skrypt nie zapisuje tam formuł: obejrzyj te komórki i usuń formuły, których nie wpisałeś sam.');
   });
   if (d.bledy > 0) add('uwaga', 'Pliki w _plany/bledy: ' + d.bledy + ' (opis błędu w zakładce Import).');
-  if (d.czeka > 0) add('info', 'Pliki czekające w _plany: ' + d.czeka + ' (menu Trening → Wczytaj plany z Drive).');
+  if (d.czeka > 0) add('info', 'Pliki czekające w _plany: ' + d.czeka + ' (Trening → Wczytaj plany z Dysku teraz).');
   return out;
 }
 
@@ -1288,12 +1294,15 @@ function sprawdzArkusz() {
   const res = diagnose_({ klienci: tableOf_('Klienci'), plan: tableOf_('Plan'), today: today_(), bledy: bledy, czeka: czeka, formuly: formuly,
     pwaUrl: PropertiesService.getScriptProperties().getProperty('PWA_URL'), triggers: ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()) });
   const mark = { 'błąd': '✗', 'uwaga': '!', 'info': '·' };
-  alert_('Sprawdzenie arkusza', res.length ? res.map(r => mark[r[0]] + ' ' + r[1]).join('\n') : '✓ Wszystko w porządku.');
+  let size = []; try { size = rozmiarOpis_(rozmiarArkusza_()); } catch (e) { /* pomiar się nie udał: reszta bez niego */ }
+  alert_('Sprawdzenie arkusza', (res.length ? res.map(r => mark[r[0]] + ' ' + r[1]).join('\n') : '✓ Wszystko w porządku.') +
+    (size.length ? '\n\nROZMIAR\n' + size.join('\n') : '') +
+    '\n\nWYZWALACZE\n' + wyzwalaczeOpis_(ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()), mailGodz_()).join('\n'));
 }
 
 function instalujPodsumowanie() { instalujWyzwalacze(); }
 
-/** Uruchom raz: podsumowanie codziennie ok. 5:00, wczytywanie planów z Drive co 15 min, poranny mail do klientów (Mail.gs). */
+/** Instaluje od nowa wszystkie wyzwalacze z listy WYZWALACZE (Arkusz.gs); menu Trening → Ustawienia (raz) → Zainstaluj albo napraw wyzwalacze. */
 function instalujWyzwalacze() {
   ScriptApp.getProjectTriggers().filter(t => ['podsumowanie', 'wczytajPlany'].indexOf(t.getHandlerFunction()) >= 0)
     .forEach(t => ScriptApp.deleteTrigger(t));
@@ -1303,7 +1312,8 @@ function instalujWyzwalacze() {
   komWyzwalacz_();
   kopiaWyzwalacz_();
   linkiWyzwalacz_();
-  Logger.log('OK: podsumowanie codziennie ~5:00, plany z „' + ROOT_FOLDER_NAME + '/_plany” co 15 min, poranny mail ~' + mailGodz_() + ':00, mail po komentarzu ~' + MAIL_KOM_GODZ + ':00, kopia arkusza w niedzielę ~3:00, linki do filmów w poniedziałek ~4:00.');
+  podgladWyzwalacz_();
+  Logger.log('OK:\n' + wyzwalaczeOpis_(ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction()), mailGodz_()).join('\n'));
 }
 
 /** e: zdarzenie wyzwalacza czasowego (wtedy idzie też alert mailowy); z menu bez argumentu. */
@@ -2711,14 +2721,16 @@ const PLAN_REQUIRED = ['klient', 'tydzien', 'jednostka', 'nr', 'cwiczenie', 'ser
 function wczytajPlany(e) {
   if (e && e.triggerUid) komentarzeAuto_();
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(1000)) return;
+  if (!lock.tryLock(1000)) return null;                                // wczytywanie już trwa
+  const out = [];                                                      // wynik dla menu (menuPlany): [{name, ok, status}]
   try {
     const dir = child_(rootFolder_(), '_plany'), it = dir.getFiles();
     while (it.hasNext()) {
       const f = it.next();
-      if (/\.json$/i.test(f.getName())) importPlanFile_(f, dir);
+      if (/\.json$/i.test(f.getName())) { const name = f.getName(), r = importPlanFile_(f, dir) || {}; out.push({ name: name, ok: !!r.ok, status: String(r.status || '') }); }
     }
   } finally { lock.releaseLock(); }
+  return out;
 }
 
 /**

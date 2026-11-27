@@ -2457,3 +2457,49 @@ test('textCols_, frac_: „zrobione/plan” zostaje tekstem (Arkusze robiły z �
   assert.equal(C.frac_('1/4'), '1/4');
   assert.equal(C.frac_(null), '');
 });
+
+test('wyzwalaczeOpis_: siedem zadań po ludzku, brakujące ✗, obce i powtórzone widać', () => {
+  const all = ['wczytajPlany', 'odswiezPodglad', 'podsumowanie', 'porannyMail', 'wieczornyMail', 'kopiaArkusza', 'sprawdzLinki'];
+  const ok = Array.from(C.wyzwalaczeOpis_(all, 6));
+  assert.equal(ok.length, 7);
+  assert.ok(ok.every(l => l.startsWith('✓ ')), ok.join('\n'));
+  assert.ok(ok[1].includes('co 30 min'), ok[1]);                                  // podgląd dla Claude co 30 min (27.11)
+  assert.ok(ok[3].includes('ok. 6:00') && ok[4].includes('ok. 20:00') && ok[5].includes('8 ostatnich'), ok.join('\n'));
+  const bad = Array.from(C.wyzwalaczeOpis_(['podsumowanie', 'podsumowanie', 'stary'], 7));
+  assert.ok(bad[0].startsWith('✗ co 15 min'), bad[0]);
+  assert.ok(bad[2].startsWith('✓ codziennie ok. 5:00') && bad[2].endsWith('(2×)'), bad[2]);
+  assert.equal(bad[bad.length - 1], '? stary: spoza listy');
+  // każdy wyzwalacz z listy ma funkcję w skrypcie, a każda instalacja w kodzie jest na liście
+  const fs = require('fs'), path = require('path'), dir = path.join(__dirname, '..', 'apps-script');
+  const src = fs.readdirSync(dir).filter(f => /\.gs$/.test(f)).map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+  C.WYZWALACZE.forEach(w => assert.equal(typeof C[w.fn], 'function', w.fn));
+  const made = [...src.matchAll(/newTrigger\('(\w+)'\)/g)].map(m => m[1]);
+  assert.deepEqual([...new Set(made)].sort(), all.slice().sort());
+  assert.ok(/everyMinutes\(PODGLAD_CO\)/.test(src) && !/odswiezPodglad'\)\.timeBased\(\)\.everyMinutes\(10\)/.test(src));
+});
+
+test('zakladkiPlan_: grupy w kolejności, obce na końcu bez zmian, choć jedna widoczna', () => {
+  const p = Array.from(C.zakladkiPlan_([{ name: 'Moje' , hidden: true }, { name: 'Log' }, { name: 'AI' }, { name: 'Klienci' }, { name: 'Przegląd' }, { name: 'Plan' }, { name: 'Notatki' }]));
+  assert.deepEqual(p.map(x => x.name), ['Klienci', 'Plan', 'Log', 'Przegląd', 'AI', 'Moje', 'Notatki']);
+  assert.deepEqual(p.map(x => x.hidden), [false, false, false, false, true, true, false]);
+  assert.equal(p[0].color, '#4a86e8');
+  assert.equal(p[2].color, '#6aa84f');
+  assert.equal(p[5].color, null);                                                 // zakładka spoza listy: kolor bez zmian
+  assert.equal(C.zakladkiPlan_([{ name: 'AI' }, { name: 'API' }])[0].hidden, false);
+  assert.deepEqual(Array.from(C.zakladkiPlan_([])), []);
+  // żadna zakładka nie jest w dwóch grupach
+  const all = C.ZAKLADKI.flatMap(g => g.tabs);
+  assert.equal(new Set(all).size, all.length);
+});
+
+test('rozmiarOpis_: komórki, największe zakładki, ścieżki i czas wczytania', () => {
+  const out = Array.from(C.rozmiarOpis_({ tabs: [{ name: 'Log', rows: 12000, cols: 26 }, { name: 'Plan', rows: 900, cols: 25 }, { name: 'Pusta', rows: 0, cols: 0 }],
+    pathKb: 2048.4, time: { client: 'Ania', ms: 5200, logRows: 4100 } }));
+  assert.equal(out[0], 'Komórki z danymi: 334 500 (limit Google: 10 000 000).');
+  assert.equal(out[1], '· Log: 12 000 wierszy × 26 kolumn');
+  assert.equal(out[2], '· Plan: 900 wierszy × 25 kolumn');
+  assert.ok(out.includes('· Ścieżki sztangi w Logu: 2 048 KB'), out.join('\n'));
+  assert.ok(out[out.length - 1].includes('(Ania, 4 100 serii): 5,2 s – do obserwacji'), out.join('\n'));
+  assert.ok(C.rozmiarOpis_({ tabs: [], pathKb: 0, time: { client: 'B', ms: 900, logRows: 10 } }).slice(-1)[0].includes('0,9 s – dobrze'));
+  assert.equal(C.rozmiarOpis_({ tabs: [], pathKb: 0, time: null }).length, 1);
+});

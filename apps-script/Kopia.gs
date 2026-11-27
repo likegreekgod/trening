@@ -1,7 +1,7 @@
 /* ---------- kopia arkusza co tydzień, limit filmu, miejsce na Dysku (punkty 10 i 8 przeglądu v80, 23.11.2026) ----------
  * Kopia: wyzwalacz kopiaArkusza w niedzielę ok. 3:00 (instalujWyzwalacze), plik „Trening – kopia RRRR-MM-DD” w „Trening – Klienci/_kopie”,
  * zostaje KOPIE_ILE najnowszych (starsze do kosza Dysku, skąd znikają same po 30 dniach). Google kopiuje arkusz razem ze skryptem, ale bez
- * wyzwalaczy i bez wdrożenia, więc kopia nic sama nie robi (w kopii nie uruchamiaj „Zainstaluj wyzwalacze”). Powrót do danych = przeniesienie wierszy z kopii. W kopiach są dane klientów (RODO: znikają razem z kopią po 8 tygodniach).
+ * wyzwalaczy i bez wdrożenia, więc kopia nic sama nie robi (w kopii nie uruchamiaj „Zainstaluj albo napraw wyzwalacze”). Powrót do danych = przeniesienie wierszy z kopii. W kopiach są dane klientów (RODO: znikają razem z kopią po 8 tygodniach).
  * Limit filmu: startUpload odrzuca plik > FILM_MAX albo nie-film (filmOk_); telefon sprawdza to samo przed kolejką.
  * Dysk: trDysk (panel → Ustawienia), trPulpit dokłada `dysk`, poniżej DYSK_MALO wolnego czerwony wpis w „Wymaga uwagi”.
  */
