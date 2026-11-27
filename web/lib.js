@@ -1630,6 +1630,10 @@
       cwiczenia: ['array', 'Lista {nazwa, serie: [{kg, powt, swiatlo}]}'] }, ['cwiczenia']],
     ['zaproponuj', 'Propozycja zmiany planu do akceptacji trenera. Do decyzji plan zostaje bez zmian.', { typ: ['string', 'zamiana / ciezar / serie / trening'], tydzien: ['integer'], jednostka: ['string'], nr: ['integer'],
       na: ['string', 'Zamiennik (typ zamiana)'], kg: ['number', 'Nowy ciężar (typ ciezar)'], serie: ['integer', 'Nowa liczba serii (typ serie)'], data: ['string', 'Dzień dodatkowego treningu (typ trening)'], opis: ['string'], powod: ['string', 'Powód od klienta'] }, ['typ', 'powod']],
+    ['skroc', 'Skróć niezrobiony trening sam (tylko gdy w zasadach sam_skraca_i_zamienia = true): mniej serii albo pominięcie ćwiczeń B, od ostatniego B; A i K zostają. Trener widzi zmianę i może ją cofnąć.', { tydzien: ['integer'], jednostka: ['string'],
+      zmiany: ['array', 'Lista {nr, serie}: nowa liczba serii, 0 = pomiń ćwiczenie'], powod: ['string', 'Powód od klienta'] }, ['tydzien', 'jednostka', 'zmiany', 'powod']],
+    ['zamien', 'Zamień ćwiczenie w niezrobionym treningu sam (tylko gdy sam_skraca_i_zamienia = true), tylko w tym treningu, bez bojów, zamiennik z bazy. Trener może cofnąć.', { tydzien: ['integer'], jednostka: ['string'], nr: ['integer'],
+      na: ['string', 'Zamiennik z bazy'], powod: ['string', 'Powód od klienta'] }, ['tydzien', 'jednostka', 'nr', 'na', 'powod']],
     ['zglos', 'Zgłoszenie do trenera (ból, czerwona flaga, pytanie o plan, dietę, cel…).', { temat: ['string', 'czerwona_flaga / bol / plan / ciezar / status / fail / pominiete / dieta / cel / zawody / inne'], opis: ['string'],
       miejsce: ['string', 'Przy bólu: miejsce'], strona: ['string', 'L / P'], ocena: ['integer', 'Przy bólu: 0–10'] }, ['temat', 'opis']]
   ];
@@ -1652,7 +1656,7 @@
     'Dostęp: POST ' + String(url || '') + '?api=KLUCZ z treścią {"fn": "<akcja>", "args": [{…}]} (albo /exec/<akcja>?api=KLUCZ). Odpowiedź: {ok, result} albo {ok: false, error}.',
     'Na początku każdej rozmowy wywołaj „zasady” i trzymaj się ich. Plan sprawdzaj akcją „plan”, ciężar na dziś akcją „ciezarNaDzis” (nie licz go sam).',
     'Akcje: ' + L.AG_READ.concat(L.AG_WRITE).map(a => a[0]).join(', ') + '.',
-    'Planu nie zmieniasz: zmiany idą przez „zaproponuj” i czekają na trenera. Ból, czerwone flagi i sprawy, o których decyduje trener, zgłaszasz akcją „zglos”.',
+    'Planu nie zmieniasz: zmiany idą przez „zaproponuj” i czekają na trenera. Wyjątek: gdy w „zasady” jest sam_skraca_i_zamienia = true, sam skracasz trening („skroc”, ćwiczenia B od końca) i zamieniasz ćwiczenie w tym treningu („zamien”). Ból, czerwone flagi i sprawy, o których decyduje trener, zgłaszasz akcją „zglos”.',
     'Każdą serię oceniaj światłem (zielone / żółte / czerwone / nieudana). Bez oceny zapytaj klienta, nie zgaduj.',
     'Gdy serwer odmówi, powiedz klientowi powód (numer reguły) i nie próbuj obejść go inną akcją.',
     'Nie diagnozujesz i nie leczysz. Przy czerwonej fladze: przerwij trening, zgłoś („zglos”, temat czerwona_flaga) i odeślij do specjalisty.'

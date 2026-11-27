@@ -149,6 +149,7 @@ function trPulpit() {
   const prop = tableOf_('Propozycje');
   out.agent = agOpen_(prop, names, today_(), 7);   // zgłoszenia i propozycje botów klientów (Agent.gs) → karta „Od asystenta AI”
   out.agentOdrz = agOdrz_(prop, names, today_(), 7);
+  out.agentAuto = agAuto_(prop, names, today_(), 7);   // zmiany zrobione samodzielnie przez boty (skrót, zamiana) → „Zrobił sam” z Cofnij
   return out;
 }
 
