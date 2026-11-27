@@ -130,7 +130,9 @@ function doPost(e) {
       out = { ok: true, result: agentDo_(fn, apiKey, Array.isArray(req.args) ? req.args[0] : req) };
     } else if (Object.prototype.hasOwnProperty.call(TR_FNS, req.fn)) {          // panel trenera: bilet Google zamiast klucza klienta
       if (req.fn !== 'trConfig') trAuth_(req.token);
-      out = { ok: true, result: TR_FNS[req.fn].apply(null, req.args || []) };
+      try { out = { ok: true, result: TR_FNS[req.fn].apply(null, req.args || []) }; }
+      catch (err) { mcpLog_(req, false, err && err.message); throw err; }
+      mcpLog_(req, true, '');                                           // zapis z Claude (pośrednik MCP, mcp/) → zakładka API
     } else if (req.as !== undefined && req.as !== null) {               // trener prowadzi trening klienta (bilet + klient_id)
       const f = Object.prototype.hasOwnProperty.call(LIVE_FNS, req.fn) ? LIVE_FNS[req.fn] : null;
       if (!f) throw new Error('Nieznana funkcja: ' + req.fn);

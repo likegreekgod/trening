@@ -65,6 +65,24 @@ const TR_FILM_DNI = 14;                // filmy w panelu: ostatnie 14 dni
 const TR_TYG = 12;                     // obciążenie na pulpicie: 12 tygodni
 const TR_ODP_DNI = 14;                // odpowiedzi klientów na komentarze na pulpicie: ostatnie 14 dni
 
+/* ---------- panel w Claude (pośrednik MCP na Cloudflare, mcp/, 27.11.2026) ----------
+ * Pośrednik woła te same TR_FNS z biletem trenera i dopisuje src: 'mcp'. Zapisy z tej listy trafiają do zakładki API
+ * (jak akcje botów klientów), żeby było widać, co zmienił Claude. Odczyty nie są zapisywane.
+ */
+const TR_MCP_ZAPIS = ['trJednostka', 'trKomentarz', 'trPlan', 'trPropozycja', 'trPrzesun'];   // = ZAPIS w mcp/src/tools.js
+/** Czysta: zapytanie → wiersz dziennika API [klient, akcja, ok, opis] albo null (nie z Claude albo odczyt). */
+function mcpLogRow_(req, ok, why) {
+  if (!req || req.src !== 'mcp' || TR_MCP_ZAPIS.indexOf(req.fn) < 0) return null;
+  const a = Array.isArray(req.args) ? req.args : [], id = String(a[0] === undefined || a[0] === null ? '' : a[0]).split('|')[0].toLowerCase();
+  let opis = String(why || '');
+  if (!opis) { try { opis = JSON.stringify(a.slice(1)); } catch (e) { opis = ''; } }
+  return [id, 'claude: ' + req.fn, !!ok, opis.slice(0, 200)];
+}
+function mcpLog_(req, ok, why) {
+  const r = mcpLogRow_(req, ok, why);
+  if (r) agLog_(r[0], r[1], r[2], r[3]);
+}
+
 /** Ustawienia panelu z właściwości skryptu. */
 function trCfg_() {
   const p = PropertiesService.getScriptProperties();

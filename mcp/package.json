@@ -1,0 +1,16 @@
+{
+  "name": "trening-mcp",
+  "private": true,
+  "description": "Pośrednik MCP: panel trenera w Claude (Cloudflare Worker → Apps Script /exec)",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/tools.test.js",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.4.0"
+  },
+  "devDependencies": {
+    "wrangler": "4.168.0"
+  }
+}

@@ -2695,3 +2695,16 @@ test('rozmiarOpis_: komórki, największe zakładki, ścieżki i czas wczytania'
   assert.ok(C.rozmiarOpis_({ tabs: [], pathKb: 0, time: { client: 'B', ms: 900, logRows: 10 } }).slice(-1)[0].includes('0,9 s – dobrze'));
   assert.equal(C.rozmiarOpis_({ tabs: [], pathKb: 0, time: null }).length, 1);
 });
+
+test('mcpLogRow_: zapisy z Claude (pośrednik MCP) do dziennika API, odczyty i panel pominięte', () => {
+  assert.equal(C.mcpLogRow_({ fn: 'trPrzesun', args: ['ania', {}] }, true, ''), null, 'panel bez src');
+  assert.equal(C.mcpLogRow_({ src: 'mcp', fn: 'trPulpit', args: [] }, true, ''), null, 'odczyt');
+  assert.deepEqual(C.mcpLogRow_({ src: 'mcp', fn: 'trPrzesun', args: ['Ania', { week: 3, day: 'B', date: '2026-11-28' }] }, true, ''),
+    ['ania', 'claude: trPrzesun', true, '[{"week":3,"day":"B","date":"2026-11-28"}]']);
+  assert.deepEqual(C.mcpLogRow_({ src: 'mcp', fn: 'trPropozycja', args: ['ania|p|1', { mode: 'tak' }] }, false, 'Nie ma już tej propozycji.'),
+    ['ania', 'claude: trPropozycja', false, 'Nie ma już tej propozycji.']);
+  // lista zapisów serwera = lista w pośredniku
+  const mcp = require('fs').readFileSync(require('path').join(__dirname, '..', 'mcp', 'src', 'tools.js'), 'utf8');
+  const z = JSON.parse(mcp.match(/export const ZAPIS = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
+  assert.deepEqual(z, C.TR_MCP_ZAPIS);
+});
