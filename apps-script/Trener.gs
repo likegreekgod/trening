@@ -42,6 +42,7 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trKomentarz,
   trKomentarzFilm,
   trKopia,
+  trKopiuj,
   trMail,
   trMailProba,
   trMailUstaw,
@@ -1686,4 +1687,65 @@ function trPrzesun(id, m) {
 /** Nazwy ćwiczeń z bazy do wyszukiwarki w oknie jednostki: [[nazwa, film, „partie”, „aliasy”]] (jak getExNames). */
 function trCwNazwy() {
   return exNames_(cwRowsCached_());
+}
+
+/* ---------- kopiowanie jednostek w planie bloku (panel v2 PR 4, 27.11.2026) ----------
+ * Siatka bloku w karcie klienta: jednostka z Shift na inny dzień = kopia, „+ Tydzień” = kopia ostatniego tygodnia bloku,
+ * „Kopiuj tydzień…” = wszystkie jednostki trenera z tygodnia do innego tygodnia. Kopia: te same kolumny Planu (bez wierszy usuniętych
+ * i dodanych przez klienta, bez własnych treningów), nowy tydzień i data; kod dnia zajęty w docelowym tygodniu → następny wolny numer
+ * z tą samą literą (T1 → T4). Log i Sesje bez zmian.
+ */
+const TR_COPY_MAX = 14;
+
+/**
+ * Czysta funkcja: e = {units: [{week, day}], toWeek, date? (jedna jednostka), shift? (dni; domyślnie 7 × różnica tygodni)}
+ * → {error} albo {rows: [wiersze Planu], made: [{week, day, from, date}]}.
+ */
+function trCopy_(plan, clientId, e) {
+  e = e || {};
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase(), norm = v => v === undefined || v === null || v instanceof Date ? '' : String(v).trim();
+  const mine = (plan || []).filter(r => lc(r.klient) === clientId), toWeek = Number(e.toWeek);
+  const units = [].concat(e.units || []);
+  if (!units.length) return { error: 'Wybierz jednostkę do skopiowania.' };
+  if (units.length > TR_COPY_MAX) return { error: 'Najwyżej ' + TR_COPY_MAX + ' jednostek naraz.' };
+  if (!(Number.isInteger(toWeek) && toWeek >= 1 && toWeek <= 200)) return { error: 'Zły tydzień docelowy.' };
+  const date1 = e.date === undefined || e.date === null || e.date === '' ? '' : String(e.date).trim();
+  if (date1 && (units.length > 1 || !/^\d{4}-\d{2}-\d{2}$/.test(date1))) return { error: 'Zła data.' };
+  const shift = e.shift === undefined || e.shift === null || e.shift === '' ? null : Number(e.shift);
+  if (shift !== null && !(Number.isInteger(shift) && Math.abs(shift) <= 400)) return { error: 'Złe przesunięcie dni.' };
+  const taken = {}; mine.filter(r => Number(r.tydzien) === toWeek).forEach(r => { taken[String(r.jednostka).trim()] = 1; });
+  const rows = [], made = [];
+  for (const u of units) {
+    const week = Number(u && u.week), day = String(u && u.day !== undefined && u.day !== null ? u.day : '').trim();
+    const src = mine.filter(r => Number(r.tydzien) === week && String(r.jednostka).trim() === day && !removed_(r) && !added_(r)).sort((a, b) => Number(a.nr) - Number(b.nr));
+    if (!src.length) return { error: 'Nie ma jednostki ' + day + ' w tyg. ' + week + '.' };
+    if (src.some(own_)) return { error: 'Własnego treningu klienta się nie kopiuje.' };
+    let to = day;
+    if (taken[to]) { const m = /^(\D*)(\d*)$/.exec(day) || ['', day, ''], pre = m[1] || 'T';
+      let n = 1; Object.keys(taken).forEach(k => { const x = new RegExp('^' + pre.replace(/[^\w]/g, '\\$&') + '(\\d+)$').exec(k); if (x) n = Math.max(n, Number(x[1]) + 1); });
+      to = pre + n; }
+    taken[to] = 1;
+    const d0 = norm(src[0].data instanceof Date ? fmtDate_(src[0].data) : src[0].data);
+    const date = date1 || (/^\d{4}-\d{2}-\d{2}$/.test(d0) ? new Date(Date.parse(d0 + 'T12:00:00Z') + (shift !== null ? shift : 7 * (toWeek - week)) * 864e5).toISOString().slice(0, 10) : '');
+    src.forEach(s => { const r = {}; PLAN_HEADERS.forEach(k => { r[k] = s[k] === undefined || s[k] === null || s[k] instanceof Date ? (k === 'data' ? d0 : '') : s[k]; });
+      Object.assign(r, { klient: clientId, tydzien: toWeek, jednostka: to, data: date }); rows.push(r); });
+    made.push({ week: toWeek, day: to, from: week + '|' + day, date });
+  }
+  return { rows, made };
+}
+
+/** Kopia jednostek trenera (trCopy_) na koniec Planu. */
+function trKopiuj(id, e) {
+  id = String(id || '').trim().toLowerCase();
+  trRow_(id);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const res = trCopy_(tableOf_('Plan'), id, e);
+    if (res.error) throw new Error(res.error);
+    const sh = SpreadsheetApp.getActive().getSheetByName('Plan'), h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
+    PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(plain_(k)); h.push(k); } });
+    planAppend_(sh, h, res.rows);
+    return { made: res.made, n: res.rows.length };
+  } finally { lock.releaseLock(); }
 }
