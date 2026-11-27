@@ -25,10 +25,12 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trConfig,
   trCwFilm,
   trCwiczenia,
+  trCwNazwy,
   trCwSprawdz,
   trDysk,
   trFilm,
   trImport,
+  trJednostka,
   trKalendarz,
   trKlienci,
   trKlient,
@@ -49,6 +51,7 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trPropozycja,
   trProwadzone,
   trPrzelicz,
+  trPrzesun,
   trPulpit,
   trSzkic,
   trTytul,
@@ -1460,4 +1463,207 @@ function trNastepna(id, u) {
     trPlanSet_(e.set);
     return { mode: 'edit', week: res.week, n: e.n };
   } finally { lock.releaseLock(); }
+}
+
+/* ---------- okno jednostki w kalendarzu: edycja całej jednostki i przesunięcie na inny dzień (panel v2 PR 3, 27.11.2026) ----------
+ * trJednostka: panel wysyła całą listę ćwiczeń w nowej kolejności (items). Ćwiczenie z order = wiersz Planu o tym nr, bez order = nowe
+ * (Plan.zrodlo = trener), brak na liście = usunięte (wiersz znika z Planu). Numery nr rozdane od nowa 1…n; ćwiczenie z wpisem w Logu
+ * (rozgrzewka, seria K w niezrobionej jednostce) zostaje na swoim numerze i nie da się go usunąć. Zrobiona jednostka zablokowana.
+ * next = także kolejne tygodnie tej jednostki w bloku, niezrobione (po nazwie ćwiczenia, jak trPlanEdit_): pola (kg i % o tę samą różnicę),
+ * nowa nazwa, usunięte i dodane ćwiczenia; kolejność tylko tam, gdzie po zmianach są te same ćwiczenia. Obwód i data tylko w tej jednostce.
+ * trPrzesun: nowa data niezrobionej jednostki (przeciągnięcie w kalendarzu albo „zmień dzień” w oknie).
+ */
+const TR_UNIT_MAX = 30;
+const TR_UNIT_F = ['prio', 'sets', 'reps', 'kg', 'pct', 'rpe', 'note'];
+
+/**
+ * Czysta funkcja: e = {week, day, items: [{order?, name, prio, sets, reps, kg, pct, rpe, note, circuit}], unote?, date?, next?};
+ * done = unitsDone_; logged = {'tydzień|nr': 1} ćwiczeń z wpisem w Logu (ta jednostka i kolejne tygodnie)
+ * → {error} albo {set: [[indeks wiersza Planu, {kolumna: wartość}]], add: [wiersze Planu], del: [indeksy], n, weeks}.
+ */
+function trUnitEdit_(plan, done, logged, clientId, e) {
+  e = e || {}; done = done || {}; logged = logged || {};
+  const week = Number(e.week), day = String(e.day === undefined || e.day === null ? '' : e.day).trim();
+  const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  const norm = y => y === undefined || y === null || y instanceof Date ? '' : String(y).trim();
+  const mine = []; (plan || []).forEach((r, i) => { if (lc(r.klient) === clientId) mine.push({ r, i }); });
+  const unitOf = w => mine.filter(x => Number(x.r.tydzien) === w && String(x.r.jednostka).trim() === day && !removed_(x.r)).sort((a, b) => Number(a.r.nr) - Number(b.r.nr));
+  const cur = unitOf(week);
+  if (!(week >= 1) || !day || !cur.length) return { error: 'Nie ma takiej jednostki w planie.' };
+  if (cur.some(x => own_(x.r))) return { error: 'To własny trening klienta – nie zmienia się go w panelu.' };
+  if (done[doneKey_(clientId, week, day)]) return { error: 'Ta jednostka jest już zrobiona (albo klient zaczął ją zapisywać) – zmiany tylko w niezrobionych.' };
+  const items = [].concat(e.items || []);
+  if (!items.length) return { error: 'Jednostka musi mieć co najmniej jedno ćwiczenie.' };
+  if (items.length > TR_UNIT_MAX) return { error: 'Najwyżej ' + TR_UNIT_MAX + ' ćwiczeń w jednostce.' };
+  // walidacja pozycji: nazwa, pola jak w trPlanVal_, obwód = litera sąsiadów
+  const its = [];
+  for (const it of items) {
+    const name = String(it && it.name !== undefined && it.name !== null ? it.name : '').trim().replace(/\s+/g, ' ');
+    if (!name) return { error: 'Każde ćwiczenie musi mieć nazwę.' };
+    if (name.length > UNIT_NAME_MAX) return { error: 'Nazwa: najwyżej ' + UNIT_NAME_MAX + ' znaków.' };
+    const has = it.order !== undefined && it.order !== null && it.order !== '';
+    const x = has ? cur.find(y => Number(y.r.nr) === Number(it.order)) : null;
+    if (has && !x) return { error: 'Lista ćwiczeń się zmieniła – odśwież i spróbuj jeszcze raz.' };
+    if (x && its.some(o => o.x === x)) return { error: 'Ćwiczenie jest dwa razy na liście.' };
+    const v = {};
+    for (const f of TR_UNIT_F) {
+      if (!(f in it) && x) continue;
+      const val = trPlanVal_(f, f in it ? it[f] : f === 'prio' ? 'B' : f === 'sets' ? 3 : f === 'reps' ? '8' : '');
+      if (val.error) return { error: name + ': ' + val.error };
+      v[f] = val.v;
+    }
+    const c = trPlanVal_('circuit', it.circuit);
+    if (c.error) return { error: name + ': ' + c.error };
+    its.push({ x, name, v, c: c.v });
+  }
+  // obwód: ta sama litera tylko u sąsiadów, pojedyncza litera = zwykłe ćwiczenie
+  const seen = {};
+  for (let k = 0; k < its.length; k++) {
+    const c = its[k].c; if (!c) continue;
+    if (seen[c] && its[k - 1].c !== c) return { error: 'Obwód ' + c + ' musi zostać razem.' };
+    seen[c] = 1;
+  }
+  its.forEach((o, k) => { if (o.c && (its[k - 1] || {}).c !== o.c && (its[k + 1] || {}).c !== o.c) o.c = ''; });
+  // numery: 1…n, ćwiczenie z wpisem w Logu stoi na swoim
+  const lg = (w, x) => !!logged[w + '|' + Number(x.r.nr)];
+  const fixed = {}; cur.forEach(x => { if (lg(week, x)) fixed[Number(x.r.nr)] = 1; });
+  for (const x of cur) if (lg(week, x) && !its.some(o => o.x === x)) return { error: String(x.r.cwiczenie).trim() + ': ma zapisane serie, nie da się go usunąć.' };
+  let c0 = 0;
+  for (const o of its) {
+    if (o.x && lg(week, o.x)) { const nr = Number(o.x.r.nr); if (nr <= c0) return { error: String(o.x.r.cwiczenie).trim() + ': ma zapisane serie, zostaje na swoim miejscu.' }; o.nr = nr; c0 = nr; continue; }
+    c0++; while (fixed[c0]) c0++; o.nr = c0;
+  }
+  const set = {}, add = [], del = [], weeks = {};
+  let n = 0;
+  const eq = (val, v) => { const o = norm(val); return typeof v === 'number' ? o !== '' && Number(o.replace(',', '.')) === v : o === String(v); };
+  const put = (x, col, v) => {
+    if (eq(x.r[col], v)) return false;
+    (set[x.i] = set[x.i] || {})[col] = v; weeks[Number(x.r.tydzien)] = 1; return true;
+  };
+  const b = cur[0].r, dateOk = e.date === undefined || e.date === null ? null : String(e.date).trim();
+  if (dateOk !== null && dateOk !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(dateOk)) return { error: 'Zła data.' };
+  const newRow = (o, w, nr, base) => {
+    const r = {}; PLAN_HEADERS.forEach(k => { r[k] = ''; });
+    Object.assign(r, { klient: clientId, tydzien: w, jednostka: day, tytul: base.tytul, data: base.data instanceof Date ? fmtDate_(base.data) : norm(base.data), nr: nr, cwiczenie: o.name,
+      prio: o.v.prio, serie: o.v.sets, powt: o.v.reps, procent: o.v.pct, kg: o.v.kg, rpe_max: o.v.rpe, uwagi: o.v.note, blok: norm(base.blok), zrodlo: 'trener', obwod: o.c });
+    return r;
+  };
+  // ta jednostka
+  for (const o of its) {
+    if (!o.x) { add.push(newRow(o, week, o.nr, b)); weeks[week] = 1; n++; continue; }
+    let ch = false;
+    ch = put(o.x, 'nr', o.nr) || ch;
+    if (o.name !== String(o.x.r.cwiczenie).trim()) ch = put(o.x, 'cwiczenie', o.name) || ch;
+    Object.keys(o.v).forEach(f => { ch = put(o.x, TR_PLAN_F[f], o.v[f]) || ch; });
+    ch = put(o.x, 'obwod', o.c) || ch;
+    if (ch) n++;
+  }
+  cur.forEach(x => { if (!its.some(o => o.x === x)) { del.push(x.i); weeks[week] = 1; n++; } });
+  if (dateOk !== null && dateOk !== norm(b.data instanceof Date ? fmtDate_(b.data) : b.data)) {
+    cur.forEach(x => put(x, 'data', dateOk)); add.forEach(r => { r.data = dateOk; }); n++;
+  }
+  if (e.unote !== undefined && e.unote !== null) {
+    const t = String(e.unote).replace(/\r\n?/g, '\n').trim();
+    if (t.length > TR_UNOTE_MAX) return { error: 'Notatka do jednostki: najwyżej ' + TR_UNOTE_MAX + ' znaków.' };
+    const keep = cur.filter(x => its.some(o => o.x === x)), first = keep.slice().sort((a, c) => (its.find(o => o.x === a).nr) - (its.find(o => o.x === c).nr))[0];
+    let any = false;
+    if (first) { any = put(first, 'uwagi_jedn', t) || any; keep.forEach(x => { if (x !== first && norm(x.r.uwagi_jedn)) any = put(x, 'uwagi_jedn', '') || any; }); }
+    else if (t && add.length) { add[0].uwagi_jedn = t; any = true; }
+    if (any) n++;
+  }
+  // kolejne tygodnie: ten sam blok, niezrobione, po nazwie ćwiczenia
+  if (e.next) {
+    const blok = lc(b.blok);
+    const later = [...new Set(mine.filter(x => Number(x.r.tydzien) > week && String(x.r.jednostka).trim() === day && lc(x.r.blok) === blok && !own_(x.r) && !removed_(x.r) && !done[doneKey_(clientId, x.r.tydzien, day)])
+      .map(x => Number(x.r.tydzien)))].sort((a, c) => a - c);
+    later.forEach(w => {
+      const u = unitOf(w), gone = {}, keepNames = [];
+      // usunięte w tej jednostce → usunięte po nazwie (bez wpisów w Logu)
+      cur.forEach(x => { if (!its.some(o => o.x === x)) u.filter(y => lc(y.r.cwiczenie) === lc(x.r.cwiczenie) && !lg(w, y)).forEach(y => { gone[y.i] = 1; del.push(y.i); weeks[w] = 1; }); });
+      const left = u.filter(y => !gone[y.i]);
+      its.forEach(o => {
+        if (!o.x) {                                                   // nowe ćwiczenie: na końcu jednostki, jeśli jeszcze go tam nie ma
+          if (left.some(y => lc(y.r.cwiczenie) === lc(o.name)) || add.some(r => r.tydzien === w && lc(r.cwiczenie) === lc(o.name))) return;
+          const nr = Math.max(0, ...left.map(y => Number(y.r.nr) || 0), ...add.filter(r => r.tydzien === w).map(r => r.nr)) + 1;
+          const r = newRow(o, w, nr, (left[0] || u[0] || cur[0]).r); r.obwod = ''; add.push(r); weeks[w] = 1; return;
+        }
+        const old = String(o.x.r.cwiczenie).trim();
+        left.filter(y => lc(y.r.cwiczenie) === lc(old)).forEach(y => {
+          if (o.name !== old) put(y, 'cwiczenie', o.name);
+          Object.keys(o.v).forEach(f => {
+            const col = TR_PLAN_F[f], was = n_(o.x.r[col]), v = o.v[f];
+            if (eq(o.x.r[col], v)) return;                              // pole bez zmiany w tej jednostce
+            const delta = (f === 'kg' || f === 'pct') && typeof v === 'number' && isFinite(was) && norm(o.x.r[col]) !== '' ? v - was : null, yo = n_(y.r[col]);
+            if (delta !== null) { if (isFinite(yo) && norm(y.r[col]) !== '') put(y, col, Math.max(0, Math.round((yo + delta) * (f === 'pct' ? 10000 : 100)) / (f === 'pct' ? 10000 : 100))); }
+            else put(y, col, v);
+          });
+        });
+      });
+      // kolejność: tylko gdy po zmianach to te same ćwiczenia (po nazwie) i żadne nie ma wpisu w Logu
+      const names = its.map(o => lc(o.name)), mineW = left.map(y => lc(set[y.i] && set[y.i].cwiczenie !== undefined ? set[y.i].cwiczenie : y.r.cwiczenie)).concat(add.filter(r => r.tydzien === w).map(r => lc(r.cwiczenie)));
+      if (names.length === mineW.length && names.slice().sort().join('\n') === mineW.slice().sort().join('\n') && new Set(names).size === names.length && !left.some(y => lg(w, y))) {
+        its.forEach((o, k) => {
+          const y = left.find(z => lc(set[z.i] && set[z.i].cwiczenie !== undefined ? set[z.i].cwiczenie : z.r.cwiczenie) === lc(o.name));
+          if (y) put(y, 'nr', k + 1); else { const r = add.find(q => q.tydzien === w && lc(q.cwiczenie) === lc(o.name)); if (r) r.nr = k + 1; }
+        });
+      }
+    });
+  }
+  return { set: Object.keys(set).map(i => [Number(i), set[i]]), add, del: [...new Set(del)].sort((a, c) => c - a), n, weeks: Object.keys(weeks).map(Number).sort((a, c) => a - c) };
+}
+
+/** Zapis całej jednostki z okna kalendarza (trUnitEdit_): komórki, nowe wiersze na końcu Planu, potem usunięte od dołu. */
+function trJednostka(id, e) {
+  id = String(id || '').trim().toLowerCase();
+  trRow_(id);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const plan = tableOf_('Plan'), log = pgTable_('Log', DONE_LOG_COLS), done = unitsDone_(plan, pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), log);
+    const logged = {};
+    log.forEach(l => { if (String(l.klient).trim().toLowerCase() === id && String(l.jednostka).trim() === String(e && e.day).trim()) logged[Number(l.tydzien) + '|' + Number(l.nr_cw)] = 1; });
+    const res = trUnitEdit_(plan, done, logged, id, e);
+    if (res.error) throw new Error(res.error);
+    trPlanSet_(res.set);
+    const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
+    if (res.add.length) { const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim()); PLAN_HEADERS.forEach(k => { if (h.indexOf(k) < 0) { sh.getRange(1, h.length + 1).setValue(plain_(k)); h.push(k); } }); planAppend_(sh, h, res.add); }
+    res.del.forEach(i => sh.deleteRow(i + 2));                      // od dołu, więc wcześniejsze indeksy się nie przesuwają
+    return { n: res.n, weeks: res.weeks };
+  } finally { lock.releaseLock(); }
+}
+
+/** Czysta funkcja: m = {week, day, date} → {error} albo {rows: [[indeks wiersza Planu, data]], date} (planMoves_ z regułą unitsDone_). */
+function trMove_(plan, done, clientId, m) {
+  m = m || {};
+  const week = Number(m.week), day = String(m.day === undefined || m.day === null ? '' : m.day).trim(), date = String(m.date === undefined || m.date === null ? '' : m.date).trim();
+  const rows = (plan || []).filter(r => String(r.klient).trim().toLowerCase() === clientId && Number(r.tydzien) === week && String(r.jednostka).trim() === day);
+  if (!rows.length) return { error: 'Nie ma takiej jednostki w planie.' };
+  if (rows.some(own_)) return { error: 'To własny trening klienta – dzień ustawia klient.' };
+  if (done[doneKey_(clientId, week, day)]) return { error: 'Ta jednostka jest już zrobiona – dzień bierze się z jej zapisu.' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Zła data.' };
+  const res = planMoves_(plan, [], clientId, [{ week: week, day: day, date: date }]);
+  return { rows: res.rows, date: date };
+}
+
+/** Przesunięcie niezrobionej jednostki klienta na inny dzień (kalendarz w panelu). */
+function trPrzesun(id, m) {
+  id = String(id || '').trim().toLowerCase();
+  trRow_(id);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const plan = tableOf_('Plan'), done = unitsDone_(plan, pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', DONE_LOG_COLS));
+    const res = trMove_(plan, done, id, m);
+    if (res.error) throw new Error(res.error);
+    const sh = SpreadsheetApp.getActive().getSheetByName('Plan'), h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
+    planTextCols_();
+    const col = h.indexOf('data') + 1;
+    res.rows.forEach(([i, d]) => sh.getRange(i + 2, col).setValue(plain_(d)));
+    return { date: res.date, n: res.rows.length };
+  } finally { lock.releaseLock(); }
+}
+
+/** Nazwy ćwiczeń z bazy do wyszukiwarki w oknie jednostki: [[nazwa, film, „partie”, „aliasy”]] (jak getExNames). */
+function trCwNazwy() {
+  return exNames_(cwRowsCached_());
 }

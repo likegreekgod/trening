@@ -61,7 +61,7 @@ function errBox(e){ return '<div class="pg"><div class="card es"><b>Nie udało s
 function route(){
   if (!PUL) return;
   document.body.classList.remove('pvfs');
-  if ($('#kw')) { $('#kw').remove(); document.body.classList.remove('kwon'); } KW = null;   // okno jednostki zamyka każda zmiana adresu
+  if ($('#kw')) { $('#kw').remove(); document.body.classList.remove('kwon'); } KW = null; KE = null; KMSG = null;   // okno jednostki (i szkic zmian) zamyka każda zmiana adresu
   let h = (location.hash || '#dzis').slice(1).split('/'), v = h[0];
   if (v === 'prowadz' && h[1]) { location.replace(liveHref(decodeURIComponent(h[1]))); return; }   // powrót z aplikacji po ponownym zalogowaniu
   // stare adresy (v81–v102) → nowe miejsca (zakładki w przeglądarce, linki z alertu)
@@ -1232,7 +1232,7 @@ function kMeta(u){
   if (u.plan && u.date && u.plan !== u.date) a.push((u.st === 'late' ? 'zaległa od ' : 'w planie ') + dowDm(u.plan));
   return a.filter(Boolean).join(' · ');
 }
-const kuHtml = (u, i, mini) => '<button type="button" class="ku st-' + u.st + (mini ? ' mini' : '') + '" data-ku="' + i + '" style="--c:' + kColor(u.id) + '">' +
+const kuHtml = (u, i, mini) => '<button type="button" class="ku st-' + u.st + (mini ? ' mini' : '') + '" data-ku="' + i + '"' + (kMovable(u) ? ' draggable="true"' : '') + ' style="--c:' + kColor(u.id) + '">' +
   '<span class="kt"><b>' + esc(u.name) + '</b>' + kBadge(u) + '</span>' + (mini ? '' : '<span class="kn">' + esc(u.day) + ' · ' + esc(u.title) + '</span><small>' + esc(kMeta(u)) + '</small>') + '</button>';
 const kHash = (mode, a) => '#kalendarz' + (mode === 'm' ? '/m/' + a : a ? '/' + a : '');
 const MIESD = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
@@ -1241,6 +1241,7 @@ function kRange(a, b){
   return a.slice(0, 7) === b.slice(0, 7) ? +a.slice(8) + '–' + +b.slice(8) + ' ' + MIESD[m] + ' ' + a.slice(0, 4) : +a.slice(8) + ' ' + MIESD[m] + ' – ' + +b.slice(8) + ' ' + MIESD[n] + ' ' + b.slice(0, 4);
 }
 async function renderKalendarz(a, b){
+  KARGS = [a, b];
   const today = PUL.today, month = a === 'm';
   let from, to, mm = '', anchor = today;
   if (month) {
@@ -1281,27 +1282,29 @@ async function renderKalendarz(a, b){
   if (month) {
     grid = '<div class="kalm" role="grid" aria-label="' + esc(label) + '">' + ['pn', 'wt', 'śr', 'cz', 'pt', 'sb', 'nd'].map(d => '<div class="kmh">' + d + '</div>').join('') +
       days.map(d => { const us = by[d] || [], wk = TL.mondayOf(d);
-        return '<div class="kmd' + (d.slice(0, 7) !== mm ? ' out' : '') + (d === today ? ' t' : '') + '"><a class="kmn" href="' + kHash('w', wk) + '" aria-label="Tydzień od ' + esc(dowDm(wk)) + '">' + +d.slice(8) + '</a>' +
+        return '<div class="kmd' + (d.slice(0, 7) !== mm ? ' out' : '') + (d === today ? ' t' : '') + '" data-kday="' + d + '"><a class="kmn" href="' + kHash('w', wk) + '" aria-label="Tydzień od ' + esc(dowDm(wk)) + '">' + +d.slice(8) + '</a>' +
           us.slice(0, 3).map(u => kuHtml(u, idx(u), true)).join('') + (us.length > 3 ? '<a class="kmore" href="' + kHash('w', wk) + '">+' + (us.length - 3) + ' więcej</a>' : '') + '</div>'; }).join('') + '</div>';
   } else {
     grid = '<div class="kal">' + days.map((d, i) => { const us = by[d] || [];
-      return '<section class="kd' + (d === today ? ' t' : '') + (us.length ? '' : ' empty') + '" aria-label="' + esc(DOWL[(i + 1) % 7] + ' ' + dm(d)) + '"><h3><b>' + +d.slice(8) + '</b><span>' + DOW[(i + 1) % 7] + (d === today ? ' · dziś' : '') + '</span><em>' + (us.length || '') + '</em></h3>' +
+      return '<section class="kd' + (d === today ? ' t' : '') + (us.length ? '' : ' empty') + '" data-kday="' + d + '" aria-label="' + esc(DOWL[(i + 1) % 7] + ' ' + dm(d)) + '"><h3><b>' + +d.slice(8) + '</b><span>' + DOW[(i + 1) % 7] + (d === today ? ' · dziś' : '') + '</span><em>' + (us.length || '') + '</em></h3>' +
         us.map(u => kuHtml(u, idx(u))).join('') + '</section>'; }).join('') + '</div>';
   }
   const undH = und.length ? '<div class="card kund"><h2>Bez daty · ' + und.length + '</h2><div class="kul">' + und.map(u => kuHtml(u, idx(u))).join('') + '</div>' +
-    '<p class="hint">Najbliższy tydzień planu bez wpisanego dnia. Dzień ustawisz w planie klienta.</p></div>' : '';
+    '<p class="hint">Najbliższy tydzień planu bez wpisanego dnia. Przeciągnij jednostkę na dzień albo ustaw go w jej oknie.</p></div>' : '';
   const leg = '<p class="kleg hint"><span><i class="ok">✓</i> zrobiona</span><span><i class="lv">●</i> w trakcie</span><span><i class="la">!</i> zaległa</span><span>kolor paska = klient</span></p>';
   const empty = !inM.length && !und.length ? '<div class="card es"><b>Pusto</b>' + (month ? 'W tym miesiącu' : 'W tym tygodniu') + ' nie ma jednostek z datą.</div>' : '';
-  $('#main').innerHTML = head(eb, 'Kalendarz', seg) + '<div class="pg kpg">' + bar + grid + empty + undH + leg + '</div>';
+  const dnd = !month || units.some(kMovable) ? '<span class="hide-m">przeciągnij niezrobioną jednostkę na inny dzień</span>' : '';
+  $('#main').innerHTML = head(eb, 'Kalendarz', seg) + '<div class="pg kpg">' + bar + '<div id="kmsg">' + kMsgHtml() + '</div>' + grid + empty + undH + leg.replace('</p>', dnd + '</p>') + '</div>';
   document.querySelectorAll('[data-kf]').forEach(c => c.onclick = () => { KFI = c.dataset.kf; renderKalendarz(a, b); });
-  if (KW && KLIST[KW.i]) kwOpen(KW.i); else KW = null;
+  if (KW) { const j = KW.k ? KLIST.findIndex(u => kKey(u) === KW.k) : KW.i; if (KLIST[j]) kwOpen(j); else kwClose(); }
 }
 /* okno jednostki: nad kalendarzem, ← → poprzednia / następna z kalendarza, Esc zamyka */
-function kwClose(){ KW = null; const o = $('#kw'); if (o) { o.remove(); document.body.classList.remove('kwon'); } const f = KW_BACK; KW_BACK = null; if (f && document.contains(f)) f.focus(); }
+function kwClose(){ KW = null; KE = null; const o = $('#kw'); if (o) { o.remove(); document.body.classList.remove('kwon'); } const f = KW_BACK; KW_BACK = null; if (f && document.contains(f)) f.focus(); }
 let KW_BACK = null;
 async function kwOpen(i){
   const u = KLIST[i]; if (!u) return;
-  KW = { i };
+  KW = { i, k: kKey(u) };
+  if (KE && KE.k !== KW.k) KE = null;
   let o = $('#kw');
   if (!o) { KW_BACK = document.activeElement; o = document.createElement('div'); o.id = 'kw'; o.className = 'kwo'; document.body.append(o); document.body.classList.add('kwon'); }
   const near = j => KLIST[j] ? '<button type="button" class="b" data-kwgo="' + j + '">' + (j < i ? '‹ ' : '') + esc((KLIST[j].date ? DOW[new Date(KLIST[j].date + 'T12:00:00Z').getUTCDay()] + ': ' : '') + KLIST[j].name + ' · ' + KLIST[j].title) + (j > i ? ' ›' : '') + '</button>' : '<span></span>';
@@ -1316,7 +1319,8 @@ async function kwOpen(i){
     if (!KW || KW.i !== i) return;
   }
   CUR = CK[u.id]; CID = u.id;               // komentarz do sesji (komBox) pracuje na bieżącym kliencie
-  o.innerHTML = shell(kwBody(u, CUR));
+  o.innerHTML = shell(KE ? '' : kwBody(u, CUR));
+  if (KE) keDraw();
   const x = o.querySelector('[data-kwx]'); if (x && !o.contains(document.activeElement)) x.focus();
 }
 function kwBody(u, d){
@@ -1339,22 +1343,237 @@ function kwBody(u, d){
   if (!rows.length && !ex.length) h += '<div class="card es">Brak ćwiczeń w planie tej jednostki.</div>';
   if (s && s.uwagi) h += '<div class="card"><p class="note" style="margin:0"><span class="eb">Uwaga klienta</span><br>' + esc(s.uwagi) + '</p></div>';
   if (s) h += '<div class="card">' + komBox(s, ex.length) + '</div>';
-  else if (c && u.st !== 'done') h += '<div class="row kwgo"><span class="hint">' + (u.st === 'live' ? 'Klient jest w trakcie.' : 'Zmiany w planie: Karta klienta → Plan.') + '</span><span class="sp"></span>' + go(liveHref(u.id, u.week, u.day), '▶ Prowadź', 'acc') + '</div>';
+  else if (c && u.st !== 'done') h += '<div class="row kwgo">' + (kMovable(u) && rows.length ? '<label class="pc kwdt"><i class="lb">Dzień</i><input type="date" data-kwdate value="' + esc(u.date || '') + '" aria-label="Zmień dzień jednostki"></label>' : '') +
+    '<span class="hint">' + (u.st === 'live' ? 'Klient jest w trakcie.' : u.own ? 'Własny trening klienta.' : '') + '</span><span class="sp"></span>' +
+    (kMovable(u) && rows.length ? '<button type="button" class="b" data-kwedit>✎ Edytuj</button>' : '') + go(liveHref(u.id, u.week, u.day), '▶ Prowadź', 'acc') + '</div>';
   return h;
 }
 document.addEventListener('click', e => {
   const k = e.target.closest('[data-ku]'); if (k) { e.preventDefault(); kwOpen(+k.dataset.ku); return; }
   const g = e.target.closest('[data-kwgo]'); if (g) { kwOpen(+g.dataset.kwgo); return; }
-  if (e.target.closest('[data-kwx]') || e.target.id === 'kw') { kwClose(); return; }
+  if (e.target.closest('[data-kwx]') || e.target.id === 'kw') { if (KE && keChanges() && !e.target.closest('[data-kwx]')) return; kwClose(); return; }
   if (e.target.closest('#kw a[href^="#"]')) kwClose();
 });
 document.addEventListener('keydown', e => {
   if (!KW || !$('#kw')) return;
-  if (e.key === 'Escape') { e.preventDefault(); kwClose(); return; }
+  if (e.key === 'Escape') { e.preventDefault(); if (KE && keChanges()) { KE.err = 'Masz niezapisane zmiany: Zapisz albo Anuluj.'; keFoot(); return; } kwClose(); return; }
+  if (KE) return;
   if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || '')) || e.target.isContentEditable) return;
   if (e.key === 'ArrowLeft' && KLIST[KW.i - 1]) { e.preventDefault(); kwOpen(KW.i - 1); }
   if (e.key === 'ArrowRight' && KLIST[KW.i + 1]) { e.preventDefault(); kwOpen(KW.i + 1); }
 });
+/* ---------- edycja w oknie jednostki i przeciąganie w kalendarzu (panel v2 PR 3, 27.11.2026) ----------
+ * „✎ Edytuj” w oknie niezrobionej jednostki trenera: cała lista ćwiczeń (kolejność przez ⋮⋮, ↑ ↓ albo Alt + ↑ ↓, nowe z bazy, ✕, A/B/K,
+ * serie, powt., kg, %, RPE, uwagi, obwód „⛓ Połącz zaznaczone”), notatka do jednostki, dzień, „także kolejne tygodnie” → trJednostka.
+ * Przeciągnięcie jednostki na inny dzień kalendarza albo pole dnia w oknie → trPrzesun. Szkic (KE) i baza nazw (CWN) tylko w pamięci strony.
+ */
+let KE = null, CWN = null, KE_UID = 0, KDRAG = null, KEDRAG = null, KMSG = null, KARGS = [];
+const KE_F = [['sets', 'Serie'], ['reps', 'Powt.'], ['kg', 'kg'], ['pct', '%'], ['rpe', 'RPE ≤'], ['note', 'Uwagi']];
+const kKey = u => u.id + '|' + uKey(u.week, u.day);
+const kMovable = u => !u.own && (u.st === 'wait' || u.st === 'late');
+function keStart(u){
+  const d = CK[u.id], key = uKey(u.week, u.day);
+  const rows = (d.plan || []).filter(r => uKey(r.week, r.day) === key).sort((a, b) => a.order - b.order);
+  const logged = {}; (d.logs || []).forEach(l => { if (uKey(l.tydzien, l.jednostka) === key) logged[Number(l.nr_cw)] = 1; });
+  const items = rows.map(r => ({ uid: ++KE_UID, order: r.order, name: r.name, prio: String(r.prio || 'B').toUpperCase(), sets: peTxt(r, 'sets'), reps: peTxt(r, 'reps'), kg: peTxt(r, 'kg'),
+    pct: peTxt(r, 'pct'), rpe: peTxt(r, 'rpe'), note: peTxt(r, 'note'), circuit: r.circuit || '', logged: !!logged[r.order], tag: r.added ? 'dodane przez klienta' : r.coach ? 'dodane przez Ciebie' : '' }));
+  const unote = (rows.find(r => r.unote) || {}).unote || '', date = (rows.find(r => r.date) || {}).date || '';
+  KE = { k: kKey(u), id: u.id, week: u.week, day: u.day, block: u.block, items, orig: JSON.parse(JSON.stringify(items)), date, date0: date, unote, unote0: unote, next: false, sel: {}, q: '', busy: false, err: '' };
+  if (!CWN) api('trCwNazwy').then(x => { CWN = x || []; if (KE && KE.q) keRes(); }).catch(() => { CWN = []; });
+}
+const KE_FLD = ['name', 'prio', 'sets', 'reps', 'kg', 'pct', 'rpe', 'note', 'circuit'];
+function keChanges(){
+  if (!KE) return 0;
+  let n = 0;
+  KE.items.forEach((it, i) => { const o = KE.orig.find(x => x.uid === it.uid);
+    if (!o) { n++; return; }
+    if (KE.orig.indexOf(o) !== i || KE_FLD.some(f => String(it[f]).trim() !== String(o[f]).trim())) n++; });
+  n += KE.orig.filter(o => !KE.items.some(x => x.uid === o.uid)).length;
+  if (KE.date !== KE.date0) n++;
+  if (KE.unote.trim() !== KE.unote0.trim()) n++;
+  return n;
+}
+/** błąd szkicu (ta sama reguła co trUnitEdit_) albo '' */
+function keBad(){
+  if (!KE.items.length) return 'Jednostka musi mieć co najmniej jedno ćwiczenie.';
+  for (const it of KE.items) {
+    if (!String(it.name).trim()) return 'Każde ćwiczenie musi mieć nazwę.';
+    for (const f of KE_F) { const b = peBad(f[0], it[f[0]]); if (b) return it.name + ': ' + b; }
+  }
+  const seen = {};
+  for (let k = 0; k < KE.items.length; k++) { const c = KE.items[k].circuit; if (!c) continue; if (seen[c] && KE.items[k - 1].circuit !== c) return 'Obwód ' + c + ' musi zostać razem: przesuń jego ćwiczenia obok siebie.'; seen[c] = 1; }
+  return '';
+}
+const keLater = () => { if (!KE || !CK[KE.id]) return []; const units = planUnits(CK[KE.id], sesDates(CK[KE.id])), x = units.find(y => y.u === uKey(KE.week, KE.day)); return x ? peLater(units, x) : []; };
+function keHtml(){
+  const dis = KE.busy ? ' disabled' : '', it = KE.items, cnt = {};
+  const rows = it.map((x, i) => {
+    const o = KE.orig.find(y => y.uid === x.uid), c = x.circuit, first = c && (it[i - 1] || {}).circuit !== c, pair = c && ((it[i - 1] || {}).circuit === c || (it[i + 1] || {}).circuit === c);
+    if (c) cnt[c] = (cnt[c] || 0) + 1;
+    const tag = pair ? c + cnt[c] : String(i + 1);
+    const cell = f => { const v = x[f[0]], was = o ? o[f[0]] : '', chg = o && String(v).trim() !== String(was).trim(), bad = peBad(f[0], v);
+      return '<label class="pc kc-' + f[0] + (chg ? ' chg' : '') + (bad ? ' bad' : '') + '"><i class="lb">' + f[1] + '</i><input data-kef="' + f[0] + '" value="' + esc(v) + '"' +
+        (f[0] === 'note' ? ' maxlength="300"' : ' inputmode="' + (f[0] === 'reps' || f[0] === 'kg' ? 'text' : 'decimal') + '"') + ' aria-label="' + esc(x.name + ': ' + f[1]) + '"' + (bad ? ' aria-invalid="true" title="' + esc(bad) + '"' : '') + dis + '>' +
+        '<small class="was">' + (chg ? 'było ' + esc(was || '–') : '') + '</small></label>'; };
+    const nameChg = o && x.name.trim() !== o.name.trim();
+    return (first && pair ? '<div class="kecg">⛓ Obwód ' + esc(c) + ' · na zmianę, przerwa po rundzie</div>' : '') +
+      '<div class="ke' + (o ? '' : ' kenew') + (pair ? ' cir' : '') + '" data-ke="' + i + '">' +
+      '<button type="button" class="keg" draggable="true" data-kedrag aria-label="Przeciągnij: ' + esc(x.name) + ' (albo Alt + ↑ ↓)"' + dis + '>⋮⋮</button>' +
+      '<input type="checkbox" class="kesel" data-kesel aria-label="Zaznacz: ' + esc(x.name) + '"' + (KE.sel[x.uid] ? ' checked' : '') + dis + '>' +
+      '<div class="ken"><span class="ktag">' + esc(tag) + '</span><label class="pc' + (nameChg ? ' chg' : '') + '"><i class="lb">Ćwiczenie</i><input data-kef="name" value="' + esc(x.name) + '" maxlength="80" aria-label="Nazwa ćwiczenia ' + (i + 1) + '"' + dis + '></label>' +
+      '<small>' + esc([o ? '' : 'nowe', nameChg ? 'było ' + o.name : '', x.tag, x.logged ? 'ma zapisane serie' : ''].filter(Boolean).join(' · ')) + '</small></div>' +
+      '<div class="seg kep" role="group" aria-label="Priorytet">' + ['A', 'B', 'K'].map(p => '<button type="button" data-keprio="' + p + '" aria-pressed="' + (x.prio === p) + '"' + dis + '>' + p + '</button>').join('') + '</div>' +
+      KE_F.map(cell).join('') +
+      '<div class="kebt"><button type="button" class="ib" data-kemv="-1" aria-label="Wyżej"' + (i ? '' : ' disabled') + dis + '>↑</button><button type="button" class="ib" data-kemv="1" aria-label="Niżej"' + (i < it.length - 1 ? '' : ' disabled') + dis + '>↓</button>' +
+      '<button type="button" class="ib" data-kedel aria-label="Usuń: ' + esc(x.name) + '"' + (x.logged ? ' disabled title="Ma zapisane serie"' : '') + dis + '>✕</button></div></div>';
+  }).join('');
+  const gone = KE.orig.filter(o => !KE.items.some(x => x.uid === o.uid));
+  const later = keLater(), n = keChanges(), bad = keBad(), nsel = Object.keys(KE.sel).filter(k => KE.sel[k]).length;
+  return '<div class="card ked">' +
+    '<div class="kedt"><label class="pc"><i class="lb">Dzień</i><input type="date" data-kef="date" value="' + esc(KE.date) + '"' + dis + '></label>' +
+    '<label class="pun"><span class="eb">Od trenera · notatka do całej jednostki</span><textarea data-kef="unote" rows="2" maxlength="500" placeholder="np. dziś technika w wyciskaniu, pauza 1 s na klatce"' + dis + '>' + esc(KE.unote) + '</textarea></label></div>' +
+    '<div class="ke keh" aria-hidden="true"><span></span><span></span><span>Ćwiczenie</span><span>Prio</span>' + KE_F.map(f => '<span>' + f[1] + '</span>').join('') + '<span></span></div>' + rows +
+    (gone.length ? '<p class="kegone">Usunięte: ' + gone.map(o => '<button type="button" class="lnk" data-keback="' + o.uid + '"' + dis + '>' + esc(o.name) + ' ↺</button>').join(', ') + '</p>' : '') +
+    '<div class="kea"><div class="keq"><input id="ke-q" type="search" autocomplete="off" placeholder="+ dodaj ćwiczenie: wpisz nazwę" aria-label="Dodaj ćwiczenie" value="' + esc(KE.q) + '"' + dis + '><div class="kes" id="ke-res" role="listbox"></div></div>' +
+    '<button type="button" class="b" data-kelink' + (nsel >= 2 && !KE.busy ? '' : ' disabled') + '>⛓ Połącz zaznaczone</button><button type="button" class="b" data-keunlink' + (nsel && !KE.busy ? '' : ' disabled') + '>Rozłącz</button>' +
+    '<span class="hint hide-m">przeciągnij ⋮⋮ albo Alt + ↑ ↓</span></div></div>' +
+    '<div class="kef">' + (later.length ? '<label class="pnx"><input type="checkbox" data-kef="next"' + (KE.next ? ' checked' : '') + dis + '><span><b>Także kolejne tygodnie: ' + esc(KE.day) + ' w tyg. ' + esc(later.length > 1 ? later[0] + '–' + later[later.length - 1] : later[0]) + (KE.block ? ' bloku ' + esc(KE.block) : '') + '</b> (niezrobione): kg i % o tę samą różnicę, nowe i usunięte ćwiczenia po nazwie.</span></label>' : '<span></span>') +
+    '<div class="row">' + (KE.err ? '<span class="err" role="alert">' + esc(KE.err) + '</span>' : bad && n ? '<span class="err">' + esc(bad) + '</span>' : '<span class="muted">Zmienione: ' + n + '</span>') + '<span class="sp"></span>' +
+    '<button type="button" class="b" data-kecancel' + dis + '>Anuluj</button><button type="button" class="b p" data-kesave' + (n && !bad && !KE.busy ? '' : ' disabled') + '>' + (KE.busy ? 'Zapisuję…' : 'Zapisz zmiany') + '</button></div></div>';
+}
+function keDraw(focus){
+  const b = $('#kw .kwb'); if (!b || !KE) return;
+  b.innerHTML = keHtml(); keRes();
+  if (focus) { const el = b.querySelector(focus); if (el) { el.focus(); try { const n = el.value.length; el.setSelectionRange(n, n); } catch (e) {} } }
+}
+/** tylko licznik i przycisk zapisu: wpisywanie w pole nie przerysowuje okna (kursor, klawiatura telefonu) */
+function keFoot(){
+  const f = $('#kw .kef'); if (!f || !KE) return;
+  const n = keChanges(), bad = keBad(), row = f.querySelector('.row');
+  row.firstElementChild.outerHTML = KE.err ? '<span class="err" role="alert">' + esc(KE.err) + '</span>' : bad && n ? '<span class="err">' + esc(bad) + '</span>' : '<span class="muted">Zmienione: ' + n + '</span>';
+  const s = f.querySelector('[data-kesave]'); if (s) s.disabled = !n || !!bad || KE.busy;
+}
+function keRes(){
+  const box = $('#ke-res'); if (!box || !KE) return;
+  const q = KE.q.trim(); if (!q) { box.innerHTML = ''; return; }
+  const mine = [...new Set((CK[KE.id].plan || []).map(r => r.name))];
+  const hits = TL.exSearch(mine, CWN || [], q, 7);
+  box.innerHTML = hits.map((h, i) => '<button type="button" role="option" data-keadd="' + esc(h.name) + '"' + (i ? '' : ' class="on"') + '><b>' + esc(h.name) + '</b>' + (h.film ? ' ▶' : '') + '<small>' + esc(h.mine ? 'z planu klienta' : h.alias ? h.alias : '') + '</small></button>').join('') +
+    (hits.some(h => h.name.toLowerCase() === q.toLowerCase()) ? '' : '<button type="button" role="option" data-keadd="' + esc(q) + '"' + (hits.length ? '' : ' class="on"') + '>+ „' + esc(q) + '” <small>własna nazwa</small></button>') +
+    (CWN ? '' : '<p class="hint">Wczytuję bazę ćwiczeń…</p>');
+}
+function keAdd(name){
+  name = String(name).trim().replace(/\s+/g, ' ').slice(0, 80); if (!name) return;
+  const last = KE.items[KE.items.length - 1];
+  KE.items.push({ uid: ++KE_UID, name, prio: 'B', sets: '3', reps: '10', kg: '', pct: '', rpe: last && last.rpe ? last.rpe : '8', note: '', circuit: '', logged: false, tag: '' });
+  KE.q = ''; KE.err = ''; keDraw('#ke-q');
+}
+function keMove(i, d, focus){
+  const j = i + d, a = KE.items; if (!a[i] || !a[j]) return;
+  [a[i], a[j]] = [a[j], a[i]]; KE.err = '';
+  keDraw(); const r = $('#kw [data-ke="' + j + '"] ' + (focus || '[data-kedrag]')); if (r) r.focus();
+}
+const keRow = el => { const r = el.closest('[data-ke]'); return r ? +r.dataset.ke : -1; };
+document.addEventListener('input', e => {
+  const t = e.target.closest('#kw [data-kef]'); if (t && KE) {
+    const f = t.dataset.kef; KE.err = '';
+    if (f === 'next') KE.next = t.checked;
+    else if (f === 'unote') KE.unote = t.value;
+    else if (f === 'date') KE.date = t.value;
+    else { const i = keRow(t), x = KE.items[i]; if (!x) return; x[f] = t.value;
+      const c = t.closest('.pc'), o = KE.orig.find(y => y.uid === x.uid);
+      if (o && c) { const chg = String(t.value).trim() !== String(o[f]).trim(); c.classList.toggle('chg', chg); const w = c.querySelector('.was'); if (w) w.textContent = chg ? 'było ' + (o[f] || '–') : ''; }
+      if (f !== 'name' && c) { const bad = peBad(f, t.value); c.classList.toggle('bad', !!bad); if (bad) { t.setAttribute('aria-invalid', 'true'); t.title = bad; } else { t.removeAttribute('aria-invalid'); t.removeAttribute('title'); } } }
+    keFoot(); return;
+  }
+  if (e.target.id === 'ke-q' && KE) { KE.q = e.target.value; keRes(); }
+});
+document.addEventListener('change', e => {
+  const s = e.target.closest('#kw [data-kesel]'); if (s && KE) { const x = KE.items[keRow(s)]; if (x) KE.sel[x.uid] = s.checked; const sel = Object.keys(KE.sel).filter(k => KE.sel[k]).length;
+    const l = $('#kw [data-kelink]'), u = $('#kw [data-keunlink]'); if (l) l.disabled = sel < 2; if (u) u.disabled = !sel; return; }
+  const d = e.target.closest('#kw [data-kwdate]'); if (d && KW) { const u = KLIST[KW.i]; if (u && d.value) kMove(u, d.value); }
+});
+document.addEventListener('click', async e => {
+  if (!$('#kw')) return;
+  const t = e.target;
+  if (t.closest('[data-kwedit]')) { const u = KLIST[KW.i]; if (u && CK[u.id]) { keStart(u); keDraw('[data-kef="kg"]'); } return; }
+  if (!KE) return;
+  const pr = t.closest('[data-keprio]'); if (pr) { const x = KE.items[keRow(pr)]; if (x) { x.prio = pr.dataset.keprio; keDraw(); } return; }
+  const mv = t.closest('[data-kemv]'); if (mv) { keMove(keRow(mv), +mv.dataset.kemv, '[data-kemv="' + mv.dataset.kemv + '"]'); return; }
+  const dl = t.closest('[data-kedel]'); if (dl) { const i = keRow(dl), x = KE.items[i]; if (x) { KE.items.splice(i, 1); delete KE.sel[x.uid]; KE.err = ''; keDraw(); } return; }
+  const bk = t.closest('[data-keback]'); if (bk) { const o = KE.orig.find(y => y.uid === +bk.dataset.keback); if (o) { const at = Math.min(KE.orig.indexOf(o), KE.items.length); KE.items.splice(at, 0, JSON.parse(JSON.stringify(o))); keDraw(); } return; }
+  const ad = t.closest('[data-keadd]'); if (ad) { keAdd(ad.dataset.keadd); return; }
+  if (t.closest('[data-kelink]')) {
+    const ix = KE.items.map((x, i) => KE.sel[x.uid] ? i : -1).filter(i => i >= 0);
+    if (ix.length < 2) return;
+    if (ix[ix.length - 1] - ix[0] !== ix.length - 1) { KE.err = 'Zaznacz ćwiczenia, które stoją obok siebie (przesuń je najpierw).'; keFoot(); return; }
+    const used = new Set(KE.items.map(x => x.circuit).filter(Boolean)), own = KE.items[ix[0]].circuit;
+    const c = own && ix.every(i => !KE.items[i].circuit || KE.items[i].circuit === own) ? own : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').find(l => !used.has(l)) || 'Z';
+    ix.forEach(i => { KE.items[i].circuit = c; }); KE.sel = {}; KE.err = ''; keDraw(); return;
+  }
+  if (t.closest('[data-keunlink]')) { KE.items.forEach(x => { if (KE.sel[x.uid]) x.circuit = ''; }); KE.sel = {}; keDraw(); return; }
+  if (t.closest('[data-kecancel]')) { KE = null; const u = KLIST[KW.i]; if (u) kwOpen(KW.i); return; }
+  if (t.closest('[data-kesave]')) {
+    const s = KE, bad = keBad(); if (bad || !keChanges() || s.busy) return;
+    const req = { week: s.week, day: s.day, next: !!s.next, items: s.items.map(x => { const o = { name: x.name.trim(), prio: x.prio, sets: x.sets, reps: x.reps, kg: x.kg, pct: x.pct, rpe: x.rpe, note: x.note, circuit: x.circuit }; if (x.order !== undefined) o.order = x.order; return o; }) };
+    if (s.date !== s.date0) req.date = s.date;
+    if (s.unote.trim() !== s.unote0.trim()) req.unote = s.unote.trim();
+    s.busy = true; s.err = ''; keDraw();
+    try {
+      const r = await guard(api('trJednostka', s.id, req));
+      CK[s.id] = await guard(api('trKlient', s.id));
+      Object.keys(KAL).forEach(k => delete KAL[k]);
+      KMSG = { ok: '✓ Zapisano ' + r.n + ' ' + plN(r.n, 'zmianę', 'zmiany', 'zmian') + (r.weeks && r.weeks.length > 1 ? ' w tyg. ' + r.weeks.join(', ') : '') + ' · klient zobaczy je przy następnym otwarciu aplikacji' };
+      if (KE === s) KE = null;
+      if (KW) KW.k = s.k;
+      await renderKalendarz(...KARGS);
+    } catch (err) { s.busy = false; if (!err.auth) s.err = err.message; if (KE === s) keDraw(); }
+  }
+});
+document.addEventListener('keydown', e => {
+  if (!KE || !$('#kw')) return;
+  if (e.target.id === 'ke-q') {
+    if (e.key === 'Enter') { e.preventDefault(); const on = $('#ke-res .on'); if (on) keAdd(on.dataset.keadd); else if (KE.q.trim()) keAdd(KE.q); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { const bs = [...document.querySelectorAll('#ke-res [data-keadd]')]; if (!bs.length) return; e.preventDefault();
+      let i = bs.findIndex(b => b.classList.contains('on')); bs.forEach(b => b.classList.remove('on')); i = (i + (e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length; bs[i].classList.add('on'); return; }
+    if (e.key === 'Escape' && KE.q) { e.preventDefault(); e.stopImmediatePropagation(); KE.q = ''; e.target.value = ''; keRes(); return; }
+  }
+  if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) { const i = keRow(e.target); if (i >= 0) { e.preventDefault(); e.stopImmediatePropagation(); const f = e.target.dataset.kef ? '[data-kef="' + e.target.dataset.kef + '"]' : '[data-kedrag]'; keMove(i, e.key === 'ArrowUp' ? -1 : 1, f); } }
+}, true);
+/* przeciąganie: wiersz w oknie (⋮⋮) i jednostka w kalendarzu (na inny dzień) */
+document.addEventListener('dragstart', e => {
+  const h = e.target.closest && e.target.closest('#kw [data-kedrag]');
+  if (h && KE) { KEDRAG = keRow(h); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'ke'); const r = h.closest('.ke'); r.classList.add('drag'); try { e.dataTransfer.setDragImage(r, 20, 20); } catch (x) {} return; }
+  const k = e.target.closest && e.target.closest('[data-ku][draggable="true"]');
+  if (k) { KDRAG = +k.dataset.ku; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'ku'); k.classList.add('drag'); }
+});
+document.addEventListener('dragover', e => {
+  if (KEDRAG !== null) { const r = e.target.closest && e.target.closest('#kw .ke[data-ke]'); if (r) { e.preventDefault(); document.querySelectorAll('#kw .ke.over').forEach(x => x !== r && x.classList.remove('over')); r.classList.add('over'); } return; }
+  if (KDRAG !== null) { const d = e.target.closest && e.target.closest('[data-kday]'); if (d) { e.preventDefault(); document.querySelectorAll('.kdrop').forEach(x => x !== d && x.classList.remove('kdrop')); d.classList.add('kdrop'); } }
+});
+document.addEventListener('drop', e => {
+  if (KEDRAG !== null) { const r = e.target.closest && e.target.closest('#kw .ke[data-ke]'); const from = KEDRAG; KEDRAG = null;
+    if (r && KE) { e.preventDefault(); const to = +r.dataset.ke; if (to !== from) { const [x] = KE.items.splice(from, 1); KE.items.splice(to, 0, x); KE.err = ''; } keDraw(); } return; }
+  if (KDRAG !== null) { const d = e.target.closest && e.target.closest('[data-kday]'); const u = KLIST[KDRAG]; KDRAG = null;
+    document.querySelectorAll('.kdrop,.ku.drag').forEach(x => x.classList.remove('kdrop', 'drag'));
+    if (d && u) { e.preventDefault(); kMove(u, d.dataset.kday); } }
+});
+document.addEventListener('dragend', () => { KEDRAG = null; KDRAG = null; document.querySelectorAll('.kdrop,.ku.drag,#kw .ke.drag,#kw .ke.over').forEach(x => x.classList.remove('kdrop', 'drag', 'over')); });
+/** jednostka na inny dzień (trPrzesun); okno zostaje otwarte, jeśli jednostka dalej jest w widoku */
+async function kMove(u, date){
+  if (!kMovable(u) || !/^\d{4}-\d{2}-\d{2}$/.test(date || '') || date === u.date) return;
+  const lbl = u.name + ' · ' + u.day + (u.title ? ' ' + u.title : '');
+  KMSG = { busy: 'Przenoszę: ' + lbl + '…' }; kMsgDraw();
+  try {
+    await guard(api('trPrzesun', u.id, { week: u.week, day: u.day, date }));
+    delete CK[u.id]; Object.keys(KAL).forEach(k => delete KAL[k]);
+    KMSG = { ok: '✓ ' + lbl + ' → ' + dowDm(date) + ' · klient zobaczy nowy dzień przy następnym otwarciu aplikacji' };
+    if (KW && $('#kw')) KW.k = kKey(u);
+    await renderKalendarz(...KARGS);
+  } catch (err) { KMSG = err.auth ? null : { err: lbl + ': ' + err.message }; kMsgDraw(); }
+}
+const kMsgHtml = () => !KMSG ? '' : '<p class="kmsg ' + (KMSG.err ? 'err' : KMSG.busy ? 'muted' : 'saved') + '" role="status">' + esc(KMSG.err || KMSG.busy || KMSG.ok) + '</p>';
+function kMsgDraw(){ const m = $('#kmsg'); if (m) m.innerHTML = kMsgHtml(); }
 /* ---------- karta klienta (v87: nagłówek z sygnałami i „Prowadź trening”, przegląd jak na telefonie) ---------- */
 /** faktyczny dzień jednostki z Sesje.start (klucz tydzień|jednostka) */
 function sesDates(d){ const o = {}; (d.sessions || []).forEach(s => { if (/T/.test(String(s.start || ''))) o[uKey(s.tydzien, s.jednostka)] = TL.localDate(new Date(s.start)); }); return o; }
@@ -1892,7 +2111,7 @@ function planList(d, dates, today){
 function puLine(r){
   const t = f => peTxt(r, f), sr = [t('sets'), t('reps')].filter(Boolean).join(' × ');
   const rx = [sr, t('kg') && t('kg') !== '0' ? t('kg') + (/^[\d,.]+$/.test(t('kg')) ? ' kg' : '') : '', t('pct') ? t('pct') + '%' : '', t('rpe') ? 'RPE ≤ ' + t('rpe') : ''].filter(Boolean).map(esc).join(' · ');
-  return '<div class="pxl"><span class="pp pp-' + esc(String(r.prio || '').toUpperCase()) + '">' + esc(r.prio || '') + '</span><div class="pxt"><b>' + esc(r.name) + (r.added ? ' <span class="muted">· dodane przez klienta</span>' : '') + (r.coach ? ' <span class="muted">· dodane w „Prowadź”</span>' : '') + '</b>' +
+  return '<div class="pxl"><span class="pp pp-' + esc(String(r.prio || '').toUpperCase()) + '">' + esc(r.prio || '') + '</span><div class="pxt"><b>' + esc(r.name) + (r.added ? ' <span class="muted">· dodane przez klienta</span>' : '') + (r.coach ? ' <span class="muted">· dodane przez Ciebie</span>' : '') + '</b>' +
     '<span class="mono">' + (rx || '–') + '</span>' + (t('note') ? '<small>' + esc(t('note')) + '</small>' : '') + '</div></div>';
 }
 function puInner(x, units, today){
