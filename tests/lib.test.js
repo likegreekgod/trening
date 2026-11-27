@@ -627,6 +627,10 @@ test('keyFrom: klucz z linku albo samego kodu', () => {
   assert.equal(L.keyFrom('  https://x/exec?a=1&k=kabc&b=2 '), 'kabc');
   assert.equal(L.keyFrom('k0123456789a'), 'k0123456789a');
   assert.equal(L.keyFrom('Twój kod: kABCDEF01234.'), 'kABCDEF01234');
+  assert.equal(L.keyFrom('Link: https://x/trening/?k=k0123456789a.'), 'k0123456789a');        // wklejone ze zdania
+  assert.equal(L.keyFrom('**https://x/trening/?k=k0123456789a**'), 'k0123456789a');
+  assert.equal(L.keyFrom('(https://x/trening/?k=k0123456789a)”'), 'k0123456789a');
+  assert.equal(L.keyFrom('https://x/trening/?k=k0123456789a%E2%80%9D'), 'k0123456789a');
   assert.equal(L.keyFrom('k0123'), '');
   assert.equal(L.keyFrom('https://x/trening/'), '');
   assert.equal(L.keyFrom(''), '');

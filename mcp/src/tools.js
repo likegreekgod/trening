@@ -338,6 +338,7 @@ TOOLS.push(
       treningi: { type: 'integer', minimum: 1, maximum: 100, description: 'liczba treningów (> 0)' },
       tryb: { type: 'string', enum: ['dodaj', 'ustaw'], description: 'dodaj (domyślnie) albo ustaw' },
       notatka: { type: 'string', description: 'opcjonalnie, do historii pakietu' },
+      widoczny: { type: 'boolean', description: 'opcjonalnie: klient widzi w aplikacji licznik i historię pakietu (karta „Twój pakiet”); domyślnie bez zmian, nowy pakiet niewidoczny' },
       data: { type: 'string', description: 'opcjonalnie RRRR-MM-DD; domyślnie dziś' } },
       required: ['id', 'treningi'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } },
@@ -349,7 +350,7 @@ const BOOL = v => (v === undefined || v === null || v === '' ? undefined : !!v);
 export const klientNowy = k => ({ zapisano: true, klient_id: k.id, imie: k.name, link: k.link || '',
   flagi: { tryb: k.mode, dod_serie: k.extra, masters: !!k.masters, zamiana: k.swap, skala: k.scale, bol: !!k.pain, sufit_oly: k.oly, wlasne: !!k.own, edycja: !!k.edit, aktywny: k.on !== false } });
 /** Stan pakietu (pkgOf_) przed i po → krótka odpowiedź. */
-export const pakietTxt = (p, przed) => nz({ zapisano: true, zostalo: p ? p.left : null, bylo: przed === undefined ? '' : przed, kupione: p ? p.n : '', waznosc: p ? p.to : '', od: p ? p.from : '' });
+export const pakietTxt = (p, przed) => nz({ zapisano: true, zostalo: p ? p.left : null, bylo: przed === undefined ? '' : przed, kupione: p ? p.n : '', waznosc: p ? p.to : '', od: p ? p.from : '', klient_widzi: p ? (p.show ? 'tak' : 'nie') : '' });
 
 export const KLATKI_MAX = 24, KLATKA_MAX = 400000;   // klatek w paczce, znaków base64 na klatkę (~300 kB)
 
@@ -437,7 +438,7 @@ export async function run(name, a, api, o) {
       const n = Number(need(a, 'treningi')), mode = s(a.tryb).toLowerCase() || 'dodaj';
       if (!Number.isInteger(n) || n < 1) throw new Error('Liczba treningów: całkowita większa od 0.');
       if (['dodaj', 'ustaw'].indexOf(mode) < 0) throw new Error('Tryb: dodaj albo ustaw.');
-      const p = await api('trPakiet', cid(a), nz({ mode, n, note: s(a.notatka), date: s(a.data) }));   // nieznany klient = błąd serwera „Nie ma klienta …”
+      const p = await api('trPakiet', cid(a), Object.assign(nz({ mode, n, note: s(a.notatka), date: s(a.data) }), BOOL(a.widoczny) === undefined ? {} : { show: !!a.widoczny }));   // nieznany klient = błąd serwera „Nie ma klienta …”
       return pakietTxt(p, p && p.prev !== null && p.prev !== undefined ? p.prev : '');
     }
     default: throw new Error('Nieznane narzędzie: ' + name);
