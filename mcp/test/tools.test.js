@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS } from '../src/tools.js';
 import { handle, handleBody, VERSIONS } from '../src/mcp.js';
+import { UI_DZIS } from '../src/ui.js';
 
 const PULPIT = {
   today: '2026-11-27', at: '2026-11-27T06:00:00Z',
@@ -119,11 +120,33 @@ test('MCP: initialize, tools/list, tools/call, błędy jako wynik', async () => 
   const bad = await handle({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'przesun', arguments: { id: 'ania', tydzien: 3, jednostka: 'A', data: '2026-11-28' } } }, ctx);
   assert.equal(bad.result.isError, true); assert.match(bad.result.content[0].text, /zrobiona/);
   assert.equal((await handle({ jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'nie_ma' } }, ctx)).error.code, -32602);
-  assert.equal((await handle({ jsonrpc: '2.0', id: 7, method: 'resources/list' }, ctx)).error.code, -32601);
+  assert.equal((await handle({ jsonrpc: '2.0', id: 7, method: 'resources/nie_ma' }, ctx)).error.code, -32601);
   assert.equal((await handle({ id: 8 }, ctx)).error.code, -32600);
   const batch = await handleBody([{ jsonrpc: '2.0', id: 9, method: 'ping' }, { jsonrpc: '2.0', method: 'notifications/initialized' }], ctx);
   assert.deepEqual(batch, [{ jsonrpc: '2.0', id: 9, result: {} }]);
   // błąd logowania nie jest zwykłym wynikiem: index.js odpowiada wtedy 401
   const auth = Object.assign(new Error('Logowanie: bilet wygasł'), { auth: true });
   await assert.rejects(handle({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'dzis' } }, { api: async () => { throw auth; } }), /Logowanie/);
+});
+
+test('karty MCP Apps: zasób ui:// z kartą Dziś, narzędzie „dzis” wskazuje kartę', async () => {
+  const ctx = { api: async () => PULPIT, today: '2026-11-27' };
+  const init = await handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25' } }, ctx);
+  assert.ok(init.result.capabilities.resources);
+  const list = await handle({ jsonrpc: '2.0', id: 2, method: 'resources/list' }, ctx);
+  assert.deepEqual(list.result.resources.map(r => [r.uri, r.mimeType]), [[UI_DZIS, 'text/html;profile=mcp-app']]);
+  const read = await handle({ jsonrpc: '2.0', id: 3, method: 'resources/read', params: { uri: UI_DZIS } }, ctx);
+  const c = read.result.contents[0];
+  assert.equal(c.mimeType, 'text/html;profile=mcp-app');
+  assert.match(c.text, /^<!doctype html>/); assert.match(c.text, /ui\/initialize/); assert.match(c.text, /decyzja_asystent/);
+  assert.doesNotMatch(c.text, /https?:\/\/(?!www\.w3)/, 'karta nie sięga do sieci');
+  assert.deepEqual(c._meta.ui.csp.connectDomains, []);
+  assert.equal((await handle({ jsonrpc: '2.0', id: 4, method: 'resources/read', params: { uri: 'ui://nie/ma' } }, ctx)).error.code, -32002);
+  const tools = (await handle({ jsonrpc: '2.0', id: 5, method: 'tools/list' }, ctx)).result.tools;
+  assert.equal(tools.find(t => t.name === 'dzis')._meta.ui.resourceUri, UI_DZIS);
+  // skrypt karty da się przetworzyć (bez błędu składni)
+  new Function(c.text.match(/<script>([\s\S]*)<\/script>/)[1]);
+  // wszystkie decyzje z karty są dozwolone w narzędziu
+  const enumD = TOOLS.find(t => t.name === 'decyzja_asystent').inputSchema.properties.decyzja.enum;
+  ['tak', 'nie', 'czytane', 'cofnij'].forEach(d => { assert.ok(enumD.includes(d)); assert.match(c.text, new RegExp("'" + d + "'")); });
 });

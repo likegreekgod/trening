@@ -8,6 +8,7 @@ Szkic i plan PR-ów: Claude Doc „Szkic D: panel trenera w Claude (MCP)”, zmi
 - **Logowanie**: Claude rejestruje się w Workerze (OAuth 2.1, biblioteka `@cloudflare/workers-oauth-provider`), trener widzi stronę „Połączyć „Claude” z panelem trenera?”, potem loguje się w Google tym samym kontem co do panelu. Worker wpuszcza tylko adresy z sekretu `TRENER_EMAIL`.
 - **Bilet do arkusza**: z Google zostaje refresh token (zaszyfrowany w danych grantu w KV). Z niego Worker bierze świeży ID token i wysyła go do `/exec` jako `token`, tak jak panel. `trAuth_` w Apps Script sprawdza go bez zmian.
 - **MCP**: bez stanu, same odpowiedzi JSON (`src/mcp.js`), narzędzia w `src/tools.js` (odczyt: `dzis`, `klienci`, `kalendarz`, `klient`, `jednostka`; zapis: `przesun`, `zmien_plan`, `decyzja_asystent`, `komentarz_sesji`). Odpowiedzi są skrócone: bez linków z kluczami klientów i bez linków do filmów.
+- **Karty (MCP Apps)**: `src/ui.js`. Narzędzie `dzis` ma w `_meta.ui.resourceUri` kartę `ui://sila-z-ruchu/dzis.html` (HTML bez bibliotek i bez sieci, protokół `ui/*` przez postMessage). claude.ai pokazuje ją pod odpowiedzią: kto dziś trenuje, propozycje asystentów AI z „✓ Zatwierdź” / „✕ Odrzuć” (powód, „zapamiętaj jako zasadę”), „Przeczytane”, „↶ Cofnij”, „Wymaga uwagi”. Przyciski wołają przez gospodarza narzędzie `decyzja_asystent`.
 - **Dziennik**: zapisy z Claude idą z `src: 'mcp'`, a serwer dopisuje je do zakładki API jako „claude: trPrzesun” itp. (`mcpLogRow_`, lista `TR_MCP_ZAPIS` = `ZAPIS` w `src/tools.js`, test pilnuje zgodności).
 
 ## Uruchomienie (raz, trener)
@@ -21,7 +22,7 @@ Szkic i plan PR-ów: Claude Doc „Szkic D: panel trenera w Claude (MCP)”, zmi
    `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `GOOGLE_CLIENT_ID` (ten sam co `TRENER_CLIENT_ID`), `GOOGLE_CLIENT_SECRET`, `TRENER_EMAIL`.
 4. GitHub → Actions → „Wdrożenie pośrednika MCP (panel w Claude)” → Run workflow. Każde scalenie zmian w `mcp/` wdraża się potem samo.
 5. **claude.ai** → Ustawienia → Konektory → Dodaj własny konektor: nazwa „Siła z Ruchu – trener”, adres `https://trening-mcp.<subdomena>.workers.dev/mcp` → Połącz → „Połącz” → konto Google trenera.
-6. W czacie: „Co dziś w panelu?”.
+6. W czacie: „Kto dziś trenuje?”.
 
 Klucze i sekrety tylko w Cloudflare i w sekretach GitHuba, nigdy w repo ani w czacie.
 
@@ -30,6 +31,7 @@ Klucze i sekrety tylko w Cloudflare i w sekretach GitHuba, nigdy w repo ani w cz
 ```bash
 cd mcp && npm install
 npm test               # czyste funkcje (tools.js, mcp.js)
+node test/karta.mjs /tmp   # karta Dziś w atrapie gospodarza (Playwright): przyciski i zrzuty jasny / ciemny / telefon
 bash test/e2e.sh       # cały łańcuch lokalnie: rejestracja, zgoda, „Google”, bilet, odświeżenie, narzędzia (atrapa w test/fake.mjs)
 npx wrangler deploy --dry-run
 ```
