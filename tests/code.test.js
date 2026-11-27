@@ -2471,6 +2471,45 @@ test('agent: zgłoszenia, lista dla pulpitu, zasady i ustawienia z panelu', () =
   ['trAgent', 'trAgentKlucz', 'trAgentUstaw', 'trZasady', 'trZasadyUstaw'].forEach(k => assert.ok(C.TR_FNS[k], k));
 });
 
+test('asystent: decyzje trenera (zatwierdź zmienia plan, odrzuć, pamięć decyzji, zapamiętaj jako zasadę)', () => {
+  const P = (nr, name, o) => Object.assign({ klient: 'ania', tydzien: 12, jednostka: 'D1', tytul: 'Nogi', nr: nr, cwiczenie: name, prio: 'A', serie: 3, powt: '5', kg: 80, blok: 'B2', zrodlo: '', uwagi: '' }, o || {});
+  const plan = [P(1, 'Przysiad tylny'), P(2, 'Wyciskanie leżąc', { prio: 'B', uwagi: 'pauza' }), P(1, 'Przysiad tylny', { klient: 'bartek' })];
+  const prop = o => Object.assign({ id: 'ania|p|1', klient: 'ania', tydzien: 12, jednostka: 'D1', status: 'czeka', zapisano: '2026-11-26' }, o);
+  // ciężar i serie: przez trPlanEdit_ (te same reguły co edycja w panelu)
+  assert.deepEqual(plain(C.agApply_(prop({ typ: 'ciezar', nr: 1, cwiczenie: 'Przysiad tylny', tresc: '{"kg":82.5}' }), plan, [], []).set), [[0, { kg: 82.5 }]]);
+  assert.deepEqual(plain(C.agApply_(prop({ typ: 'serie', nr: 2, cwiczenie: 'Wyciskanie leżąc', tresc: '{"serie":4}' }), plan, [], []).set), [[1, { serie: 4 }]]);
+  // zamiana: tylko ta jednostka, ślad w uwagach
+  const z = plain(C.agApply_(prop({ typ: 'zamiana', nr: 2, cwiczenie: 'Wyciskanie leżąc', tresc: '{"na":"Wyciskanie hantli"}', powod_klienta: 'bark' }), plan, [], []));
+  assert.deepEqual(z.set, [[1, { cwiczenie: 'Wyciskanie hantli', uwagi: 'pauza · zamiana (asystent): Wyciskanie leżąc → Wyciskanie hantli | bark' }]]);
+  // dodatkowy trening: bez zmiany planu
+  assert.deepEqual(plain(C.agApply_(prop({ typ: 'trening', tresc: '{"data":"2026-11-29","opis":"góra"}' }), plan, [], [])), { set: [] });
+  // plan się zmienił albo jednostka zrobiona = odmowa
+  assert.match(C.agApply_(prop({ typ: 'ciezar', nr: 1, cwiczenie: 'Martwy ciąg', tresc: '{"kg":100}' }), plan, [], []).error, /Plan się zmienił/);
+  assert.match(C.agApply_(prop({ typ: 'ciezar', nr: 1, cwiczenie: 'Przysiad tylny', tresc: '{"kg":82.5}' }), plan, [{ klient: 'ania', tydzien: 12, jednostka: 'D1' }], []).error, /zrobiona/);
+  // lista na pulpit: id wiersza i szczegóły; odrzucone przez serwer osobno
+  const rows = [prop({ typ: 'ciezar', nr: 1, cwiczenie: 'Przysiad tylny', tresc: '{"kg":82.5}', powod_klienta: 'lekko' }),
+    prop({ id: 'ania|p|2', typ: 'serie', nr: 2, cwiczenie: 'Wyciskanie leżąc', tresc: '{"serie":5}', status: 'odrzucona', uwaga_serwera: 'Najwyżej 1 seria więcej (reguła 1.8)' }),
+    prop({ id: 'ania|p|3', typ: 'zamiana', nr: 2, cwiczenie: 'Wyciskanie leżąc', tresc: '{"na":"Pompki"}', status: 'odrzucona', decyzja_at: '2026-11-26T10:00:00Z', komentarz_trenera: 'najpierw technika', zapisano: '2026-11-25' }),
+    prop({ id: 'ania|p|4', typ: 'ciezar', nr: 1, cwiczenie: 'Przysiad tylny', tresc: '{"kg":80}', status: 'zatwierdzona', decyzja_at: '2026-11-24', zapisano: '2026-11-23' }),
+    prop({ id: 'ania|z|5', typ: 'zgloszenie:bol', powod_klienta: 'kolano', status: 'przeczytane', decyzja_at: '2026-11-25' })];
+  const o = plain(C.agOpen_(rows, { ania: 'Ania' }, '2026-11-26', 7));
+  assert.deepEqual(o.map(x => [x.pid, x.typ, x.kg, x.week, x.day, x.nr, x.why]), [['ania|p|1', 'ciezar', 82.5, 12, 'D1', 1, 'lekko']]);
+  assert.deepEqual(plain(C.agOdrz_(rows, { ania: 'Ania' }, '2026-11-26', 7)), [{ name: 'Ania', at: '2026-11-26', text: 'Wyciskanie leżąc: 5 serie', uwaga: 'Najwyżej 1 seria więcej (reguła 1.8)' }]);
+  // pamięć bota: decyzje trenera i czekające, bez odrzuconych przez serwer i bez zgłoszeń, najstarsze pierwsze
+  const d = plain(C.agDecyzje_(rows, 'ania', 20));
+  assert.deepEqual(d, [{ data: '2026-11-24', co: 'Przysiad tylny: 80 kg', status: 'zatwierdzona przez trenera' },
+    { data: '2026-11-26', co: 'Wyciskanie leżąc → Pompki', status: 'odrzucona przez trenera', komentarz: 'najpierw technika' },
+    { data: '2026-11-26', co: 'Przysiad tylny: 82,5 kg', status: 'czeka na trenera' }]);
+  assert.equal(C.agDecyzje_(rows, 'ania', 1).length, 1);
+  const sp = C.agChatSystem_({ decyzje: d });
+  assert.match(sp, /## Ostatnie decyzje trenera/); assert.match(sp, /Pompki · odrzucona przez trenera · „najpierw technika”/);
+  // zapamiętaj jako zasadę: dopisana linia, limit długości
+  assert.equal(C.agMemo_('kolano: bez skoków\n', '27.11 trener odrzucił: Pompki.').ogr, 'kolano: bez skoków\n- 27.11 trener odrzucił: Pompki.');
+  assert.equal(C.agMemo_('', 'x').ogr, '- x');
+  assert.match(C.agMemo_('a'.repeat(5000), 'x').error, /pełne/);
+  assert.ok(C.TR_FNS.trPropozycja);
+});
+
 test('czat „Wypróbuj asystenta”: narzędzia, historia, pętla akcji, instrukcja', () => {
   const C = require('./load-code')();
   const plain = x => JSON.parse(JSON.stringify(x));

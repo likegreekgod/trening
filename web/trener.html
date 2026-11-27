@@ -148,6 +148,7 @@
   .ini i{position:absolute;right:-1px;bottom:-1px;width:13px;height:13px;border-radius:50%;border:2px solid var(--surface);background:var(--lv,var(--line))}
   .dbar{display:block;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin-top:6px;max-width:440px}.dbar i{display:block;height:100%;background:var(--accent);border-radius:3px}.dbar.low i{background:var(--bad)}
   .heatc summary{list-style:none;cursor:pointer;display:flex;align-items:center;min-height:32px}.heatc summary::-webkit-details-marker{display:none}
+  .achd summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:8px;min-height:44px;flex-wrap:wrap}.achd summary::-webkit-details-marker{display:none}.achd summary h2{margin:0}.achd summary h2::before{content:"▸ ";color:var(--muted)}.achd[open] summary h2::before{content:"▾ "}.achd summary .muted{font-size:13px}
   .heatc summary h2{margin:0}.heatc summary::after{content:"▸";margin-left:8px;color:var(--muted)}.heatc[open] summary::after{content:"▾"}.heatc[open] summary{margin-bottom:10px}
   .b{min-height:44px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);padding:0 16px;font-weight:600}
   .b.p{background:var(--primary);color:var(--on-primary);border:0}
@@ -276,6 +277,10 @@
   .ctx summary{cursor:pointer;min-height:auto}
   .ctx ul{margin:6px 0 0;padding-left:18px}
   .saved{color:var(--ok);font-weight:600;font-size:14px}
+  .asy .api{padding:12px 0;border-bottom:1px solid var(--line)}.asy .api:last-of-type{border-bottom:0}.aph{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.aph a{color:inherit;text-decoration:none}.aph .muted{font-size:13px}
+  .atag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--surface-2)}.atag.bad{background:var(--bad);color:var(--on-primary)}
+  .apw{margin:6px 0;line-height:1.45}.apr{margin:0 0 8px;color:var(--muted);font-size:14px;line-height:1.45}.amem{display:flex;gap:8px;align-items:center;font-size:14px;margin:0 0 8px;min-height:44px}.amem input{width:20px;height:20px}
+  .asy textarea.awhy{width:100%;box-sizing:border-box;margin:4px 0 4px;font:inherit;padding:8px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--ink)}.asy .row2{flex-wrap:wrap}.aodrz{margin-top:10px}.aodrz ul{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.5}
   #busy{position:fixed;top:0;left:0;right:0;height:3px;background:var(--accent);transform-origin:left;animation:busy 1.2s ease-in-out infinite}
   @keyframes busy{0%{transform:scaleX(0)}50%{transform:scaleX(.7)}100%{transform:scaleX(1);opacity:0}}
   @media (prefers-reduced-motion:reduce){#busy{animation:none}}
