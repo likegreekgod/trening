@@ -3726,3 +3726,47 @@ test('Kolejność i nazwa ćwiczenia: strzałki i ✎ w kreatorze (obwód w cał
     await ctx.close();
   }
 });
+
+// --- sekcje jednostki (Rozgrzewka / Główne / Korekcyjne, Plan `sekcja`) ---
+const SEK = (() => {
+  const R = (o, name, prio, section, x) => Object.assign({ week: 1, day: 'T1', title: 'Dół', date: '2026-10-06', order: o, name, prio, sets: 1, reps: '10', pct: null, kg: 'BW', rpe: '', note: '', extra: 0, drop: 0, group: '', block: 'B1', swaps: [], section }, x || {});
+  return Object.assign({}, PRO, { plan: [R(1, 'Glute Bridge', 'K', 'R'), R(2, 'Band Pull-Apart', 'K', 'R'), R(3, 'Przysiad', 'A', '', { sets: 2, kg: 60, reps: '5' }), R(4, 'Pompki', 'B', 'G'), R(5, 'Dead Bug', 'K', '')] });
+})();
+for (const scheme of ['light', 'dark']) test(`Sekcje ${scheme}: nagłówki w kolejności planu, licznik, samo zwijanie zrobionej, zapamiętany stan, „Zwiń zrobione”, etykieta w trybie skupienia`, async () => {
+  const calls = [];
+  const { ctx, p } = await page(calls, false, { data: SEK, scheme });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.sek-h');
+  const heads = () => p.$$eval('.sek-h', h => h.map(x => x.querySelector('.sek-n').textContent + ' ' + x.querySelector('.sek-m').textContent + (x.classList.contains('shut') ? ' [zwinięta]' : '')));
+  assert.deepEqual(await heads(), ['Rozgrzewka 2 · 0/2', 'Główne 2 · 0/2', 'Korekcyjne 1 · 0/1']);
+  assert.equal((await p.$$('.card[data-card="1"] .badge, .card[data-card="3"] .badge, .card[data-card="5"] .badge')).length, 0);   // plakietka powtarzająca sekcję znika
+  assert.equal(await p.textContent('.card[data-card="4"] .badge.bp'), 'opcjonalne');
+  await p.click('.set[data-o="1"][data-s="1"] .ok'); await p.waitForTimeout(60);
+  assert.deepEqual((await heads())[0], 'Rozgrzewka 2 · 1/2');
+  await p.click('#rest [data-r="0"]');
+  await p.click('.set[data-o="2"][data-s="1"] .ok'); await p.waitForTimeout(60);
+  assert.deepEqual((await heads())[0], 'Rozgrzewka 2 · 2/2 ✓ [zwinięta]');            // zrobiona sekcja zwija się sama
+  assert.equal(await p.isHidden('.card[data-card="1"]'), true);
+  assert.equal(await p.getAttribute('.sek-h[data-sek="0"]', 'aria-expanded'), 'false');
+  await p.click('#rest [data-r="0"]');
+  await p.click('.sek-h[data-sek="0"]');                                                 // ręcznie rozwinięta: zapamiętane
+  assert.equal(await p.isVisible('.card[data-card="1"]'), true);
+  if (process.env.SCREENS !== '0') { fs.mkdirSync(SCREENS, { recursive: true }); await p.screenshot({ path: path.join(SCREENS, `sekcje-${scheme}.png`), fullPage: true }); }
+  assert.deepEqual(await a11y(p), []);
+  assert.equal(await p.evaluate(() => localStorage.getItem('sk_kabc')), '{"1|T1":{"0":0}}');   // stan na klient|tydzień|jednostka
+  await p.click('#umore'); await p.click('#fold-all');                                   // „Zwiń zrobione” obejmuje całe sekcje
+  assert.equal(await p.isHidden('.card[data-card="1"]'), true);
+  assert.match((await heads())[0], /zwinięta/);
+  assert.equal(await p.isVisible('.card[data-card="3"]'), true);
+  await p.evaluate(() => localStorage.setItem('fx_kabc', '1')); await p.reload(); await p.waitForSelector('#fx');
+  assert.equal((await p.$$('.sek-h')).length, 0);                                        // tryb skupienia: bez nagłówków, z etykietą
+  assert.equal(await p.textContent('.fx-sk'), 'Rozgrzewka');                            // atrapa bez serii po przeładowaniu: start od pierwszego ćwiczenia
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+test('Sekcje: stary plan (wszystko w Głównych) bez nagłówków', async () => {
+  const { ctx, p } = await page([], false, { data: CIRC });
+  await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]');
+  assert.equal((await p.$$('.sek-h')).length, 0);
+  assert.equal(await p.textContent('.card[data-card="1"] .badge.bp'), 'główne');
+  await ctx.close();
+});
