@@ -305,3 +305,47 @@ test('pakiet: dodaj (domyślnie) / ustaw przez trPakiet, ile zostało, walidacja
   await assert.rejects(run('pakiet', { id: 'nikt', treningi: 1 }, api), /Nie ma klienta/);
   calls.forEach(c => assert.ok(ZAPIS.includes(c[0]), c[0]));
 });
+
+test('trening prowadzony: start, ćwiczenie (drabinka), serie w planie, zakończenie, przeniesienie; P oznaczone w kalendarzu, karcie i jednostce', async () => {
+  const calls = [];
+  const api = async (fn, ...a) => { calls.push([fn, ...a]);
+    if (fn === 'trProwadzonyStart') return { week: 3, day: 'P2', date: '2026-11-27', title: 'Trening z trenerem', made: !!a[1].ex, name: 'Maciek', cwiczenia: a[1].ex ? ['1 Z-Press: 30×12'] : undefined, ostrzezenia: [] };
+    if (fn === 'trProwadzonyCw') return { week: 3, day: 'P2', cwiczenia: ['2 Front Squat: 30×9, 30×8', '3 Push-Up: 1, 2'], ostrzezenia: ['Pompki X: nie ma w bazie ćwiczeń, więc brak filmu i partii'] };
+    if (fn === 'trSerie') return { n: 4, cwiczenia: ['1 Przysiad: 80×5 🟢, 80×5 🟢'] };
+    if (fn === 'trZakoncz') return { week: 3, day: 'P2', name: 'Maciek', led: true, feel: 4, rpe: 9, minutes: 50, pain: '', pkg: { before: 1, after: 0, on: true }, warn: [] };
+    if (fn === 'trZPlanu') return { week: 1, from: 'S1', day: 'P1', rows: 3, closed: true, pkg: { before: 2, after: 1 }, name: 'Maciek' };
+  };
+  const st = await run('prowadzony_start', { id: 'Maciek' }, api);
+  assert.deepEqual(calls[0], ['trProwadzonyStart', 'maciek', {}]);
+  assert.equal(st.jednostka, 'P2'); assert.equal(st.tydzien, 3); assert.match(st.nowa, /otwarta/); assert.match(st.podglad, /#k\/maciek\/sesje$/);
+  const st2 = await run('prowadzony_start', { id: 'maciek', cwiczenia: [{ cwiczenie: 'Z-Press', serie: [{ kg: '30', powt: '12' }] }] }, api);
+  assert.deepEqual(calls[1][2].ex, [{ cwiczenie: 'Z-Press', serie: [{ kg: '30', powt: '12' }] }]); assert.equal(st2.nowa, 'tak');
+  const lad = [9, 8].map(p => ({ kg: 30, powt: p })), pu = [1, 2].map(p => ({ powt: p, swiatlo: 'lekko' }));
+  const cw = await run('prowadzony_cwiczenie', { id: 'maciek', tydzien: 3, jednostka: 'P2', cwiczenia: [{ cwiczenie: 'Front Squat', obwod: 'A', serie: lad }, { cwiczenie: 'Push-Up', obwod: 'A', serie: pu }] }, api);
+  assert.deepEqual(calls[2], ['trProwadzonyCw', 'maciek', { week: 3, day: 'P2', ex: [
+    { cwiczenie: 'Front Squat', obwod: 'A', serie: [{ kg: '30', powt: '9' }, { kg: '30', powt: '8' }] },
+    { cwiczenie: 'Push-Up', obwod: 'A', serie: [{ powt: '1', swiatlo: 'lekko' }, { powt: '2', swiatlo: 'lekko' }] }] }]);
+  assert.equal(cw.cwiczenia.length, 2); assert.equal(cw.ostrzezenia.length, 1);
+  await assert.rejects(run('zapisz_serie', { id: 'maciek', tydzien: 3, jednostka: 'S1' }, api), /serie/);
+  const zs = await run('zapisz_serie', { id: 'maciek', tydzien: 3, jednostka: 'S1', wszystkie_wg_planu: true, serie: [{ nr: 1, seria: '2', swiatlo: 'ciezko' }] }, api);
+  assert.deepEqual(calls[3], ['trSerie', 'maciek', { week: 3, day: 'S1', sets: [{ nr: 1, seria: '2', swiatlo: 'ciezko' }], all: true }]); assert.equal(zs.serii, 4);
+  const z = await run('zakoncz_jednostke', { id: 'maciek', tydzien: 3, jednostka: 'P2', samopoczucie: 4, rpe_sesji: 9 }, api);
+  assert.deepEqual(calls[4], ['trZakoncz', 'maciek', { week: 3, day: 'P2', samopoczucie: 4, rpe_sesji: 9 }], 'bez zdejmij_z_pakietu: serwer bierze domyślne (tak)');
+  assert.equal(z.pakiet, 'było 1 → zostało 0'); assert.match(z.rodzaj, /prowadzony/);
+  await run('zakoncz_jednostke', { id: 'maciek', tydzien: 3, jednostka: 'S1', zdejmij_z_pakietu: false }, api);
+  assert.equal(calls[5][2].pkg, false);
+  const m = await run('prowadzony_z_planu', { id: 'maciek', tydzien: 1, jednostka: 'S1' }, api);
+  assert.equal(m.jest, 'P1'); assert.equal(m.pakiet, 'było 2 → zostało 1');
+  calls.forEach(c => assert.ok(ZAPIS.includes(c[0]), c[0]));
+  ['prowadzony_start', 'prowadzony_cwiczenie', 'zapisz_serie', 'zakoncz_jednostke', 'prowadzony_z_planu'].forEach(n => {
+    const t = TOOLS.find(x => x.name === n); assert.ok(t, n); assert.match(t.description, /wyraźną prośbę trenera/);
+    assert.equal(t.annotations.readOnlyHint, false); assert.equal(t.annotations.destructiveHint, false);
+  });
+  ['prowadzony_cwiczenie', 'zapisz_serie'].forEach(n => assert.equal(TOOLS.find(x => x.name === n).annotations.idempotentHint, true));
+  // oznaczenie P: kalendarz, jednostka, karta (nie w „nadchodzących” planu)
+  const kal = kalendarz({ from: '2026-11-24', to: '2026-11-30', units: [{ date: '2026-11-27', name: 'Maciek', id: 'maciek', week: 3, day: 'P2', st: 'done', prow: true, led: true, ex: 2, done: 10, sets: 10 }] });
+  assert.match(kal.jednostki[0].rodzaj, /prowadzony/);
+  const d = { cfg: { id: 'maciek', name: 'Maciek' }, plan: [{ week: 3, day: 'P2', order: 1, name: 'Z-Press', sets: 4, reps: '12,12,9,8', date: '2026-11-28', led: true, title: 'Trening z trenerem' }], logs: [], sessions: [] };
+  assert.match(jednostka(d, 3, 'P2').rodzaj, /prowadzony/);
+  assert.equal(klient(d, { today: '2026-11-27' }).nadchodzace_jednostki, undefined, 'P nie jest nadchodzącą jednostką planu');
+});

@@ -118,6 +118,7 @@ Od 25.11 nowe wpisy są w `docs/zmiany/` (plik na PR, najnowsze = nazwy od końc
 
 ## Czeka na Damiana
 
+- Po scaleniu treningu prowadzonego (27.11, `docs/zmiany/2026-11-27-trening-prowadzony.md`): w Claude przenieść S1 Maćka do P1 (`prowadzony_z_planu`), zrobić próbny trening z narzędziami `prowadzony_*`, sprawdzić panel (Sesje, Kalendarz, Bloki po „przelicz”, Pakiety). Skill trenera: P… zarezerwowane, nie w plikach planu.
 - Po scaleniu sekcji ćwiczeń (27.11): w projekcie trenera podmienić w SKILL.md opis pliku planu (pole `sekcja`, rozgrzewka jako zwykłe ćwiczenia, tekst w wątku „Dodaj zwijane sekcje ćwiczeń”), przebudować ZIP; wrzucić plan z rozgrzewką `"sekcja": "R"` i obejrzeć w aplikacji całą listę i tryb skupienia.
 
 - Po scaleniu poprawek Podsumowania (25.11): Trening → Odśwież podsumowanie; w Klientach pojawią się nagłówki `max_rwanie`, `max_podrzut`, `start`. U ciężarowca wpisz maksy i datę startu (RRRR-MM-DD), odśwież i sprawdź w Podsumowanie_OLY kolumny `K_value`, `dni_do_startu`, `sygnaly`. Skill trenera: dopisać nowe kolumny do SKILL.md.

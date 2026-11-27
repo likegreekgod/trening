@@ -203,7 +203,7 @@
   L.lightWeeks = plan => {
     const ton = {};
     plan.forEach(r => {
-      if (r.own) return;                                                       // własny trening klienta nie zmienia obrazu planu
+      if (r.own || r.led) return;                                              // własny i prowadzony trening nie zmieniają obrazu planu
       const kg = typeof r.kg === 'number' ? r.kg : NaN, reps = L.repsDefault(r.reps);
       ton[r.week] = (ton[r.week] || 0) + (kg > 0 && reps > 0 ? (Number(r.sets) || 0) * reps * kg : 0);
     });
@@ -220,7 +220,7 @@
   /** tydzień planu dla daty: ostatni tydzień, którego pierwsza jednostka trenera wypada nie później niż ta data (inaczej pierwszy) */
   L.ownWeek = (plan, date) => {
     const first = {};
-    plan.forEach(r => { if (r.own || !r.date) return; if (!first[r.week] || r.date < first[r.week]) first[r.week] = r.date; });
+    plan.forEach(r => { if (r.own || r.led || !r.date) return; if (!first[r.week] || r.date < first[r.week]) first[r.week] = r.date; });
     const ws = Object.keys(first).map(Number).sort((a, b) => a - b);
     if (!ws.length) return Math.max(1, ...plan.map(r => Number(r.week) || 1));
     return ws.filter(w => first[w] <= date).pop() || ws[0];
@@ -358,10 +358,12 @@
   };
   /** szablon trenera {name, ex: [{name, sets, reps, circuit}]} → lista do kreatora z kg z historii klienta */
   L.tplUnit = (tpl, logs) => ({ title: tpl.name, list: (tpl.ex || []).map(e => ({ name: e.name, sets: e.sets, reps: String(e.reps), kg: L.histKg(logs, e.name), c: e.circuit || '' })) });
-  L.liveNextDay = (plan, week) => {
-    const n = plan.filter(r => r.week === week).map(r => +((/(\d+)$/.exec(String(r.day)) || [])[1] || 0));
-    return 'T' + ((n.length ? Math.max(...n) : 0) + 1);
+  /** nowa jednostka w „Prowadź” = trening prowadzony P<n> (poza planem, numeracja ciągła u klienta, jak ledNextDay_ w Prowadzony.gs) */
+  L.liveNextDay = plan => {
+    const n = plan.map(r => (/^P(\d{1,3})$/.exec(String(r.day)) || [])[1]).filter(Boolean).map(Number);
+    return 'P' + ((n.length ? Math.max(...n) : 0) + 1);
   };
+  L.ledDay = d => /^P\d{1,3}$/.test(String(d || ''));
   /**
    * notatka trenera do ćwiczenia (prowadzony trening): wiersz serii, w którym siedzi (jak liveNoteRow_ w Code.gs).
    * rows = [{seria, notatka_trenera, komentarz_trenera}] → indeks albo -1: wiersz z notatką lub komentarzem (pierwszy wg serii),
@@ -1015,7 +1017,7 @@
   L.weekSummary = (mon, d) => {
     const end = L.addDays(mon, 6), inW = x => !!x && x >= mon && x <= end, D = d.dates || {};
     const ud = (w, j, fb) => D[w + '|' + j] || String(fb || '').slice(0, 10);
-    const us = (d.units || []).filter(u => inW(u.date)), plan = us.filter(u => !u.own);
+    const us = (d.units || []).filter(u => inW(u.date)), plan = us.filter(u => !u.own && !u.led);
     const pk = {}; plan.forEach(u => { pk[u.week + '|' + u.day] = 1; });
     const planSets = (d.plan || []).reduce((n, r) => n + (pk[r.week + '|' + r.day] ? Number(r.sets) || 0 : 0), 0);
     const sets = (d.sets || []).filter(x => inW(x.date)), tonOf = xs => Math.round(xs.reduce((t, x) => t + (x.kg > 0 && x.reps > 0 ? x.kg * x.reps : 0), 0));
@@ -1044,7 +1046,7 @@
     const notes = (d.notes || []).filter(n => inW(ud(n.week, n.unit, n.date))).length;
     return {
       mon, end, week: plan.length ? plan[0].week : us.length ? us[0].week : null,
-      units: { plan: plan.length, done: plan.filter(u => u.done).length, list: plan.map(u => ({ day: u.day, date: u.date, done: !!u.done })), own: us.filter(u => u.own && u.done).length },
+      units: { plan: plan.length, done: plan.filter(u => u.done).length, list: plan.map(u => ({ day: u.day, date: u.date, done: !!u.done })), own: us.filter(u => u.own && u.done).length, led: us.filter(u => u.led && u.done).length },
       sets: { done: sets.length, plan: planSets }, ton: tonOf(sets), tonAvg: prev.length ? Math.round(prev.reduce((a, b) => a + b, 0) / prev.length) : null,
       min: vals('czas_min').reduce((a, b) => a + b, 0), rpe: vals('rpe_sesji'), rpeAvg: avg(vals('rpe_sesji')), feel: avg(vals('samopoczucie').filter(v => v > 0)),
       pain, ready, records: recs.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, 'pl')),
@@ -1618,6 +1620,7 @@
   /** jednostka z importu historii (tydzień 0, dzień H<rrmmdd>[b…]) i jej nazwa w aplikacji: źródło z tytułu („Hevy · Nogi” → „Hevy”) */
   L.importDay = d => /^H\d{6}[a-h]?$/.test(String(d || ''));
   L.dayLabel = (day, title) => L.importDay(day) ? (String(title || '').split(' · ')[0].trim() || 'Import') : String(day === undefined || day === null ? '' : day);
+  L.LED_TAG = 'z trenerem';   // etykieta treningu prowadzonego (P…) w aplikacji klienta
 
   /* ---------- Agent AI klienta (panel → ustawienia klienta; Agent.gs): opis API dla bota ---------- */
   L.AG_READ = [

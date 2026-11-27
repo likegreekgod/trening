@@ -253,7 +253,7 @@ function draw(){
   SS.forEach(function(x){
     var ex = (x.cwiczenia || []).slice(0, 2).map(function(e){ return e.cwiczenie + ' ' + (e.serie || ''); }).join(' · ');
     var u = x.uwagi_klienta ? ' · „' + x.uwagi_klienta + '”' : '';
-    var g1 = add(el('div', 'grow'), el('div', 'nm', dShort(x.data) + ' · ' + (x.tytul || x.jednostka)), el('div', 'sub ln', ex + u));
+    var g1 = add(el('div', 'grow'), el('div', 'nm', dShort(x.data) + ' · ' + (x.tytul || x.jednostka) + (x.rodzaj ? ' · z trenerem' : '')), el('div', 'sub ln', ex + u));
     c2.appendChild(add(el('div', 'row'), g1, x.rpe_sesji !== undefined ? el('span', 'sub', 'RPE ' + pl(x.rpe_sesji)) : null));
   });
   add(g, c1, c2); app.appendChild(g);

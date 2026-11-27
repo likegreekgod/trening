@@ -1393,7 +1393,7 @@ function kColor(id){
 }
 const kBadge = u => u.st === 'done' ? '<i class="ok">✓</i>' : u.st === 'live' ? '<i class="lv">● w trakcie</i>' : u.st === 'late' ? '<i class="la">! zaległa</i>' : u.date === PUL.today ? '<i class="td">dziś</i>' : '';
 function kMeta(u){
-  const a = [u.ex + ' ćw.'];
+  const a = [u.ex + ' ćw.'].concat(u.prow ? ['poza planem'] : []);   // trening prowadzony P…
   if (u.st === 'done') a.push(u.done + ' serii', u.min ? u.min + ' min' : '', u.rpe !== null && u.rpe !== undefined ? 'RPE ' + pl(u.rpe) : '', u.led ? 'prowadzony' : '');
   else if (u.st === 'live') a.push(u.done + ' z ' + u.sets + ' serii');
   else a.push(u.sets + ' serii');
@@ -1512,7 +1512,7 @@ function kwBody(u, d){
   if (s && s.uwagi) h += '<div class="card"><p class="note" style="margin:0"><span class="eb">Uwaga klienta</span><br>' + esc(s.uwagi) + '</p></div>';
   if (s) h += '<div class="card">' + komBox(s, ex.length) + '</div>';
   else if (c && u.st !== 'done') h += '<div class="row kwgo">' + (kMovable(u) && rows.length ? '<label class="pc kwdt"><i class="lb">Dzień</i><input type="date" data-kwdate value="' + esc(u.date || '') + '" aria-label="Zmień dzień jednostki"></label>' : '') +
-    '<span class="hint">' + (u.st === 'live' ? 'Klient jest w trakcie.' : u.own ? 'Własny trening klienta.' : '') + '</span><span class="sp"></span>' +
+    '<span class="hint">' + (u.st === 'live' ? 'Klient jest w trakcie.' : u.own ? 'Własny trening klienta.' : u.prow ? 'Trening prowadzony, poza planem.' : '') + '</span><span class="sp"></span>' +
     (kMovable(u) && rows.length ? '<button type="button" class="b" data-kwedit>✎ Edytuj</button>' : '') + go(liveHref(u.id, u.week, u.day), '▶ Prowadź', 'acc') + '</div>';
   return h;
 }
@@ -1756,8 +1756,8 @@ function khHtml(id, tab){
   let eb = '', pills = '', name = (d && d.cfg.name) || (k && k.name) || (c && c.name) || id;
   if (d) {
     const dates = sesDates(d);
-    const cur = (d.plan || []).filter(r => !r.own).map(r => ({ r, dt: dates[uKey(r.week, r.day)] || r.date })).filter(x => x.dt && x.dt <= today).sort((a, b) => a.dt.localeCompare(b.dt)).pop();
-    const blk = cur && cur.r.block, bw = blk ? [...new Set((d.plan || []).filter(r => r.block === blk && !r.own).map(r => r.week))].sort((a, b) => a - b) : [];
+    const cur = (d.plan || []).filter(r => !r.own && !r.led).map(r => ({ r, dt: dates[uKey(r.week, r.day)] || r.date })).filter(x => x.dt && x.dt <= today).sort((a, b) => a.dt.localeCompare(b.dt)).pop();
+    const blk = cur && cur.r.block, bw = blk ? [...new Set((d.plan || []).filter(r => r.block === blk && !r.own && !r.led).map(r => r.week))].sort((a, b) => a - b) : [];
     eb = [blk ? 'Blok ' + esc(blk) + ' · tydz. ' + (bw.indexOf(cur.r.week) + 1) + ' z ' + bw.length : 'Bez bloku', d.cfg.simple ? 'Prosty' : 'PRO']
       .concat(!d.cfg.simple && d.cfg.scale === 'RIR' ? ['RIR'] : []).concat(d.cfg.masters ? ['masters'] : []).concat(d.cfg.active === false ? ['nieaktywny'] : []).join(' · ');
     // sygnały z Przeglądu + dyspozycja z ostatnich 3 dni, gdy nie „OK”
@@ -2253,7 +2253,7 @@ function peBad(f, v){
 function planUnits(d, dates){
   const done = TL.doneUnits(d.plan, d.sessions, d.logs);                     // Sesje albo seria A/B (jak unitsDone_ w Code.gs)
   const by = {};
-  (d.plan || []).filter(r => !r.own).forEach(r => { const u = uKey(r.week, r.day); (by[u] = by[u] || { u, week: r.week, day: r.day, title: r.title, block: r.block, date: dates[u] || r.date, rows: [] }).rows.push(r); });
+  (d.plan || []).filter(r => !r.own && !r.led).forEach(r => { const u = uKey(r.week, r.day); (by[u] = by[u] || { u, week: r.week, day: r.day, title: r.title, block: r.block, date: dates[u] || r.date, rows: [] }).rows.push(r); });
   return Object.values(by).map(x => Object.assign(x, { done: !!done[x.u], rows: x.rows.sort((a, b) => a.order - b.order), unote: (x.rows.find(r => r.unote) || {}).unote || '' }))
     .sort((a, b) => a.week - b.week || String(a.date || '9').localeCompare(String(b.date || '9')) || String(a.day).localeCompare(String(b.day)));
 }

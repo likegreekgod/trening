@@ -991,8 +991,9 @@ test('Prowadź trening: liveNoteRow, liveNextDay, planEdit trenera', () => {
   assert.equal(L.liveNoteRow([R(1), R(2, 'x')]), 1);
   assert.equal(L.liveNoteRow([R(0)]), -1);
   const plan = [{ week: 3, day: 'T1' }, { week: 3, day: 'T2' }, { week: 3, day: 'W4' }, { week: 4, day: 'T9' }];
-  assert.equal(L.liveNextDay(plan, 3), 'T5');
-  assert.equal(L.liveNextDay(plan, 7), 'T1');
+  assert.equal(L.liveNextDay(plan), 'P1', 'nowa jednostka w Prowadź = trening prowadzony P (poza planem)');
+  assert.equal(L.liveNextDay(plan.concat([{ week: 1, day: 'P2' }, { week: 4, day: 'P7' }])), 'P8', 'numeracja P ciągła u klienta');
+  assert.ok(L.ledDay('P3') && !L.ledDay('T3'));
   const P = [{ week: 1, day: 'T1', title: 'Nogi', date: '2026-11-22', order: 1, name: 'Przysiad', prio: 'A', sets: 3, reps: '5', kg: 85, block: 'B2' }];
   let r = L.planEdit(P, [], {}, { op: 'add', week: 1, day: 'T1', name: 'Wykrok', sets: 3, reps: 10, trainer: true });
   const a = r.plan[1];
