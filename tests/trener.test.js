@@ -268,7 +268,7 @@ test('panel: logowanie przyciskiem Google → ekran Dziś (liczby, kto dziś tre
   assert.equal(await p.evaluate(() => window.__gcfg.client_id), 'test.apps.googleusercontent.com');
   assert.equal(await p.evaluate(() => localStorage.getItem('tr_dev')), null);
   await p.click('#fake-g');
-  await p.waitForSelector('tr.row[data-k="ania"]');
+  await p.waitForSelector('.dr');
   assert.equal(await p.evaluate(() => localStorage.getItem('tr_dev')), '1');   // urządzenie trenera: aplikacja pokaże „Panel trenera”
   assert.equal(await p.getAttribute('#mine', 'href'), './');                   // „Mój trening” = aplikacja z kluczem zapamiętanym w telefonie
   const pul = calls.find(c => c.fn === 'trPulpit');
@@ -285,18 +285,19 @@ test('panel: logowanie przyciskiem Google → ekran Dziś (liczby, kto dziś tre
     ['Ania', 'Góra · 5 ćwiczeń · czeka', '▶ Prowadź', './?prowadz=ania&j=12%7CT2'],
     ['Bartek', 'FBW · zrobiony, 55 min, RPE 8', 'Sesja', '#k/bartek/sesje']]);
   assert.equal(await p.$$eval('.dr .dbar', a => a.length), 1);
-  // „Wymaga uwagi”: czerwony sygnał, filmy, blok, koniec planu (odpowiedzi klientów w osobnej karcie)
+  // „Skrzynka”: czerwony sygnał, filmy, blok, koniec planu (odpowiedzi klientów w osobnej karcie)
   const todo = await p.$$eval('.todo .it b', a => a.map(x => x.textContent));
   assert.deepEqual(todo, ['Ania: ból 5/10 kolano', 'Ania: 2 filmy bez komentarza', 'Bartek: blok B1 do zamknięcia', 'Bartek: plan kończy się za 5 dni']);
   assert.equal(await p.textContent('#n-filmy'), '2');
   assert.equal(await p.getAttribute('#nav a[data-v="dzis"]', 'aria-current'), 'page');
   assert.deepEqual(await p.$$eval('#rail-kl a', a => a.map(x => x.textContent)), ['Ania', 'Bartek', 'Celina', 'Darek']);   // klienci w menu, alfabetycznie
-  assert.equal(await p.$$eval('.heat i', a => a.length), 48);    // 4 klientów × 12 tygodni
+  assert.deepEqual(await p.$$eval('.todo .chip', a => a.map(x => x.textContent.replace(/\s+/g, ' ').trim())), ['Wszystko 6', 'Sygnały 1', 'Filmy 1', 'Odpowiedzi 2', 'Bloki i plany 2']);
+  assert.equal(await p.$('table.kl'), null, 'tabela klientów jest na ekranie Klienci');
   assert.match(await p.textContent('#at'), /dane z/);
   assert.equal(await p.textContent('#av'), 'T');                 // inicjał z biletu (atrapa ma tylko adres)
   await shot(p, 'trener-pulpit-jasny.png');
   // odświeżenie strony: bilet zapamiętany, bez ponownego logowania
-  await p.reload(); await p.waitForSelector('tr.row[data-k="ania"]');
+  await p.reload(); await p.waitForSelector('.dr');
   assert.equal(await p.isVisible('#login'), false);
   // przeliczenie
   await p.click('#recalc'); await p.waitForFunction(() => /09:30|10:30/.test(document.querySelector('#at').textContent));
@@ -315,8 +316,9 @@ test('panel: logowanie przyciskiem Google → ekran Dziś (liczby, kto dziś tre
 test('panel: karta klienta (przegląd, sesje, bloki, dyspozycja)', async () => {
   const calls = [];
   const { ctx, p } = await page(calls, { loggedIn: true });
-  await p.goto(base + 'trener.html');
-  await p.click('tr.row[data-k="ania"] td.nw');                  // klik w wiersz tabeli
+  await p.goto(base + 'trener.html#klienci'); await p.waitForSelector('table.kl');
+  assert.equal(await p.$$eval('.heat i', a => a.length), 48);    // obciążenie: 4 klientów × 12 tygodni
+  await p.click('table.kl a.who[href="#k/ania"]');               // imię otwiera kartę klienta
   await p.waitForSelector('.tabs');
   assert.equal(calls.find(c => c.fn === 'trKlient').args[0], 'ania');
   let txt = await p.textContent('#main');
@@ -324,7 +326,8 @@ test('panel: karta klienta (przegląd, sesje, bloki, dyspozycja)', async () => {
   // nagłówek: sygnały z Przeglądu i dyspozycja jako pigułki, „Prowadź trening” z najbliższą niezrobioną jednostką
   assert.deepEqual(await p.$$eval('.kpl .pill', a => a.map(x => x.textContent)), ['ból 5/10 kolano', '2 serie FAIL', 'dyspozycja: uwaga']);
   assert.equal((await p.textContent('.kgo')).trim(), '▶ Prowadź trening');
-  assert.match(await p.textContent('.khs'), /Filmy · 2\s*Ustawienia/);
+  assert.deepEqual(await p.$$eval('.tabs a', a => a.map(x => x.textContent)), ['Przegląd', 'Plan', 'Sesje', 'Bloki', 'Dyspozycja', 'Ustawienia', 'Filmy · 2']);
+  assert.equal(await p.getAttribute('.tabs a[data-kf]', 'href'), '#filmy/ania');
   assert.deepEqual(await p.$$eval('.stats .st', a => a.map(x => x.textContent)), ['1/2ten tydzień', '5/10ból, kolano', '1140sRPE, za dużo', '1,6 ttonaż −28%', 'Uwagadyspozycja 17.11']);
   assert.match(await p.getAttribute('.stats .st:nth-child(3)', 'title'), /ACWR 1,3/);
   // ostatnie sesje w skrócie: ten sam ciężar = sama ocena, uwaga klienta pod spodem
@@ -395,7 +398,7 @@ test('panel: wygasły bilet wraca do logowania, brak konfiguracji = instrukcja',
   assert.match(await p.textContent('#login-msg'), /bilet wygasł/);
   assert.equal(await p.evaluate(() => localStorage.getItem('tr_tok')), null);
   await p.waitForSelector('#fake-g'); await p.click('#fake-g');
-  await p.waitForSelector('tr.row[data-k="ania"]');
+  await p.waitForSelector('.dr');
   await ctx.close();
   const c2 = await page([], { ready: false });
   await c2.p.goto(base + 'trener.html'); await c2.p.waitForFunction(() => /skonfigurowany/.test(document.querySelector('#login-msg').textContent));
@@ -406,7 +409,7 @@ test('panel: wygasły bilet wraca do logowania, brak konfiguracji = instrukcja',
 test('panel: zrzuty w ciemnym motywie i na telefonie', async () => {
   for (const [scheme, vp, sfx] of [['light', null, 'jasny'], ['dark', null, 'ciemny'], ['light', { width: 390, height: 844 }, 'telefon-jasny'], ['dark', { width: 390, height: 844 }, 'telefon-ciemny']]) {
     const { ctx, p } = await page([], { loggedIn: true, scheme, vp });
-    await p.goto(base + 'trener.html'); await p.waitForSelector('tr.row[data-k="ania"]');
+    await p.goto(base + 'trener.html'); await p.waitForSelector('.dr');
     await shot(p, 'trener-pulpit-' + sfx + '.png');
     await p.goto(base + 'trener.html#k/ania'); await p.waitForSelector('.tabs');
     await shot(p, 'trener-klient-' + sfx + '.png');
@@ -558,7 +561,7 @@ test('panel: mało miejsca na Dysku = czerwony wpis w „Wymaga uwagi” z linki
   await p.goto(base + 'trener.html'); await p.waitForSelector('.todo .it');
   const it = await p.$$eval('.todo .it', a => a.map(x => [x.querySelector('b').textContent, x.querySelector('.dot').className, x.querySelector('a') ? x.querySelector('a').getAttribute('href') : '']));
   const d = it.find(x => /Dysku/.test(x[0]));
-  assert.ok(d, 'wpis o Dysku'); assert.equal(d[0], 'Na Dysku zostało 1,5 GB'); assert.match(d[1], /lv-bad/); assert.equal(d[2], '#ustawienia');
+  assert.ok(d, 'wpis o Dysku'); assert.equal(d[0], 'Na Dysku zostało 1,5 GB'); assert.match(d[1], /lv-bad/); assert.equal(d[2], '#ustawienia/dane');
   await ctx.close();
 });
 
@@ -566,12 +569,12 @@ test('panel: Więcej → Prowadzone treningi (miesiąc, na klienta, CSV do rozli
   for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
     const calls = [];
     const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
-    await p.goto(base + 'trener.html#wiecej'); await p.waitForSelector('.mo a[href="#prowadzone"]');
-    await p.click('.mo a[href="#prowadzone"]'); await p.waitForSelector('#pw-sum');
+    await p.goto(base + 'trener.html#wiecej'); await p.waitForSelector('.mo a[href="#rozliczenia"]');
+    await p.click('.mo a[href="#rozliczenia"]'); await p.waitForSelector('#pw-sum');
     assert.equal(calls.find(c => c.fn === 'trProwadzone').args[0], '');
     assert.match(await p.textContent('#pw-sum'), /3 treningi · 2 h 40 min · 2 klientów/);
     assert.deepEqual(await p.$$eval('tr.row', a => a.map(x => [...x.querySelectorAll('td')].slice(0, 3).map(t => t.textContent))), [['Ania', '2', '1 h 40 min'], ['Bartek', '1', '1 h']]);
-    if (!vp) assert.equal(await p.getAttribute('#prow', 'aria-current'), 'page');
+    if (!vp) assert.equal(await p.getAttribute('#nav2 a[data-v="rozliczenia"]', 'aria-current'), 'page');
     else assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390));
     await shot(p, 'trener-prowadzone-' + (vp ? 'telefon-ciemny' : 'jasny') + '.png');
     const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#pw-csv')]);
@@ -592,15 +595,15 @@ test('panel: Ćwiczenia bez filmu (link trenera do bazy, martwe linki, szukanie,
   for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
     const calls = [];
     const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
-    if (vp) { await p.goto(base + 'trener.html#wiecej'); await p.waitForSelector('.mo a[href="#cwiczenia"]'); await p.click('.mo a[href="#cwiczenia"]'); }
-    else { await p.goto(base + 'trener.html#dzis'); await p.waitForSelector('#nav a[data-v="cwiczenia"]'); await p.click('#nav a[data-v="cwiczenia"]'); }
+    if (vp) { await p.goto(base + 'trener.html#wiecej'); await p.waitForSelector('.mo a[href="#biblioteka"]'); await p.click('.mo a[href="#biblioteka"]'); }
+    else { await p.goto(base + 'trener.html#dzis'); await p.waitForSelector('#nav2 a[data-v="biblioteka"]'); await p.click('#nav2 a[data-v="biblioteka"]'); }
     await p.waitForSelector('#cw-sum');
     assert.match(await p.textContent('#cw-sum'), /3 ćwiczenia bez filmu · 1 martwy link · 640 z filmem w bazie/);
     assert.deepEqual(await p.$$eval('#cw-miss .cwn b', b => b.map(x => x.textContent)), ['Goblet Squat', 'Face Pull', 'Wymyślone „ćwiczenie” <b>']);   // tekst, nie HTML
     assert.match(await p.textContent('#cw-miss .cwr'), /2 klientów · 6 wierszy planu · ostatnio .* · w planie: Przysiad goblet/);
     assert.match(await p.textContent('#cw-dead'), /Hang Clean.*Film usunięty albo zły adres · 2 wiersze planu/s);
     assert.match(await p.textContent('#cw-miss .cwr:last-child'), /nowe w bazie/);
-    if (!vp) assert.equal(await p.getAttribute('#nav a[data-v="cwiczenia"]', 'aria-current'), 'page');
+    if (!vp) assert.equal(await p.getAttribute('#nav2 a[data-v="biblioteka"]', 'aria-current'), 'page');
     else { assert.equal(await p.getAttribute('#bnav a[data-v="wiecej"]', 'aria-current'), 'page'); assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390)); }
     // zły link: przycisk nieaktywny, komunikat; dobry: zapis, ćwiczenie zostaje na liście z potwierdzeniem
     const inp = '[data-cwu="m:Goblet Squat"]', btn = '[data-cws="m:Goblet Squat"]';
@@ -633,7 +636,7 @@ test('panel: RODO – pobranie danych klienta (ZIP) i usunięcie po wpisaniu imi
   for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
     const calls = [];
     const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
-    await p.goto(base + 'trener.html#klienci/bartek'); await p.waitForSelector('#rodo-card');
+    await p.goto(base + 'trener.html#k/bartek/ustawienia/rodo'); await p.waitForSelector('#rodo-card');
     const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#rodo-dl')]);
     assert.match(dl.suggestedFilename(), /^dane-bartek-\d{4}-\d{2}-\d{2}\.zip$/);
     assert.equal(fs.readFileSync(await dl.path()).slice(0, 2).toString(), 'PK');
@@ -676,8 +679,14 @@ test('panel: Ustawienia, klucz Claude API wklejany w panelu (też na telefonie),
     assert.match(await p.textContent('#aikey-card .saved'), /Klucz działa/);
     assert.match(await p.textContent('#aikey-card .kstat'), /Klucz ustawiony …AbCd/);
     assert.ok(!(await p.content()).includes(key), 'cały klucz nie zostaje na stronie');
-    // Dysk i kopie arkusza: miejsce, ostatnia kopia, „Zrób kopię teraz”
-    await p.waitForSelector('#dysk-card .dbar');
+    if (vp) { assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390)); await shot(p, 'trener-ustawienia-telefon-ciemny.png'); }
+    else await shot(p, 'trener-ustawienia-jasny.png');
+    await p.click('#aikey-del'); assert.match(await p.textContent('#aikey-del'), /Na pewno/);   // usunięcie: drugie dotknięcie
+    await p.click('#aikey-del'); await p.waitForSelector('#aikey-card .saved');
+    assert.match(await p.textContent('#aikey-card .kstat'), /Brak klucza/);
+    assert.equal(calls.filter(c => c.fn === 'trUstawAI').pop().args[0], '');
+    // Dysk i kopie arkusza (sekcja „Dane i kopie”): miejsce, ostatnia kopia, „Zrób kopię teraz”
+    await p.click('.snav a[href="#ustawienia/dane"]'); await p.waitForSelector('#dysk-card .dbar');
     assert.match(await p.textContent('#dysk-card'), /wolne 2,5 GB/);
     assert.match(await p.textContent('#dysk-card'), /2 z 8 kopii/);
     assert.equal(await p.$('#dysk-card .dbar.low'), null);
@@ -685,12 +694,6 @@ test('panel: Ustawienia, klucz Claude API wklejany w panelu (też na telefonie),
     assert.match(await p.textContent('#dysk-card .saved'), /Kopia zapisana/);
     assert.match(await p.textContent('#dysk-card'), /3 z 8 kopii/);
     assert.equal(calls.filter(c => c.fn === 'trKopia').length, 1);
-    if (vp) { assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390)); await shot(p, 'trener-ustawienia-telefon-ciemny.png'); }
-    else await shot(p, 'trener-ustawienia-jasny.png');
-    await p.click('#aikey-del'); assert.match(await p.textContent('#aikey-del'), /Na pewno/);   // usunięcie: drugie dotknięcie
-    await p.click('#aikey-del'); await p.waitForSelector('#aikey-card .saved');
-    assert.match(await p.textContent('#aikey-card .kstat'), /Brak klucza/);
-    assert.equal(calls.filter(c => c.fn === 'trUstawAI').pop().args[0], '');
     assert.deepEqual(p.errors, []);
     await ctx.close();
   }
@@ -915,14 +918,20 @@ test('panel: Klienci (lista, kopiowanie linku, ustawienia klienta, nowy link, no
   assert.equal(await p.evaluate(() => navigator.clipboard.readText()), 'https://example.com/trening/?k=kbbbbbbbbbb2');
   await shot(p, 'trener-klienci-jasny.png');
   // ustawienia Bartka: zmiana trybu, zamiany, dodatkowych serii i sufitu, zapis
-  await p.click('a.cp[href="#klienci/bartek"]');
+  await p.click('a.cp[href="#k/bartek/ustawienia"]');
   await p.waitForSelector('#kl-form');
+  assert.equal(await p.getAttribute('.tabs a[href="#k/bartek/ustawienia"]', 'aria-current'), 'page');
+  assert.deepEqual(await p.$$eval('.snav a', a => a.map(x => x.firstChild.textContent)), ['Aplikacja klienta', 'Co klient może zmieniać', 'Maile', 'Link i telefony', 'Asystent AI', 'Historia z innej aplikacji', 'Dane klienta (RODO)']);
   assert.equal(await p.isDisabled('#kl-save'), true, 'bez zmian nie ma czego zapisać');
   await p.click('[data-seg="mode"][data-val="PRO"]');
-  await p.click('[data-seg="swap"][data-val="DOWOLNA"]');
   await p.click('[data-sw="masters"]');
-  await p.click('[data-num="extra"][data-d="1"]');
   await p.click('[data-num="oly"][data-d="2.5"]');
+  // druga sekcja: szkic zostaje, zapis bierze zmiany z obu
+  await p.click('.snav a[href="#k/bartek/ustawienia/zmiany"]');
+  await p.waitForSelector('[data-seg="swap"]');
+  await p.click('[data-seg="swap"][data-val="DOWOLNA"]');
+  await p.click('[data-num="extra"][data-d="1"]');
+  assert.match(await p.textContent('#kl-form'), /też w innych sekcjach/);
   assert.match(await p.textContent('#kl-form'), /Zmienione: 5/);
   await p.click('[data-num="extra"][data-d="-1"]');
   assert.match(await p.textContent('#kl-form'), /Zmienione: 4/, 'powrót do starej wartości nie liczy się jako zmiana');
@@ -936,12 +945,14 @@ test('panel: Klienci (lista, kopiowanie linku, ustawienia klienta, nowy link, no
   assert.equal(await p.isDisabled('#kl-save'), true);
   await shot(p, 'trener-klient-ustawienia-jasny.png');
   // nowy link: dopiero po drugim dotknięciu
+  await p.click('.snav a[href="#k/bartek/ustawienia/link"]');
+  await p.waitForSelector('#kl-rekey');
   await p.click('#kl-rekey');
   assert.match(await p.textContent('#kl-rekey'), /Na pewno/);
   assert.equal(calls.filter(c => c.fn === 'trKlientLink').length, 0);
   await p.click('#kl-rekey');
   await p.waitForFunction(() => /knowylink001/.test(document.querySelector('#kl-link').textContent));
-  assert.match(await p.textContent('#kl-form'), /Stary już nie działa/);
+  assert.match(await p.textContent('#kl-linkc'), /Stary już nie działa/);
   // lista pokazuje nowe ustawienia
   await p.click('a[href="#klienci"]');
   await p.waitForSelector('table.kl');
@@ -973,7 +984,7 @@ test('panel: Klienci (lista, kopiowanie linku, ustawienia klienta, nowy link, no
   assert.match(await p.textContent('#main'), /3 aktywnych · 1 nieaktywny/);
   // karta klienta prowadzi do ustawień
   await p.goto(base + 'trener.html#k/ania');
-  await p.waitForSelector('.khs a.sb[href="#klienci/ania"]');
+  await p.waitForSelector('.tabs a[href="#k/ania/ustawienia"]');
   assert.deepEqual(p.errors, []);
   await ctx.close();
   // telefon, ciemny motyw
@@ -999,7 +1010,7 @@ test('panel: poranny mail (e-mail i przełącznik klienta, mail próbny, godzina
   for (const [scheme, vp] of [['light', null], ['dark', { width: 390, height: 844 }]]) {
     const calls = [];
     const { ctx, p } = await page(calls, { loggedIn: true, scheme, vp });
-    await p.goto(base + 'trener.html#klienci/bartek'); await p.waitForSelector('#kl-email');
+    await p.goto(base + 'trener.html#k/bartek/ustawienia/maile'); await p.waitForSelector('#kl-email');
     assert.equal(await p.isDisabled('#kl-mailtest'), true, 'bez adresu nie ma mail próbnego');
     // włączenie bez adresu: błąd z serwera (atrapa przepuszcza), więc najpierw adres
     await p.fill('#kl-email', ' bartek@example.com ');
@@ -1018,16 +1029,17 @@ test('panel: poranny mail (e-mail i przełącznik klienta, mail próbny, godzina
     if (vp) { assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= 390)); await shot(p, 'trener-mail-klient-telefon-ciemny.png'); }
     else await shot(p, 'trener-mail-klient-jasny.png');
     // mail po komentarzu: przełącznik obok porannego, „ostatnio otwarta” w karcie linku
-    assert.match(await p.textContent('#kl-seen'), /otwarta wczoraj · 1 telefon/);
     await p.click('[data-sw="mailKom"]'); await p.click('#kl-save'); await p.waitForFunction(() => document.querySelector('#kl-save') && document.querySelector('#kl-save').disabled && document.querySelector('#kl-save').textContent === 'Zapisz zmiany');
     assert.equal(calls.filter(c => c.fn === 'trKlientUstaw').pop().args[1].mailKom, true);
+    await p.click('.snav a[href="#k/bartek/ustawienia/link"]'); await p.waitForSelector('#kl-seen');
+    assert.match(await p.textContent('#kl-seen'), /otwarta wczoraj · 1 telefon/);
     // lista: „mail rano” i „mail po komentarzu” w skrócie ustawień, „otwarta …” pod imieniem, ⚠ przy 3 telefonach
     await p.goto(base + 'trener.html#klienci'); await p.waitForSelector('table.kl');
     assert.match(await p.textContent('table.kl'), /Bartek.*mail rano · mail po komentarzu/s);
     assert.match(await p.textContent('table.kl'), /Ania.*otwarta 2 h temu · ⚠ 3 telefony/s);
     assert.equal(await p.locator('table.kl .seen b.warn').count(), 1, 'ostrzeżenie tylko u Ani');
     // Ustawienia: godzina i wynik dzisiejszej wysyłki
-    await p.goto(base + 'trener.html#ustawienia'); await p.waitForSelector('#mail-card');
+    await p.goto(base + 'trener.html#ustawienia/maile'); await p.waitForSelector('#mail-card');
     assert.match(await p.textContent('#mail-card'), /wysłano 2 maile \(Ania, Bartek\)/);
     assert.equal(await p.getAttribute('[data-hour="6"]', 'aria-pressed'), 'true');
     await p.click('[data-hour="7"]'); await p.waitForSelector('#mail-card .saved');
@@ -1066,7 +1078,7 @@ test('panel: odpowiedzi klientów na komentarze (pulpit, sesja, film)', async ()
 
 test('panel: blokada obcych skryptów (CSP) zatrzymuje wstrzyknięty kod', async () => {
   const { ctx, p } = await page([], { loggedIn: true });
-  await p.goto(base + 'trener.html'); await p.waitForSelector('tr.row[data-k="ania"]');
+  await p.goto(base + 'trener.html'); await p.waitForSelector('.dr');
   // tak wyglądałby atak przez tekst klienta, gdyby gdzieś zabrakło esc(): obrazek z kodem w onerror i wstawiony <script>
   await p.evaluate(() => {
     const d = document.createElement('div'); d.innerHTML = '<img src="nie-ma.png" onerror="window.__xss = 1">'; document.body.append(d);
@@ -1171,7 +1183,7 @@ const HEVY = ['"title","start_time","end_time","description","exercise_title","s
 test('panel: historia z innej aplikacji (plik Hevy → podgląd → wczytanie → cofnięcie)', async () => {
   const calls = [];
   const { ctx, p } = await page(calls, { loggedIn: true });
-  await p.goto(base + 'trener.html#klienci/ania'); await p.waitForSelector('#import #hv-file', { state: 'attached' });
+  await p.goto(base + 'trener.html#k/ania/ustawienia/import'); await p.waitForSelector('#import #hv-file', { state: 'attached' });
   assert.match(await p.textContent('#import'), /Hevy:.*Export Workouts[\s\S]*Strong:[\s\S]*szablon CSV/);
   assert.match(await p.getAttribute('#import a[download]', 'href'), /^data:text\/csv/);
   await p.setInputFiles('#hv-file', { name: 'hevy_workouts.csv', mimeType: 'text/csv', buffer: Buffer.from(HEVY) });
@@ -1233,7 +1245,7 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   assert.match(await p.textContent('#zasady-card .kstat'), /Zapisane/);
   await shot(p, 'trener-zasady-ai.png');
   // ustawienia klienta: klucz pokazany raz, uprawnienia, ograniczenia, instrukcja i OpenAPI
-  await p.goto(base + 'trener.html#klienci/ania'); await p.waitForSelector('#agent #ag-new');
+  await p.goto(base + 'trener.html#k/ania/ustawienia/asystent'); await p.waitForSelector('#agent #ag-new');
   assert.match(await p.textContent('#agent .kstat'), /Wyłączony/);
   await p.click('#ag-new'); await p.waitForSelector('#ag-key');
   assert.equal(await p.textContent('#ag-key'), 'sz_' + '0123456789abcdef'.repeat(2));
@@ -1243,8 +1255,7 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   assert.equal(calls.filter(c => c.fn === 'trAgentKlucz').length, 1, 'nowy klucz dopiero po drugim dotknięciu');
   await p.click('[data-agsw="write"]'); await p.fill('#ag-ogr', 'Bez skoków na kolano lewe.');
   await p.click('[data-agnum="limit"][data-d="-10"]');
-  assert.equal(await p.getAttribute('[data-sw="on"]', 'aria-checked'), 'true', 'przełączniki asystenta nie ruszają formularza klienta');
-  assert.ok(await p.isDisabled('#kl-save'));
+  assert.equal(await p.$('#kl-form'), null, 'formularz klienta jest w innej sekcji');
   await p.click('#ag-save'); await p.waitForSelector('#agent .saved');
   assert.deepEqual(calls.filter(c => c.fn === 'trAgentUstaw').pop().args, ['ania', { read: true, write: false, prop: true, limit: 190, ogr: 'Bez skoków na kolano lewe.' }]);
   const oa = JSON.parse(decodeURIComponent((await p.getAttribute('#ag-oapi', 'href')).split(',')[1]));
@@ -1264,7 +1275,6 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   assert.deepEqual(ac[1].args[1].map(m => m.role), ['user', 'assistant', 'user']);
   assert.deepEqual(ac[1].args[1][1].steps.map(x => x.fn), ['plan', 'zapiszSerie'], 'akcje idą z historią');
   assert.match(await p.textContent('#agchat .acm.a .acx'), /ok\. 0,031 USD/); assert.deepEqual(ac[1].args[2], { real: true });
-  assert.equal(await p.getAttribute('[data-sw="on"]', 'aria-checked'), 'true', 'czat nie rusza formularza klienta');
   await shot(p, 'trener-asystent-czat.png');
   await p.fill('#ach-in', 'błąd'); await p.click('#ach-go'); await p.waitForSelector('#agchat .err');
   assert.match(await p.textContent('#agchat .err'), /limit szkiców AI/);
