@@ -4,7 +4,7 @@
  * Odpowiedzi są skracane (bez linków z kluczami klientów, bez ścieżek VBT), żeby Claude dostawał tylko to, co potrzebne do decyzji.
  */
 
-import { UI_DZIS } from './ui.js';
+import { UI_DZIS, UI_KLIENT } from './ui.js';
 
 const ST_DZIS = { wait: 'czeka', live: 'w trakcie', done: 'zrobione' };
 const SEKCJA = { R: 'Rozgrzewka', G: 'Główne', K: 'Korekcyjne' };   // kolumna Planu `sekcja` (litera), jak SEKCJE w Code.gs
@@ -110,13 +110,74 @@ export function klient(d, o) {
     .map(x => Object.assign({ tydzien: Number(x.tydzien), jednostka: s(x.jednostka), tytul: title(x.tydzien, x.jednostka) }, sesTxt(x),
       { cwiczenia: doneEx((d.logs || []).filter(l => key(l.tydzien, l.jednostka) === key(x.tydzien, x.jednostka))) }));
   const c = d.cfg || {};
+  const k = karta(d, o.today, next, done);
   return nz({
-    id: c.id, klient: c.name, tryb: c.simple ? 'PROSTY' : 'PRO', skala: c.scale, zamiana: c.swap || 'NIE', aktywny: c.active === false ? 'NIE' : '', masters: c.masters || '',
+    id: c.id, klient: c.name, naglowek: k.naglowek, sygnaly: k.sygnaly, liczby: k.liczby, sila: k.sila, tryb: c.simple ? 'PROSTY' : 'PRO', skala: c.scale, zamiana: c.swap || 'NIE', aktywny: c.active === false ? 'NIE' : '', masters: c.masters || '',
     nadchodzace_jednostki: next, ostatnie_sesje: ses,
     tygodnie: (d.summary || []).slice(-4).map(w => nz({ od: d10(w.week), status: w.status, powody: w.why, wykonanie: w.done, tonaz_kg: w.ton, sRPE: w.srpe, ACWR: w.acwr, serie_twarde: w.hard })),
     bloki: (d.blocks || []).slice(-3).map(b => nz({ blok: s(b.blok), od: b.od, do: b.do, wnioski_trenera: s(b.wnioski), dla_klienta: s(b.dla_klienta) })),
     pakiet: d.pkg ? nz({ kupione: d.pkg.n, zostalo: d.pkg.left, waznosc: d.pkg.to }) : '',
   });
+}
+
+/* ---------- karta klienta (D3): nagłówek, sygnały, liczby i siła, liczone z danych trKlient ---------- */
+
+const addDays = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+const monday = iso => { const x = new Date(iso + 'T12:00:00Z'), w = (x.getUTCDay() + 6) % 7; return addDays(iso, -w); };
+const r1 = x => Math.round(x * 10) / 10;
+
+/** e1RM jak w aplikacji (wykres Siły): Epley z RIR = 10 − RPE, seria bez RPE liczona jak RPE 10, FAIL i ponad 12 powt. pominięte. */
+export function e1rm(kg, reps, rpe) {
+  kg = num(kg); reps = num(reps);
+  if (!kg || !reps || reps < 1 || reps > 12) return null;
+  const r = num(rpe), rir = r === null ? 0 : Math.max(0, 10 - r);
+  return reps + rir <= 1 ? kg : kg * (1 + (reps + rir) / 30);
+}
+
+/** Sygnały, liczby i siła do karty klienta. today = RRRR-MM-DD (strefa trenera). */
+export function karta(d, today, next, done) {
+  today = today || new Date().toISOString().slice(0, 10);
+  const logs = d.logs || [], ses = d.sessions || [], plan = d.plan || [];
+  const work = l => /^\d+$/.test(s(l.seria)) && s(l.seria) !== '0' && s(l.wykonane) === 'TAK' && !/FAIL/.test(s(l.typ));
+  const sygnaly = [];
+  const sum = (d.summary || []).slice(-1)[0];
+  if (sum && /🔴|🟠|za dużo|uwaga/i.test(sum.status)) sygnaly.push({ lv: /🔴|za dużo/i.test(sum.status) ? 'bad' : 'warn', t: ('tydzień: ' + sum.status.replace(/^[^\p{L}]+/u, '') + (sum.why ? ' (' + sum.why + ')' : '')).slice(0, 90) });
+  const from14 = addDays(today, -14), from3 = addDays(today, -3);
+  const pain = [];
+  ses.forEach(x => { const day = d10(x.start) || d10(x.data); if (day >= from14 && num(x.bol_max) > 3) pain.push([num(x.bol_max), s(x.bol).split(';')[0].replace(/:\s*\d+.*/, ''), day]); });
+  (d.stan || []).forEach(x => { if (d10(x.data) >= from14 && num(x.ocena) > 3) pain.push([num(x.ocena), (s(x.miejsce) + ' ' + s(x.strona)).trim(), d10(x.data)]); });
+  pain.sort((a, b) => b[0] - a[0] || b[2].localeCompare(a[2]));
+  if (pain.length) sygnaly.push({ lv: pain[0][0] >= 6 ? 'bad' : 'warn', t: 'ból ' + (pain[0][1] ? pain[0][1] + ' ' : '') + pain[0][0] + '/10 (' + pain[0][2].slice(8, 10) + '.' + pain[0][2].slice(5, 7) + ')' });
+  const rd = (d.readiness || []).filter(x => d10(x.data) >= from3 && /uwaga|zm[eę]czenie/i.test(s(x.werdykt))).sort((a, b) => d10(b.data).localeCompare(d10(a.data)))[0];
+  if (rd) sygnaly.push({ lv: /zm[eę]czenie/i.test(s(rd.werdykt)) ? 'bad' : 'warn', t: 'dyspozycja: ' + s(rd.werdykt).toLowerCase() });
+  const mon = monday(today), sun = addDays(mon, 6), U = {};
+  plan.forEach(r => { if (!r.own && Number(r.week) > 0 && r.date >= mon && r.date <= sun) U[key(r.week, r.day)] = 1; });
+  const wk = Object.keys(U), wkDone = wk.filter(x => done[x]).length;
+  const last = ses.slice().sort((a, b) => (s(b.start) || s(b.data)).localeCompare(s(a.start) || s(a.data))).slice(0, 5).map(x => num(x.rpe_sesji)).filter(x => x !== null);
+  const films = logs.filter(l => s(l.film_link) && !s(l.komentarz_trenera) && !s(l.komentarz_dysk) && (d10(l.data) || d10(l.zapisano)) >= addDays(today, -14)).length;
+  const sm = (d.summary || []).filter(w => num(w.ton) !== null);
+  const tonNow = sm.length ? num(sm[sm.length - 1].ton) : null, tonPrev = sm.length > 1 ? num(sm[sm.length - 2].ton) : null;
+  const liczby = nz({ ten_tydzien: wk.length ? wkDone + '/' + wk.length : '', sr_rpe_sesji: last.length ? r1(last.reduce((a, b) => a + b, 0) / last.length) : null,
+    tonaz_tydzien_t: tonNow !== null ? r1(tonNow / 1000) : null, tonaz_zmiana_proc: tonNow !== null && tonPrev ? Math.round((tonNow / tonPrev - 1) * 100) : null,
+    filmy_bez_komentarza_14dni: films });
+  // siła: ćwiczenia A z planu (najczęstsze w Logu), najlepsze e1RM w każdym tygodniu, 8 ostatnich punktów
+  const A = {};
+  plan.forEach(r => { if (s(r.prio) === 'A' && r.section !== 'R') A[s(r.name).toLowerCase()] = s(r.name); });
+  const by = {};
+  logs.filter(work).forEach(l => {
+    const n = s(l.cwiczenie).toLowerCase(); if (!A[n]) return;
+    const e = e1rm(l.kg, l.powt, l.rpe); if (e === null) return;
+    const w = Number(l.tydzien); (by[n] = by[n] || { n: 0, w: {} }).n++; by[n].w[w] = Math.max(by[n].w[w] || 0, e);
+  });
+  const sila = Object.keys(by).sort((a, b) => by[b].n - by[a].n).slice(0, 4).map(n => {
+    const ws = Object.keys(by[n].w).map(Number).sort((a, b) => a - b).slice(-8), pts = ws.map(w => Math.round(by[n].w[w] * 2) / 2);
+    return { cwiczenie: A[n], e1rm_kg: pts[pts.length - 1], zmiana_kg: r1(pts[pts.length - 1] - pts[0]), tygodnie: ws, punkty: pts };
+  });
+  const n0 = (next || [])[0], blk = n0 && n0.blok;
+  const wMax = blk ? Math.max.apply(null, plan.filter(r => r.block === blk).map(r => Number(r.week)).concat([0])) : 0;
+  const c = d.cfg || {};
+  const naglowek = [blk ? 'Blok ' + blk : '', n0 ? 'tydz. ' + n0.tydzien + (wMax ? ' z ' + wMax : '') : '', c.simple ? 'PROSTY' : 'PRO'].filter(Boolean).join(' · ');
+  return { naglowek, sygnaly: sygnaly.map(x => (x.lv === 'bad' ? '🔴 ' : '🟠 ') + x.t), liczby, sila };
 }
 
 /** Jedna jednostka klienta: plan i (jeśli była) wykonanie z Logu i Sesji. */
@@ -150,8 +211,8 @@ export const TOOLS = [
     inputSchema: { type: 'object', properties: { od: { type: 'string', description: 'RRRR-MM-DD' }, do: { type: 'string', description: 'RRRR-MM-DD' } }, required: ['od', 'do'], additionalProperties: false },
     annotations: RO },
   { name: 'klient', title: 'Karta klienta',
-    description: 'Karta klienta: ustawienia, najbliższe niezrobione jednostki z ćwiczeniami (serie, powt., kg, %, RPE max), ostatnie sesje z wykonaniem (seria jako „kg×powt. światło”: 🟢 lekko RPE 7, 🟡 średnio 8, 🔴 ciężko 9, ✖ nieudana), tygodnie z Podsumowania, bloki, pakiet.',
-    inputSchema: { type: 'object', properties: { id: ID }, required: ['id'], additionalProperties: false }, annotations: RO },
+    description: 'Karta klienta: ustawienia, najbliższe niezrobione jednostki z ćwiczeniami (serie, powt., kg, %, RPE max), ostatnie sesje z wykonaniem (seria jako „kg×powt. światło”: 🟢 lekko RPE 7, 🟡 średnio 8, 🔴 ciężko 9, ✖ nieudana), tygodnie z Podsumowania, bloki, pakiet, sygnały (ból, dyspozycja, status tygodnia), liczby tygodnia i siła (e1RM ćwiczeń A tydzień po tygodniu). Użyj, gdy trener mówi „pokaż Olę” albo pyta o konkretnego klienta. Trener widzi wynik jako kartę klienta, więc nie przepisuj jej: odpowiedz na pytanie trenera i wskaż, co z danych za tym stoi.',
+    inputSchema: { type: 'object', properties: { id: ID }, required: ['id'], additionalProperties: false }, annotations: RO, _meta: { ui: { resourceUri: UI_KLIENT } } },
   { name: 'jednostka', title: 'Jednostka',
     description: 'Jedna jednostka klienta: plan ćwiczeń z numerami (nr do „zmien_plan”) i, jeśli zrobiona, wykonanie serii, sesja (RPE sesji, samopoczucie, ból, uwagi) i komentarze.',
     inputSchema: { type: 'object', properties: { id: ID, tydzien: WEEK, jednostka: DAY }, required: ['id', 'tydzien', 'jednostka'], additionalProperties: false }, annotations: RO },

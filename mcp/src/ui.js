@@ -7,6 +7,8 @@
 
 export const UI_MIME = 'text/html;profile=mcp-app';
 export const UI_DZIS = 'ui://sila-z-ruchu/dzis.html';
+export const UI_KLIENT = 'ui://sila-z-ruchu/klient.html';
+export const PANEL = 'https://likegreekgod.github.io/trening/trener.html';   // panel trenera (GitHub Pages), linki z kart przez ui/open-link
 
 const CSS = `
 :root{color-scheme:light dark;
@@ -50,7 +52,8 @@ label.ck{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--tx2)
 `;
 
 /* Skrypt karty: wykonuje się w ramce gospodarza, bez dostępu do sieci. Treść z danych zawsze przez textContent. */
-const JS = `
+/* Wspólna część kart: protokół ui/* (postMessage do gospodarza), motyw, pomocnicze funkcje rysowania. Karta dokłada własne draw(). */
+const JS_TOP = `
 (function(){
 var P = window.parent, N = 0, WAIT = {}, D = null, READY = false, OPEN = {}, MORE = false;
 function send(m){ P.postMessage(m, '*'); }
@@ -79,7 +82,23 @@ function hm(iso){ var x = new Date(iso); return isNaN(x) ? '' : ('0' + x.getHour
 var ST = {'czeka': 'p-wait', 'w trakcie': 'p-live', 'zrobione': 'p-done'};
 function stat(n, t){ return add(el('div', 'st'), el('b', '', n), el('span', '', t)); }
 
-function decide(a, mode, box){
+`;
+
+const JS_BOT = `var LH = 0;
+function size(){ if (!READY) return; var h = Math.ceil(document.documentElement.getBoundingClientRect().height); if (h !== LH) { LH = h; note('ui/notifications/size-changed', {height: h}); } }
+if (window.ResizeObserver) new ResizeObserver(size).observe(document.documentElement);
+draw();
+function start(n){
+  req('ui/initialize', {protocolVersion: '2026-01-26', appInfo: {name: '@@NAME@@', version: '1.1.0'}, appCapabilities: {}}).then(function(r){
+    ctx(r && r.hostContext); READY = true; note('ui/notifications/initialized', {}); size();
+  }).catch(function(){ if (n < 4) setTimeout(function(){ start(n + 1); }, 300 * Math.pow(2, n)); else { D = {blad: 'Karta nie połączyła się z Claude. Zapytaj ponownie.'}; draw(); } });
+}
+start(0);
+})();
+`;
+
+/* Karta „Dziś”. */
+const JS_DZIS = `function decide(a, mode, box){
   var why = box.querySelector('textarea'), z = box.querySelector('input[type=checkbox]');
   var args = {pid: a.pid, decyzja: mode};
   if (why && why.value.trim()) args.powod = why.value.trim();
@@ -159,29 +178,112 @@ function draw(){
   if (od.length) app.appendChild(el('div', 'sub', '↩ Odpowiedzi klientów na komentarze: ' + od.length + ' (zapytaj Claude, żeby je pokazał)'));
   size();
 }
-var LH = 0;
-function size(){ if (!READY) return; var h = Math.ceil(document.documentElement.getBoundingClientRect().height); if (h !== LH) { LH = h; note('ui/notifications/size-changed', {height: h}); } }
-if (window.ResizeObserver) new ResizeObserver(size).observe(document.documentElement);
-draw();
-function start(n){
-  req('ui/initialize', {protocolVersion: '2026-01-26', appInfo: {name: 'sila-z-ruchu-dzis', version: '1.0.0'}, appCapabilities: {}}).then(function(r){
-    ctx(r && r.hostContext); READY = true; note('ui/notifications/initialized', {}); size();
-  }).catch(function(){ if (n < 4) setTimeout(function(){ start(n + 1); }, 300 * Math.pow(2, n)); else { D = {blad: 'Karta nie połączyła się z Claude. Zapytaj ponownie o „dziś”.'}; draw(); } });
-}
-start(0);
-})();
 `;
 
-export const DZIS_HTML = '<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-  + '<title>Dziś</title><style>' + CSS + '</style></head><body><div id="app"></div><script>' + JS + '</script></body></html>';
+const page = (title, name, css, js) => '<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+  + '<title>' + title + '</title><style>' + CSS + css + '</style></head><body><div id="app"></div><script>' + JS_TOP + js + JS_BOT.replace('@@NAME@@', name) + '</script></body></html>';
+
+export const DZIS_HTML = page('Dziś', 'sila-z-ruchu-dzis', '', JS_DZIS);
+
+
+/* Karta klienta (D3): jak przegląd w karcie klienta panelu. Linki do panelu otwiera gospodarz (ui/open-link), sama karta nie ma sieci. */
+const CSS_KLIENT = `
+.eb{font-size:12px;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em}
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px}
+.pl{font-size:12px;border-radius:999px;padding:2px 8px;border:1px solid var(--bd)}.pl.bad{color:var(--bad);border-color:var(--bad)}.pl.warn{color:var(--warn);border-color:var(--warn)}.pl.ok{color:var(--ok);border-color:var(--ok)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px}
+.sg{display:grid;grid-template-columns:1fr auto;gap:0 8px;align-items:center;padding:5px 0;border-top:1px solid var(--bd)}
+.sg:first-of-type{border-top:0}.sg .v{font-weight:600;text-align:right}.sg .d{font-size:12px;text-align:right;color:var(--tx2)}.sg .d.up{color:var(--ok)}.sg .d.dn{color:var(--bad)}
+.sg svg{width:100%;height:22px;color:var(--ac);display:block}
+.ln{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.u{background:var(--bg2);border-radius:var(--r);padding:7px 9px;margin-bottom:6px}.u .t{display:flex;justify-content:space-between;gap:6px;align-items:baseline}
+@media (max-width:520px){.g2{grid-template-columns:1fr}}
+`;
+const JS_KLIENT = `
+var DN = ['nd.','pn.','wt.','śr.','czw.','pt.','sob.'];
+function dShort(d){ var m = /^(\\d{4})-(\\d\\d)-(\\d\\d)/.exec(d || ''); if (!m) return ''; var x = new Date(+m[1], +m[2] - 1, +m[3]); return DN[x.getDay()] + ' ' + (+m[3]) + '.' + m[2]; }
+function pl(n){ return String(n).replace('.', ','); }
+function spark(p){
+  var ns = 'http://www.w3.org/2000/svg', s = document.createElementNS(ns, 'svg'); s.setAttribute('viewBox', '0 0 100 22'); s.setAttribute('preserveAspectRatio', 'none');
+  if (!p || p.length < 2) return s;
+  var lo = Math.min.apply(null, p), hi = Math.max.apply(null, p), r = hi - lo || 1;
+  var l = document.createElementNS(ns, 'polyline'); l.setAttribute('fill', 'none'); l.setAttribute('stroke', 'currentColor'); l.setAttribute('stroke-width', '1.8'); l.setAttribute('vector-effect', 'non-scaling-stroke');
+  l.setAttribute('points', p.map(function(v, i){ return (i / (p.length - 1) * 100).toFixed(1) + ',' + (19 - (v - lo) / r * 16).toFixed(1); }).join(' '));
+  s.appendChild(l); return s;
+}
+function exLine(e){
+  var t = e.cwiczenie, x = [];
+  if (e.kg !== undefined && e.kg !== '') x.push(pl(e.kg) + (isNaN(+String(e.kg).replace(',', '.')) ? '' : ' kg'));
+  if (e.procent) x.push(e.procent);
+  t += ' ' + [x.join(' '), (e.serie || '?') + '×' + (e.powt || '?')].filter(Boolean).join(' · ');
+  if (e.rpe_max) t += ' · RPE ≤ ' + pl(e.rpe_max);
+  return t;
+}
+function link(path){ req('ui/open-link', {url: '` + PANEL + `' + path}).catch(function(){}); }
+function draw(){
+  var app = document.getElementById('app'); app.textContent = '';
+  if (!D) { app.appendChild(el('div', 'empty', 'Wczytuję dane klienta…')); size(); return; }
+  if (D.blad) { app.appendChild(el('div', 'err', D.blad)); size(); return; }
+  var L = D.liczby || {};
+  if (D.naglowek) app.appendChild(el('div', 'eb', D.naglowek));
+  add(app, add(el('div', 'hd'), el('b', '', D.klient || D.id), D.aktywny === 'NIE' ? el('span', '', 'nieaktywny') : null));
+  var ps = el('div', 'pills');
+  (D.sygnaly || []).forEach(function(s){ ps.appendChild(el('span', 'pl ' + (s.indexOf('🔴') === 0 ? 'bad' : 'warn'), s.replace(/^\\S+\\s/, ''))); });
+  if (D.pakiet && D.pakiet.zostalo !== undefined) ps.appendChild(el('span', 'pl' + (D.pakiet.zostalo <= 2 ? ' warn' : ''), 'pakiet: zostało ' + D.pakiet.zostalo));
+  if (!ps.childNodes.length) ps.appendChild(el('span', 'pl ok', 'bez sygnałów'));
+  app.appendChild(ps);
+  add(app, add(el('div', 'stats'),
+    stat(L.ten_tydzien || '–', 'ten tydzień'),
+    stat(L.sr_rpe_sesji !== undefined ? pl(L.sr_rpe_sesji) : '–', 'śr. RPE sesji'),
+    stat(L.tonaz_tydzien_t !== undefined ? pl(L.tonaz_tydzien_t) + ' t' : '–', 'tonaż tyg.' + (L.tonaz_zmiana_proc !== undefined ? ' (' + (L.tonaz_zmiana_proc > 0 ? '+' : '') + L.tonaz_zmiana_proc + '%)' : '')),
+    stat(L.filmy_bez_komentarza_14dni || 0, 'filmy bez kom.')));
+  var g = el('div', 'g2'), c1 = el('div'), c2 = el('div');
+  c1.appendChild(el('h3', '', 'Siła (e1RM)'));
+  var S = D.sila || [];
+  if (!S.length) c1.appendChild(el('div', 'empty', 'Za mało serii w ćwiczeniach A.'));
+  S.forEach(function(x){
+    var z = x.zmiana_kg || 0, d = el('span', 'd' + (z > 0 ? ' up' : z < 0 ? ' dn' : ''), (z > 0 ? '+' : '') + pl(z) + ' kg · ' + x.punkty.length + ' tyg.');
+    c1.appendChild(add(el('div', 'sg'), el('span', '', x.cwiczenie), el('span', 'v', pl(x.e1rm_kg) + ' kg'), spark(x.punkty), d));
+  });
+  c2.appendChild(el('h3', '', 'Ostatnie sesje'));
+  var SS = (D.ostatnie_sesje || []).slice(0, 4);
+  if (!SS.length) c2.appendChild(el('div', 'empty', 'Jeszcze bez zapisanych treningów.'));
+  SS.forEach(function(x){
+    var ex = (x.cwiczenia || []).slice(0, 2).map(function(e){ return e.cwiczenie + ' ' + (e.serie || ''); }).join(' · ');
+    var u = x.uwagi_klienta ? ' · „' + x.uwagi_klienta + '”' : '';
+    var g1 = add(el('div', 'grow'), el('div', 'nm', dShort(x.data) + ' · ' + (x.tytul || x.jednostka)), el('div', 'sub ln', ex + u));
+    c2.appendChild(add(el('div', 'row'), g1, x.rpe_sesji !== undefined ? el('span', 'sub', 'RPE ' + pl(x.rpe_sesji)) : null));
+  });
+  add(g, c1, c2); app.appendChild(g);
+  var N = (D.nadchodzace_jednostki || []).slice(0, 3);
+  app.appendChild(el('h3', '', 'Najbliższe w planie'));
+  if (!N.length) app.appendChild(el('div', 'empty', 'Brak niezrobionych jednostek w planie.'));
+  N.forEach(function(u){
+    var exs = (u.cwiczenia || []).filter(function(e){ return e.sekcja !== 'Rozgrzewka'; }).map(exLine);
+    var box = el('div', 'u');
+    add(box, add(el('div', 't'), el('span', 'nm', (u.data ? dShort(u.data) : 'bez daty') + ' · ' + (u.tytul || u.jednostka)), el('span', 'sub', 'tydz. ' + u.tydzien + ' · ' + u.jednostka)),
+      el('div', 'sub ln', exs.join(' · ')), u.notatka_do_jednostki ? el('div', 'sub', '✎ ' + u.notatka_do_jednostki) : null);
+    app.appendChild(box);
+  });
+  var b = el('div', 'btns'), p1 = el('button', 'pri', '▶ Prowadź'), p2 = el('button', '', 'Otwórz w panelu ›');
+  p1.onclick = function(){ link('#prowadz/' + encodeURIComponent(D.id)); };
+  p2.onclick = function(){ link('#k/' + encodeURIComponent(D.id) + '/przeglad'); };
+  if (D.id) { add(b, p1, p2); app.appendChild(b); }
+  size();
+}
+`;
+
+export const KLIENT_HTML = page('Klient', 'sila-z-ruchu-klient', CSS_KLIENT, JS_KLIENT);
 
 /** Zasoby ui:// (resources/list i resources/read). */
 export const RESOURCES = [
   { uri: UI_DZIS, name: 'karta-dzis', title: 'Dziś w panelu', description: 'Karta ekranu Dziś: kto trenuje, decyzje o propozycjach asystentów AI, co wymaga uwagi.', mimeType: UI_MIME },
+  { uri: UI_KLIENT, name: 'karta-klient', title: 'Karta klienta', description: 'Karta klienta: sygnały, liczby tygodnia, siła, ostatnie sesje, najbliższe jednostki.', mimeType: UI_MIME },
 ];
 const META = { ui: { prefersBorder: true, csp: { connectDomains: [], resourceDomains: [], frameDomains: [], baseUriDomains: [] } } };
 
 export function readResource(uri) {
   if (uri === UI_DZIS) return { contents: [{ uri: UI_DZIS, mimeType: UI_MIME, text: DZIS_HTML, _meta: META }] };
+  if (uri === UI_KLIENT) return { contents: [{ uri: UI_KLIENT, mimeType: UI_MIME, text: KLIENT_HTML, _meta: META }] };
   return null;
 }

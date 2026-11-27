@@ -1,9 +1,9 @@
 // Testy pośrednika MCP (czyste funkcje, dane syntetyczne): node --test mcp/test/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS } from '../src/tools.js';
+import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS, karta, e1rm } from '../src/tools.js';
 import { handle, handleBody, VERSIONS } from '../src/mcp.js';
-import { UI_DZIS } from '../src/ui.js';
+import { UI_DZIS, UI_KLIENT, KLIENT_HTML } from '../src/ui.js';
 
 const PULPIT = {
   today: '2026-11-27', at: '2026-11-27T06:00:00Z',
@@ -134,7 +134,7 @@ test('karty MCP Apps: zasób ui:// z kartą Dziś, narzędzie „dzis” wskazuj
   const init = await handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25' } }, ctx);
   assert.ok(init.result.capabilities.resources);
   const list = await handle({ jsonrpc: '2.0', id: 2, method: 'resources/list' }, ctx);
-  assert.deepEqual(list.result.resources.map(r => [r.uri, r.mimeType]), [[UI_DZIS, 'text/html;profile=mcp-app']]);
+  assert.deepEqual(list.result.resources.map(r => [r.uri, r.mimeType]), [[UI_DZIS, 'text/html;profile=mcp-app'], [UI_KLIENT, 'text/html;profile=mcp-app']]);
   const read = await handle({ jsonrpc: '2.0', id: 3, method: 'resources/read', params: { uri: UI_DZIS } }, ctx);
   const c = read.result.contents[0];
   assert.equal(c.mimeType, 'text/html;profile=mcp-app');
@@ -149,4 +149,41 @@ test('karty MCP Apps: zasób ui:// z kartą Dziś, narzędzie „dzis” wskazuj
   // wszystkie decyzje z karty są dozwolone w narzędziu
   const enumD = TOOLS.find(t => t.name === 'decyzja_asystent').inputSchema.properties.decyzja.enum;
   ['tak', 'nie', 'czytane', 'cofnij'].forEach(d => { assert.ok(enumD.includes(d)); assert.match(c.text, new RegExp("'" + d + "'")); });
+});
+
+test('karta klienta: sygnały, liczby tygodnia, siła z e1RM ćwiczeń A', () => {
+  assert.equal(e1rm(100, 5, 8), 100 * (1 + 7 / 30));
+  assert.equal(e1rm(100, 1, 10), 100);
+  assert.equal(e1rm(100, 5, ''), 100 * (1 + 5 / 30), 'bez RPE = RPE 10, jak w aplikacji');
+  assert.equal(e1rm(100, 15, 8), null);
+  const L = (w, kg, rpe, extra) => Object.assign({ tydzien: w, jednostka: 'A', nr_cw: 1, cwiczenie: 'Przysiad', seria: '1', kg, powt: 5, rpe, wykonane: 'TAK', data: '2026-11-' + String(w + 10).padStart(2, '0') }, extra);
+  const d = {
+    cfg: { id: 'ola', name: 'Ola', simple: false },
+    plan: [
+      { week: 9, day: 'A', order: 1, name: 'Przysiad', prio: 'A', block: 'B3', date: '2026-11-25' },
+      { week: 9, day: 'B', order: 1, name: 'Martwy ciąg', prio: 'A', block: 'B3', date: '2026-11-28' },
+      { week: 12, day: 'A', order: 1, name: 'Przysiad', prio: 'A', block: 'B3', date: '2026-12-16' },
+      { week: 9, day: 'R', order: 1, name: 'Rozgrzewka', prio: 'A', section: 'R', block: 'B3', date: '2026-11-25' },
+    ],
+    logs: [L(7, 90, 8), L(8, 92.5, 8), L(9, 95, 9, { film_link: 'https://x', data: '2026-11-25' }), L(9, 95, '', { typ: 'FAIL', wykonane: '', seria: '2' }), L(9, 40, 7, { seria: 'R1' })],
+    sessions: [{ tydzien: 9, jednostka: 'A', start: '2026-11-25T17:00:00', rpe_sesji: 8, bol_max: 4, bol: 'kolano:4' }, { tydzien: 8, jednostka: 'A', start: '2026-11-18T17:00:00', rpe_sesji: 7 }],
+    readiness: [{ data: '2026-11-26', werdykt: 'Uwaga' }, { data: '2026-11-10', werdykt: 'Zmęczenie' }],
+    stan: [{ data: '2026-11-20', miejsce: 'Bark', strona: 'P', ocena: 2 }],
+    summary: [{ week: '2026-11-17', ton: 12000, status: '🟢 OK' }, { week: '2026-11-24', ton: 13200, status: '🟠 uwaga', why: 'skok obciążenia' }],
+  };
+  const k = klient(d, { today: '2026-11-27' });
+  assert.equal(k.naglowek, 'Blok B3 · tydz. 9 z 12 · PRO');
+  assert.deepEqual(k.sygnaly, ['🟠 tydzień: uwaga (skok obciążenia)', '🟠 ból kolano 4/10 (25.11)', '🟠 dyspozycja: uwaga']);
+  assert.deepEqual(k.liczby, { ten_tydzien: '1/3', sr_rpe_sesji: 7.5, tonaz_tydzien_t: 13.2, tonaz_zmiana_proc: 10, filmy_bez_komentarza_14dni: 1 });
+  assert.equal(k.sila.length, 1, 'Martwy bez serii w Logu, rozgrzewka (sekcja R) poza siłą');
+  assert.deepEqual(k.sila[0].tygodnie, [7, 8, 9]);
+  assert.equal(k.sila[0].e1rm_kg, Math.round(95 * (1 + 6 / 30) * 2) / 2, 'FAIL i rozgrzewka R1 pominięte');
+  assert.equal(k.sila[0].zmiana_kg, Math.round((k.sila[0].e1rm_kg - k.sila[0].punkty[0]) * 10) / 10);
+  // karta bez danych: bez wyjątku
+  assert.deepEqual(karta({ cfg: {} }, '2026-11-27', [], {}).sygnaly, []);
+  // narzędzie wskazuje kartę, karta nie sięga do sieci poza linkiem do panelu przez gospodarza
+  assert.equal(TOOLS.find(t => t.name === 'klient')._meta.ui.resourceUri, UI_KLIENT);
+  assert.match(KLIENT_HTML, /ui\/open-link/);
+  assert.deepEqual(KLIENT_HTML.match(/https?:\/\/[^'"\s]+/g).filter(u => !/www\.w3\.org/.test(u)), ['https://likegreekgod.github.io/trening/trener.html']);
+  new Function(KLIENT_HTML.match(/<script>([\s\S]*)<\/script>/)[1]);
 });

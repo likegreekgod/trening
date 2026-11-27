@@ -2,8 +2,8 @@
 // Uruchom: node test/karta.mjs [katalog_na_zrzuty]   (potrzebny Playwright z przeglądarką; nie jest częścią npm test)
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
-import { DZIS_HTML } from '../src/ui.js';
-import { dzis } from '../src/tools.js';
+import { DZIS_HTML, KLIENT_HTML } from '../src/ui.js';
+import { dzis, klient } from '../src/tools.js';
 const { chromium } = createRequire(import.meta.url)('playwright');
 
 const out = process.argv[2] || '.';
@@ -25,6 +25,7 @@ window.addEventListener('message', e => { const m = e.data; if (e.source !== f.c
   const reply = r => f.contentWindow.postMessage({ jsonrpc: '2.0', id: m.id, result: r }, '*');
   if (m.method === 'ui/initialize') reply({ protocolVersion: '2026-01-26', hostInfo: { name: 'atrapa', version: '1' }, hostCapabilities: {}, hostContext: CTX });
   if (m.method === 'ui/notifications/initialized') f.contentWindow.postMessage({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [{ type: 'text', text: 'x' }], structuredContent: DATA } }, '*');
+  if (m.method === 'ui/open-link') reply({});
   if (m.method === 'ui/notifications/size-changed') f.style.height = m.params.height + 'px';
   if (m.method === 'tools/call') reply(m.params.arguments.pid === 'olek|z|2' ? { content: [{ type: 'text', text: 'Nie ma już tej propozycji.' }], isError: true } : { content: [{ type: 'text', text: '{}' }], structuredContent: { zapisano: true } });
 });
@@ -75,5 +76,53 @@ for (const theme of ['light', 'dark']) {
   await page.screenshot({ path: out + '/karta-dzis-telefon.png', fullPage: true });
   await page.close();
 }
+// Karta klienta: dane syntetyczne, zrzuty, przyciski → ui/open-link do panelu
+{
+  const L = (w, n, ex, kg, reps, rpe, x) => Object.assign({ tydzien: w, jednostka: x && x.j || 'A', nr_cw: n, cwiczenie: ex, seria: String(x && x.s || 1), kg, powt: reps, rpe, wykonane: 'TAK',
+    data: x && x.d || '2026-11-01' }, x || {});
+  const logs = [];
+  [[2, 85], [3, 87.5], [4, 87.5], [5, 90], [6, 92.5], [7, 92.5], [8, 95], [9, 95]].forEach(([w, kg], i) => {
+    logs.push(L(w, 1, 'Przysiad', kg, 5, [7, 8, 8, 8, 8, 7, 8, 9][i]), L(w, 3, 'Martwy ciąg', kg + 20, 3, 8), L(w, 2, 'Wyciskanie leżąc', 47.5 + (i % 2) * 2.5, 6, 8));
+  });
+  logs.push(L(9, 1, 'Przysiad', 95, 5, 8, { s: 2, d: '2026-11-25', j: 'A', film_link: 'https://x' }), L(9, 1, 'Przysiad', 95, 5, 9, { s: 3, d: '2026-11-25', j: 'A', uwagi: 'kolano przy 3. serii' }));
+  logs.forEach(l => { if (l.tydzien === 9) { l.j = 'A'; l.data = '2026-11-25'; } });
+  const P = (w, j, t, date, rows) => rows.map((r, i) => Object.assign({ week: w, day: j, title: t, date, block: 'B3', order: i + 1, prio: 'A' }, r));
+  const K = {
+    cfg: { id: 'ola', name: 'Ola', simple: false },
+    plan: [].concat(
+      P(9, 'A', 'Dół A', '2026-11-25', [{ name: 'Przysiad', sets: 4, reps: '5', kg: 95, rpe: 8 }]),
+      P(9, 'B', 'Góra', '2026-11-23', [{ name: 'Wyciskanie leżąc', sets: 3, reps: '6', kg: 50 }]),
+      P(9, 'C', 'Dół B', '2026-11-28', [{ name: 'Martwy ciąg', sets: 3, reps: '3', kg: 117.5, rpe: 8, unote: 'Pas dopiero od 2. serii' }, { name: 'Przysiad bułgarski', prio: 'B', sets: 3, reps: '8/str', kg: 12 }, { name: 'Plank', prio: 'K', sets: 3, reps: '40 s', kg: 'BW' }]),
+      P(10, 'A', 'Dół A', '2026-12-02', [{ name: 'Przysiad', sets: 4, reps: '5', kg: 97.5, rpe: 8 }, { name: 'Wykroki', prio: 'B', sets: 3, reps: '10', kg: 16 }]),
+      P(12, 'A', 'Dół A', '2026-12-16', [{ name: 'Przysiad', sets: 3, reps: '3', kg: 102.5 }])),
+    logs,
+    sessions: [{ tydzien: 9, jednostka: 'A', start: '2026-11-25T17:00:00', rpe_sesji: 8, bol_max: 4, bol: 'kolano L:4', uwagi: 'kolano przy 3. serii' },
+      { tydzien: 9, jednostka: 'B', start: '2026-11-23T10:00:00', rpe_sesji: 7 }, { tydzien: 8, jednostka: 'A', start: '2026-11-18T17:00:00', rpe_sesji: 8 }],
+    readiness: [{ data: '2026-11-26', werdykt: 'Uwaga' }],
+    summary: [{ week: '2026-11-17', ton: 13400, status: '🟢 OK' }, { week: '2026-11-24', ton: 14200, status: '🟢 OK' }],
+    pkg: { n: 10, left: 2, to: '2026-12-31' },
+  };
+  const kd = klient(K, { today: '2026-11-27' });
+  for (const [theme, w] of [['light', 640], ['dark', 640], ['telefon', 380]]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 }, colorScheme: theme === 'dark' ? 'dark' : 'light' });
+    const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+    await page.setContent(HOST.replace('BG', theme === 'dark' ? '#262624' : '#faf9f5').replace('CTXJSON', JSON.stringify({ theme: theme === 'dark' ? 'dark' : 'light' }))
+      .replace('DATA', JSON.stringify(kd)).replace('HTML', () => JSON.stringify(KLIENT_HTML).replace(/</g, '\\u003c')));
+    const fr = page.frameLocator('#f');
+    await fr.getByText('Siła (e1RM)').waitFor();
+    await fr.getByText('Najbliższe w planie').waitFor();
+    if (theme === 'light') {
+      await fr.getByRole('button', { name: '▶ Prowadź' }).click();
+      await fr.getByRole('button', { name: 'Otwórz w panelu ›' }).click();
+      await page.waitForTimeout(100);
+      const links = (await page.evaluate(() => LOG)).filter(m => m.method === 'ui/open-link').map(m => m.params.url);
+      assert.deepEqual(links, ['https://likegreekgod.github.io/trening/trener.html#prowadz/ola', 'https://likegreekgod.github.io/trening/trener.html#k/ola/przeglad']);
+    }
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: out + '/karta-klient-' + theme + '.png', fullPage: true });
+    assert.deepEqual(errs, []);
+    await page.close();
+  }
+}
 await browser.close();
-console.log('karta Dziś: ok');
+console.log('karty Dziś i klient: ok');
