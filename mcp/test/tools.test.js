@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS, karta, e1rm, filmy, filmRef, refParse, tor } from '../src/tools.js';
-import { handle, handleBody, VERSIONS } from '../src/mcp.js';
+import { handle, handleBody, VERSIONS, rec } from '../src/mcp.js';
 import { UI_DZIS, UI_KLIENT, UI_FILM, UI_TOR, KLIENT_HTML, FILM_HTML, TOR_HTML } from '../src/ui.js';
 
 const PULPIT = {
@@ -127,6 +127,22 @@ test('MCP: initialize, tools/list, tools/call, błędy jako wynik', async () => 
   // błąd logowania nie jest zwykłym wynikiem: index.js odpowiada wtedy 401
   const auth = Object.assign(new Error('Logowanie: bilet wygasł'), { auth: true });
   await assert.rejects(handle({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'dzis' } }, { api: async () => { throw auth; } }), /Logowanie/);
+});
+
+test('structuredContent zawsze jest obiektem: „klienci” jako { klienci: [...] }, tablica z innego narzędzia → { wynik }', async () => {
+  const ctx = { api: async () => PULPIT, today: '2026-11-27' };
+  const r = await handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'klienci', arguments: {} } }, ctx);
+  const sc = r.result.structuredContent;
+  assert.ok(sc && typeof sc === 'object' && !Array.isArray(sc), 'klient MCP odrzuca tablicę („expected record, received array”)');
+  assert.deepEqual(sc.klienci.map(k => k.id), ['ania', 'olek']);
+  assert.equal(sc.klienci[0].sygnaly[0], '🔴 ból kolana 5/10');
+  assert.deepEqual(JSON.parse(r.result.content[0].text), sc, 'tekst = to samo co structuredContent');
+  for (const name of ['dzis', 'klienci', 'filmy']) {                // narzędzia czytające sam pulpit
+    const x = (await handle({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: {} } }, ctx)).result.structuredContent;
+    assert.ok(x && typeof x === 'object' && !Array.isArray(x), name);
+  }
+  assert.deepEqual(rec([1, 2]), { wynik: [1, 2] }); assert.deepEqual(rec(null), { wynik: null }); assert.deepEqual(rec('ok'), { wynik: 'ok' });
+  const o = { a: 1 }; assert.equal(rec(o), o);
 });
 
 test('karty MCP Apps: zasób ui:// z kartą Dziś, narzędzie „dzis” wskazuje kartę', async () => {

@@ -45,8 +45,9 @@ export async function handle(msg, ctx) {
       if (!t) return err(id, -32602, 'Nieznane narzędzie: ' + p.name);
       try {
         const out = await run(p.name, p.arguments || {}, ctx.api, { today: ctx.today, ticket: ctx.ticket, store: ctx.store, load: ctx.load });
-        if (out && out.__content) return res(id, { content: out.__content, structuredContent: out.__structured });   // klatki: zdjęcia dla Claude
-        return res(id, { content: [{ type: 'text', text: JSON.stringify(out, (k, v) => (k === '_ui' ? undefined : v)) }], structuredContent: out });   // _ui tylko dla karty
+        if (out && out.__content) return res(id, { content: out.__content, structuredContent: rec(out.__structured) });   // klatki: zdjęcia dla Claude
+        const sc = rec(out);                                           // structuredContent musi być obiektem (klient MCP odrzuca tablicę: „expected record”)
+        return res(id, { content: [{ type: 'text', text: JSON.stringify(sc, (k, v) => (k === '_ui' ? undefined : v)) }], structuredContent: sc });   // _ui tylko dla karty
       } catch (e) {
         if (e && e.auth) throw e;                                      // bilet Google nieważny: index.js odpowiada 401, Claude loguje ponownie
         return res(id, { content: [{ type: 'text', text: String((e && e.message) || e) }], isError: true });
@@ -55,6 +56,9 @@ export async function handle(msg, ctx) {
     default: return err(id, -32601, 'Method not found: ' + method);
   }
 }
+
+/** Wynik narzędzia → obiekt dla structuredContent: tablica, liczba, tekst albo null idą do { wynik }. */
+export function rec(x) { return x && typeof x === 'object' && !Array.isArray(x) ? x : { wynik: x === undefined ? null : x }; }
 
 /** Ciało zapytania HTTP (obiekt albo tablica) → odpowiedź (obiekt, tablica albo null = 202 bez treści). */
 export async function handleBody(body, ctx) {
