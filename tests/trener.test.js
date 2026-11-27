@@ -189,6 +189,7 @@ async function page(calls, opt = {}) {
     else if (b.fn === 'trKalendarz') out = { ok: true, result: kalendarz(b.args[0], b.args[1]) };
     else if (b.fn === 'trCwNazwy') out = { ok: true, result: [['Wyciskanie hantli nad głowę', 'https://example.com/v', 'barki; triceps', 'wycisk nad głowę'], ['Wyciskanie żołnierskie', '', 'barki', 'OHP'], ['Face pull', '', 'barki', '']] };
     else if (b.fn === 'trJednostka') { await new Promise(res => setTimeout(res, 100)); out = /^X/.test(b.args[1].items[0].name) ? { ok: false, error: 'Lista ćwiczeń się zmieniła – odśwież i spróbuj jeszcze raz.' } : { ok: true, result: { n: 4, weeks: b.args[1].next ? [12, 13] : [12] } }; }
+    else if (b.fn === 'trKopiuj') { await new Promise(res => setTimeout(res, 60)); const e = b.args[1]; out = { ok: true, result: { n: 4, made: e.units.map((u, i) => ({ week: e.toWeek, day: u.day, from: u.week + '|' + u.day, date: e.date || '' })) } }; }
     else if (b.fn === 'trPrzesun') { await new Promise(res => setTimeout(res, 60)); out = { ok: true, result: { date: b.args[1].date, n: 2 } }; }
     else if (b.fn === 'trKlienci') { st.kl = st.kl || KLIENCI.map(k => Object.assign({}, k)); out = { ok: true, result: st.kl }; }
     else if (b.fn === 'trKlientUstaw') { await new Promise(res => setTimeout(res, 100)); const f = b.args[1], i = st.kl.findIndex(k => k.id === b.args[0]);
@@ -441,7 +442,7 @@ test('panel: zrzuty w ciemnym motywie i na telefonie', async () => {
     await shot(p, 'trener-pulpit-' + sfx + '.png');
     await p.goto(base + 'trener.html#k/ania'); await p.waitForSelector('.tabs');
     await shot(p, 'trener-klient-' + sfx + '.png');
-    await p.goto(base + 'trener.html#k/ania/plan'); await p.waitForSelector('.pu');
+    await p.goto(base + 'trener.html#k/ania/plan'); await p.waitForSelector('.pu, .pgg');
     await shot(p, 'trener-plan-' + sfx + '.png');
     if (vp) assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Plan bez przewijania w bok na telefonie');
     await p.goto(base + 'trener.html#k/ania'); await p.waitForSelector('.kgo');
@@ -1245,11 +1246,65 @@ test('panel: blokada obcych skryptów (CSP) zatrzymuje wstrzyknięty kod', async
   await ctx.close();
 });
 
+test('panel: karta klienta → Plan jako siatka bloku (bloki, okno, przeciąganie, kopia z Shift, + Tydzień, Kopiuj tydzień)', async () => {
+  for (const scheme of ['light', 'dark']) {
+    const calls = [], { ctx, p } = await page(calls, { loggedIn: true, scheme });
+    await p.goto(base + 'trener.html#k/ania/plan'); await p.waitForSelector('.pgg');
+    assert.deepEqual(await p.$$eval('[data-pgb]', a => a.map(x => [x.textContent, x.getAttribute('aria-pressed')])), [['B1 · 6 tyg. · 11 z 12 zrobione', 'false'], ['B2 · 6 tyg. · 11 z 12 zrobione', 'true']]);
+    assert.deepEqual(await p.$$eval('.pgw:not(.pgh) .pgl b', a => a.map(x => x.textContent)), ['Tydz. 7', 'Tydz. 8', 'Tydz. 9', 'Tydz. 10', 'Tydz. 11', 'Tydz. 12']);
+    assert.match(await p.textContent('.pgc[data-kday="' + addDays(MON, 3) + '"]'), /T2 · Góra/);
+    assert.match(await p.textContent('.pgc[data-kday="' + addDays(MON, 1) + '"]'), /T1 · Nogi✓/);
+    await shot(p, 'trener-plan-siatka-' + (scheme === 'light' ? 'jasny' : 'ciemny') + '.png');
+    if (scheme === 'dark') { assert.deepEqual(p.errors, []); await ctx.close(); continue; }
+    // okno jednostki z siatki: ← → po jednostkach bloku
+    await p.click('.pgc[data-kday="' + addDays(MON, 3) + '"] .ku'); await p.waitForSelector('#kw [data-kwedit]');
+    assert.match(await p.textContent('#kw .kwh .eb'), /tydz\. 12 · T2/);
+    await p.keyboard.press('ArrowLeft'); await p.waitForFunction(() => /tydz\. 12 · T1/.test((document.querySelector('#kw .kwh .eb') || {}).textContent));
+    await p.keyboard.press('Escape'); assert.equal(await p.$('#kw'), null);
+    // przeciągnięcie w tym samym tygodniu = nowy dzień; do innego tygodnia bez Shift = komunikat; z Shift = kopia
+    await p.dragAndDrop('.pgc[data-kday="' + addDays(MON, 3) + '"] .ku', '.pgc[data-kday="' + addDays(MON, 4) + '"]');
+    await p.waitForFunction(() => /→ pt 20\.11/.test((document.querySelector('#kmsg') || {}).textContent));
+    assert.deepEqual(calls.filter(c => c.fn === 'trPrzesun').pop().args, ['ania', { week: 12, day: 'T2', date: addDays(MON, 4) }]);
+    await p.dragAndDrop('.pgc[data-kday="' + addDays(MON, 3) + '"] .ku', '.pgc[data-kday="' + addDays(MON, -3) + '"]');
+    assert.match(await p.textContent('#kmsg'), /Shift/);
+    await p.evaluate(([a, b]) => {                     // Playwright nie przekazuje Shift do zdarzeń przeciągania: zdarzenia z shiftKey ręcznie
+      const dt = new DataTransfer(), src = document.querySelector('.pgc[data-kday="' + a + '"] .ku'), dst = document.querySelector('.pgc[data-kday="' + b + '"]');
+      src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+      dst.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      dst.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, shiftKey: true }));
+    }, [addDays(MON, 1), addDays(MON, -3)]);
+    await p.waitForFunction(() => /Skopiowano/.test((document.querySelector('#kmsg') || {}).textContent));
+    assert.deepEqual(calls.filter(c => c.fn === 'trKopiuj').pop().args, ['ania', { units: [{ week: 12, day: 'T1' }], toWeek: 11, date: addDays(MON, -3) }]);
+    // + Tydzień 13 = kopia ostatniego tygodnia bloku
+    await p.click('[data-pgadd]');
+    await p.waitForFunction(() => /tydz\. 13/.test((document.querySelector('#kmsg') || {}).textContent));
+    assert.deepEqual(calls.filter(c => c.fn === 'trKopiuj').pop().args, ['ania', { units: [{ week: 12, day: 'T1' }, { week: 12, day: 'T2' }], toWeek: 13 }]);
+    // Kopiuj tydzień… (formularz), blok B1 nie ma wolnego tygodnia 7
+    await p.click('[data-pgcp]'); await p.waitForSelector('#pg-from');
+    assert.equal(await p.inputValue('#pg-to'), '13');
+    await p.selectOption('#pg-from', '10'); await p.fill('#pg-to', '14'); await p.click('[data-pgcpgo]');
+    await p.waitForFunction(() => /tydz\. 14/.test((document.querySelector('#kmsg') || {}).textContent));
+    assert.deepEqual(calls.filter(c => c.fn === 'trKopiuj').pop().args, ['ania', { units: [{ week: 10, day: 'T1' }, { week: 10, day: 'T2' }], toWeek: 14 }]);
+    assert.equal(await p.$('#pg-from'), null);
+    await p.click('[data-pgb="B1"]'); await p.waitForSelector('[data-pgb="B1"][aria-pressed="true"]');
+    assert.equal(await p.isDisabled('[data-pgadd]'), true);
+    // Lista = dotychczasowy widok z edycją w miejscu
+    await p.click('[data-pgv="lista"]'); await p.waitForSelector('.pu');
+    assert.deepEqual(p.errors, []);
+    await ctx.close();
+  }
+  // telefon: lista bez przełącznika
+  const { ctx, p } = await page([], { loggedIn: true, scheme: 'dark', vp: { width: 390, height: 844 } });
+  await p.goto(base + 'trener.html#k/ania/plan'); await p.waitForSelector('.pu');
+  assert.equal(await p.$('.pgg'), null); assert.equal(await p.$('[data-pgv]'), null);
+  await ctx.close();
+});
+
 test('panel: karta klienta → Plan, szybka zmiana kg / serii w niezrobionej jednostce (trPlan)', async () => {
   for (const [vp, scheme, sfx] of [[{ width: 1440, height: 900 }, 'light', 'jasny'], [{ width: 390, height: 844 }, 'dark', 'telefon-ciemny']]) {
     const calls = [];
     const { ctx, p } = await page(calls, { loggedIn: true, vp, scheme });
-    await p.goto(base + 'trener.html#k/ania/plan'); await p.waitForSelector('.pu');
+    await p.goto(base + 'trener.html#k/ania/plan'); await p.waitForSelector('.pu, .pgg'); if (await p.$('.pgg')) { await p.click('[data-pgv="lista"]'); await p.waitForSelector('.pu'); }
     // tylko niezrobiona jednostka (tydz. 12 T2, czwartek); dzisiejsza T1 ma serie w Logu → zablokowana, nie ma jej na liście
     assert.deepEqual(await p.$$eval('.pu', a => a.map(x => x.dataset.u)), ['12|T2']);
     assert.match(await p.textContent('.wkh'), /Tydzień 12\s*16\.11–22\.11 · blok B2 · 1 z 2 zrobione/);
