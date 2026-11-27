@@ -2875,3 +2875,88 @@ test('trFilmSeria_: film z komputera trenera do serii (link, tor sztangi, wniosk
     S({ vbt: 50 }), S({ rpe: 11 }), S({ kg: 'dużo' }), S({ note: 'x'.repeat(3001) })].forEach(s => assert.ok(f(s).error, JSON.stringify(s).slice(0, 80)));
   assert.equal(f(S({ vbt: 1, path: 'x'.repeat(45001) })).set.sciezka, '');      // za długa ścieżka nie psuje zapisu
 });
+
+test('trening prowadzony (P): poza wykonaniem planu, Blokami, zaległymi i importem; tonaż tak', () => {
+  const R = (j, nr, x) => Object.assign({ klient: 'maciek', tydzien: 1, jednostka: j, data: '2026-11-24', nr, cwiczenie: 'Przysiad', prio: 'A', serie: 2, powt: '5', kg: 100, blok: 'B1' }, x || {});
+  const led = R('P1', 1, { cwiczenie: 'Z-Press', kg: 30, zrodlo: 'prowadzony', blok: '', data: '2026-11-27', serie: 4, powt: '12,12,9,8' });
+  const plan = [R('S1', 1), led];
+  assert.ok(C.led_(led) && C.offPlan_(led) && !C.led_(plan[0]));
+  const L = (j, nr, s, kg, reps, cw) => ({ klient: 'maciek', tydzien: 1, jednostka: j, data: '2026-11-27', nr_cw: nr, cwiczenie: cw, seria: s, kg, powt: reps, rpe: 9, wykonane: 'TAK', typ: '' });
+  const log = [L('S1', 1, 1, 100, 5, 'Przysiad'), L('P1', 1, 1, 30, 12, 'Z-Press'), L('P1', 1, 2, 30, 12, 'Z-Press'), L('P1', 1, 3, 30, 9, 'Z-Press'), L('P1', 1, 4, 30, 8, 'Z-Press')];
+  const H = C.SUM_HEADERS, row = C.computeSummary_(plan, log, [], []).rows[0];
+  assert.equal(row[H.indexOf('wykonanie_%')], 50, 'P nie podbija wykonania planu');
+  assert.equal(row[H.indexOf('tonaz_kg')], 500 + 30 * 41, 'ale tonaż P się liczy');
+  const ses = [{ klient: 'maciek', tydzien: 1, jednostka: 'P1', start: '2026-11-27T17:00:00Z', prowadzil: 'trener' }];
+  const b = C.computeBlocks_(plan, log, ses, [], [], {}), BH = C.BLOK_HEADERS;
+  assert.equal(b.length, 1); assert.equal(b[0][BH.indexOf('blok')], 'B1'); assert.equal(b[0][BH.indexOf('tonaz_kg')], 500, 'P poza Blokami (także tonaż bloku)');
+  assert.equal(C.computeBlocks_([led], log.slice(1), ses, [], [], {}).length, 0, 'sam trening prowadzony = żadnego bloku');
+  // import: P zostaje, plik nie może używać P
+  const m = C.mergePlan_(plan, [R('S1', 1, { kg: 105 }), R('S2', 1)], [], []);
+  assert.ok(m.rows.includes(led));
+  const m2 = C.mergePlan_(plan, [R('P1', 1)], [], []);
+  assert.ok(m2.rows.includes(led)); assert.match(m2.warnings.join(' '), /prowadzony trening/);
+  assert.match(C.validatePlan_([R('P1', 1, { blok: 'B1' })]).join(' '), /treningi prowadzone/);
+  // aplikacja: klient nie dopisuje do P, trener tak (zrodlo prowadzony, bez bloku)
+  assert.match(C.planEdit_(plan, [], 'maciek', { op: 'add', week: 1, day: 'P1', name: 'Plank', sets: 2, reps: '30 s' }).error, /z trenerem/);
+  const ad = C.planEdit_(plan, [], 'maciek', { op: 'add', week: 1, day: 'P1', name: 'Plank', sets: 2, reps: '30 s', trainer: true });
+  assert.equal(ad.add[0].zrodlo, 'prowadzony'); assert.equal(ad.add[0].blok, '');
+  // Prowadź → Nowa jednostka = P (ownRows_ w trybie 'P')
+  const own = C.ownRows_('maciek', { week: 1, day: 'P2', date: '2026-11-28', exercises: [{ name: 'Wiosłowanie', sets: 3, reps: '10' }] }, plan, 'P');
+  assert.equal(own.rows[0].zrodlo, 'prowadzony'); assert.equal(own.rows[0].blok, ''); assert.equal(own.rows[0].tytul, 'Trening z trenerem');
+  assert.match(C.ownRows_('maciek', { week: 1, day: 'S1', date: '2026-11-28', exercises: [{ name: 'X', sets: 1, reps: '1' }] }, plan, 'P').error, /Zła jednostka/);
+  // klient (bez trybu trenera) nie zapisuje serii w P
+  assert.throws(() => C.ledGuard_('P1'), /z trenerem/); C.ledGuard_('S1');
+  C.LIVE_ = true; C.ledGuard_('P1'); C.LIVE_ = false;
+  // tydzień i kod: ciągła numeracja P, tydzień jak ownWeek; otwarta jednostka tego dnia
+  const plan2 = [R('S1', 1, { data: '2026-11-17' }), R('S1', 2, { tydzien: 2, data: '2026-11-24' }), led];
+  assert.equal(C.ledWeek_(plan2, 'maciek', '2026-11-27'), 2);
+  assert.equal(C.ledWeek_([led], 'maciek', '2026-11-27'), 1, 'bez planu tydzień 1');
+  assert.equal(C.ledNextDay_(plan2, 'maciek'), 'P2');
+  assert.deepEqual(plain(C.ledOpen_(plan2, [], 'maciek', '2026-11-27')), { week: 1, day: 'P1', date: '2026-11-27', title: 'Trening z trenerem' });
+  assert.equal(C.ledOpen_(plan2, ses, 'maciek', '2026-11-27'), null, 'zamknięta: ponowny start da nową');
+  assert.equal(C.ledOpen_(plan2, [], 'maciek', '2026-11-28'), null);
+  // przeniesienie S1 → P (Plan)
+  const fp = C.ledFromPlan_(plan2, 'maciek', 2, 'S1');
+  assert.equal(fp.day, 'P2'); assert.deepEqual(plain(fp.set), [[1, { jednostka: 'P2', zrodlo: 'prowadzony', blok: '' }]]);
+  assert.match(C.ledFromPlan_(plan2, 'maciek', 1, 'P1').error, /już jest trening prowadzony/);
+});
+
+test('trening prowadzony: światła → RPE / FAIL, drabinka, serie w planie, zamknięcie, pakiet −1', () => {
+  assert.deepEqual(plain(['lekko', 'średnio', 'ciężko', 'nieudana'].map(sw => C.ledEffort_({ swiatlo: sw }, false))),
+    [{ rpe: 7, typ: '' }, { rpe: 8, typ: '' }, { rpe: 9, typ: '' }, { rpe: '', typ: 'FAIL' }]);
+  assert.deepEqual(plain(C.ledEffort_({ rpe: 8.5 }, false)), { rpe: 8.5, typ: '' });
+  assert.deepEqual(plain(C.ledEffort_({ rpe: 8.5 }, true)), { rpe: 8, typ: '' }, 'PROSTY: RPE zaokrąglone do światła');
+  assert.deepEqual(plain(C.ledEffort_({ swiatlo: 'nieudana', typ: 'DROP' }, false)), { rpe: '', typ: 'DROP+FAIL' });
+  assert.match(C.ledEffort_({ swiatlo: 'mocno' }, false).error, /światło/);
+  const ix = C.exIndex_([{ cwiczenie: 'Front Squat', aliasy: 'przysiad przedni', instruktaz: 'https://example.test/fs', partia: 'czworogłowe' }, { cwiczenie: 'Push-Up', aliasy: 'pompki', partia: 'klatka' }]);
+  const lad = n => Array.from({ length: 9 }, (_, i) => n ? { powt: String(i + 1) } : { kg: '30', powt: String(9 - i) });
+  const r = C.ledExRows_('maciek', { week: 3, day: 'P2', date: '2026-11-27', title: 'Trening z trenerem', rows: [] },
+    [{ cwiczenie: 'przysiad przedni', obwod: 'a', serie: lad(0) }, { cwiczenie: 'pompki', obwod: 'A', serie: lad(1) }, { cwiczenie: 'Coś nowego', serie: [{ kg: '20', powt: '10', seria: 'R1' }, { kg: 40, powt: 8, swiatlo: 'ciezko' }] }], ix, false);
+  assert.deepEqual(r.rows.map(x => [x.nr, x.cwiczenie, x.serie, x.powt, x.kg, x.obwod, x.zrodlo, x.blok]),
+    [[1, 'Front Squat', 9, '9,8,7,6,5,4,3,2,1', 30, 'A', 'prowadzony', ''], [2, 'Push-Up', 9, '1,2,3,4,5,6,7,8,9', '', 'A', 'prowadzony', ''], [3, 'Coś nowego', 1, '8', 40, '', 'prowadzony', '']]);
+  assert.equal(r.sets.length, 9 + 9 + 2);
+  assert.deepEqual(plain(r.sets.slice(-2)), [{ order: 3, name: 'Coś nowego', set: 'R1', kg: 20, reps: 10, rpe: '', typ: '' }, { order: 3, name: 'Coś nowego', set: '1', kg: 40, reps: 8, rpe: 9, typ: '' }]);
+  assert.match(r.warn.join(' '), /Coś nowego: nie ma w bazie/);
+  assert.equal(r.out[2], '3 Coś nowego: R1 20×10, 40×8 🔴');
+  // ten sam nr = poprawka (bez duplikatu), następny wolny nr dalej
+  const r2 = C.ledExRows_('maciek', { week: 3, day: 'P2', date: '2026-11-27', title: 'T', rows: r.rows }, [{ nr: 3, cwiczenie: 'Coś nowego', serie: [{ kg: 42.5, powt: 8 }] }, { cwiczenie: 'Plank', serie: [{ powt: '30 s' }] }], ix, false);
+  assert.deepEqual(r2.rows.map(x => x.nr + ' ' + x.kg + ' ' + x.powt), ['1 30 9,8,7,6,5,4,3,2,1', '2  1,2,3,4,5,6,7,8,9', '3 42.5 8', '4  30 s']);
+  assert.match(C.ledExRows_('maciek', { week: 3, day: 'P2', rows: [] }, [{ cwiczenie: 'X', serie: [{ powt: '6-8' }] }], ix, false).error, /powt/);
+  // serie w planie: wszystkie wg planu + nadpisania; zakres bez liczby = błąd
+  const plan = [{ klient: 'maciek', tydzien: 1, jednostka: 'S1', nr: 1, cwiczenie: 'Przysiad', serie: 2, powt: '5', kg: 80 }, { klient: 'maciek', tydzien: 1, jednostka: 'S1', nr: 2, cwiczenie: 'Wiosłowanie', serie: 2, powt: '8-10', kg: 40 }];
+  assert.match(C.trSerieRows_(plan, [], true, false).error, /Wiosłowanie.*8-10.*podaj liczbę/);
+  const sr = C.trSerieRows_(plan, [{ nr: 1, seria: '2', swiatlo: 'ciezko' }, { nr: 2, seria: '1', powt: '10', swiatlo: 'lekko' }], false, false);
+  assert.deepEqual(sr.sets.map(x => [x.order, x.set, x.kg, x.reps, x.rpe]), [[1, '2', 80, 5, 9], [2, '1', 40, 10, 7]]);
+  assert.equal(C.trSerieRows_(plan.slice(0, 1), [{ nr: 1, seria: '2', kg: 85, swiatlo: 'nieudana' }], true, false).out[0], '1 Przysiad: 80×5, 85×5 ✖');
+  assert.match(C.trSerieRows_([{ klient: 'maciek', nr: 1, cwiczenie: 'Rwanie', serie: 3, powt: '2', kg: '', procent: 0.75 }], [], true, false).error, /75%.*podaj kg/);
+  // zamknięcie
+  const s = C.ledSession_({ samopoczucie: 4, rpe_sesji: 9, bol: [{ miejsce: 'kolano L', ocena: 3 }, { miejsce: 'bark', ocena: 2 }] }, '2026-11-27T17:05:00.000Z', '2026-11-27T18:00:00.000Z');
+  assert.deepEqual(plain(s), { feel: 4, rpe: 9, minutes: 55, start: '2026-11-27T17:05:00.000Z', end: '2026-11-27T18:00:00.000Z', pain: 'kolano L:3; bark:2', painMax: 3, knee: 3, shoulder: 2, note: '' });
+  assert.equal(C.ledSession_({ czas_min: 60 }, '', '2026-11-27T18:00:00.000Z').start, '2026-11-27T17:00:00.000Z');
+  assert.match(C.ledSession_({ samopoczucie: 6 }, '', '2026-11-27T18:00:00.000Z').error, /samopoczucie/);
+  // pakiet: wpis „trening” po zamknięciu P zdejmuje 1
+  const P = (typ, ile, data, x) => Object.assign({ klient: 'maciek', typ, ile, data, zapisano: data + 'T10:00:00Z' }, x || {});
+  const k = C.pkgState_([P('zakup', 2, '2026-11-20'), P('trening', -1, '2026-11-27', { sesja: '1|P1' })]);
+  assert.equal(k.left, 1);
+  assert.equal(C.pkgState_([P('zakup', 2, '2026-11-20'), P('trening', -1, '2026-11-27'), P('trening', -1, '2026-11-27', { zapisano: '2026-11-27T19:00:00Z' })]).left, 0);
+});

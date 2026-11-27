@@ -230,7 +230,7 @@ function clientData_(client, t0) {
       extra: ix < 0 || r[ix] === '' || r[ix] === null ? null : (Number(r[ix]) || 0),
       drop: idr < 0 ? 0 : (Number(r[idr]) || 0),
       group: opt(r, 'grupa').toUpperCase() || dx.group || '', block: opt(r, 'blok'),
-      swaps: own.length ? own : dx.swaps, infos: dx.infos, fx: dx.fx || [], parts: dx.parts, own: src(r) === 'klient', added: src(r) === 'dodane', coach: src(r) === 'trener',
+      swaps: own.length ? own : dx.swaps, infos: dx.infos, fx: dx.fx || [], parts: dx.parts, own: src(r) === 'klient', added: src(r) === 'dodane', coach: src(r) === 'trener', led: src(r) === 'prowadzony',
       mode: opt(r, 'tryb').toUpperCase(), cut: Number(opt(r, 'ciecie')) || null, setsMin: opt(r, 'serie_min') === '' ? null : Number(opt(r, 'serie_min')),
       circuit: circuit_(opt(r, 'obwod')), unote: opt(r, 'uwagi_jedn'), section: sekcja_(opt(r, 'sekcja')) || ''
     }; });
@@ -258,6 +258,7 @@ function blockNotes_(rows, clientId) {
 /** Zapis jednej serii. Idempotentny po id (klient|tydz|jedn|nr|seria). */
 function logSet(key, s) {
   const client = mustClient_(key);
+  ledGuard_(s && s.day);
   const id = [client.id, s.week, s.day, s.order, s.set].join('|');
   upsert_('Log', LOG_HEADERS, id, [id, new Date(), client.id, s.week, s.day, s.date || today_(), s.order, s.name,
     s.set, s.kg, s.reps, s.rpe, s.vbt, s.done ? 'TAK' : '', s.video || '', s.note || '', s.typ || '']
@@ -419,7 +420,9 @@ function przesunJednostke(key, moves) {
   try {
     const sh = SpreadsheetApp.getActive().getSheetByName('Plan');
     const v = sh.getDataRange().getValues(), h = v[0];
-    const res = planMoves_(tableOf_('Plan'), readRows_('Sesje', SES_HEADERS, client.id), client.id, [].concat(moves || []));
+    const all = [].concat(moves || []), led = LIVE_ ? [] : all.filter(m => m && LED_DAY.test(String(m.day)));   // trening z trenerem: dzień ustawia trener
+    const res = planMoves_(tableOf_('Plan'), readRows_('Sesje', SES_HEADERS, client.id), client.id, all.filter(m => led.indexOf(m) < 0));
+    led.forEach(m => res.skipped.push({ week: m.week, day: m.day, why: 'trening z trenerem' }));
     if (res.rows.length) {
       planTextCols_();
       const col = h.indexOf('data') + 1;
@@ -581,6 +584,7 @@ function filmPart(key, r) {
 /** Usunięcie serii dodanej przez klienta (rozgrzewka / dodatkowa / drop) — kasuje wiersz w Log. */
 function deleteSet(key, s) {
   const client = mustClient_(key);
+  ledGuard_(s && s.day);
   const id = [client.id, s.week, s.day, s.order, s.set].join('|');
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -596,6 +600,7 @@ function deleteSet(key, s) {
 /** Zapis jednostki. Ból: liczba 0–10 lub '' (nie zgłoszono); bol = „miejsce:0–10; …”, bol_max = najwyższa ocena. Czas liczony w aplikacji: od pierwszego wpisu do „Zakończ”. */
 function logSession(key, s) {
   const client = mustClient_(key);
+  ledGuard_(s && s.day);
   const id = [client.id, s.week, s.day].join('|');
   upsert_('Sesje', SES_HEADERS, id, [id, new Date(), client.id, s.week, s.day, s.date || today_(),
     s.knee, s.shoulder, s.feel, s.minutes, s.note || '', s.start || '', s.end || '', s.pain || '', s.painMax === undefined ? '' : s.painMax, s.rpeSession === undefined ? '' : s.rpeSession]);
@@ -1798,7 +1803,7 @@ function computeBlocks_(plan, log, ses, dys, sumRows, opts) {
   const U = {}, P = {}, X = {}, OWN = {}, SK = skips_(log);
   const blockOf = r => String(r.blok === undefined || r.blok === null ? '' : r.blok).trim() || NO_BLOCK;
   plan.forEach(r => {
-    const c = String(r.klient).toLowerCase(); if (!c) return;
+    const c = String(r.klient).toLowerCase(); if (!c || led_(r)) return;   // trening prowadzony: poza Blokami (także tonaż bloku)
     const u = key(c, r.tydzien, r.jednostka), b = blockOf(r);
     P[key(c, r.tydzien, r.jednostka, r.nr)] = r;
     const x = X[c + '|' + b] || (X[c + '|' + b] = { c, b, units: {}, weeks: [], planned: 0, donePlanned: 0, ton: 0,
@@ -2188,7 +2193,18 @@ const own_ = r => String(r && r.zrodlo !== undefined && r.zrodlo !== null ? r.zr
 const zr_ = r => String(r && r.zrodlo !== undefined && r.zrodlo !== null ? r.zrodlo : '').trim().toLowerCase();
 const added_ = r => zr_(r) === 'dodane';
 const removed_ = r => /^usuniete/.test(zr_(r));
-const offPlan_ = r => own_(r) || added_(r) || removed_(r);
+/**
+ * Trening prowadzony (P1, P2… u klienta, Plan.zrodlo = „prowadzony”; 27.11.2026): trener prowadzi trening poza planem
+ * (Claude przez MCP albo „Nowa jednostka” / „Trening bez planu” w „▶ Prowadź”). Jak własny trening: poza wykonaniem planu,
+ * Blokami, zaległymi i końcem planu, import planu go nie rusza; tonaż, obciążenie, partie, e1RM i Postęp tak. Klient go nie zmienia.
+ */
+const led_ = r => zr_(r) === 'prowadzony';
+const LED_DAY = /^P\d{1,3}$/;   // kod jednostki prowadzonej; plany z pliku go nie używają (validatePlan_)
+/** Klient (bez trybu trenera) nie zmienia treningu prowadzonego: serie, sesja i dzień tylko przez trenera. */
+function ledGuard_(day) {
+  if (!LIVE_ && LED_DAY.test(String(day === undefined || day === null ? '' : day).trim())) throw new Error('To trening z trenerem – zmienia go tylko trener.');
+}
+const offPlan_ = r => own_(r) || led_(r) || added_(r) || removed_(r);
 const EDIT_NR = 50;      // ćwiczenia dodane przez klienta mają nr od 51, żeby nie zderzyć się z numerami z planu trenera
 const EDIT_MAX = 10;     // najwięcej dodanych ćwiczeń w jednostce
 
@@ -2210,6 +2226,8 @@ function planEdit_(plan, ses, clientId, e) {
   const cur = mine.filter(x => inUnit(x, week));
   if (!(week >= 1) || !day || !cur.length) return { error: 'Nie ma takiej jednostki w planie.' };
   if (cur.some(x => own_(x.r))) return { error: 'To własny trening – popraw go w kreatorze.' };
+  const led = cur.some(x => led_(x.r));
+  if (led && !e.trainer) return { error: 'To trening z trenerem – zmienia go tylko trener.' };
   const done = {}; (ses || []).forEach(s => { done[s.tydzien + '|' + s.jednostka] = 1; });
   const blok = lc(cur[0].r.blok);
   // kolejne tygodnie tej jednostki: ten sam blok, bez wpisu w Sesjach
@@ -2226,7 +2244,7 @@ function planEdit_(plan, ses, clientId, e) {
     weeks.forEach(w => {
       const rows = mine.filter(x => inUnit(x, w)), act = rows.filter(x => !removed_(x.r));
       // już jest: w kolejnych tygodniach dowolne ćwiczenie o tej nazwie, w tej jednostce wcześniej dodane (ponowiona wysyłka nic nie dubluje)
-      if (act.some(x => lc(x.r.cwiczenie) === lc(name) && (w !== week || added_(x.r) || (e.trainer && zr_(x.r) === 'trener')))) return;
+      if (act.some(x => lc(x.r.cwiczenie) === lc(name) && (w !== week || added_(x.r) || (e.trainer && /^(trener|prowadzony)$/.test(zr_(x.r)))))) return;
       if (!e.trainer && rows.filter(x => added_(x.r)).length >= EDIT_MAX) { if (w === week) full = true; return; }
       // trener (prowadzony trening): zwykłe ćwiczenie planu na końcu jednostki, prio B; klient: „dodane” od nr 51
       const nr = Math.max(e.trainer ? 0 : EDIT_NR, ...rows.map(x => Number(x.r.nr) || 0)) + 1, b = rows[0].r;
@@ -2240,7 +2258,7 @@ function planEdit_(plan, ses, clientId, e) {
         }
       }
       add.push({ klient: clientId, tydzien: w, jednostka: day, tytul: b.tytul, data: b.data instanceof Date ? fmtDate_(b.data) : String(b.data === undefined || b.data === null ? '' : b.data),
-        nr: nr, cwiczenie: name, prio: e.trainer ? (/^[ABK]$/.test(String(e.prio || '')) ? String(e.prio) : 'B') : 'A', serie: sets, powt: reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: b.blok, zrodlo: e.trainer ? 'trener' : 'dodane', obwod: ob });
+        nr: nr, cwiczenie: name, prio: e.trainer ? (/^[ABK]$/.test(String(e.prio || '')) ? String(e.prio) : 'B') : 'A', serie: sets, powt: reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: led ? '' : b.blok, zrodlo: led ? 'prowadzony' : e.trainer ? 'trener' : 'dodane', obwod: ob });
     });
     if (full) return { error: 'Najwyżej ' + EDIT_MAX + ' dodanych ćwiczeń w jednostce.' };
     return { set, add, n: add.length };
@@ -2384,6 +2402,7 @@ function planAppend_(sh, h, rows) {
 }
 
 const OWN_MAX = 20;
+const LED_TITLE = 'Trening z trenerem';
 const SETS_MAX = 40;   // górny limit serii ćwiczenia (EMOM 20+ rund)
 
 /**
@@ -2392,25 +2411,25 @@ const SETS_MAX = 40;   // górny limit serii ćwiczenia (EMOM 20+ rund)
  */
 function ownRows_(clientId, u, plan, trainer) {
   u = u || {};
-  const week = Number(u.week), day = String(u.day || '').trim(), date = String(u.date || '');
-  // trener (prowadzony trening): nowa jednostka planu T<n> (Plan.zrodlo „trener”); klient: własny trening W<n>
-  if (!(week >= 1) || !(trainer ? /^T\d{1,3}$/ : /^W\d{1,3}$/).test(day)) return { error: 'Zła jednostka.' };
+  const week = Number(u.week), day = String(u.day || '').trim(), date = String(u.date || ''), led = trainer === 'P';
+  // trener: trening prowadzony P<n> (Plan.zrodlo „prowadzony”, poza planem) albo dawna jednostka planu T<n> („trener”); klient: własny trening W<n>
+  if (!(week >= 1) || !(led ? LED_DAY : trainer ? /^T\d{1,3}$/ : /^W\d{1,3}$/).test(day)) return { error: 'Zła jednostka.' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Zła data.' };
   const mine = (plan || []).filter(r => String(r.klient).toLowerCase() === clientId);
-  if (mine.some(r => Number(r.tydzien) === week && String(r.jednostka) === day && (trainer ? zr_(r) !== 'trener' : !own_(r)))) return { error: trainer ? 'Taka jednostka już jest w planie.' : 'Ta jednostka jest w planie trenera.' };
+  if (mine.some(r => Number(r.tydzien) === week && String(r.jednostka) === day && (led ? !led_(r) : trainer ? zr_(r) !== 'trener' : !own_(r)))) return { error: trainer ? 'Taka jednostka już jest w planie.' : 'Ta jednostka jest w planie trenera.' };
   const ex = [].concat(u.exercises || []).map(e => ({ name: String(e && e.name || '').trim().replace(/\s+/g, ' ').slice(0, 80),
     sets: Math.round(Number(e && e.sets)), reps: String(e && e.reps === undefined ? '' : e.reps).trim().slice(0, 12), kg: e && e.kg, circuit: circuit_(e && e.circuit) })).filter(e => e.name);
   if (!ex.length) return { error: 'Dodaj co najmniej jedno ćwiczenie.' };
   if (ex.length > OWN_MAX) return { error: 'Najwyżej ' + OWN_MAX + ' ćwiczeń.' };
   if (ex.some(e => !(e.sets >= 1 && e.sets <= SETS_MAX) || !e.reps)) return { error: 'Serie 1–' + SETS_MAX + ' i powtórzenia przy każdym ćwiczeniu.' };
-  const same = mine.filter(r => Number(r.tydzien) === week && !own_(r)), blok = same.length ? String(same[0].blok || '') : String((mine[mine.length - 1] || {}).blok || '');
-  const tt = String(u.title || '').trim().slice(0, 40), title = trainer ? tt || 'Trening' : 'Własny' + (tt ? ' · ' + tt : '');
+  const same = mine.filter(r => Number(r.tydzien) === week && !offPlan_(r)), blok = led ? '' : same.length ? String(same[0].blok || '') : String((mine.filter(r => !offPlan_(r)).pop() || {}).blok || '');
+  const tt = String(u.title || '').trim().slice(0, 40), title = led ? tt || LED_TITLE : trainer ? tt || 'Trening' : 'Własny' + (tt ? ' · ' + tt : '');
   // obwód tylko dla sąsiadów pod tą samą literą; pojedyncze ćwiczenie z literą = zwykłe
   const solo = (e, i) => !(ex[i - 1] && ex[i - 1].circuit === e.circuit) && !(ex[i + 1] && ex[i + 1].circuit === e.circuit);
   return { rows: ex.map((e, i) => {
     const kg = e.kg === undefined || e.kg === null || String(e.kg).trim() === '' ? '' : (isFinite(Number(String(e.kg).replace(',', '.'))) ? Number(String(e.kg).replace(',', '.')) : String(e.kg).slice(0, 10));
     return { klient: clientId, tydzien: week, jednostka: day, tytul: title, data: date, nr: i + 1, cwiczenie: e.name, prio: 'A',
-      serie: e.sets, powt: e.reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: blok, zrodlo: trainer ? 'trener' : 'klient', obwod: e.circuit && !solo(e, i) ? e.circuit : '' };
+      serie: e.sets, powt: e.reps, procent: '', kg: kg, rpe_max: '', uwagi: '', dod_serie: '', drop: '', grupa: '', zamienniki: '', blok: blok, zrodlo: led ? 'prowadzony' : trainer ? 'trener' : 'klient', obwod: e.circuit && !solo(e, i) ? e.circuit : '' };
   }) };
 }
 
@@ -2421,7 +2440,9 @@ function addOwnUnit(key, u) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const plan = tableOf_('Plan'), res = ownRows_(client.id, u, plan, LIVE_ && /^T\d/.test(String(u && u.day || '')));   // trener: nowa jednostka T<n>; własny trening klienta (W<n>) jak zwykle
+    const d0 = String(u && u.day || ''), plan = tableOf_('Plan');
+    // trener: trening prowadzony P<n> (starsza aplikacja: jednostka planu T<n>); własny trening klienta (W<n>) jak zwykle
+    const res = ownRows_(client.id, u, plan, LIVE_ && LED_DAY.test(d0) ? 'P' : LIVE_ && /^T\d/.test(d0));
     if (res.error) throw new Error(res.error);
     const day = String(u.day).trim(), week = Number(u.week);
     ownWrite_(client.id, week, day, res.rows);
@@ -2848,6 +2869,7 @@ function validatePlan_(rows) {
     if (!blank_(r.ciecie) && !(Number.isInteger(Number(r.ciecie)) && Number(r.ciecie) >= 1)) e.push(w + 'ciecie jako liczba całkowita ≥ 1 (1 = tnij jako pierwsze)');
     if (!blank_(r.serie_min) && !(Number.isInteger(Number(r.serie_min)) && Number(r.serie_min) >= 1 && Number(r.serie_min) <= Number(r.serie))) e.push(w + 'serie_min od 1 do liczby serii');
     if (r.tydzien !== undefined && !(Number(r.tydzien) >= 1)) e.push(w + 'tydzien musi być ≥ 1');
+    if (LED_DAY.test(String(r.jednostka === undefined || r.jednostka === null ? '' : r.jednostka).trim())) e.push(w + 'jednostka ' + r.jednostka + ': P1, P2… to treningi prowadzone (zapis przez Claude), nie używaj ich w planie (np. S1, T1)');
     if (r.prio && ['A', 'B', 'K'].indexOf(String(r.prio)) < 0) e.push(w + 'prio tylko A/B/K');
     if (r.procent !== undefined && r.procent !== '' && !(Number(r.procent) > 0 && Number(r.procent) <= 1.3)) e.push(w + 'procent jako ułamek (np. 0.75)');
     if (r.grupa && GROUPS.indexOf(String(r.grupa).toUpperCase()) < 0) e.push(w + 'grupa tylko R/P/CR/CP/PS/I');
@@ -2949,7 +2971,7 @@ function mergePlan_(existing, incoming, ses, log) {
     if (r.klient === '' || r.klient === undefined) return;
     const k = lc(r.klient), u = unit(r);
     if (clients.indexOf(k) < 0) { others.push(r); return; }
-    if (own_(r)) { kept.push(r); keptOwn[u] = 1; return; }                // własny trening klienta zostaje
+    if (own_(r) || led_(r)) { kept.push(r); keptOwn[u] = led_(r) ? 'prowadzony trening' : 'własny trening klienta'; return; }     // własny trening klienta i trening prowadzony zostają
     if (zast[k] !== undefined && blk(r) === zast[k]) hasBlock[k] = 1;
     if (done[u]) {
       kept.push(r); keptBlock[u] = blk(r);
@@ -2980,7 +3002,7 @@ function mergePlan_(existing, incoming, ses, log) {
   });
   incoming.forEach(r => {
     const u = unit(r);
-    if (keptOwn[u]) { if (!skipped[u]) warnings.push(lc(r.klient) + ' tyg. ' + r.tydzien + ' ' + r.jednostka + ': to własny trening klienta, wiersze z pliku pominięte'); skipped[u] = 1; return; }
+    if (keptOwn[u]) { if (!skipped[u]) warnings.push(lc(r.klient) + ' tyg. ' + r.tydzien + ' ' + r.jednostka + ': to ' + keptOwn[u] + ', wiersze z pliku pominięte'); skipped[u] = 1; return; }
     if (!(u in keptBlock)) { fresh.push(r); return; }
     if (blk(r) && keptBlock[u] !== blk(r)) {                              // plik z blokiem ≠ blok zrobionej jednostki
       const was = keptBlock[u] || NO_BLOCK;

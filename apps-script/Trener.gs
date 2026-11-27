@@ -54,16 +54,21 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trPlan,
   trPropozycja,
   trProwadzone,
+  trProwadzonyCw,
+  trProwadzonyStart,
   trPrzelicz,
   trPrzesun,
   trPulpit,
+  trSerie,
   trSzablon,
   trSzablony,
   trSzkic,
   trTytul,
   trUstawAI,
+  trZakoncz,
   trZasady,
   trZasadyUstaw,
+  trZPlanu,
 };
 const TR_ISS = ['accounts.google.com', 'https://accounts.google.com'];
 const TR_AUTH = 'Logowanie: ';         // początek błędów logowania: panel wtedy prosi o ponowne zalogowanie
@@ -75,7 +80,7 @@ const TR_ODP_DNI = 14;                // odpowiedzi klientów na komentarze na p
  * Pośrednik woła te same TR_FNS z biletem trenera i dopisuje src: 'mcp'. Zapisy z tej listy trafiają do zakładki API
  * (jak akcje botów klientów), żeby było widać, co zmienił Claude. Odczyty nie są zapisywane.
  */
-const TR_MCP_ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarzFilm', 'trPakiet', 'trPlan', 'trPropozycja', 'trPrzesun'];   // = ZAPIS w mcp/src/tools.js
+const TR_MCP_ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarzFilm', 'trPakiet', 'trPlan', 'trPropozycja', 'trProwadzonyCw', 'trProwadzonyStart', 'trPrzesun', 'trSerie', 'trZakoncz', 'trZPlanu'];   // = ZAPIS w mcp/src/tools.js
 /** Czysta: zapytanie → wiersz dziennika API [klient, akcja, ok, opis] albo null (nie z Claude albo odczyt). */
 function mcpLogRow_(req, ok, why) {
   if (!req || req.src !== 'mcp' || TR_MCP_ZAPIS.indexOf(req.fn) < 0) return null;
@@ -326,17 +331,17 @@ function trDzis_(klienci, plan, log, ses, today, d10) {
  * z najniższego takiego tygodnia klienta (dalsze tygodnie bez dat pokażą się po kolei). Tylko odczyt.
  */
 const TR_KAL_DNI = 62;          // najdłuższy zakres jednego zapytania (miesiąc z marginesem tygodni)
-/** Czysta funkcja: → {from, to, today, units: [{id, name, week, day, title, block, date, plan, own, led, ex, sets, done, st, rpe, min}], undated: […]} */
+/** Czysta funkcja: → {from, to, today, units: [{id, name, week, day, title, block, date, plan, own, prow (trening prowadzony P…), led (Sesje prowadzil), ex, sets, done, st, rpe, min}], undated: […]} */
 function trKalendarz_(klienci, plan, log, ses, from, to, today, d10) {
   const lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase(), names = {};
   (klienci || []).forEach(k => { if (!blank_(k.klient_id) && String(k.aktywny || '').trim().toUpperCase() !== 'NIE') names[lc(k.klient_id)] = String(k.imie || k.klient_id).trim(); });
   const key = r => lc(r.klient) + '|' + Number(r.tydzien) + '|' + String(r.jednostka === undefined || r.jednostka === null ? '' : r.jednostka).trim();
-  const U = {}, unit = r => { const k = key(r); return U[k] = U[k] || { id: lc(r.klient), week: Number(r.tydzien), day: String(r.jednostka).trim(), title: '', block: '', own: false,
+  const U = {}, unit = r => { const k = key(r); return U[k] = U[k] || { id: lc(r.klient), week: Number(r.tydzien), day: String(r.jednostka).trim(), title: '', block: '', own: false, prow: false,
     names: {}, sets: 0, done: 0, first: '', plan: '', rows: 0, ses: null }; };
   (plan || []).forEach(r => {
     if (names[lc(r.klient)] === undefined || blank_(r.jednostka) || removed_(r) || added_(r)) return;
     const u = unit(r); u.rows++;
-    u.title = u.title || String(r.tytul || '').trim(); u.block = u.block || String(r.blok || '').trim(); u.own = u.own || own_(r);
+    u.title = u.title || String(r.tytul || '').trim(); u.block = u.block || String(r.blok || '').trim(); u.own = u.own || own_(r); u.prow = u.prow || led_(r);
     if (!blank_(r.cwiczenie)) u.names[String(r.cwiczenie).trim()] = 1;
     u.sets += Number(r.serie) || 0;
     if (!blank_(r.data) && (!u.plan || d10(r.data) < u.plan)) u.plan = d10(r.data);
@@ -352,12 +357,12 @@ function trKalendarz_(klienci, plan, log, ses, from, to, today, d10) {
     const u = U[k], s = u.ses, date = s && !blank_(s.start) ? d10(s.start) : u.first || u.plan;
     const st = s || (u.done && date && date < today) ? 'done' : u.done ? 'live' : u.plan && u.plan < today ? 'late' : 'wait';
     return { id: u.id, name: names[u.id], week: u.week, day: u.day, title: u.title || (u.own ? 'Własny trening' : 'Trening ' + u.day), block: u.block, date: date || '', plan: u.plan,
-      own: u.own, led: !!(s && lc(s.prowadzil) === 'trener'), ex: Object.keys(u.names).length, sets: u.sets, done: u.done, st,
+      own: u.own, prow: u.prow, led: !!(s && lc(s.prowadzil) === 'trener'), ex: Object.keys(u.names).length, sets: u.sets, done: u.done, st,
       rpe: s ? num(s.rpe_sesji) : null, min: s ? num(s.czas_min) : null };
   });
   const order = (a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, 'pl') || a.week - b.week || a.day.localeCompare(b.day);
   const units = all.filter(u => u.date && u.date >= from && u.date <= to && !(u.own && u.st === 'wait')).sort(order);
-  const low = {}; all.forEach(u => { if (!u.date && !u.own && u.week > 0 && (low[u.id] === undefined || u.week < low[u.id])) low[u.id] = u.week; });
+  const low = {}; all.forEach(u => { if (!u.date && !u.own && !u.prow && u.week > 0 && (low[u.id] === undefined || u.week < low[u.id])) low[u.id] = u.week; });
   const undated = all.filter(u => !u.date && !u.own && u.week === low[u.id]).sort(order);
   return { from, to, today, units, undated };
 }
@@ -1574,7 +1579,12 @@ function trNextUnit_(plan, clientId, u) {
   const src = mine.filter(r => Number(r.tydzien) === week && !removed_(r) && zr_(r) !== 'dodane').sort((a, b) => Number(a.nr) - Number(b.nr));
   if (!(week >= 1) || !day || !src.length) return { error: 'Nie ma takiej jednostki w planie.' };
   if (src.some(own_)) return { error: 'To własny trening klienta – nie planuje się go dalej.' };
-  const next = week + 1, target = mine.filter(r => Number(r.tydzien) === next && !removed_(r));
+  // trening prowadzony (P…): następny to już plan, więc nowa jednostka trenera T<n> w tyg. + 1 (nie P, które jest tylko dla prowadzonych)
+  const led = src.some(led_), all = (plan || []).filter(r => lc(r.klient) === clientId), next = week + 1;
+  const tN = all.filter(r => Number(r.tydzien) === next).map(r => (/^T(\d+)$/.exec(String(r.jednostka).trim()) || [])[1]).filter(Boolean).map(Number);
+  const day2 = led ? 'T' + ((tN.length ? Math.max(...tN) : 0) + 1) : day;
+  const blok2 = led ? String((all.filter(r => Number(r.tydzien) === next && !offPlan_(r))[0] || all.filter(r => !offPlan_(r)).pop() || {}).blok || '') : null;
+  const target = led ? [] : mine.filter(r => Number(r.tydzien) === next && !removed_(r));
   if (target.some(own_)) return { error: 'W tyg. ' + next + ' ta jednostka to własny trening klienta.' };
   const ex = [].concat(u.ex || []);
   if (target.length) {
@@ -1592,7 +1602,7 @@ function trNextUnit_(plan, clientId, u) {
   const rows = [];
   for (const s of src) {
     const r = {}; PLAN_HEADERS.forEach(k => { const v = s[k]; r[k] = v === undefined || v === null || v instanceof Date ? '' : v; });
-    Object.assign(r, { tydzien: next, data: date, zrodlo: 'trener' });
+    Object.assign(r, { tydzien: next, data: date, zrodlo: 'trener' }, led ? { jednostka: day2, blok: blok2, tytul: String(s.tytul || '').trim() === LED_TITLE ? 'Trening' : s.tytul } : {});
     const ch = ex.find(x => Number(x.order) === Number(s.nr));
     if (ch) for (const f of Object.keys(TR_NEXT_F)) {
       if (!(f in ch)) continue;
@@ -1601,7 +1611,7 @@ function trNextUnit_(plan, clientId, u) {
     }
     rows.push(r);
   }
-  return { mode: 'new', week: next, rows: rows };
+  return { mode: 'new', week: next, day: day2, rows: rows };
 }
 
 /** Prowadzony trening → „Zapisz w planie”: zmiana jednostki w tyg. + 1 albo nowa jednostka trenera. */
@@ -1613,7 +1623,7 @@ function trNastepna(id, u) {
   try {
     const plan = tableOf_('Plan'), res = trNextUnit_(plan, id, u);
     if (res.error) throw new Error(res.error);
-    if (res.mode === 'new') { ownWrite_(id, res.week, String(u.day).trim(), res.rows); return { mode: 'new', week: res.week, n: res.rows.length }; }
+    if (res.mode === 'new') { ownWrite_(id, res.week, res.day, res.rows); return { mode: 'new', week: res.week, day: res.day, n: res.rows.length }; }
     const e = trPlanEdit_(plan, pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', DONE_LOG_COLS), id, res.edit);
     if (e.error) throw new Error(e.error);
     trPlanSet_(e.set);
@@ -1701,7 +1711,7 @@ function trUnitEdit_(plan, done, logged, clientId, e) {
   const newRow = (o, w, nr, base) => {
     const r = {}; PLAN_HEADERS.forEach(k => { r[k] = ''; });
     Object.assign(r, { klient: clientId, tydzien: w, jednostka: day, tytul: base.tytul, data: base.data instanceof Date ? fmtDate_(base.data) : norm(base.data), nr: nr, cwiczenie: o.name,
-      prio: o.v.prio, serie: o.v.sets, powt: o.v.reps, procent: o.v.pct, kg: o.v.kg, rpe_max: o.v.rpe, uwagi: o.v.note, blok: norm(base.blok), zrodlo: 'trener', obwod: o.c });
+      prio: o.v.prio, serie: o.v.sets, powt: o.v.reps, procent: o.v.pct, kg: o.v.kg, rpe_max: o.v.rpe, uwagi: o.v.note, blok: led_(base) ? '' : norm(base.blok), zrodlo: led_(base) ? 'prowadzony' : 'trener', obwod: o.c });
     return r;
   };
   // ta jednostka
@@ -1855,15 +1865,16 @@ function trCopy_(plan, clientId, e) {
     const src = mine.filter(r => Number(r.tydzien) === week && String(r.jednostka).trim() === day && !removed_(r) && !added_(r)).sort((a, b) => Number(a.nr) - Number(b.nr));
     if (!src.length) return { error: 'Nie ma jednostki ' + day + ' w tyg. ' + week + '.' };
     if (src.some(own_)) return { error: 'Własnego treningu klienta się nie kopiuje.' };
-    let to = day;
-    if (taken[to]) { const m = /^(\D*)(\d*)$/.exec(day) || ['', day, ''], pre = m[1] || 'T';
+    const led = src.some(led_);                                  // trening prowadzony skopiowany = zwykła jednostka planu T<n>
+    let to = led ? 'T1' : day;
+    if (taken[to]) { const m = /^(\D*)(\d*)$/.exec(to) || ['', to, ''], pre = m[1] || 'T';
       let n = 1; Object.keys(taken).forEach(k => { const x = new RegExp('^' + pre.replace(/[^\w]/g, '\\$&') + '(\\d+)$').exec(k); if (x) n = Math.max(n, Number(x[1]) + 1); });
       to = pre + n; }
     taken[to] = 1;
     const d0 = norm(src[0].data instanceof Date ? fmtDate_(src[0].data) : src[0].data);
     const date = date1 || (/^\d{4}-\d{2}-\d{2}$/.test(d0) ? new Date(Date.parse(d0 + 'T12:00:00Z') + (shift !== null ? shift : 7 * (toWeek - week)) * 864e5).toISOString().slice(0, 10) : '');
     src.forEach(s => { const r = {}; PLAN_HEADERS.forEach(k => { r[k] = s[k] === undefined || s[k] === null || s[k] instanceof Date ? (k === 'data' ? d0 : '') : s[k]; });
-      Object.assign(r, { klient: clientId, tydzien: toWeek, jednostka: to, data: date }); rows.push(r); });
+      Object.assign(r, { klient: clientId, tydzien: toWeek, jednostka: to, data: date }, led ? { zrodlo: 'trener', blok: String((mine.filter(x => Number(x.tydzien) === toWeek && !offPlan_(x))[0] || mine.filter(x => !offPlan_(x)).pop() || {}).blok || '') } : {}); rows.push(r); });
     made.push({ week: toWeek, day: to, from: week + '|' + day, date });
   }
   return { rows, made };

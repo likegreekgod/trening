@@ -3606,6 +3606,30 @@ test('Prowadź → „Zaplanuj następną”: po zakończeniu ta sama jednostka 
   await ctx.close();
 });
 
+test('Trening z trenerem (P…): klient widzi serie bez zmian, tag w Planie, nie wybiera go na start', async () => {
+  const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+  const ex = (d, date, order, name, kg, o) => Object.assign({ week: 1, day: d, title: 'Dół', date, order, name, prio: 'A', sets: 2, reps: '5', pct: null, kg, rpe: 8, note: '', extra: 1, drop: 0, block: 'B1' }, o);
+  const D = { cfg: { name: 'Maciek', pain: false, simple: true, extra: 1, swap: false, scale: 'RPE', edit: true, own: true },
+    plan: [ex('S1', day(1), 1, 'Przysiad tylny', 80), ex('P1', day(0), 1, 'Z-Press', 30, { title: 'Trening z trenerem', block: '', led: true, sets: 4, reps: '12,12,9,8' })],
+    logs: [12, 12, 9, 8].map((r, i) => ({ id: 'maciek|1|P1|1|' + (i + 1), tydzien: 1, jednostka: 'P1', data: day(0), nr_cw: 1, cwiczenie: 'Z-Press', seria: i + 1, kg: 30, powt: r, rpe: i > 1 ? 9 : '', wykonane: 'TAK', typ: '', zapisano: day(0) + 'T17:00:00.000Z' })),
+    sessions: [{ id: 'maciek|1|P1', tydzien: 1, jednostka: 'P1', data: day(0), start: day(0) + 'T17:00:00.000Z', rpe_sesji: 9, samopoczucie: 4, prowadzil: 'trener' }] };
+  const calls = []; const { ctx, p } = await page(calls, false, { data: D });
+  await p.goto(base + '?k=kabc');
+  await p.waitForSelector('.card[data-card]', { state: 'attached' }); await p.waitForTimeout(200);
+  assert.doesNotMatch(await p.textContent('header'), /Trening z trenerem/, 'start: plan, nie trening z trenerem');
+  await p.evaluate(() => { cur.week = 1; cur.day = 'P1'; renderTrening(); });
+  assert.match(await p.textContent('.card.ledro'), /Trening z trenerem/);
+  assert.equal(await p.$eval('#main', m => m.classList.contains('ro')), true);
+  assert.equal(await p.isVisible('#main .card.sess'), false, 'bez podsumowania „Zakończ i zapisz”');
+  assert.equal(await p.isVisible('#main .adds'), false);
+  assert.equal(await p.$('#umore'), null);
+  await p.click('[data-tab="plan"]'); await p.waitForTimeout(100);
+  assert.match(await p.textContent('#main'), /z trenerem/);
+  assert.equal(calls.filter(c => /^(logSet|deleteSet|logSession|editPlan)$/.test(c.fn)).length, 0);
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
 test('Prowadź bez planu na dziś: „Jak ostatnio”, szablon z kg z historii, pusty; „⋯ → Zapisz jako szablon”', async () => {
   const day = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
   const ex = (week, d, date, order, name, kg, o) => Object.assign({ week, day: d, title: 'Dół', date, order, name, prio: 'A', sets: 3, reps: '5', pct: null, kg, rpe: 8, note: '', extra: 1, drop: 0, block: 'B2' }, o);
@@ -3636,7 +3660,7 @@ test('Prowadź bez planu na dziś: „Jak ostatnio”, szablon z kg z historii, 
     assert.deepEqual(await p.$$eval('#ow-list input[data-f="kg"]', a => a.map(x => x.value)), ['102,5', '62,5']);
     await p.click('#ow-save'); await p.waitForTimeout(200);
     const add = calls.find(c => c.fn === 'addOwnUnit').args[0];
-    assert.match(add.day, /^T\d+$/); assert.equal(add.title, 'Dół'); assert.equal(add.date, day(0));
+    assert.equal(add.day, 'P1', 'nowa jednostka w Prowadź = trening prowadzony P (poza planem)'); assert.equal(add.title, 'Dół'); assert.equal(add.date, day(0));
     assert.deepEqual(add.exercises, [{ name: 'Przysiad tylny', sets: 2, reps: '5', kg: '102,5' }, { name: 'Wiosłowanie', sets: 1, reps: '5', kg: '62,5' }]);
     // zapis jako szablon
     await p.click('#umore'); await p.click('#u-tpl'); await p.waitForSelector('#tp-name');

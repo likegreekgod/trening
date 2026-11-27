@@ -604,7 +604,8 @@ function curKeep(){
 }
 function pickDefault(){
   let kept = null; try { kept = JSON.parse(localStorage.getItem(CUK) || 'null'); } catch (e) {}
-  const s = TL.keepUnit(kept, unitList(), localDate(), Date.now()) || pickUnit(unitList(), localDate());   // ostatnio otwarta (ten sam dzień), inaczej dzisiejsza niezrobiona, potem najbliższa następna (strefa telefonu)
+  const ul = unitList(), ulc = LIVE ? ul : ul.filter(u => !u.led);   // klient: trening z trenerem nie jest „dzisiejszym” do zrobienia
+  const s = TL.keepUnit(kept, ul, localDate(), Date.now()) || pickUnit(ulc.length ? ulc : ul, localDate());   // ostatnio otwarta (ten sam dzień), inaczej dzisiejsza niezrobiona, potem najbliższa następna (strefa telefonu)
   if (s) { cur.week = s.week; cur.day = s.day; }
   const j = LIVE_J.split('|');                       // „▶ Prowadź” z panelu na konkretną jednostkę
   if (LIVE_J && PLAN.some(r => r.week === +j[0] && r.day === j.slice(1).join('|'))) { cur.week = +j[0]; cur.day = j.slice(1).join('|'); }
@@ -1183,6 +1184,7 @@ function weekCards(sets, dates, today){
   let out = nav + `<section class="card"><div class="cn">Wykonanie</div>
     ${w.units.plan ? kv('Jednostki z planu', w.units.done + ' z ' + w.units.plan, ulist) : ''}
     ${w.units.own ? kv('Własne treningi', w.units.own) : ''}
+    ${w.units.led ? kv('Treningi z trenerem', w.units.led) : ''}
     ${kv('Serie', w.sets.plan ? w.sets.done + ' z ' + w.sets.plan : w.sets.done, w.sets.plan ? 'w planie' : '')}
     ${kv('Tonaż', kgTxt(w.ton) + ' kg', diff === null ? '' : (diff >= 0 ? '▲ ' : '▼ ') + Math.abs(diff) + '% wobec śr. 4 tyg.' + (mon === now ? ' (tydzień trwa)' : ''))}
     ${w.min ? kv('Czas', (h ? h + ' h ' : '') + m + ' min') : ''}</section>`;
@@ -1382,12 +1384,12 @@ function unitList(){
   const act = {};
   Object.values(SESS).forEach(x => { const id = String(x.id).split('|'); if (/T/.test(String(x.start || ''))) act[id.slice(-2).join('|')] = localDate(new Date(x.start)); });
   return units(PLAN).map(u => { const done = sessDone(u.week, u.day);
-    return { week: u.week, day: u.day, title: u.title, done, own: !!(u.rows[0] && u.rows[0].own), date: (done && act[u.week + '|' + u.day]) || u.date }; });
+    return { week: u.week, day: u.day, title: u.title, done, own: !!(u.rows[0] && u.rows[0].own), led: !!(u.rows[0] && u.rows[0].led), date: (done && act[u.week + '|' + u.day]) || u.date }; });
 }
 const curDate = () => { const u = unitList().find(x => x.week === cur.week && x.day === cur.day); return u ? u.date : localDate(); };
 const wkMon = () => WK || mondayOf(curDate() || localDate());
 function wkTitle(mon, list){
-  const inW = list.filter(u => u.date >= mon && u.date <= addDays(mon, 6) && !u.own), first = inW[0];
+  const inW = list.filter(u => u.date >= mon && u.date <= addDays(mon, 6) && !u.own && !u.led), first = inW[0];
   const b = first ? blockInfo(PLAN, first.week) : null, end = addDays(mon, 6);
   const range = mon.slice(5, 7) === end.slice(5, 7) ? mon.slice(8, 10) + '–' + ddmm(end) : ddmm(mon) + '–' + ddmm(end);
   return { t: b ? 'Blok ' + b.block + ' · tydz. bloku ' + b.n : first ? 'Tydz. ' + first.week : 'Bez treningów w planie', range, week: first ? first.week : null };
@@ -1475,11 +1477,11 @@ function renderPlan(){
     const k = u.week + '|' + u.day, exs = byKey[k].rows.slice().sort((a, b) => a.order - b.order);
     h += `<section class="unit ${state(u)}" id="u-${u.week}-${esc(u.day)}">
       <div class="uh"><div class="dd"><b>${u.date.slice(8, 10)}</b><small>${weekday(u.date)} · ${monthShort(u.date)}</small></div>
-        <div class="ut"><strong>${esc(window.TL.dayLabel(u.day, u.title))}</strong> ${esc(u.title)}${u.own ? ' <span class="tag">własny</span>' : ''}<small>${exs.length} ${plural(exs.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} · ${u.done ? 'zrobiona ✓' : u.date === today ? 'dziś' : u.date < today ? 'zaległa' : 'zaplanowana'}</small></div>
+        <div class="ut"><strong>${esc(window.TL.dayLabel(u.day, u.title))}</strong> ${esc(u.title)}${u.own ? ' <span class="tag">własny</span>' : u.led ? ' <span class="tag">' + TL.LED_TAG + '</span>' : ''}<small>${exs.length} ${plural(exs.length, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')} · ${u.done ? 'zrobiona ✓' : u.date === today ? 'dziś' : u.date < today ? 'zaległa' : 'zaplanowana'}</small></div>
         ${calOk(u) ? `<button type="button" class="btn cal" data-cal="${k}" title="Dodaj do kalendarza" aria-label="Dodaj do kalendarza: ${esc(u.day)}">${CAL_ADD_SVG}</button>` : ''}</div>
       <details><summary>Ćwiczenia</summary><ol>${exs.map(ex => `<li><b>${esc(ex.name)}</b><span>${SIMPLE ? rxSimple(ex) : rxPro(ex)}</span></li>`).join('')}</ol></details>
       <div class="uact"><button class="btn go" data-go="${k}">Przejdź do treningu</button>
-        ${u.done ? '<span class="sub">Zrobiona — dnia nie zmienisz.</span>' : `<button type="button" class="btn" data-mv="${k}">Zmień dzień</button>`}
+        ${u.done ? '<span class="sub">Zrobiona — dnia nie zmienisz.</span>' : u.led && !LIVE ? '<span class="sub">Trening z trenerem.</span>' : `<button type="button" class="btn" data-mv="${k}">Zmień dzień</button>`}
 </div></section>`;
   });
   if (ownOn()) h += `<button type="button" class="ghost own-new" id="own-new">${LIVE ? '+ nowa jednostka' : '+ własny trening'}</button>`;
@@ -1656,7 +1658,7 @@ function openSwap(ex){
 
 /* ---------- zmiany w jednostce trenera dla osób z flagą „edycja”: dodaj / usuń / zamień, tylko ten trening albo na stałe ---------- */
 /** czy ćwiczenie można zmieniać: flaga klienta, jednostka trenera, jeszcze niezakończona */
-const edOn = ex => EDIT && !ex.own && !sessDone(cur.week, cur.day);
+const edOn = ex => EDIT && !ex.own && !(ex.led && !LIVE) && !sessDone(cur.week, cur.day);
 const edDone = () => { const d = {}; Object.keys(SESS).forEach(k => { d[String(k).split('|').slice(-2).join('|')] = 1; }); return d; };
 /** nanosi zmianę na dane w telefonie (lib planEdit); save = zapis w pamięci telefonu. Zwraca wynik planEdit. */
 function applyEdit(p, save){
@@ -2059,10 +2061,10 @@ function applyOwn(u, save){
     return { infos: p ? p.infos : b && /^https?:\/\//i.test(String(b[1])) ? [{ n: b[0], u: b[1] }] : [],
       parts: p ? p.parts || [] : b && b[2] ? String(b[2]).split(';').map(s => s.trim()).filter(Boolean) : [] };
   };
-  const coach = LIVE && /^T\d/.test(String(u.day));            // trener: jednostka planu (Plan.zrodlo „trener”), nie własny trening
-  const rows = u.exercises.map((e, i) => ({ week: u.week, day: u.day, title: coach ? u.title || 'Trening' : 'Własny' + (u.title ? ' · ' + u.title : ''), date: u.date, order: i + 1,
+  const led = LIVE && TL.ledDay(u.day), coach = LIVE && /^T\d/.test(String(u.day));   // trener: trening prowadzony P (poza planem) albo dawna jednostka planu T
+  const rows = u.exercises.map((e, i) => ({ week: u.week, day: u.day, title: led ? u.title || 'Trening z trenerem' : coach ? u.title || 'Trening' : 'Własny' + (u.title ? ' · ' + u.title : ''), date: u.date, order: i + 1,
     name: e.name, prio: 'A', sets: +e.sets, reps: String(e.reps), pct: null, kg: kgOf(e.kg), rpe: '', note: '', extra: null, drop: 0,
-    group: '', block, swaps: [], infos: dx(e.name).infos, parts: dx(e.name).parts, ...(coach ? { coach: true } : { own: true }), circuit: e.circuit || '' }));
+    group: '', block: led ? '' : block, swaps: [], infos: dx(e.name).infos, parts: dx(e.name).parts, ...(led ? { led: true } : coach ? { coach: true } : { own: true }), circuit: e.circuit || '' }));
   DATA.plan = DATA.plan.filter(r => !(r.week === u.week && r.day === u.day)).concat(rows); PLAN = DATA.plan;
   if (save) try { localStorage.setItem(DK, JSON.stringify(DATA)); } catch (e) {}
 }
@@ -2237,7 +2239,7 @@ function ownSave(){
   if (!OWN.edit) {
     const d = $('#ow-date').value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return err('Wybierz dzień.');
-    OWN.date = d; OWN.title = $('#ow-title').value.trim(); OWN.week = ownWeek(PLAN, d); OWN.day = LIVE ? TL.liveNextDay(PLAN, OWN.week) : ownNextDay(PLAN, OWN.week);
+    OWN.date = d; OWN.title = $('#ow-title').value.trim(); OWN.week = ownWeek(PLAN, d); OWN.day = LIVE ? TL.liveNextDay(PLAN) : ownNextDay(PLAN, OWN.week);
   }
   const u = { week: OWN.week, day: OWN.day, date: OWN.date, title: OWN.title,
     exercises: OWN.list.map(e => ({ name: e.name, sets: +e.sets, reps: e.t && !e.old ? parseInt(e.reps) + ' s' : String(e.reps).trim(), kg: String(e.kg || '').trim(), ...(e.c ? { circuit: e.c } : {}) })) };
@@ -2305,14 +2307,16 @@ function renderTrening(){
     s0.title || cur.day,
     `<span>Czas <b class="clock">${clockText()}</b></span><span>Serie <b id="st-sets"></b></span><span>Tonaż <b id="st-ton"></b> kg</span>`,
     (SIMPLE ? '' : `<span class="sc" role="group" aria-label="Skala">${['RPE', 'RIR'].map(s => `<button type="button" data-sc="${s}" aria-pressed="${SCALE === s}">${s}</button>`).join('')}</span>`) +
-    (exs.length > 1 || LIVE || ordOk(s0) || (!sessDone(cur.week, cur.day) && unitEntries().length) ? `<button type="button" class="hmore" id="umore" aria-label="Więcej akcji: ${esc(s0.title || cur.day)}">${MORE_SVG}</button>` : ''));
+    (!(s0.led && !LIVE) && (exs.length > 1 || LIVE || ordOk(s0) || (!sessDone(cur.week, cur.day) && unitEntries().length)) ? `<button type="button" class="hmore" id="umore" aria-label="Więcej akcji: ${esc(s0.title || cur.day)}">${MORE_SVG}</button>` : ''));
   document.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => {
     SCALE = b.dataset.sc; try { localStorage.setItem('sc_' + KEY, SCALE); } catch (e) {}
     renderTrening();
   });
-  const open = !sessDone(cur.week, cur.day);
+  const ro = !!s0.led && !LIVE;                                      // trening z trenerem (P…): klient tylko ogląda, serie zapisał trener
+  const open = !sessDone(cur.week, cur.day) && !ro;
   const fx = FX && exs.length > 1;
-  let h = sbNote() + (fx ? '<section class="fx" id="fx" aria-label="Tryb skupienia"></section>' : '') + unoteCard(exs) + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section><div class="wkm" id="wkm"></div>' : '') + weekBar('t') + notesCard() + readyBanner();
+  let h = sbNote() + (fx ? '<section class="fx" id="fx" aria-label="Tryb skupienia"></section>' : '') + unoteCard(exs) + (open ? '<section class="today" id="today" aria-label="Ten trening" hidden></section><div class="wkm" id="wkm"></div>' : '') + weekBar('t') + notesCard() + readyBanner()
+    + (ro ? '<section class="card ledro"><b>Trening z trenerem</b><p class="sub">Ten trening prowadził i zapisał trener. Liczy się do Twojego Postępu, ale nie do planu. Komentarze trenera znajdziesz w zakładce Trener.</p></section>' : '');
   const grps = circuitGroups(exs), gOf = o => grps.find(g => g.orders.includes(o));
   SKALL = sectionRuns(exs);
   const sks = fx ? [] : SKALL;                                      // sekcje (Rozgrzewka / Główne / Korekcyjne): nagłówki tylko w całej liście
@@ -2326,9 +2330,10 @@ function renderTrening(){
   });
   if (s0.own && ownOn() && !sessDone(cur.week, cur.day)) h += '<button type="button" class="ghost own-add" id="own-add">+ ćwiczenie</button>';
   if (EDIT && !s0.own && open) h += '<button type="button" class="ghost own-add" id="ed-add">+ ćwiczenie</button>';
-  if (EDIT && !s0.own) h += edRemoved();
+  if (EDIT && !s0.own && !ro) h += edRemoved();
   h += sessCard(s0) + helpCard() + (fx ? '<div class="fx-nav" id="fx-nav"></div>' : '');
   $('#main').innerHTML = h;
+  $('#main').classList.toggle('ro', ro);
   CIRC = grps; SKS = sks; bind(exs, s0);
   grps.forEach(g => grpDraw(g.id));
   bindNotes();
@@ -3165,7 +3170,7 @@ function openNext(nx, sum, off){
     const b = $('#nu-ok'); b.disabled = true; b.textContent = 'Zapisuję…';
     const s = x => x === null || x === undefined ? '' : String(typeof x === 'number' ? fmtKg(x) : x);
     call('trNastepna', LIVE, { week: nx.week - 1, day: nx.day, date: nx.exists ? '' : nx.date, ex: nx.items.map(it => ({ order: it.order, sets: s(it.sets), reps: s(it.reps), kg: s(it.kg), rpe: s(it.rpe) })) })
-      .then(r => { toast(r.mode === 'new' ? 'Dopisane do planu: tydz. ' + r.week + '.' : r.n ? 'Plan na tydz. ' + r.week + ' zmieniony.' : 'Plan na tydz. ' + r.week + ' bez zmian.'); done(); refreshData(); })
+      .then(r => { toast(r.mode === 'new' ? 'Dopisane do planu: tydz. ' + r.week + (r.day && r.day !== nx.day ? ', ' + r.day : '') + '.' : r.n ? 'Plan na tydz. ' + r.week + ' zmieniony.' : 'Plan na tydz. ' + r.week + ' bez zmian.'); done(); refreshData(); })
       .catch(e => { b.disabled = false; b.textContent = 'Zapisz w planie'; err(e.message); });
   };
 }

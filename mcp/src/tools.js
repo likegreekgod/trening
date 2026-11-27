@@ -4,12 +4,12 @@
  * Odpowiedzi są skracane (bez linków z kluczami klientów, bez ścieżek VBT), żeby Claude dostawał tylko to, co potrzebne do decyzji.
  */
 
-import { UI_DZIS, UI_KLIENT, UI_FILM, UI_TOR } from './ui.js';
+import { UI_DZIS, UI_KLIENT, UI_FILM, UI_TOR, PANEL } from './ui.js';
 
 const ST_DZIS = { wait: 'czeka', live: 'w trakcie', done: 'zrobione' };
 const SEKCJA = { R: 'Rozgrzewka', G: 'Główne', K: 'Korekcyjne' };   // kolumna Planu `sekcja` (litera), jak SEKCJE w Code.gs
 const ST_KAL = { wait: 'zaplanowana', live: 'w trakcie', done: 'zrobiona', late: 'zaległa' };
-export const ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarzFilm', 'trPakiet', 'trPlan', 'trPropozycja', 'trPrzesun'];   // zapisy: serwer wpisuje je do zakładki API
+export const ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarzFilm', 'trPakiet', 'trPlan', 'trPropozycja', 'trProwadzonyCw', 'trProwadzonyStart', 'trPrzesun', 'trSerie', 'trZakoncz', 'trZPlanu'];   // zapisy: serwer wpisuje je do zakładki API
 
 const s = v => (v === undefined || v === null ? '' : String(v)).trim();
 const num = v => { const x = typeof v === 'number' ? v : parseFloat(s(v).replace(',', '.')); return isFinite(x) ? x : null; };
@@ -63,11 +63,13 @@ export function klienci(p) {
 /** Kalendarz: jednostki aktywnych klientów w zakresie dat. k = wynik trKalendarz. */
 export function kalendarz(k) {
   const u = x => nz({ data: x.date, klient: x.name, id: x.id, tydzien: x.week, jednostka: x.day, tytul: x.title, blok: x.block, stan: ST_KAL[x.st] || x.st,
-    wlasny: x.own || '', prowadzona: x.led || '', cwiczenia: x.ex, serie: x.done + '/' + x.sets, rpe_sesji: x.rpe, min: x.min });
+    wlasny: x.own || '', rodzaj: x.prow ? 'prowadzony (poza planem)' : '', prowadzona: x.led || '', cwiczenia: x.ex, serie: x.done + '/' + x.sets, rpe_sesji: x.rpe, min: x.min });
   return nz({ od: k.from, do: k.to, dzis: k.today, jednostki: (k.units || []).map(u), bez_daty: (k.undated || []).map(u) });
 }
 
 const key = (w, d) => Number(w) + '|' + s(d);
+/** Trening prowadzony (P…, Plan.zrodlo = prowadzony): oznaczenie w odpowiedziach. */
+const ledOf = rows => (rows || []).some(r => r.led) ? { rodzaj: 'prowadzony (poza planem)' } : {};
 /** Jednostki zrobione: wpis w Sesjach albo seria robocza z ✓ / FAIL (przybliżenie reguły `unitsDone_` bez rozróżnienia priorytetów). */
 function doneSet(d) {
   const out = {};
@@ -98,7 +100,7 @@ export function klient(d, o) {
   const done = doneSet(d), U = {};
   (d.plan || []).forEach(r => { const k = key(r.week, r.day); (U[k] = U[k] || []).push(r); });
   const from = o.today ? new Date(Date.parse(o.today) - 14 * 864e5).toISOString().slice(0, 10) : '';
-  const next = Object.keys(U).filter(k => !done[k] && !U[k].some(r => r.own) && Number(U[k][0].week) > 0)
+  const next = Object.keys(U).filter(k => !done[k] && !U[k].some(r => r.own || r.led) && Number(U[k][0].week) > 0)
     .map(k => U[k].sort((a, b) => a.order - b.order))
     .filter(rs => !rs[0].date || rs[0].date >= from)
     .sort((a, b) => (a[0].date || '9999').localeCompare(b[0].date || '9999') || a[0].week - b[0].week || s(a[0].day).localeCompare(s(b[0].day)))
@@ -107,7 +109,7 @@ export function klient(d, o) {
       cwiczenia: rs.map(exRow) }));
   const title = (w, dd) => ((U[key(w, dd)] || [])[0] || {}).title || '';
   const ses = (d.sessions || []).slice().sort((a, b) => (s(b.start) || s(b.data)).localeCompare(s(a.start) || s(a.data))).slice(0, o.sessions)
-    .map(x => Object.assign({ tydzien: Number(x.tydzien), jednostka: s(x.jednostka), tytul: title(x.tydzien, x.jednostka) }, sesTxt(x),
+    .map(x => Object.assign({ tydzien: Number(x.tydzien), jednostka: s(x.jednostka), tytul: title(x.tydzien, x.jednostka) }, ledOf(U[key(x.tydzien, x.jednostka)]), sesTxt(x),
       { cwiczenia: doneEx((d.logs || []).filter(l => key(l.tydzien, l.jednostka) === key(x.tydzien, x.jednostka))) }));
   const c = d.cfg || {};
   const k = karta(d, o.today, next, done);
@@ -151,7 +153,7 @@ export function karta(d, today, next, done) {
   const rd = (d.readiness || []).filter(x => d10(x.data) >= from3 && /uwaga|zm[eę]czenie/i.test(s(x.werdykt))).sort((a, b) => d10(b.data).localeCompare(d10(a.data)))[0];
   if (rd) sygnaly.push({ lv: /zm[eę]czenie/i.test(s(rd.werdykt)) ? 'bad' : 'warn', t: 'dyspozycja: ' + s(rd.werdykt).toLowerCase() });
   const mon = monday(today), sun = addDays(mon, 6), U = {};
-  plan.forEach(r => { if (!r.own && Number(r.week) > 0 && r.date >= mon && r.date <= sun) U[key(r.week, r.day)] = 1; });
+  plan.forEach(r => { if (!r.own && !r.led && Number(r.week) > 0 && r.date >= mon && r.date <= sun) U[key(r.week, r.day)] = 1; });
   const wk = Object.keys(U), wkDone = wk.filter(x => done[x]).length;
   const last = ses.slice().sort((a, b) => (s(b.start) || s(b.data)).localeCompare(s(a.start) || s(a.data))).slice(0, 5).map(x => num(x.rpe_sesji)).filter(x => x !== null);
   const films = logs.filter(l => s(l.film_link) && !s(l.komentarz_trenera) && !s(l.komentarz_dysk) && (d10(l.data) || d10(l.zapisano)) >= addDays(today, -14)).length;
@@ -186,7 +188,7 @@ export function jednostka(d, week, day) {
   const logs = (d.logs || []).filter(l => key(l.tydzien, l.jednostka) === k), x = (d.sessions || []).find(y => key(y.tydzien, y.jednostka) === k);
   if (!rows.length && !logs.length) return { blad: 'Nie ma jednostki tydz. ' + week + ' „' + day + '” u tego klienta.' };
   const r0 = rows[0] || {};
-  return nz({ klient: (d.cfg || {}).name, tydzien: Number(week), jednostka: s(day), tytul: r0.title, data: r0.date, blok: r0.block,
+  return nz({ klient: (d.cfg || {}).name, tydzien: Number(week), jednostka: s(day), ...ledOf(rows), tytul: r0.title, data: r0.date, blok: r0.block,
     zrobiona: doneSet(d)[k] ? 'tak' : 'nie', notatka_do_jednostki: (rows.find(r => r.unote) || {}).unote,
     plan: rows.map(exRow), wykonanie: doneEx(logs), sesja: x ? sesTxt(x) : '' });
 }
@@ -214,7 +216,7 @@ export function filmy(p, id, wszystkie) {
 
 const ID = { type: 'string', description: 'klient_id (małe litery, z narzędzia „klienci” albo „dzis”)' };
 const WEEK = { type: 'integer', description: 'numer tygodnia planu' };
-const DAY = { type: 'string', description: 'jednostka, np. „A”, „B”, „W1”, „T2”' };
+const DAY = { type: 'string', description: 'jednostka, np. „A”, „B”, „W1”, „T2”, „P1” (prowadzony)' };
 const RO = { readOnlyHint: true, openWorldHint: false };
 const RW = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 
@@ -344,6 +346,72 @@ TOOLS.push(
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } },
 );
 
+const ZAP = 'Zapis tylko na wyraźną prośbę trenera; po zapisie powiedz, co zapisałeś.';
+const SERIA = { type: 'object', properties: {
+  seria: { type: 'string', description: 'domyślnie 1, 2, … (robocze); „R1”… rozgrzewka, „D1”… drop set' },
+  kg: { type: 'string', description: 'liczba albo „BW”; puste = bez ciężaru' },
+  powt: { type: 'string', description: 'powtórzenia tej serii (liczba) albo „30 s” na czas' },
+  swiatlo: { type: 'string', enum: ['lekko', 'srednio', 'ciezko', 'nieudana'], description: 'lekko = RPE 7, srednio = 8, ciezko = 9, nieudana = FAIL (jak w aplikacji)' },
+  rpe: { type: 'number', description: 'RPE liczbą (tylko klienci PRO; u PROSTYCH zaokrąglone do światła)' },
+  typ: { type: 'string', enum: ['DROP', 'FAIL', 'DROP+FAIL'] } }, required: ['powt'], additionalProperties: false };
+const CW = { type: 'object', properties: {
+  nr: { type: 'integer', description: 'numer ćwiczenia w jednostce; domyślnie następny wolny; ten sam nr = poprawka tego ćwiczenia' },
+  cwiczenie: { type: 'string', description: 'nazwa jak w bazie (polskie nazwy i aliasy działają jak w aplikacji)' },
+  uwagi: { type: 'string' }, grupa: { type: 'string', description: 'R / P / CR / CP / PS / I (boje), zwykle puste' },
+  obwod: { type: 'string', description: 'litera A–Z: superseria / drabinka, ta sama litera przy sąsiednich ćwiczeniach' },
+  sekcja: { type: 'string', enum: ['R', 'G', 'K'], description: 'R rozgrzewka (bez tonażu), G główne, K korekcyjne' },
+  serie: { type: 'array', minItems: 1, maxItems: 40, items: SERIA, description: 'wykonane serie, każda z własnym powt (drabinka: 9, 8, … 1)' } },
+  required: ['cwiczenie', 'serie'], additionalProperties: false };
+const P_DAY = { type: 'string', description: 'kod jednostki prowadzonej, np. „P2” (z „prowadzony_start”)' };
+const WR = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+
+TOOLS.push(
+  { name: 'prowadzony_start', title: 'Trening prowadzony: start',
+    description: 'Zaczyna trening prowadzony przez trenera poza planem: nowa jednostka P1, P2… u klienta (nie liczy się do wykonania planu ani Bloków, liczy się do tonażu i Postępu; przy zamknięciu zdejmuje 1 trening z pakietu). Ponowne wywołanie tego samego dnia zwraca niezamkniętą jednostkę zamiast tworzyć nową. Ćwiczenia można podać od razu. ' + ZAP,
+    inputSchema: { type: 'object', properties: { id: ID, data: { type: 'string', description: 'RRRR-MM-DD, domyślnie dziś' }, tytul: { type: 'string', description: 'domyślnie „Trening z trenerem”' },
+      cwiczenia: { type: 'array', maxItems: 30, items: CW } }, required: ['id'], additionalProperties: false },
+    annotations: WR },
+  { name: 'prowadzony_cwiczenie', title: 'Trening prowadzony: ćwiczenie z seriami',
+    description: 'Dopisuje ćwiczenie (albo kilka) z wykonanymi seriami do otwartej jednostki prowadzonej P…: wiersz w Planie i serie w Logu (zrobione). Ten sam nr i seria nadpisują. Drabinka: każda seria z własnym powt, oba ćwiczenia z tą samą literą obwod. Zamknięta jednostka = błąd. ' + ZAP,
+    inputSchema: { type: 'object', properties: { id: ID, tydzien: WEEK, jednostka: P_DAY, cwiczenia: { type: 'array', minItems: 1, maxItems: 30, items: CW } },
+      required: ['id', 'tydzien', 'jednostka', 'cwiczenia'], additionalProperties: false },
+    annotations: RW },
+  { name: 'zapisz_serie', title: 'Zapisz serie w jednostce planu',
+    description: 'Zapisuje serie w jednostce planu trenera (S1, T2…), gdy klient robi plan z trenerem obok (jak zapis serii w aplikacji). wszystkie_wg_planu = wszystkie serie robocze z kg i powt z planu, podane serie nadpisują. Zakres („6-8”) w planie wymaga podania powt. Do treningu poza planem użyj „prowadzony_start”. ' + ZAP,
+    inputSchema: { type: 'object', properties: { id: ID, tydzien: WEEK, jednostka: DAY, wszystkie_wg_planu: { type: 'boolean' },
+      serie: { type: 'array', maxItems: 200, items: { type: 'object', properties: Object.assign({ nr: { type: 'integer', description: 'nr ćwiczenia (z „jednostka”)' }, uwagi: { type: 'string' } }, SERIA.properties,
+        { seria: { type: 'string', description: '1, 2, … robocza; R1… rozgrzewka; D1… drop' }, powt: { type: 'string', description: 'puste = z planu (gdy plan ma jedną liczbę)' } }),
+        required: ['nr', 'seria'], additionalProperties: false } } },
+      required: ['id', 'tydzien', 'jednostka'], additionalProperties: false },
+    annotations: RW },
+  { name: 'zakoncz_jednostke', title: 'Zakończ jednostkę',
+    description: 'Zamyka jednostkę (prowadzoną P… albo planu): wpis w Sesjach jak „Zakończ i zapisz” w aplikacji, prowadził = trener. Pakiet: domyślnie zdejmuje 1 trening (zdejmij_z_pakietu: false = nie zdejmuj, np. trening gratis; ponowne zamknięcie z false oddaje trening). ' + ZAP,
+    inputSchema: { type: 'object', properties: { id: ID, tydzien: WEEK, jednostka: DAY,
+      samopoczucie: { type: 'integer', minimum: 1, maximum: 5 }, rpe_sesji: { type: 'integer', minimum: 0, maximum: 10 }, czas_min: { type: 'integer', minimum: 1, maximum: 600 },
+      start: { type: 'string', description: 'ISO data i godzina; domyślnie koniec − czas_min albo pierwsza seria' }, koniec: { type: 'string', description: 'ISO; domyślnie teraz' },
+      bol: { type: 'array', items: { type: 'object', properties: { miejsce: { type: 'string' }, ocena: { type: 'integer', minimum: 0, maximum: 10 } }, required: ['miejsce', 'ocena'], additionalProperties: false } },
+      uwagi: { type: 'string' }, zdejmij_z_pakietu: { type: 'boolean', description: 'domyślnie tak' } },
+      required: ['id', 'tydzien', 'jednostka'], additionalProperties: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
+  { name: 'prowadzony_z_planu', title: 'Przenieś jednostkę planu do prowadzonych',
+    description: 'Przenosi jednostkę, która trafiła do planu, a była treningiem prowadzonym, do P… (poza plan i Bloki), razem z seriami z Logu, sesją i wpisem w pakiecie; zamknięta jednostka bez wpisu w pakiecie zdejmuje 1 trening. ' + ZAP,
+    inputSchema: { type: 'object', properties: { id: ID, tydzien: WEEK, jednostka: DAY }, required: ['id', 'tydzien', 'jednostka'], additionalProperties: false },
+    annotations: WR },
+);
+
+const sesLink = id => PANEL + '#k/' + encodeURIComponent(id) + '/sesje';
+/** Ćwiczenie z MCP → postać dla serwera (te same nazwy pól: serwer sprawdza i liczy). */
+const cwOut = c => nz({ nr: c.nr, cwiczenie: s(c.cwiczenie), uwagi: c.uwagi, grupa: c.grupa, obwod: c.obwod, sekcja: c.sekcja, prio: c.prio,
+  serie: (c.serie || []).map(x => nz({ seria: x.seria, kg: x.kg === undefined ? '' : String(x.kg), powt: x.powt === undefined ? '' : String(x.powt), swiatlo: x.swiatlo, rpe: x.rpe, typ: x.typ })) });
+/** Odpowiedź serwera po zapisie ćwiczeń → krótko. */
+export const cwTxt = r => nz({ cwiczenia: r.cwiczenia || [], ostrzezenia: r.ostrzezenia || [] });
+/** Wynik trZakoncz → krótko: zapisano, samopoczucie, RPE, czas, ból, pakiet było → zostało. */
+export function zakonczTxt(r) {
+  const p = r.pkg;
+  return nz({ zapisano: true, klient: r.name, tydzien: r.week, jednostka: r.day, rodzaj: r.led ? 'prowadzony (poza planem)' : '', samopoczucie: r.feel, rpe_sesji: r.rpe, czas_min: r.minutes,
+    bol: r.pain, pakiet: p ? (p.on ? 'było ' + p.before + ' → zostało ' + p.after : 'nie zdjęto (zostało ' + p.after + ')') : 'klient nie ma pakietu', ostrzezenia: r.warn || [] });
+}
+
 const ENUM = (v, list, nm) => { const x = s(v).toUpperCase(); if (x && list.indexOf(x) < 0) throw new Error(nm + ': ' + list.join(' / ') + '.'); return x; };
 const BOOL = v => (v === undefined || v === null || v === '' ? undefined : !!v);
 /** Nowy klient z panelu (trKlientOf_) → odpowiedź: id, link i ustawione flagi. */
@@ -440,6 +508,32 @@ export async function run(name, a, api, o) {
       if (['dodaj', 'ustaw'].indexOf(mode) < 0) throw new Error('Tryb: dodaj albo ustaw.');
       const p = await api('trPakiet', cid(a), Object.assign(nz({ mode, n, note: s(a.notatka), date: s(a.data) }), BOOL(a.widoczny) === undefined ? {} : { show: !!a.widoczny }));   // nieznany klient = błąd serwera „Nie ma klienta …”
       return pakietTxt(p, p && p.prev !== null && p.prev !== undefined ? p.prev : '');
+    }
+    case 'prowadzony_start': {
+      const r = await api('trProwadzonyStart', cid(a), nz({ date: s(a.data), title: s(a.tytul), ex: (a.cwiczenia || []).map(cwOut) }));
+      return Object.assign(nz({ zapisano: true, klient: r.name, tydzien: r.week, jednostka: r.day, data: r.date, tytul: r.title,
+        nowa: r.made ? 'tak' : 'nie, ta jednostka jest już otwarta dziś', podglad: sesLink(cid(a)) }), r.cwiczenia ? cwTxt(r) : {});
+    }
+    case 'prowadzony_cwiczenie': {
+      const r = await api('trProwadzonyCw', cid(a), { week: Number(need(a, 'tydzien')), day: s(need(a, 'jednostka')), ex: (a.cwiczenia || []).map(cwOut) });
+      return Object.assign({ zapisano: true, tydzien: r.week, jednostka: r.day }, cwTxt(r));
+    }
+    case 'zapisz_serie': {
+      const sets = (a.serie || []).map(x => nz({ nr: x.nr, seria: s(x.seria), kg: x.kg === undefined ? '' : String(x.kg), powt: x.powt === undefined ? '' : String(x.powt), swiatlo: x.swiatlo, rpe: x.rpe, typ: x.typ, uwagi: x.uwagi }));
+      if (!sets.length && !a.wszystkie_wg_planu) throw new Error('Podaj „serie” albo „wszystkie_wg_planu”.');
+      const r = await api('trSerie', cid(a), { week: Number(need(a, 'tydzien')), day: s(need(a, 'jednostka')), sets, all: !!a.wszystkie_wg_planu });
+      return { zapisano: true, serii: r.n, cwiczenia: r.cwiczenia };
+    }
+    case 'zakoncz_jednostke': {
+      const o = nz({ week: Number(need(a, 'tydzien')), day: s(need(a, 'jednostka')), samopoczucie: a.samopoczucie, rpe_sesji: a.rpe_sesji, czas_min: a.czas_min,
+        start: s(a.start), koniec: s(a.koniec), bol: a.bol, uwagi: s(a.uwagi) });
+      if (a.zdejmij_z_pakietu !== undefined) o.pkg = !!a.zdejmij_z_pakietu;
+      return zakonczTxt(await api('trZakoncz', cid(a), o));
+    }
+    case 'prowadzony_z_planu': {
+      const r = await api('trZPlanu', cid(a), { week: Number(need(a, 'tydzien')), day: s(need(a, 'jednostka')) });
+      return nz({ zapisano: true, klient: r.name, tydzien: r.week, bylo: r.from, jest: r.day, cwiczen: r.rows, zamknieta: r.closed ? 'tak' : 'nie',
+        pakiet: r.pkg ? 'było ' + r.pkg.before + ' → zostało ' + r.pkg.after : '' });
     }
     default: throw new Error('Nieznane narzędzie: ' + name);
   }

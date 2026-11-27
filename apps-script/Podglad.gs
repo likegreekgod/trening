@@ -62,7 +62,7 @@ function podglad_(plan, log, ses, klienci, opts) {
   const out = [];
   units.filter(u => (per[u.klient] = (per[u.klient] || 0) + 1) <= lim).forEach(u => {
     const p0 = u.plan[0] || {};
-    const name = [s_(p0.blok), 'tydz. ' + u.tydzien, u.jednostka, s_(p0.tytul)].filter(Boolean).join(' · ') + (own_(p0) ? ' (własny)' : '');
+    const name = [s_(p0.blok), 'tydz. ' + u.tydzien, u.jednostka, s_(p0.tytul)].filter(Boolean).join(' · ') + (own_(p0) ? ' (własny)' : led_(p0) ? ' (z trenerem)' : '');
     const head = [u.date, who(u), name];
     const s = u.ses, sn = [];
     if (s) {
