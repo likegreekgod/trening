@@ -270,17 +270,38 @@ test('tor: postęp prędkości i toru ćwiczenia (liczby dla Claude, tory tylko 
   new Function(TOR_HTML.match(/<script>([\s\S]*)<\/script>/)[1]);
 });
 
-test('dodaj_klienta: domyślnie PROSTY, flagi do trKlientNowy, odpowiedź bez linku z kluczem', async () => {
+test('dodaj_klienta: domyślnie PROSTY, flagi do trKlientNowy, odpowiedź z id, linkiem i flagami', async () => {
   const calls = [];
-  const api = async (fn, ...a) => { calls.push([fn, ...a]); return { id: 'ola-k', name: 'Ola K.', mode: a[0].mode, scale: a[0].scale || 'RPE', swap: a[0].swap || 'NIE', masters: a[0].masters, link: 'https://x/?k=kabcdef12345' }; };
+  const api = async (fn, ...a) => { calls.push([fn, ...a]); const f = a[0];
+    return { id: 'ola-k', name: 'Ola K.', on: true, mode: f.mode, scale: f.scale || 'RPE', swap: f.swap || 'NIE', masters: f.masters, extra: f.extra || 0, pain: !!f.pain,
+      oly: f.oly === undefined ? 5 : f.oly, own: f.own !== false, edit: !!f.edit, link: 'https://x/?k=kabcdef12345' }; };
   const r = await run('dodaj_klienta', { imie: ' Ola K. ' }, api);
   assert.deepEqual(calls[0], ['trKlientNowy', { imie: 'Ola K.', mode: 'PROSTY', masters: false }]);
-  assert.equal(r.id, 'ola-k'); assert.equal(r.tryb, 'PROSTY'); assert.ok(!JSON.stringify(r).includes('?k='), 'bez klucza');
-  await run('dodaj_klienta', { imie: 'Jan', klient_id: 'jan-2', tryb: 'pro', skala: 'RIR', zamiana: 'DOWOLNA', masters: true }, api);
-  assert.deepEqual(calls[1], ['trKlientNowy', { imie: 'Jan', id: 'jan-2', mode: 'PRO', scale: 'RIR', swap: 'DOWOLNA', masters: true }]);
+  assert.equal(r.klient_id, 'ola-k'); assert.equal(r.link, 'https://x/?k=kabcdef12345');
+  assert.deepEqual(r.flagi, { tryb: 'PROSTY', dod_serie: 0, masters: false, zamiana: 'NIE', skala: 'RPE', bol: false, sufit_oly: 5, wlasne: true, edycja: false, aktywny: true });
+  await run('dodaj_klienta', { imie: 'Jan', klient_id: 'jan-2', tryb: 'pro', dod_serie: 2, masters: true, zamiana: 'DOWOLNA', skala: 'RIR', bol: true, sufit_oly: 0, wlasne: false, edycja: true }, api);
+  assert.deepEqual(calls[1], ['trKlientNowy', { imie: 'Jan', id: 'jan-2', mode: 'PRO', extra: 2, masters: true, swap: 'DOWOLNA', scale: 'RIR', pain: true, oly: 0, own: false, edit: true }]);
   await assert.rejects(run('dodaj_klienta', {}, api), /imie/);
   await assert.rejects(run('dodaj_klienta', { imie: 'A', zamiana: 'TAK' }, api), /Zamiana/);
+  await assert.rejects(run('dodaj_klienta', { imie: 'A', dod_serie: 9 }, api), /Dodatkowe serie/);
+  await assert.rejects(run('dodaj_klienta', { imie: 'A', sufit_oly: -1 }, api), /Sufit/);
+  assert.equal(calls.length, 2, 'błędne dane nie idą do serwera');
   calls.forEach(c => assert.ok(ZAPIS.includes(c[0]), c[0]));
   assert.ok(TOOLS.find(t => t.name === 'dodaj_klienta').inputSchema.required.includes('imie'));
-  assert.equal(klientNowy({ id: 'a', name: 'A', mode: 'PRO', scale: 'RPE', swap: 'NIE', link: 'k' }).link.includes('Kopiuj link'), true);
+});
+
+test('pakiet: dodaj (domyślnie) / ustaw przez trPakiet, ile zostało, walidacja', async () => {
+  const calls = [];
+  const api = async (fn, ...a) => { calls.push([fn, ...a]); if (a[0] === 'nikt') throw new Error('Nie ma klienta „nikt”.');
+    return { n: 10, left: 6, used: 4, from: '2026-11-01', to: '2026-12-31', prev: a[1].mode === 'ustaw' ? 4 : null }; };
+  const r = await run('pakiet', { id: 'Maciek', treningi: 2 }, api);
+  assert.deepEqual(calls[0], ['trPakiet', 'maciek', { mode: 'dodaj', n: 2 }]);
+  assert.equal(r.zostalo, 6); assert.equal(r.bylo, undefined, 'bez pakietu przed = brak „bylo”');
+  const u = await run('pakiet', { id: 'maciek', treningi: 6, tryb: 'ustaw', notatka: 'gotówka', data: '2026-11-27' }, api);
+  assert.deepEqual(calls[1], ['trPakiet', 'maciek', { mode: 'ustaw', n: 6, note: 'gotówka', date: '2026-11-27' }]);
+  assert.equal(u.bylo, 4); assert.equal(u.zostalo, 6);
+  for (const t of [0, -2, 1.5]) await assert.rejects(run('pakiet', { id: 'maciek', treningi: t }, api), /Liczba treningów/);
+  await assert.rejects(run('pakiet', { id: 'maciek', treningi: 1, tryb: 'zabierz' }, api), /Tryb/);
+  await assert.rejects(run('pakiet', { id: 'nikt', treningi: 1 }, api), /Nie ma klienta/);
+  calls.forEach(c => assert.ok(ZAPIS.includes(c[0]), c[0]));
 });

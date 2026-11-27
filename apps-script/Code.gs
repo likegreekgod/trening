@@ -1071,23 +1071,21 @@ function dodajKlienta() {
   SpreadsheetApp.getUi().showModalDialog(html, 'Nowy klient');
 }
 
-/** Wywoływane z okna „Nowy klient”. Zwraca {ok, id, link} albo {error}. */
+/**
+ * Wywoływane z okna „Nowy klient”. Zwraca {ok, id, link} albo {error}. Zapis robi wspólna `klientNowy_` (Trener.gs),
+ * ta sama co „Nowy klient” w panelu i narzędzie „dodaj_klienta” w Claude (MCP).
+ */
 function dodajKlientaZapisz(f) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
   try {
-    const sh = sheet_('Klienci', ['klucz', 'klient_id', 'imie', 'aktywny', 'link', 'bol', 'tryb', 'dod_serie', 'masters']);
-    const ids = sh.getLastRow() > 1 ? sh.getRange(2, 2, sh.getLastRow() - 1, 1).getValues().map(r => r[0]) : [];
-    const res = buildClientRow_(f, ids, newKey_());
-    if (res.error) return res;
-    const base = linkBase_();
-    if (base) res.row[4] = base + '?k=' + res.row[0];
-    const r = sh.getLastRow() + 1;
-    sh.getRange(r, 1).setNumberFormat('@');                       // klucz zawsze jako tekst
-    sh.getRange(r, 1, 1, res.row.length).setValues(plainRows_([res.row]));
-    rootFolder_();                                                // folder na filmy (Trening – Klienci) istnieje
-    return { ok: true, id: res.id, link: res.row[4] || '' };
-  } finally { lock.releaseLock(); }
+    const k = klientNowy_(klientForm_(f));
+    return { ok: true, id: k.id, link: k.link || '' };
+  } catch (e) { return { error: String((e && e.message) || e) }; }
+}
+/** Czysta: pola okna „Nowy klient” w arkuszu → ustawienia jak w panelu (tryb, ból, masters, dodatkowe serie). */
+function klientForm_(f) {
+  f = f || {};
+  const extra = String(f.dod_serie === undefined || f.dod_serie === null ? '' : f.dod_serie).trim();
+  return { imie: f.imie, id: f.id, mode: f.prosty ? 'PROSTY' : 'PRO', pain: !!f.bol, masters: !!f.masters, extra: extra === '' ? 0 : Number(extra) };
 }
 
 const DODAJ_KLIENTA_HTML_ = `<!doctype html><html><head><base target="_top"><style>

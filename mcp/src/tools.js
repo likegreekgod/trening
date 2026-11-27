@@ -9,7 +9,7 @@ import { UI_DZIS, UI_KLIENT, UI_FILM, UI_TOR } from './ui.js';
 const ST_DZIS = { wait: 'czeka', live: 'w trakcie', done: 'zrobione' };
 const SEKCJA = { R: 'Rozgrzewka', G: 'Główne', K: 'Korekcyjne' };   // kolumna Planu `sekcja` (litera), jak SEKCJE w Code.gs
 const ST_KAL = { wait: 'zaplanowana', live: 'w trakcie', done: 'zrobiona', late: 'zaległa' };
-export const ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarzFilm', 'trPlan', 'trPropozycja', 'trPrzesun'];   // zapisy: serwer wpisuje je do zakładki API
+export const ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarzFilm', 'trPakiet', 'trPlan', 'trPropozycja', 'trPrzesun'];   // zapisy: serwer wpisuje je do zakładki API
 
 const s = v => (v === undefined || v === null ? '' : String(v)).trim();
 const num = v => { const x = typeof v === 'number' ? v : parseFloat(s(v).replace(',', '.')); return isFinite(x) ? x : null; };
@@ -317,22 +317,39 @@ export function tor(d, nazwa) {
 
 TOOLS.push(
   { name: 'dodaj_klienta', title: 'Dodaj klienta',
-    description: 'Dodaje nowego klienta (jak „Nowy klient” w panelu): wiersz w zakładce Klienci z nowym kluczem; aktywny, bez planu. klient_id domyślnie z imienia (małe litery, bez polskich znaków, spacje → „-”); zajęty = błąd z wolnym ID w podpowiedzi. Linku z kluczem nie zwraca: trener kopiuje go w panelu (Klienci → ⧉ Kopiuj link). Zrób tylko na wyraźną prośbę trenera i powiedz, z jakimi ustawieniami dodałeś.',
+    description: 'Dodaje nowego klienta (to samo co „Nowy klient” w panelu i menu Trening → Dodaj klienta w arkuszu): wiersz w zakładce Klienci, nowy klucz, link do aplikacji, aktywny = TAK, folder na filmy. Bez planu. klient_id domyślnie z imienia (małe litery, bez polskich znaków, spacje → „-”); zajęte ID = błąd z wolnym ID w podpowiedzi, istniejącego klienta nie nadpisuje. Zwraca klient_id, link (z kluczem: przekaż go tylko trenerowi) i ustawione flagi. Zapis tylko na wyraźną prośbę trenera; po zapisie powiedz, z jakimi ustawieniami dodałeś.',
     inputSchema: { type: 'object', properties: {
       imie: { type: 'string', description: 'imię widoczne w aplikacji, np. „Ola” albo „Ola K.”' },
       klient_id: { type: 'string', description: 'opcjonalnie; puste = z imienia' },
       tryb: { type: 'string', enum: ['PROSTY', 'PRO'], description: 'PROSTY = słowa zamiast RPE (domyślnie), PRO = RPE / RIR, VBT, %' },
-      skala: { type: 'string', enum: ['RPE', 'RIR'], description: 'skala wysiłku w PRO (domyślnie RPE)' },
+      dod_serie: { type: 'integer', minimum: 0, maximum: 5, description: 'ile serii dodatkowych klient może dołożyć (domyślnie 0)' },
+      masters: { type: 'boolean', description: 'ostrzejsze progi obciążenia (domyślnie nie)' },
       zamiana: { type: 'string', enum: ['NIE', 'TRENER', 'DOWOLNA'], description: 'zamiana ćwiczeń przez klienta: NIE (domyślnie), TRENER = tylko zamienniki od trenera, DOWOLNA = cała baza' },
-      masters: { type: 'boolean', description: 'ostrzejsze progi obciążenia (domyślnie nie)' } },
+      skala: { type: 'string', enum: ['RPE', 'RIR'], description: 'skala wysiłku w PRO (domyślnie RPE)' },
+      bol: { type: 'boolean', description: 'pytanie o ból zawsze widoczne (domyślnie nie)' },
+      sufit_oly: { type: 'number', minimum: 0, maximum: 20, description: 'sufit w bojach: % maksa ponad plan (domyślnie 5)' },
+      wlasne: { type: 'boolean', description: 'klient może dodawać własne treningi (domyślnie tak)' },
+      edycja: { type: 'boolean', description: 'klient może zmieniać jednostki trenera: dodać / usunąć ćwiczenie (domyślnie nie)' } },
       required: ['imie'], additionalProperties: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } },
+  { name: 'pakiet', title: 'Pakiet treningów',
+    description: 'Zmienia pakiet treningów personalnych klienta (zakładka Pakiety, ta sama co w panelu; stąd „pakiet_zostalo” w „klienci” i „pakiet” w „klient”). tryb „dodaj” (domyślnie): +treningi do obecnego pakietu (korekta; data zakupu i ważność bez zmian); „ustaw”: zostanie dokładnie tyle treningów (korekta o różnicę). Bez pakietu albo po jego wygaśnięciu oba tryby zapisują nowy zakup. Zwraca, ile treningów zostało po zmianie. Zapis tylko na wyraźną prośbę trenera; po zapisie powiedz, ile było i ile zostało.',
+    inputSchema: { type: 'object', properties: { id: ID,
+      treningi: { type: 'integer', minimum: 1, maximum: 100, description: 'liczba treningów (> 0)' },
+      tryb: { type: 'string', enum: ['dodaj', 'ustaw'], description: 'dodaj (domyślnie) albo ustaw' },
+      notatka: { type: 'string', description: 'opcjonalnie, do historii pakietu' },
+      data: { type: 'string', description: 'opcjonalnie RRRR-MM-DD; domyślnie dziś' } },
+      required: ['id', 'treningi'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } },
 );
 
 const ENUM = (v, list, nm) => { const x = s(v).toUpperCase(); if (x && list.indexOf(x) < 0) throw new Error(nm + ': ' + list.join(' / ') + '.'); return x; };
-/** Ustawienia nowego klienta z panelu (trKlientOf_) → krótka odpowiedź bez linku z kluczem. */
-export const klientNowy = k => nz({ zapisano: true, id: k.id, imie: k.name, tryb: k.mode, skala: k.scale, zamiana: k.swap, masters: !!k.masters,
-  link: 'w panelu: Klienci → ' + k.name + ' → ⧉ Kopiuj link' });
+const BOOL = v => (v === undefined || v === null || v === '' ? undefined : !!v);
+/** Nowy klient z panelu (trKlientOf_) → odpowiedź: id, link i ustawione flagi. */
+export const klientNowy = k => ({ zapisano: true, klient_id: k.id, imie: k.name, link: k.link || '',
+  flagi: { tryb: k.mode, dod_serie: k.extra, masters: !!k.masters, zamiana: k.swap, skala: k.scale, bol: !!k.pain, sufit_oly: k.oly, wlasne: !!k.own, edycja: !!k.edit, aktywny: k.on !== false } });
+/** Stan pakietu (pkgOf_) przed i po → krótka odpowiedź. */
+export const pakietTxt = (p, przed) => nz({ zapisano: true, zostalo: p ? p.left : null, bylo: przed === undefined ? '' : przed, kupione: p ? p.n : '', waznosc: p ? p.to : '', od: p ? p.from : '' });
 
 export const KLATKI_MAX = 24, KLATKA_MAX = 400000;   // klatek w paczce, znaków base64 na klatkę (~300 kB)
 
@@ -408,11 +425,20 @@ export async function run(name, a, api, o) {
       return { zapisano: true, tekst: x && x.text };
     }
     case 'dodaj_klienta': {
-      const imie = s(need(a, 'imie'));
-      const f = nz({ imie, id: s(a.klient_id), mode: ENUM(a.tryb, ['PROSTY', 'PRO'], 'Tryb') || 'PROSTY', scale: ENUM(a.skala, ['RPE', 'RIR'], 'Skala'),
-        swap: ENUM(a.zamiana, ['NIE', 'TRENER', 'DOWOLNA'], 'Zamiana') });
-      f.masters = !!a.masters;
+      const imie = s(need(a, 'imie')), num0 = (v, nm, lo, hi, int) => { if (v === undefined || v === null || s(v) === '') return undefined;
+        const x = Number(v); if (!isFinite(x) || x < lo || x > hi || (int && !Number.isInteger(x))) throw new Error(nm + ': ' + (int ? 'liczba całkowita ' : 'liczba ') + lo + '–' + hi + '.'); return x; };
+      const f = { imie, id: s(a.klient_id), mode: ENUM(a.tryb, ['PROSTY', 'PRO'], 'Tryb') || 'PROSTY', extra: num0(a.dod_serie, 'Dodatkowe serie', 0, 5, true),
+        masters: !!a.masters, swap: ENUM(a.zamiana, ['NIE', 'TRENER', 'DOWOLNA'], 'Zamiana'), scale: ENUM(a.skala, ['RPE', 'RIR'], 'Skala'),
+        pain: BOOL(a.bol), oly: num0(a.sufit_oly, 'Sufit w bojach', 0, 20), own: BOOL(a.wlasne), edit: BOOL(a.edycja) };
+      Object.keys(f).forEach(k => { if (f[k] === undefined || f[k] === '') delete f[k]; });
       return klientNowy(await api('trKlientNowy', f));
+    }
+    case 'pakiet': {
+      const n = Number(need(a, 'treningi')), mode = s(a.tryb).toLowerCase() || 'dodaj';
+      if (!Number.isInteger(n) || n < 1) throw new Error('Liczba treningów: całkowita większa od 0.');
+      if (['dodaj', 'ustaw'].indexOf(mode) < 0) throw new Error('Tryb: dodaj albo ustaw.');
+      const p = await api('trPakiet', cid(a), nz({ mode, n, note: s(a.notatka), date: s(a.data) }));   // nieznany klient = błąd serwera „Nie ma klienta …”
+      return pakietTxt(p, p && p.prev !== null && p.prev !== undefined ? p.prev : '');
     }
     default: throw new Error('Nieznane narzędzie: ' + name);
   }

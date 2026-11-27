@@ -75,7 +75,7 @@ const TR_ODP_DNI = 14;                // odpowiedzi klientów na komentarze na p
  * Pośrednik woła te same TR_FNS z biletem trenera i dopisuje src: 'mcp'. Zapisy z tej listy trafiają do zakładki API
  * (jak akcje botów klientów), żeby było widać, co zmienił Claude. Odczyty nie są zapisywane.
  */
-const TR_MCP_ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarzFilm', 'trPlan', 'trPropozycja', 'trPrzesun'];   // = ZAPIS w mcp/src/tools.js
+const TR_MCP_ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarzFilm', 'trPakiet', 'trPlan', 'trPropozycja', 'trPrzesun'];   // = ZAPIS w mcp/src/tools.js
 /** Czysta: zapytanie → wiersz dziennika API [klient, akcja, ok, opis] albo null (nie z Claude albo odczyt). */
 function mcpLogRow_(req, ok, why) {
   if (!req || req.src !== 'mcp' || TR_MCP_ZAPIS.indexOf(req.fn) < 0) return null;
@@ -1359,7 +1359,9 @@ function trKlientUstaw(id, f) {
  * Nowy klient z panelu albo z Claude (narzędzie MCP „dodaj_klienta”): imię, ID (z imienia), tryb, zamiana, masters; reszta domyślna.
  * Inne ustawienia z KL_DOMYSLNE (np. scale) tylko, gdy przyszły (`trKlientNowyUst_`). Zwraca ustawienia z linkiem.
  */
-function trKlientNowy(f) {
+function trKlientNowy(f) { return klientNowy_(f); }
+/** Wspólny zapis nowego klienta: panel (trKlientNowy), menu arkusza (dodajKlientaZapisz) i Claude (dodaj_klienta). Istniejącego ID nie nadpisuje. */
+function klientNowy_(f) {
   f = f || {};
   const s = trKlientNowyUst_(f);
   const v = trKlientVals_(s);
