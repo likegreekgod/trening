@@ -136,8 +136,13 @@ async function page(calls, opt = {}) {
     else if (st.authFail > 0) { st.authFail--; out = { ok: false, error: 'Logowanie: bilet wygasł' }; }
     else if (b.fn === 'trPulpit' || b.fn === 'trPrzelicz') out = { ok: true, result: Object.assign({}, PULPIT, b.fn === 'trPrzelicz' ? { at: TODAY + 'T09:30:00.000Z' } : {}, opt.diskLow ? { dysk: { used: 13.5 * 1024 ** 3, limit: 15 * 1024 ** 3, free: 1.5 * 1024 ** 3, low: true } } : {},
       opt.pkg ? { clients: PULPIT.clients.map(c => PKG[c.id] ? Object.assign({}, c, { pkg: PKG[c.id] }) : c) } : {},
-      opt.agent ? { agent: [{ id: 'ania', name: 'Ania', at: TODAY, typ: 'czerwona_flaga', zgl: true, pilne: true, text: 'Drętwienie palców przy martwym ciągu' },
-        { id: 'ania', name: 'Ania', at: TODAY, typ: 'zamiana', zgl: false, pilne: false, text: 'Przysiad → Przysiad przedni' }] } : {}) };
+      opt.agent ? { agent: [{ pid: 'ania|z|1', id: 'ania', name: 'Ania', at: TODAY, typ: 'czerwona_flaga', zgl: true, pilne: true, text: 'Drętwienie palców przy martwym ciągu', why: '' },
+        { pid: 'ania|p|2', id: 'ania', name: 'Ania', at: TODAY, typ: 'zamiana', zgl: false, pilne: false, text: 'Przysiad → Przysiad przedni', why: 'barki bolą przy gryfie', week: 12, day: 'D1', nr: 1, ex: 'Przysiad', to: 'Przysiad przedni' },
+        { pid: 'bartek|p|3', id: 'bartek', name: 'Bartek', at: TODAY, typ: 'ciezar', zgl: false, pilne: false, text: 'Wyciskanie leżąc: 82,5 kg', why: 'ostatnio lekko', week: 7, day: 'D2', nr: 2, ex: 'Wyciskanie leżąc', kg: 82.5 }],
+        agentOdrz: [{ name: 'Bartek', at: TODAY, text: 'Przysiad: 90 kg', uwaga: 'Najwyżej +2,5 kg (reguła 1.9)' }] } : {}) };
+    else if (b.fn === 'trPropozycja') { await new Promise(res => setTimeout(res, 60)); const e = b.args[1];
+      out = b.args[0] === 'bartek|p|3' && e.mode === 'tak' ? { ok: false, error: 'Plan się zmienił od propozycji (tydz. 7, D2, nr 2): odrzuć ją albo zmień plan ręcznie.' }
+        : { ok: true, result: { status: e.mode === 'tak' ? 'zatwierdzona' : e.mode === 'nie' ? 'odrzucona' : 'przeczytane', rows: e.mode === 'tak' ? 1 : 0, memo: !!e.zasada } }; }
     else if (b.fn === 'trPakiet') { await new Promise(res => setTimeout(res, 100)); const f = b.args[1], k = st.pkg || (st.pkg = opt.pkg ? JSON.parse(JSON.stringify(PKG.ania)) : null);
       if (f.mode === 'nowy' && !(f.n >= 1 && f.n <= 100)) out = { ok: false, error: 'Liczba treningów: 1–100.' };
       else if (f.mode === 'korekta' && !k) out = { ok: false, error: 'Klient nie ma pakietu: najpierw dodaj pakiet.' };
@@ -1177,8 +1182,29 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   const { ctx, p } = await page(calls, { loggedIn: true, agent: true });
   await p.goto(base + 'trener.html'); await p.waitForSelector('.todo .it');
   const it = await p.$$eval('.todo .it', a => a.map(x => [x.querySelector('b').textContent, x.querySelector('.dot').className]));
-  assert.deepEqual(it.filter(x => /asystenta AI/.test(x[0])).map(x => [x[0], /lv-bad/.test(x[1])]),
-    [['Ania: czerwona flaga od asystenta AI', true], ['Ania: propozycja asystenta AI (zamiana)', false]]);
+  assert.deepEqual(it.filter(x => /asystenta AI/.test(x[0])).map(x => [x[0], /lv-bad/.test(x[1])]), [['Ania: czerwona flaga od asystenta AI', true]], 'propozycje tylko w karcie');
+  // karta „Od asystenta AI”: zatwierdź (plan się zmienia), odrzuć z powodem i „zapamiętaj”, przeczytane zgłoszenie, odrzucone przez serwer
+  assert.match(await p.textContent('#asy h2'), /Od asystenta AI · 3/);
+  assert.match(await p.textContent('#asy .aodrz'), /Odrzucone przez serwer · 1/);
+  assert.match(await p.textContent('[data-asy="ania|p|2"]'), /Przysiad → Przysiad przedni · tylko w tej jednostce.*Powód klienta: „barki bolą przy gryfie”/s);
+  await shot(p, 'trener-od-asystenta.png');
+  await p.click('[data-asy-ok="bartek|p|3"]'); await p.waitForSelector('[data-asy="bartek|p|3"] .err');
+  assert.match(await p.textContent('[data-asy="bartek|p|3"] .err'), /Plan się zmienił/);
+  await p.click('[data-asy-no="bartek|p|3"]'); await p.click('[data-asy-nogo="bartek|p|3"]');
+  assert.match(await p.textContent('[data-asy="bartek|p|3"] .err'), /Napisz powód/);
+  assert.equal(calls.filter(c => c.fn === 'trPropozycja').length, 1, 'bez powodu nic nie idzie');
+  await p.fill('[data-asy-why="bartek|p|3"]', 'Najpierw technika na filmie'); await p.check('[data-asy-mem="bartek|p|3"]');
+  await p.click('[data-asy-nogo="bartek|p|3"]'); await p.waitForFunction(() => !document.querySelector('[data-asy="bartek|p|3"]'));
+  assert.deepEqual(calls.filter(c => c.fn === 'trPropozycja').pop().args, ['bartek|p|3', { mode: 'nie', why: 'Najpierw technika na filmie', zasada: true }]);
+  assert.match(await p.textContent('#asy .saved'), /Bartek: odrzucone, powód pójdzie do klienta · dopisane do ograniczeń/);
+  await p.click('[data-asy-ok="ania|p|2"]'); await p.waitForFunction(() => !document.querySelector('[data-asy="ania|p|2"]'));
+  assert.deepEqual(calls.filter(c => c.fn === 'trPropozycja').pop().args, ['ania|p|2', { mode: 'tak', why: '', zasada: false }]);
+  assert.match(await p.textContent('#asy .saved'), /Ania: zatwierdzone, plan zmieniony/);
+  await p.click('.todo [data-asygo]');
+  await p.click('[data-asy-read="ania|z|1"]'); await p.waitForFunction(() => !document.querySelector('[data-asy="ania|z|1"]'));
+  assert.deepEqual(calls.filter(c => c.fn === 'trPropozycja').pop().args, ['ania|z|1', { mode: 'czytane', why: '', zasada: false }]);
+  assert.equal(await p.$$eval('.todo .it', a => a.filter(x => /asystenta AI/.test(x.textContent)).length), 0, 'przeczytana flaga znika z „Wymaga uwagi”');
+  assert.match(await p.textContent('#asy'), /Nic nie czeka na decyzję/);
   // Ustawienia: zasady trenera (sekcja 5 odrzucona, limity)
   await p.goto(base + 'trener.html#ustawienia'); await p.waitForSelector('#zasady-card');
   assert.match(await p.textContent('#zasady-card'), /Brak zasad/);
@@ -1212,6 +1238,8 @@ test('panel: asystent AI klienta (zasady w Ustawieniach, klucz i uprawnienia kli
   assert.equal(oa.openapi, '3.1.0'); assert.ok(oa.paths['/ciezarNaDzis'].get);
   await shot(p, 'trener-agent-ai.png');
   // czat „Wypróbuj asystenta”: domyślnie próba, historia idzie w całości, kroki pod odpowiedzią, błąd przywraca wiadomość
+  assert.equal(await p.$eval('#agchat', d => d.open), false, 'czat próbny zwinięty');
+  await p.click('#agchat summary');
   assert.ok(await p.isDisabled('#ach-go'));
   assert.equal(await p.getAttribute('#ach-real', 'aria-checked'), 'false');
   await p.fill('#ach-in', 'Co mam dziś?'); await p.click('#ach-go');

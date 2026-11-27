@@ -20,7 +20,7 @@ const AG_COL = { hash: 23, ust: 24, ogr: 25 };                      // Klienci X
 const AG_DOMYSLNE = { on: false, read: true, write: true, prop: true, limit: 200 };
 const AG_LIMITY = { skok_kg: 2.5, zapisy: 50, propozycje: 5, zgloszenia: 10 };
 const AG_LIMIT_MAX = 500, AG_TEKST_MAX = 45000, AG_OGR_MAX = 5000, AG_OPIS_MAX = 600;
-const AG_PLAN_DNI = 14, AG_HIST_DNI = 90, AG_TRENING_SERIE = 80, AG_DZIENNIK = 3000;
+const AG_DECYZJE = 20, AG_PLAN_DNI = 14, AG_HIST_DNI = 90, AG_TRENING_SERIE = 80, AG_DZIENNIK = 3000;
 const AG_LOG_HEADERS = ['czas', 'klient', 'akcja', 'wynik', 'powod'];
 const ZASADY_HEADERS = ['klucz', 'wartosc', 'zapisano'];
 const PROP_HEADERS = ['id', 'zapisano', 'klient', 'zrodlo', 'typ', 'tydzien', 'jednostka', 'nr', 'cwiczenie', 'tresc', 'powod_klienta',
@@ -362,15 +362,72 @@ function agZglos_(z, today) {
   return { typ: 'zgloszenie:' + temat, opis: opis, stan: (temat === 'bol' || temat === 'czerwona_flaga') && place ? { date: today, place: place, side: side, score: score, context: '', note: opis.slice(0, 300) } : null };
 }
 
-/** Czysta: otwarte sprawy od botów z ostatnich dni (zakładka Propozycje, status „czeka”) → lista dla pulpitu panelu. */
+const agD10_ = v => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || '').slice(0, 10);
+const agTresc_ = r => { try { return JSON.parse(String(r.tresc || '{}')) || {}; } catch (e) { return {}; } };
+/** Czysta: krótki opis wiersza Propozycji (co bot proponuje albo zgłasza). */
+function agWhat_(r) {
+  const t = String(r.typ || ''), tr = agTresc_(r);
+  return agTxt_(/^zgloszenie:/.test(t) ? String(r.powod_klienta || '') : t === 'zamiana' ? r.cwiczenie + ' → ' + (tr.na || '') : t === 'ciezar' ? r.cwiczenie + ': ' + String(tr.kg).replace('.', ',') + ' kg'
+    : t === 'serie' ? r.cwiczenie + ': ' + tr.serie + ' serie' : 'dodatkowy trening ' + (tr.data || '') + ': ' + (tr.opis || ''), 160);
+}
+
+/** Czysta: otwarte sprawy od botów z ostatnich dni (zakładka Propozycje, status „czeka”) → lista dla pulpitu panelu (pid = id wiersza do decyzji). */
 function agOpen_(rows, names, today, days) {
-  const from = agAddDays_(today, -(days || 7)), d10 = v => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || '').slice(0, 10);
-  return (rows || []).filter(r => String(r.status) === 'czeka' && d10(r.zapisano) >= from).map(r => {
-    const t = String(r.typ || ''), tr = (() => { try { return JSON.parse(String(r.tresc || '{}')); } catch (e) { return {}; } })();
-    const what = /^zgloszenie:/.test(t) ? String(r.powod_klienta || '') : t === 'zamiana' ? r.cwiczenie + ' → ' + (tr.na || '') : t === 'ciezar' ? r.cwiczenie + ': ' + tr.kg + ' kg' : t === 'serie' ? r.cwiczenie + ': ' + tr.serie + ' serie' : 'dodatkowy trening ' + (tr.data || '') + ': ' + (tr.opis || '');
-    return { id: String(r.klient).toLowerCase(), name: names[String(r.klient).toLowerCase()] || String(r.klient), at: d10(r.zapisano), typ: t.replace(/^zgloszenie:/, ''), zgl: /^zgloszenie:/.test(t),
-      pilne: t === 'zgloszenie:czerwona_flaga', text: agTxt_(what, 160) };
+  const from = agAddDays_(today, -(days || 7));
+  return (rows || []).filter(r => String(r.status) === 'czeka' && agD10_(r.zapisano) >= from).map(r => {
+    const t = String(r.typ || ''), tr = agTresc_(r), id = String(r.klient).toLowerCase();
+    return { pid: String(r.id || ''), id: id, name: names[id] || String(r.klient), at: agD10_(r.zapisano), typ: t.replace(/^zgloszenie:/, ''), zgl: /^zgloszenie:/.test(t),
+      pilne: t === 'zgloszenie:czerwona_flaga', text: agWhat_(r), why: /^zgloszenie:/.test(t) ? '' : agTxt_(r.powod_klienta, 300),
+      week: Number(r.tydzien) || null, day: String(r.jednostka || ''), nr: Number(r.nr) || null, ex: String(r.cwiczenie || ''),
+      kg: t === 'ciezar' ? tr.kg : null, sets: t === 'serie' ? tr.serie : null, to: t === 'zamiana' ? String(tr.na || '') : '', date: t === 'trening' ? String(tr.data || '') : '' };
   }).sort((a, b) => (b.pilne - a.pilne) || b.at.localeCompare(a.at));
+}
+
+/** Czysta: propozycje odrzucone od razu przez serwer (bez decyzji trenera) z ostatnich dni → [{name, at, text, uwaga}]. */
+function agOdrz_(rows, names, today, days) {
+  const from = agAddDays_(today, -(days || 7));
+  return (rows || []).filter(r => String(r.status) === 'odrzucona' && !String(r.decyzja_at || '').trim() && agD10_(r.zapisano) >= from)
+    .map(r => ({ name: names[String(r.klient).toLowerCase()] || String(r.klient), at: agD10_(r.zapisano), text: agWhat_(r), uwaga: agTxt_(r.uwaga_serwera, 200) }))
+    .sort((a, b) => b.at.localeCompare(a.at)).slice(0, 20);
+}
+
+/** Czysta: ostatnie decyzje trenera u klienta (i propozycje, które czekają) → pamięć bota: [{data, co, status, komentarz}], najnowsze na końcu. */
+function agDecyzje_(rows, clientId, n) {
+  const st = { czeka: 'czeka na trenera', zatwierdzona: 'zatwierdzona przez trenera', odrzucona: 'odrzucona przez trenera' };
+  return (rows || []).filter(r => String(r.klient).toLowerCase() === clientId && !/^zgloszenie:/.test(String(r.typ || '')) &&
+    (String(r.status) === 'czeka' || ((String(r.status) === 'zatwierdzona' || String(r.status) === 'odrzucona') && String(r.decyzja_at || '').trim())))
+    .map(r => ({ at: r.zapisano instanceof Date ? r.zapisano.toISOString() : String(r.zapisano || ''), data: agD10_(r.decyzja_at) || agD10_(r.zapisano), co: agWhat_(r),
+      status: st[String(r.status)], komentarz: agTxt_(r.komentarz_trenera, 300) }))
+    .sort((a, b) => a.at.localeCompare(b.at)).slice(-(n || AG_DECYZJE)).map(x => { const o = { data: x.data, co: x.co, status: x.status }; if (x.komentarz) o.komentarz = x.komentarz; return o; });
+}
+
+/**
+ * Czysta: zatwierdzona propozycja → zmiana Planu. p = wiersz Propozycji; plan, ses, log jak w trPlanEdit_.
+ * → {error} (plan się zmienił, jednostka zrobiona…) albo {set: [[indeks wiersza Planu, {kolumna: wartość}]]} (dodatkowy trening: set pusty).
+ */
+function agApply_(p, plan, ses, log) {
+  const t = String(p.typ || ''), tr = agTresc_(p), id = String(p.klient || '').toLowerCase(), lc = v => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  if (t === 'trening') return { set: [] };
+  if (['zamiana', 'ciezar', 'serie'].indexOf(t) < 0) return { error: 'Tej propozycji nie da się zatwierdzić.' };
+  const week = Number(p.tydzien), day = String(p.jednostka || '').trim(), nr = Number(p.nr);
+  const i = (plan || []).findIndex(r => lc(r.klient) === id && Number(r.tydzien) === week && String(r.jednostka).trim() === day && Number(r.nr) === nr && !removed_(r));
+  if (i < 0 || lc(plan[i].cwiczenie) !== lc(p.cwiczenie)) return { error: 'Plan się zmienił od propozycji (tydz. ' + week + ', ' + day + ', nr ' + nr + '): odrzuć ją albo zmień plan ręcznie.' };
+  const ex = t === 'ciezar' ? [{ order: nr, kg: tr.kg }] : t === 'serie' ? [{ order: nr, sets: tr.serie }] : [];
+  const e = trPlanEdit_(plan, ses, log, id, { week: week, day: day, ex: ex });   // sprawdza też, czy jednostka nie jest zrobiona
+  if (e.error) return e;
+  if (t !== 'zamiana') return { set: e.set };
+  const na = agTxt_(tr.na, 80);
+  if (!na) return { error: 'Propozycja nie ma nazwy zamiennika.' };
+  const note = String(plan[i].uwagi === undefined || plan[i].uwagi === null ? '' : plan[i].uwagi).trim();
+  return { set: [[i, { cwiczenie: na, uwagi: ((note ? note + ' · ' : '') + 'zamiana (asystent): ' + String(plan[i].cwiczenie).trim() + ' → ' + na + (p.powod_klienta ? ' | ' + agTxt_(p.powod_klienta, 100) : '')).slice(0, 300) }]] };
+}
+
+/** Czysta: „Zapamiętaj jako zasadę” → nowe ograniczenia klienta z dopisaną linią albo {error}, gdy brak miejsca. */
+function agMemo_(ogr, line) {
+  const cur = String(ogr || '').replace(/\s+$/, ''), add = '- ' + agTxt_(line, 400);
+  const out = cur ? cur + '\n' + add : add;
+  if (out.length > AG_OGR_MAX) return { error: 'Ograniczenia klienta są pełne (' + AG_OGR_MAX + ' znaków): skróć je w ustawieniach klienta.' };
+  return { ogr: out };
 }
 
 /* ---------- część z usługami Google ---------- */
@@ -420,7 +477,8 @@ const AGENT_FNS = {   // po jednej nazwie w linii, alfabetycznie; nazwy dla bota
   zapiszTrening: null,
   zaproponuj: null,
   zasady: x => { const z = agZasady_(); return { wersja: z.at, zasady_trenera: z.tekst, ograniczenia_klienta: x.ogr,
-    limity: z.limity, klient: { imie: x.c.name, zamiana: x.c.swap || 'NIE', skala: x.c.scale, wlasne_treningi: x.c.own } }; },
+    limity: z.limity, klient: { imie: x.c.name, zamiana: x.c.swap || 'NIE', skala: x.c.scale, wlasne_treningi: x.c.own },
+    decyzje_trenera: agDecyzje_(tableOf_('Propozycje'), x.c.id, AG_DECYZJE) }; },
   zglos: null,
 };
 const AG_WRITE = { zapiszSerie: 'zapisy', zapiszTrening: 'zapisy' }, AG_PROP = { zaproponuj: 'propozycje' };
@@ -552,6 +610,40 @@ function trAgentUstaw(id, f) {
   });
   return trAgent(id);
 }
+/**
+ * Decyzja trenera o wpisie z zakładki Propozycje (karta „Od asystenta AI” na ekranie Dziś).
+ * e = {mode: 'tak' (zatwierdź: plan zmienia się sam) | 'nie' (odrzuć, why idzie do bota) | 'czytane' (zgłoszenie), why, zasada (dopisz do ograniczeń klienta)}.
+ */
+function trPropozycja(pid, e) {
+  pid = String(pid || '').trim(); e = e || {};
+  const mode = String(e.mode || ''), why = agTxt_(e.why, 300);
+  if (['tak', 'nie', 'czytane'].indexOf(mode) < 0) throw new Error('Nieznana decyzja.');
+  let res = null, memo = null;
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const sh = sheet_('Propozycje', PROP_HEADERS), vals = sh.getDataRange().getValues(), h = vals[0].map(x => String(x).trim());
+    const k = vals.findIndex((r, i) => i > 0 && String(r[0]) === pid);
+    if (k < 0) throw new Error('Nie ma już tej propozycji.');
+    const p = {}; h.forEach((c, j) => { p[c] = vals[k][j]; });
+    if (String(p.status) !== 'czeka') throw new Error('Ta sprawa ma już decyzję (' + p.status + ').');
+    const zgl = /^zgloszenie:/.test(String(p.typ || ''));
+    if (zgl !== (mode === 'czytane')) throw new Error(zgl ? 'Zgłoszenie oznacza się jako przeczytane.' : 'Propozycję zatwierdza się albo odrzuca.');
+    let rows = 0;
+    if (mode === 'tak') {
+      const a = agApply_(p, tableOf_('Plan'), pgTable_('Sesje', ['klient', 'tydzien', 'jednostka']), pgTable_('Log', DONE_LOG_COLS));
+      if (a.error) throw new Error(a.error);
+      trPlanSet_(a.set); rows = a.set.length;
+    }
+    const status = mode === 'tak' ? 'zatwierdzona' : mode === 'nie' ? 'odrzucona' : 'przeczytane';
+    ['status', 'decyzja_at', 'komentarz_trenera'].forEach(c => { const j = h.indexOf(c); if (j >= 0) sh.getRange(k + 1, j + 1).setValue(plain_(c === 'status' ? status : c === 'decyzja_at' ? new Date() : why)); });
+    if (e.zasada && !zgl) { const d = today_(); memo = [String(p.klient).toLowerCase(), d.slice(8, 10) + '.' + d.slice(5, 7) + ' trener ' + (mode === 'tak' ? 'zatwierdził' : 'odrzucił') + ': ' + agWhat_(p) + (why ? '. ' + why : '') + '.']; }
+    res = { status: status, rows: rows, memo: false };
+  } finally { lock.releaseLock(); }
+  // „Zapamiętaj jako zasadę”: linia w ograniczeniach klienta (Klienci Z), które bot czyta przy każdej rozmowie; decyzja już zapisana
+  if (memo) { try { agRowSet_(memo[0], r => { const m = agMemo_(r[AG_COL.ogr], memo[1]); if (m.error) throw new Error(m.error); r[AG_COL.ogr] = m.ogr; }); res.memo = true; }
+    catch (err) { res.memoErr = String(err && err.message || err); } }
+  return res;
+}
 /** Klucz API: „nowy” (stary przestaje działać; pełny klucz tylko w tej odpowiedzi) albo „wylacz”. */
 function trAgentKlucz(id, mode) {
   id = String(id || '').trim().toLowerCase();
@@ -630,7 +722,7 @@ function agChatSystem_(o) {
     'To rozmowa próbna: trener pisze jako klient i sprawdza, jak się zachowasz. Odpowiadaj dokładnie tak, jak odpowiedziałbyś klientowi.',
     o.real ? 'Zapisy są prawdziwe: trafiają do arkusza trenera.' : 'Akcje zapisu (zapiszSerie, zapiszTrening, zaproponuj, zglos) działają w trybie próby: serwer sprawdza je regułami, ale nic nie zapisuje i trener nic nie dostaje. Gdy akcja przeszła, dopisz „(próba: nie zapisano)”, np. „Zgłosiłbym to trenerowi (próba: nie zapisano)”; gdy serwer odmówił, podaj powód.',
     'Zasady trenera i ograniczenia klienta masz poniżej. Plan sprawdzaj akcją „plan”, ciężar na dziś akcją „ciezarNaDzis” (nie licz go sam).',
-    'Planu nie zmieniasz: zmiany idą przez „zaproponuj” i czekają na trenera. Ból, czerwone flagi i sprawy, o których decyduje trener, zgłaszasz akcją „zglos”.',
+    'Planu nie zmieniasz: zmiany idą przez „zaproponuj” i czekają na trenera; zatwierdzona zmienia plan sama. Ból, czerwone flagi i sprawy, o których decyduje trener, zgłaszasz akcją „zglos”.',
     'Każdą serię oceniaj światłem (zielone / żółte / czerwone / nieudana). Bez oceny zapytaj klienta, nie zgaduj.',
     'Gdy serwer odmówi, powiedz klientowi powód (numer reguły) i nie próbuj obejść go inną akcją.',
     'Nie diagnozujesz i nie leczysz. Przy czerwonej fladze: przerwij trening, zgłoś („zglos”, temat czerwona_flaga) i odeślij do specjalisty.',
@@ -641,7 +733,11 @@ function agChatSystem_(o) {
     String(o.zasady || '').trim() || '(Trener nie wkleił jeszcze zasad. Trzymaj się powyższych reguł i planu.)',
     '',
     '## Ograniczenia tego klienta',
-    String(o.ogr || '').trim() || '(brak)'
+    String(o.ogr || '').trim() || '(brak)',
+    '',
+    '## Ostatnie decyzje trenera u tego klienta',
+    'Trzymaj się ich: nie proponuj ponownie tego, co trener odrzucił, i przekaż klientowi jego komentarz, gdy pyta o tę sprawę.',
+    (o.decyzje || []).length ? o.decyzje.map(d => '- ' + d.data + ' · ' + d.co + ' · ' + d.status + (d.komentarz ? ' · „' + d.komentarz + '”' : '')).join('\n') : '(brak)'
   ].join('\n');
 }
 
@@ -711,7 +807,7 @@ function trAsystent(id, msgs, opt) {
   const m = agChatMsgs_(msgs);
   if (m.error) throw new Error(m.error);
   const real = !!(opt && opt.real), pre = aiPre_(), x = agCtx_(row), z = agZasady_(), t0 = Date.now();
-  const req = { model: AI_MODEL, max_tokens: 4000, system: agChatSystem_({ zasady: z.tekst, ogr: x.ogr, today: x.today, real: real }), tools: agTools_(),
+  const req = { model: AI_MODEL, max_tokens: 4000, system: agChatSystem_({ zasady: z.tekst, ogr: x.ogr, today: x.today, real: real, decyzje: agDecyzje_(tableOf_('Propozycje'), x.c.id, AG_DECYZJE) }), tools: agTools_(),
     messages: m.msgs, output_config: { effort: 'low' }, fallbacks: 'default', cache_control: { type: 'ephemeral' } };   // zasady i narzędzia z pamięci podręcznej w kolejnych krokach (ok. 10% ceny)
   let zgl = 0;
   const out = agChatLoop_(req, r => {
