@@ -83,7 +83,7 @@ function route(){
   $('#av').textContent = meInit();
   if (v === 'kalendarz') return renderKalendarz(h[1] || '', h[2] || '');
   if (v === 'k') return renderKlient(kid, h[2] || 'przeglad', decodeURIComponent(h[3] || ''));
-  if (v === 'filmy') return renderFilmy(h[1] || '');
+  if (v === 'filmy') return h[1] === 'wgraj' ? renderWgraj(decodeURIComponent(h[2] || '')) : renderFilmy(h[1] || '');
   if (v === 'bloki') return renderBloki();
   if (v === 'ustawienia') return renderUstawienia(h[1] || '');
   if (v === 'klienci') return renderKlienci(decodeURIComponent(h[1] || ''));
@@ -370,6 +370,7 @@ function renderFilmy(who){
   const who1 = who ? (PUL.clients.find(c => c.id === who) || {}).name || who : '';
   const sw = cur && list.length > 1 ? '<div class="vsw"><button class="ib" type="button" data-vgo="-1" aria-label="Poprzedni film"' + (ix ? '' : ' disabled') + '>‹</button><div class="t"><b>Film ' + (ix + 1) + ' z ' + list.length + (cur.kom ? '' : ' · bez komentarza') + '</b><span>' + esc(cur.name) + ' · ' + esc(cur.ex) + ' · seria ' + esc(cur.set) + '</span></div><button class="ib" type="button" data-vgo="1" aria-label="Następny film"' + (ix < list.length - 1 ? '' : ' disabled') + '>›</button></div>' : '';
   const view = cur ? '<div class="card">' + playerHtml(cur) +
+    (FB[cur.file] && FB[cur.file].st === 'ok' ? '<details class="wgtor" id="pv-tor"><summary>Tor sztangi i prędkość</summary><div id="pv-torb"></div><p class="row2" id="pv-tors" hidden><button class="b p" type="button" id="pv-torsave">Zapisz tor przy serii</button><span class="hint" id="pv-torm" role="status"></span></p></details>' : '') +
     '<h2 style="margin-top:14px">' + esc(cur.name) + ' · ' + esc(cur.ex) + '</h2><p class="muted">' + esc(dowDm(cur.at)) + ' · tydz. ' + esc(cur.week) + ' · ' + esc(cur.day) + ' · seria ' + esc(cur.set) + ' · ' + what(cur) + (FB[cur.file] && FB[cur.file].size ? ' · plik ' + pl((FB[cur.file].size / 1048576).toFixed(FB[cur.file].size < 10485760 ? 1 : 0)) + ' MB' : '') + '</p>' +
     (FB[cur.file] && FB[cur.file].st === 'ok' ? '<details class="pvh" id="pvh"><summary>Czarny obraz, a słychać dźwięk?</summary><div id="pvh-b" class="hint">Sprawdzam plik…</div></details>' : '') +
     (cur.swap && TL.parseSwap(cur.swap) ? '<p class="note">' + swapTxt(TL.parseSwap(cur.swap)) + '</p>' : '') +
@@ -379,7 +380,7 @@ function renderFilmy(who){
     '<p class="row2"><a class="b" style="display:inline-flex;align-items:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(cur.link) + '">Otwórz na Dysku</a> <a class="b" style="display:inline-flex;align-items:center;text-decoration:none" href="#k/' + encodeURIComponent(cur.id) + '/sesje">Karta klienta</a></p>' +
     '<p class="hint kbd">Klawiatura: spacja = start / pauza, ← → = klatka, 1 / 2 / 3 = ¼× ½× 1×, F = pełny ekran.</p></div>'
     : '<div class="card es"><b>' + (all.length ? 'Wszystkie filmy skomentowane' : 'Brak filmów z 14 dni') + '</b>' + (all.length ? 'Przełącz na „Wszystkie”, żeby obejrzeć skomentowane.' : '') + '</div>';
-  $('#main').innerHTML = head('Ostatnie 14 dni' + (who1 ? ' · ' + esc(who1) : ''), 'Filmy', '<div class="chips"><button class="chip" type="button" data-vall="0" aria-pressed="' + !VALL + '">Bez komentarza</button><button class="chip" type="button" data-vall="1" aria-pressed="' + VALL + '">Wszystkie</button>' + (who ? '<a class="chip" style="display:inline-flex;align-items:center;text-decoration:none" href="#filmy">Wszyscy klienci</a>' : '') + '</div>') +
+  $('#main').innerHTML = head('Ostatnie 14 dni' + (who1 ? ' · ' + esc(who1) : ''), 'Filmy', '<div class="chips"><button class="chip" type="button" data-vall="0" aria-pressed="' + !VALL + '">Bez komentarza</button><button class="chip" type="button" data-vall="1" aria-pressed="' + VALL + '">Wszystkie</button>' + (who ? '<a class="chip" style="display:inline-flex;align-items:center;text-decoration:none" href="#filmy">Wszyscy klienci</a>' : '') + '<a class="chip wgb" style="display:inline-flex;align-items:center;text-decoration:none" href="#filmy/wgraj' + (who ? '/' + encodeURIComponent(who) : '') + '">⇪ Wgraj z komputera</a></div>') +
     '<div class="pg">' + sw + '<div class="vids' + (items ? '' : ' one') + '">' + (items ? '<div class="vlist">' + items + '</div>' : '') + view + '</div></div>';
   const redraw = () => { if (location.hash.startsWith('#filmy')) renderFilmy(who); };
   document.querySelectorAll('[data-vk]').forEach(b => b.onclick = () => { VSEL = b.dataset.vk; redraw(); });
@@ -397,6 +398,12 @@ function renderFilmy(who){
         (vid && vid.videoWidth ? 'Przeglądarka widzi obraz ' + vid.videoWidth + '×' + vid.videoHeight + ', więc go dekoduje, a czarny ekran to zwykle grafika komputera.' : 'Przeglądarka nie widzi obrazu.') + '</p><ul>' +
         (hevc ? '<li>Film jest w HEVC (H.265). W Edge pomaga rozszerzenie „HEVC Video Extensions” ze Sklepu Microsoft.</li>' : '') + '<li>' + esc(VSRTIP) + '</li><li>' + esc(HWTIP) + '</li><li>„Otwórz na Dysku” zawsze pokaże film.</li></ul>'; };
     draw(null); draw(await filmFmt(cur.file, (FB[cur.file] || {}).size || 0)); };
+  const pt = $('#pv-tor'); if (pt) pt.ontoggle = () => { if (!pt.open || pt.dataset.on) return; pt.dataset.on = '1'; let res = null;
+    torBind($('#pv-torb'), $('#pvv'), { name: cur.ex, group: '' }, null, r => { res = r; $('#pv-tors').hidden = !(r && r.reps.length); $('#pv-torm').textContent = ''; });
+    $('#pv-torsave').onclick = async () => { const o = res && TL.vbtOut(res); if (!o) return; const b = $('#pv-torsave'); b.disabled = true; $('#pv-torm').textContent = 'Zapisuję…';
+      try { await guard(api('trFilmSeria', cur.id, { week: cur.week, day: cur.day, order: cur.order, set: cur.set, name: cur.ex, vbt: o.vbt, vbtPeak: o.vbtPeak, height: o.height, path: JSON.stringify(o.path) }));
+        delete CK[cur.id]; $('#pv-torm').textContent = 'Zapisano: ' + torHead(res) + '. '; }
+      catch (e) { if (!e.auth) $('#pv-torm').textContent = 'Nie udało się: ' + e.message; } b.disabled = false; }; };
   komFilmDraw(cur, who);
 }
 /** format obrazu z początku (256 KB) i końca (3 MB) pliku na Dysku: kodek, wymiary, 10 bitów, HDR (TL.videoCodec); pamięć na czas wizyty */
@@ -2455,3 +2462,252 @@ function dyspList(d){
 start();
 // service worker (ten sam co w aplikacji): filmy strumieniem z nagłówkiem biletu (film-strumien/ w sw.js)
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+/* ---------- Filmy → Wgraj z komputera: film do serii, tor sztangi i prędkość, wnioski (27.11.2026) ----------
+ * Trener (DJI, cięcie w DaVinci) wybiera plik, osobę (też siebie), trening, ćwiczenie i serię (albo nową serię z kg / powt. / RPE).
+ * Tor sztangi liczy przeglądarka (track z vbt.js, TL.analyse, talerz 450 mm = kalibracja) i nic nie wysyła, dopóki trener nie zapisze.
+ * Plik idzie prosto na Dysk do folderu klienta (trFilmWgraj → sesja resumable z adresem panelu), potem trFilmSeria zapisuje przy serii
+ * link, wynik toru, wnioski (tylko trener) i komentarz dla klienta. Pod spodem postęp prędkości i toru tego ćwiczenia.
+ * Szkic (WG) tylko w pamięci strony; plik zostaje w przeglądarce do wysłania.
+ */
+let WG = null;
+const WG_CHUNK = 8 * 1024 * 1024;                 // wielokrotność 256 KB (wymóg sesji resumable)
+const wgOly = ex => ['R', 'P', 'CR', 'CP'].indexOf(TL.groupOf(ex.group, ex.name)) >= 0;
+/** jednostki klienta do wyboru: z planu i z Logu (też własne i import), dzień faktyczny z Sesji, najnowsze pierwsze, bez przyszłych */
+function wgUnits(d){
+  const dates = sesDates(d), by = {}, d10 = v => String(v || '').slice(0, 10);
+  const unit = (w, j, title, date) => by[uKey(w, j)] = by[uKey(w, j)] || { u: uKey(w, j), week: Number(w), day: sv(j), title: sv(title), date: dates[uKey(w, j)] || d10(date), ex: {} };
+  (d.plan || []).forEach(r => { const x = unit(r.week, r.day, r.title, r.date);
+    x.ex[r.order] = x.ex[r.order] || { order: Number(r.order), name: sv(r.name), plan: sv(r.name), sets: Number(r.sets) || 0, kg: r.kg, reps: sv(r.reps), group: r.group || '' }; });
+  (d.logs || []).forEach(l => { const x = unit(l.tydzien, l.jednostka, '', l.data), o = Number(l.nr_cw); if (!x.date) x.date = d10(l.data); if (!(o > 0)) return;
+    const e = x.ex[o] = x.ex[o] || { order: o, name: sv(l.cwiczenie), plan: '', sets: 0, kg: '', reps: '', group: '' };
+    if (sv(l.seria) !== '0' && sv(l.cwiczenie)) e.name = sv(l.cwiczenie); });   // po zamianie Log ma wykonane ćwiczenie
+  const lim = TL.addDays(PUL.today, 1);
+  return Object.values(by).filter(x => Object.keys(x.ex).length && (!x.date || x.date <= lim))
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || b.week - a.week || String(b.day).localeCompare(String(a.day))).slice(0, 60);
+}
+/** serie ćwiczenia: z planu (1…n) i z Logu (też R / D), z wpisem, jeśli jest; „nowa” = następny numer */
+function wgSets(d, x, e){
+  const L = {}; (d.logs || []).forEach(l => { if (uKey(l.tydzien, l.jednostka) === x.u && Number(l.nr_cw) === e.order && sv(l.seria) !== '0') L[sv(l.seria).toUpperCase()] = l; });
+  const nums = Object.keys(L).filter(k => /^\d+$/.test(k)).map(Number), mx = Math.max(e.sets || 0, ...nums, 0);
+  const out = []; for (let i = 1; i <= mx; i++) out.push({ set: String(i), log: L[String(i)] || null });
+  Object.keys(L).filter(k => !/^\d+$/.test(k)).sort().forEach(k => out.push({ set: k, log: L[k] }));
+  return { list: out, next: String(mx + 1) };
+}
+const wgSetTxt = l => !l ? 'bez wpisu' : [(nf(l.kg) > 0 ? pl(l.kg) + ' kg' : sv(l.kg)) + (sv(l.powt) ? ' × ' + esc(l.powt) : ''), l.ocena ? esc(l.ocena) : nf(l.rpe) >= 0 ? 'RPE ' + pl(l.rpe) : '', /FAIL/.test(l.typ || '') ? 'nieudana' : ''].filter(Boolean).join(' · ') + (l.film_link ? ' ▶' : '') + (nf(l.vbt_ms) > 0 ? ' · ' + pl(l.vbt_ms) + ' m/s' : '');
+const wgMB = n => pl((n / 1048576).toFixed(n < 104857600 ? 1 : 0)) + ' MB';
+function renderWgraj(who){
+  if (!WG) WG = { id: '', file: null, url: '', u: '', order: 0, set: '', nw: {}, res: null, note: '', fc: '', st: '', pct: 0, msg: '', kg: '' };
+  if (who && WG.id !== who) Object.assign(WG, { id: who, u: '', order: 0, set: '', res: null });
+  const people = PUL.clients.slice().sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+  const d = WG.id ? CK[WG.id] : null;
+  const back = '<a class="chip" style="display:inline-flex;align-items:center;text-decoration:none" href="#filmy">‹ Filmy</a>';
+  if (WG.id && !d) {
+    $('#main').innerHTML = head('Filmy', 'Wgraj z komputera', back) + '<div class="pg"><div class="card es">Wczytuję treningi…</div></div>';
+    guard(api('trKlient', WG.id)).then(r => { CK[WG.id] = r; if (location.hash.startsWith('#filmy/wgraj')) renderWgraj(who); })
+      .catch(e => { if (!e.auth) $('#main').innerHTML = errBox(e); });
+    return;
+  }
+  const units = d ? wgUnits(d) : [], x = units.find(u => u.u === WG.u) || null, e = x && x.ex[WG.order] || null, sets = e ? wgSets(d, x, e) : null;
+  const pick = sets && (sets.list.find(s => s.set === WG.set) || (WG.set === sets.next ? { set: sets.next, log: null, nw: true } : null));
+  const busy = WG.st === 'send';
+  const opt = (v, t, on) => '<option value="' + esc(v) + '"' + (on ? ' selected' : '') + '>' + esc(t) + '</option>';
+  const fileBox = WG.file
+    ? '<video id="wgv" class="wgv" src="' + esc(WG.url) + '" controls playsinline preload="auto" muted></video><p class="hint">' + esc(WG.file.name) + ' · ' + wgMB(WG.file.size) + ' <button class="lnk" type="button" id="wg-chg"' + (busy ? ' disabled' : '') + '>Zmień plik</button></p>'
+    : '<label class="wgdrop" id="wg-drop"><b>Upuść tu film</b><span>albo kliknij, żeby wybrać plik (MP4, MOV; do 1 GB)</span><input type="file" accept="video/*" id="wg-file" hidden></label>';
+  const torBox = WG.file && e ? '<details class="wgtor" id="wg-tor"' + (WG.res ? ' open' : '') + '><summary>Tor sztangi i prędkość' + (WG.res && WG.res.reps.length ? ' · ' + torHead(WG.res) : '') + '</summary><div id="wg-torb"></div></details>'
+    : WG.file ? '<p class="hint">Tor sztangi policzysz po wybraniu ćwiczenia.</p>' : '';
+  const setBtns = sets ? '<div class="wgsets">' + sets.list.map(s => '<button type="button" class="wgs" data-wgs="' + esc(s.set) + '" aria-pressed="' + (WG.set === s.set) + '"><b>' + (/^R/.test(s.set) ? 'Rozgrzewka ' + esc(s.set.slice(1)) : /^D/.test(s.set) ? 'Drop ' + esc(s.set.slice(1)) : 'Seria ' + esc(s.set)) + '</b><span>' + wgSetTxt(s.log) + '</span></button>').join('') +
+    '<button type="button" class="wgs" data-wgs="' + esc(sets.next) + '" aria-pressed="' + (WG.set === sets.next) + '"><b>+ Nowa seria</b><span>seria ' + esc(sets.next) + '</span></button></div>' : '';
+  const nw = pick && !pick.log ? '<div class="pk2 wgnw"><label>Ciężar (kg)<input id="wg-kg" inputmode="decimal" value="' + esc(WG.nw.kg || '') + '" placeholder="' + esc(e.kg !== '' && e.kg !== null && e.kg !== undefined ? pl(e.kg) : 'np. 70') + '"></label>' +
+    '<label>Powtórzenia<input id="wg-reps" inputmode="numeric" value="' + esc(WG.nw.reps || '') + '" placeholder="' + esc(e.reps || 'np. 3') + '"></label>' +
+    '<label>RPE (opcjonalnie)<input id="wg-rpe" inputmode="decimal" value="' + esc(WG.nw.rpe || '') + '" placeholder="7 / 8 / 9"></label></div><p class="hint">Tej serii nie ma jeszcze w zapisie: dopisze się jako zrobiona.</p>' : '';
+  const film = pick && pick.log && pick.log.film_link ? '<p class="note">Ta seria ma już film. Nowy plik zastąpi link (stary zostaje na Dysku).</p>' : '';
+  const ready = WG.file && pick && !busy && (pick.log || nf(WG.nw.kg) >= 0 || /^bw$/i.test(WG.nw.kg || '') || sv(WG.nw.reps));
+  const stat = WG.st === 'send' ? '<div class="wgpg" role="status"><span class="ld"><b style="width:' + WG.pct + '%"></b></span>' + esc(WG.msg) + '</div>'
+    : WG.st === 'err' ? '<p class="err" role="alert">' + esc(WG.msg) + '</p>'
+    : WG.st === 'ok' ? '<div class="note wgok" role="status"><b>Zapisano.</b> ' + esc(WG.msg) + ' <a href="' + esc(WG.link) + '" target="_blank" rel="noopener">Otwórz na Dysku</a></div>' : '';
+  const right = '<div class="card wgf"><h2>Do której serii</h2>' +
+    '<div class="pw-f"><label>Osoba<select id="wg-who"' + (busy ? ' disabled' : '') + '>' + opt('', 'Wybierz…', !WG.id) + people.map(c => opt(c.id, c.name, c.id === WG.id)).join('') + '</select></label>' +
+    (d ? '<label>Trening<select id="wg-u"' + (busy ? ' disabled' : '') + '>' + opt('', units.length ? 'Wybierz…' : 'Brak treningów', !x) + units.map(u => opt(u.u, (u.date ? dowDm(u.date) + ' · ' : '') + (TL.importDay(u.day) ? TL.dayLabel(u.day, u.title) : u.title || u.day) + ' · tydz. ' + u.week, u.u === WG.u)).join('') + '</select></label>' : '') +
+    (x ? '<label>Ćwiczenie<select id="wg-ex"' + (busy ? ' disabled' : '') + '>' + opt('', 'Wybierz…', !e) + Object.values(x.ex).sort((a, b) => a.order - b.order).map(q => opt(q.order, q.order + '. ' + q.name, q.order === WG.order)).join('') + '</select></label>' : '') + '</div>' +
+    setBtns + nw + film +
+    (pick ? '<div class="agta"><label for="wg-note">Wnioski (tylko Ty)</label><textarea id="wg-note" placeholder="np. pętla na wysokości bioder, za wczesne ugięcie ramion">' + esc(WG.note) + '</textarea></div>' +
+      '<div class="agta"><label for="wg-fc">Dla klienta (zobaczy w aplikacji, opcjonalnie)</label><textarea id="wg-fc" placeholder="Zostaw puste, jeśli to tylko dla Ciebie.">' + esc(WG.fc) + '</textarea></div>' : '') +
+    '<p class="row2"><button class="b p" type="button" id="wg-go"' + (ready ? '' : ' disabled') + '>' + (WG.res && WG.res.reps.length ? 'Wyślij film i zapisz tor' : 'Wyślij film') + '</button>' + (WG.st === 'ok' ? ' <button class="b" type="button" id="wg-next">Wgraj następny</button>' : '') + '</p>' + stat +
+    '</div>';
+  // film i kadr toru zostają przy przerysowaniu (wybór serii, pola): nowy element zacząłby film od początku i zgubił talerz
+  const lk = WG.url + '|' + WG.id + '|' + WG.u + '|' + WG.order, oldL = $('.wgl');
+  $('#main').innerHTML = head('Filmy', 'Wgraj z komputera', back) +
+    '<div class="pg"><div class="wg"><div class="card wgl" data-k="' + esc(lk) + '"><h2>Film</h2>' + fileBox + torBox + '</div>' + right + '</div>' + (d && e ? wgProgress(d, e, x) : '') + '</div>';
+  const keepL = !!(oldL && oldL.dataset.k === lk && WG.file);
+  if (keepL) $('.wgl').replaceWith(oldL);
+  wgBind(d, units, x, e, sets, pick, who, keepL);
+}
+function wgBind(d, units, x, e, sets, pick, who, keepL){
+  const redraw = () => { if (location.hash.startsWith('#filmy/wgraj')) renderWgraj(who); };
+  const setFile = f => { if (!f) return; const bad = TL.filmOk({ size: f.size, mimeType: f.type, fileName: f.name }); if (bad) { WG.st = 'err'; WG.msg = bad; return redraw(); }
+    if (WG.url) URL.revokeObjectURL(WG.url); Object.assign(WG, { file: f, url: URL.createObjectURL(f), res: null, st: '', msg: '' }); redraw(); };
+  const fi = $('#wg-file'); if (fi) fi.onchange = () => setFile(fi.files[0]);
+  const dz = $('#wg-drop'); if (dz) {
+    dz.ondragover = ev => { ev.preventDefault(); dz.classList.add('on'); }; dz.ondragleave = () => dz.classList.remove('on');
+    dz.ondrop = ev => { ev.preventDefault(); dz.classList.remove('on'); setFile(ev.dataTransfer.files[0]); };
+  }
+  const ch = $('#wg-chg'); if (ch) ch.onclick = () => { URL.revokeObjectURL(WG.url); Object.assign(WG, { file: null, url: '', res: null, st: '' }); redraw(); };
+  const val = id => { const el = $(id); return el ? el.value : ''; };
+  const keep = () => { if ($('#wg-note')) WG.note = val('#wg-note'); if ($('#wg-fc')) WG.fc = val('#wg-fc');
+    if ($('#wg-kg')) WG.nw = { kg: val('#wg-kg').trim(), reps: val('#wg-reps').trim(), rpe: val('#wg-rpe').trim() }; };
+  const sel = (id, f) => { const el = $(id); if (el) el.onchange = () => { keep(); f(el.value); WG.st = WG.st === 'send' ? WG.st : ''; redraw(); }; };
+  sel('#wg-who', v => { Object.assign(WG, { id: v, u: '', order: 0, set: '', res: null }); });
+  sel('#wg-u', v => { Object.assign(WG, { u: v, order: 0, set: '', res: null }); });
+  sel('#wg-ex', v => { Object.assign(WG, { order: Number(v) || 0, set: '', res: null, kg: '' }); });
+  document.querySelectorAll('[data-wgs]').forEach(b => b.onclick = () => { keep(); WG.set = b.dataset.wgs; if (WG.st !== 'send') WG.st = ''; redraw(); });
+  ['#wg-kg', '#wg-reps', '#wg-rpe'].forEach(id => { const el = $(id); if (el) el.oninput = () => { keep(); const go = $('#wg-go'); if (go) go.disabled = !(WG.file && (nf(WG.nw.kg) >= 0 || /^bw$/i.test(WG.nw.kg) || WG.nw.reps)); }; });
+  ['#wg-note', '#wg-fc'].forEach(id => { const el = $(id); if (el) el.oninput = keep; });
+  document.querySelectorAll('[data-wgkg]').forEach(b => b.onclick = () => { WG.kg = b.dataset.wgkg; redraw(); });
+  const nx = $('#wg-next'); if (nx) nx.onclick = () => { if (WG.url) URL.revokeObjectURL(WG.url);
+    Object.assign(WG, { file: null, url: '', res: null, note: '', fc: '', st: '', nw: {}, set: sets && /^\d+$/.test(WG.set) ? String(Number(WG.set) + 1) : '' }); redraw(); };
+  const tb = $('#wg-torb'), v = $('#wgv');
+  if (tb && v && e && !keepL) torBind(tb, v, e, WG.res, res => { WG.res = res; const go = $('#wg-go'); if (go) go.textContent = res && res.reps.length ? 'Wyślij film i zapisz tor' : 'Wyślij film';
+    const s = $('#wg-tor summary'); if (s) s.textContent = 'Tor sztangi i prędkość' + (res && res.reps.length ? ' · ' + torHead(res) : ''); });
+  const go = $('#wg-go'); if (go) go.onclick = () => { keep(); wgSend(d, x, e, pick, redraw); };
+}
+async function wgSend(d, x, e, pick, redraw){
+  const f = WG.file, id = WG.id, set = pick.set;
+  const base = { week: x.week, day: x.day, date: x.date || PUL.today, order: e.order, set: set, name: e.name };
+  Object.assign(WG, { st: 'send', pct: 0, msg: 'Łączę z Dyskiem…' }); redraw();
+  const show = p => { WG.pct = Math.round(p * 100); WG.msg = 'Wysyłam film na Dysk: ' + WG.pct + '% z ' + wgMB(f.size); const b = document.querySelector('.wgpg .ld b'), t = document.querySelector('.wgpg'); if (b) { b.style.width = WG.pct + '%'; t.lastChild.textContent = WG.msg; } };
+  try {
+    const up = await guard(api('trFilmWgraj', id, Object.assign({ fileName: f.name, mimeType: f.type || 'video/mp4', size: f.size, origin: location.origin }, base)));
+    let from = 0, link = '';
+    while (from < f.size && !link) {
+      const end = Math.min(from + WG_CHUNK, f.size), a = from;
+      const r = await vqPut(up.url, f.slice(a, end), 'bytes ' + a + '-' + (end - 1) + '/' + f.size, q => show((a + q * (end - a)) / f.size));
+      if (r.done) link = r.link; from = end;
+    }
+    if (!link) throw new Error('Dysk nie potwierdził zapisu filmu.');
+    WG.msg = 'Zapisuję przy serii…'; redraw();
+    const o = WG.res && WG.res.reps.length ? TL.vbtOut(WG.res) : null;
+    const s = Object.assign({}, base, { link: link, note: WG.note, forClient: WG.fc }, pick.log ? {} : { kg: /^bw$/i.test(WG.nw.kg || '') ? 'BW' : WG.nw.kg, reps: WG.nw.reps, rpe: WG.nw.rpe },
+      o ? { vbt: o.vbt, vbtPeak: o.vbtPeak, height: o.height, path: JSON.stringify(o.path) } : {});
+    await guard(api('trFilmSeria', id, s));
+    const fid = (/\/d\/([\w-]+)/.exec(link) || [])[1] || '', c = PUL.clients.find(q => q.id === id) || {}, l = pick.log || {};
+    PUL.videos = PUL.videos.filter(q => !(q.id === id && Number(q.week) === x.week && q.day === x.day && Number(q.order) === e.order && q.set === set));
+    if (fid) PUL.videos.unshift({ id: id, name: c.name || id, at: PUL.today, week: x.week, day: x.day, order: e.order, ex: e.name, set: set, kg: pick.log ? sv(l.kg) : s.kg || '', reps: pick.log ? sv(l.powt) : s.reps || '',
+      rpe: pick.log ? sv(l.rpe) : s.rpe || '', ocena: sv(l.ocena), typ: sv(l.typ), note: sv(l.uwagi), swap: sv(l.zamiana), file: fid, link: link,
+      kom: [sv(l.komentarz_dysk), WG.fc.trim()].filter(Boolean).join('\n'), komT: WG.fc.trim(), komD: sv(l.komentarz_dysk), rep: '', repAt: '' });
+    delete CK[id];
+    Object.assign(WG, { st: 'ok', link: link, msg: e.name + ', seria ' + set + (o ? ', tor i prędkość' : '') + (WG.note.trim() ? ', wnioski' : '') + '.' });
+    try { CK[id] = await guard(api('trKlient', id)); } catch (err) {}
+  } catch (err) { if (err.auth) return; Object.assign(WG, { st: 'err', msg: 'Nie udało się: ' + err.message }); }
+  redraw();
+}
+/** PUT kawałka pliku do sesji resumable Dysku (308 = dalej, 200/201 = koniec z linkiem) */
+function vqPut(url, blob, range, prog){
+  return new Promise((res, rej) => {
+    const q = new XMLHttpRequest(); q.open('PUT', url); q.setRequestHeader('Content-Range', range);
+    q.upload.onprogress = ev => { if (ev.lengthComputable) prog(ev.loaded / ev.total); };
+    q.onload = () => {
+      if (q.status === 308) return res({ done: false });
+      if (q.status === 200 || q.status === 201) { try { const f = JSON.parse(q.responseText); return res({ done: true, link: f.webViewLink || 'https://drive.google.com/file/d/' + f.id + '/view' }); } catch (err) { return rej(new Error('odpowiedź Dysku nieczytelna')); } }
+      rej(new Error('Dysk odpowiedział ' + q.status));
+    };
+    q.onerror = () => rej(new Error('brak połączenia z Dyskiem'));
+    q.send(blob);
+  });
+}
+/* ---------- tor sztangi w przeglądarce: kadr filmu, środek i krawędź talerza, analiza (wspólne: wgrywanie i film z listy) ---------- */
+const torHead = res => res.kind === 'oly' ? 'v max ' + pl(Math.round(res.vmax * 100) / 100) + ' m/s · ' + res.h + ' cm' : 'MCV ' + pl(Math.round(res.mcv * 100) / 100) + ' m/s · ' + res.reps.length + ' powt.';
+function torResHtml(res){
+  if (!res.reps.length) return '<p class="hint">Nie wykryłem powtórzenia (ruch w górę ≥ 15 cm). Sprawdź, czy talerz był widoczny przez cały fragment i czy kliknięty był jego środek.</p>';
+  const M = (l, v, u) => '<div class="kp"><b>' + v + '</b><span>' + l + (u ? ' (' + u + ')' : '') + '</span></div>', f2 = v => pl(Math.round(v * 100) / 100);
+  const m = res.kind === 'oly' ? M('v max', f2(res.vmax), 'm/s') + M('uniesienie', res.h, 'cm') + M('powt.', res.reps.length)
+    : M('MCV najlepsze', f2(res.mcv), 'm/s') + M('spadek', Math.round(res.loss), '%') + M('powt.', res.reps.length);
+  return '<div class="kpis wgm">' + m + '</div>' + TL.pathSVG(TL.vbtOut(res).path) +
+    '<div class="tw"><table><thead><tr><th>Powt.</th><th>MCV m/s</th><th>v peak m/s</th><th>Zakres cm</th></tr></thead><tbody>' +
+    res.reps.map(r => '<tr><td>' + r.n + '</td><td>' + f2(r.mcv) + '</td><td>' + f2(r.peak) + '</td><td>' + Math.round(r.dy * 100) + '</td></tr>').join('') + '</tbody></table></div>';
+}
+/** box: miejsce na kadr; video: odtwarzany film (ten sam element, analiza przewija go klatka po klatce); onRes(res) po analizie */
+function torBind(box, video, ex, res0, onRes){
+  const st = { c0: null, r0: null, ds: 1, busy: false, stop: false, done: !!res0 }, css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  box.innerHTML = '<p class="hint">Zatrzymaj film tuż przed startem powtórzenia (‹ › w odtwarzaczu albo suwak), kliknij środek talerza, potem jego krawędź (talerz 450 mm = skala). Analiza: najwyżej 20 s od tej chwili, w przeglądarce.</p>' +
+    '<canvas class="torc" width="480" height="270" role="img" aria-label="Klatka filmu: kliknij środek talerza, potem jego krawędź"></canvas>' +
+    '<p class="hint tor-h" aria-live="polite"></p><span class="ld tor-pg" hidden><b style="width:0"></b></span>' +
+    '<p class="row2"><button class="b" type="button" data-tor="reset">Od nowa</button><button class="b p" type="button" data-tor="go" disabled>Analizuj</button></p><div class="tor-res">' + (res0 ? torResHtml(res0) : '') + '</div>';
+  const cv = box.querySelector('.torc'), cx = cv.getContext('2d'), hint = box.querySelector('.tor-h'), go = box.querySelector('[data-tor="go"]');
+  const paint = () => { if (!video.videoWidth) return; st.ds = cv.width / video.videoWidth; const h = Math.round(video.videoHeight * st.ds); if (cv.height !== h) cv.height = h;
+    cx.drawImage(video, 0, 0, cv.width, cv.height);
+    if (st.c0) { cx.strokeStyle = cx.fillStyle = css('--accent'); cx.lineWidth = 2; cx.beginPath(); cx.arc(st.c0.x * st.ds, st.c0.y * st.ds, (st.r0 || 4) * st.ds, 0, 7); cx.stroke(); cx.beginPath(); cx.arc(st.c0.x * st.ds, st.c0.y * st.ds, 3, 0, 7); cx.fill(); }
+    if (st.trace && !st.busy) { cx.strokeStyle = css('--accent'); cx.lineWidth = 2.5; cx.beginPath(); st.trace.forEach((q, i) => i ? cx.lineTo(q[0] * st.ds, q[1] * st.ds) : cx.moveTo(q[0] * st.ds, q[1] * st.ds)); cx.stroke(); } };
+  const tip = () => { hint.textContent = !video.videoWidth ? 'Wczytuję film…' : !st.c0 ? 'Kliknij środek talerza na kadrze.' : !st.r0 ? 'Teraz kliknij krawędź talerza.' : 'Talerz: ' + Math.round(2 * st.r0) + ' px = 450 mm. Kliknij „Analizuj”.'; };
+  const on = () => { if (!st.busy) { paint(); if (!st.trace) tip(); } };
+  ['seeked', 'loadeddata', 'canplay', 'pause'].forEach(t => video.addEventListener(t, on));
+  if (video.readyState < 2) video.addEventListener('loadedmetadata', () => { if (!video.currentTime) video.currentTime = 0.001; }, { once: true });   // pierwsza klatka na kadrze
+  if (video.readyState >= 2) on(); else tip();
+  cv.onclick = ev => {
+    if (st.busy || !video.videoWidth) return; video.pause();
+    const b = cv.getBoundingClientRect(), px = (ev.clientX - b.left) * cv.width / b.width / st.ds, py = (ev.clientY - b.top) * cv.height / b.height / st.ds;
+    if (!st.c0 || st.r0) { st.c0 = { x: px, y: py }; st.r0 = null; st.trace = null; go.disabled = true; }
+    else { const r = Math.hypot(px - st.c0.x, py - st.c0.y); if (r < 6) { hint.textContent = 'Za blisko środka. Kliknij samą krawędź talerza.'; return; } st.r0 = r; go.disabled = false; }
+    paint(); tip();
+  };
+  box.querySelector('[data-tor="reset"]').onclick = () => { if (st.busy) return; st.c0 = null; st.r0 = null; st.trace = null; go.disabled = true; box.querySelector('.tor-res').innerHTML = ''; onRes(null); paint(); tip(); };
+  go.onclick = async () => {
+    if (!st.c0 || !st.r0) return;
+    st.trace = null; st.busy = true; go.disabled = true; video.pause();
+    const pg = box.querySelector('.tor-pg'), pts2 = [], t0 = video.currentTime; pg.hidden = false; hint.textContent = 'Śledzę talerz…';
+    try {
+      await fixDuration(video); video.currentTime = t0;
+      const pts = await track(videoSource(video), st.c0, st.r0, (p, x, y) => { pts2.push([x, y]); pg.firstChild.style.width = Math.round(p * 100) + '%';
+        paint(); cx.fillStyle = css('--light-amber'); cx.beginPath(); cx.arc(x * st.ds, y * st.ds, 4, 0, 7); cx.fill(); }, st);
+      const res = TL.analyse(pts, TL.groupOf(ex.group, ex.name));
+      st.busy = false; st.trace = pts2; paint();
+      hint.textContent = 'Gotowe: ' + pts.length + ' klatek.';
+      box.querySelector('.tor-res').innerHTML = torResHtml(res); onRes(res);
+    } catch (err) { hint.textContent = 'Analiza przerwana: ' + err.message; }
+    pg.hidden = true; st.busy = false; go.disabled = false;
+  };
+}
+/* ---------- postęp prędkości i toru ćwiczenia (Log: vbt_ms, wysokosc_cm, sciezka) ---------- */
+function wgProgress(d, e, x){
+  const name = e.name.toLowerCase(), oly = wgOly(e);
+  const rows = (d.logs || []).filter(l => sv(l.cwiczenie).toLowerCase() === name && nf(l.vbt_ms) > 0)
+    .map(l => ({ l, date: sv(l.data).slice(0, 10) || sv(l.zapisano).slice(0, 10), kg: nf(l.kg) > 0 ? nf(l.kg) : null }))
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.l.seria).localeCompare(String(b.l.seria)));
+  const what = oly ? 'v max' : 'MCV';
+  if (!rows.length) return '<div class="card wgp"><h2>Postęp: ' + esc(e.name) + '</h2><p class="muted">Jeszcze nie ma zapisanej prędkości z filmu dla tego ćwiczenia. Pierwszy tor zacznie wykres.</p></div>';
+  const kgs = [...new Set(rows.map(r => r.kg).filter(v => v !== null))].sort((a, b) => a - b);
+  const sel = WG.kg !== '' && kgs.indexOf(nf(WG.kg)) >= 0 ? nf(WG.kg) : null, list = sel === null ? rows : rows.filter(r => r.kg === sel);
+  const chips = kgs.length > 1 ? '<div class="chips"><button class="chip" type="button" data-wgkg="" aria-pressed="' + (sel === null) + '">Każdy ciężar</button>' + kgs.map(k => '<button class="chip" type="button" data-wgkg="' + k + '" aria-pressed="' + (sel === k) + '">' + pl(k) + ' kg</button>').join('') + '</div>' : '';
+  const byDay = {}; list.forEach(r => { if (!byDay[r.date] || nf(r.l.vbt_ms) > nf(byDay[r.date].l.vbt_ms)) byDay[r.date] = r; });   // najlepsza seria dnia
+  const pts = Object.keys(byDay).sort().map(k => ({ date: k, v: nf(byDay[k].l.vbt_ms) }));
+  const paths = list.filter(r => sv(r.l.sciezka)).slice(-4).map(r => { let p = []; try { p = JSON.parse(r.l.sciezka); } catch (err) {} return { date: r.date, kg: r.kg, p }; }).filter(q => q.p.length > 1);
+  return '<div class="card wgp"><div class="hrow"><h2>Postęp: ' + esc(e.name) + '</h2><span class="muted">' + what + ', najlepsza seria dnia' + (sel !== null ? ' · ' + pl(sel) + ' kg' : '') + '</span></div>' + chips +
+    '<div class="wgpc"><div>' + speedChart(pts, what) + '</div><div>' + pathsSVG(paths) + '</div></div>' +
+    '<div class="tw"><table><thead><tr><th>Dzień</th><th>Seria</th><th>Ciężar</th><th>' + what + ' m/s</th><th>v peak</th><th>' + (oly ? 'Uniesienie' : 'Zakres') + '</th><th></th></tr></thead><tbody>' +
+    list.slice().reverse().slice(0, 12).map(r => '<tr><td>' + esc(dowDm(r.date)) + '</td><td>' + esc(r.l.seria) + '</td><td>' + (r.kg !== null ? pl(r.kg) + ' kg' : esc(sv(r.l.kg))) + (sv(r.l.powt) ? ' × ' + esc(r.l.powt) : '') + '</td><td><b>' + pl(r.l.vbt_ms) + '</b></td><td>' + (nf(r.l.vbt_peak) > 0 ? pl(r.l.vbt_peak) : '–') + '</td><td>' + (nf(r.l.wysokosc_cm) > 0 ? pl(r.l.wysokosc_cm) + ' cm' : '–') + '</td><td>' +
+      (r.l.film_link ? '<a href="' + esc(r.l.film_link) + '" target="_blank" rel="noopener">film</a>' : '') + (sv(r.l.notatka_trenera) ? ' <span class="muted" title="' + esc(sv(r.l.notatka_trenera)) + '">✎</span>' : '') + '</td></tr>').join('') + '</tbody></table></div></div>';
+}
+function speedChart(pts, what){
+  if (pts.length < 2) return '<p class="muted">' + (pts.length ? 'Jeden pomiar: ' + pl(pts[0].v) + ' m/s (' + esc(dm(pts[0].date)) + '). Wykres od drugiego.' : '') + '</p>';
+  const w = 360, h = 150, vs = pts.map(p => p.v), mx = Math.max(...vs), mn = Math.min(...vs);
+  const X = i => 20 + i * (w - 40) / (pts.length - 1), Y = v => h - 26 - (v - mn) / (mx - mn || 1) * (h - 60), last = pts[pts.length - 1];
+  return '<svg class="ch" viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="' + esc(what) + ' w kolejnych dniach"><polyline fill="none" stroke="var(--primary)" stroke-width="2.5" points="' + pts.map((p, i) => X(i).toFixed(1) + ',' + Y(p.v).toFixed(1)).join(' ') + '"/>' +
+    pts.map((p, i) => '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="3" fill="var(--primary)"/>').join('') +
+    '<text x="' + (w - 20) + '" y="' + Math.max(12, Y(last.v) - 10).toFixed(1) + '" text-anchor="end">' + pl(last.v) + ' m/s</text>' +
+    '<text x="20" y="' + (h - 6) + '">' + esc(dm(pts[0].date)) + '</text><text x="' + (w - 20) + '" y="' + (h - 6) + '" text-anchor="end">' + esc(dm(last.date)) + '</text></svg>';
+}
+/** kilka torów na jednym rysunku (cm od startu, poziom ×2 jak TL.pathSVG): najstarszy blady, najnowszy akcentem */
+function pathsSVG(list){
+  if (!list.length) return '<p class="muted">Tor pojawi się po pierwszej analizie z filmu.</p>';
+  const all = [].concat(...list.map(q => q.p)), xs = all.map(p => p[0] * 2), ys = all.map(p => p[1]);
+  const pad = 22, minx = Math.min(...xs, -10), maxx = Math.max(...xs, 10), miny = Math.min(...ys), maxy = Math.max(...ys), H = 240;
+  const sc = (H - 2 * pad) / Math.max(1, maxy - miny), W = Math.max(200, Math.min(340, (maxx - minx) * sc + 2 * pad + 30)), cx = W / 2 - ((minx + maxx) / 2) * sc;
+  const X = v => cx + v * sc, Y = v => H - pad - (v - miny) * sc;
+  const tr = list.map((q, i) => { const last = i === list.length - 1;
+    return '<path d="' + q.p.map((p, k) => (k ? 'L' : 'M') + X(p[0] * 2).toFixed(1) + ',' + Y(p[1]).toFixed(1)).join('') + '" fill="none" stroke="' + (last ? 'var(--accent)' : 'var(--ink-2)') + '" stroke-opacity="' + (last ? 1 : (0.25 + 0.5 * i / Math.max(1, list.length - 1)).toFixed(2)) + '" stroke-width="' + (last ? 2.5 : 1.6) + '" stroke-linejoin="round" stroke-linecap="round"/>'; }).join('');
+  return '<svg class="path" viewBox="0 0 ' + W.toFixed(0) + ' ' + H + '" role="img" aria-label="Tory sztangi z ' + list.length + ' ostatnich analiz" style="max-width:' + W.toFixed(0) + 'px">' +
+    '<line class="plumb" x1="' + X(0).toFixed(1) + '" x2="' + X(0).toFixed(1) + '" y1="' + (pad - 6) + '" y2="' + (H - pad + 4) + '"/>' + tr +
+    '<text class="axis" x="' + (X(0) + 4).toFixed(1) + '" y="' + (H - 6) + '">pion startu · poziom ×2</text></svg>' +
+    '<p class="hint wgleg">' + list.map((q, i) => (i === list.length - 1 ? '<b>' : '') + esc(dm(q.date)) + (q.kg !== null ? ' ' + pl(q.kg) + ' kg' : '') + (i === list.length - 1 ? '</b>' : '')).join(' · ') + '</p>';
+}

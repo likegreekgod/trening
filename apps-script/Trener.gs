@@ -29,6 +29,8 @@ const TR_FNS = {   // po jednej nazwie w linii, alfabetycznie: równoległe PR-y
   trCwSprawdz,
   trDysk,
   trFilm,
+  trFilmSeria,
+  trFilmWgraj,
   trImport,
   trJednostka,
   trKalendarz,
@@ -478,6 +480,93 @@ function trKomentarzFilm(id, week, day, order, set, text) {
     sh.getRange(hit.getRow(), col).setValue(plain_(text));
   } finally { lock.releaseLock(); }
   return { text: text, at: new Date().toISOString() };
+}
+
+/* ---------- film z komputera do serii, tor sztangi i wnioski (panel → Filmy → Wgraj z komputera, 27.11.2026) ----------
+ * trFilmWgraj: sesja resumable na Dysku w folderze klienta (uploadInit_, jak w aplikacji), plik wysyła przeglądarka trenera
+ * prosto do Google (meta.origin = adres panelu). trFilmSeria: link, wynik analizy toru z przeglądarki (vbt_ms, vbt_peak,
+ * wysokosc_cm, sciezka) i wnioski trenera (notatka_trenera, klient nie widzi) albo komentarz dla klienta (komentarz_trenera)
+ * przy serii; seria, której nie ma w Logu, dopisuje się jako zrobiona (kg, powt., RPE z panelu). Zapisanej serii klienta
+ * nie zmienia kg, powt. ani RPE.
+ */
+const TR_FILM_SET = /^(?:[1-9]\d?|R[1-9]\d?|D[1-9]\d?)$/;
+
+/** Start wysyłki filmu z komputera trenera do serii klienta → {url} sesji resumable (tylko z adresem strony panelu). */
+function trFilmWgraj(id, meta) {
+  id = String(id || '').trim().toLowerCase();
+  meta = Object.assign({}, meta || {});
+  if (!/^https:\/\/[\w.-]+(:\d+)?$|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(String(meta.origin || ''))) throw new Error('Brak adresu strony panelu.');
+  const e = trFilmSeria_({ week: meta.week, day: meta.day, order: meta.order, set: meta.set, name: meta.name, date: meta.date });
+  if (e.error) throw new Error(e.error);
+  return { url: uploadInit_(clientOf_(trRow_(id)), meta) };
+}
+
+/**
+ * Czysta funkcja: dane serii z panelu → {error} albo {key: {week, day, order, set}, base: {date, name, kg, reps, rpe}, set: {kolumna Logu: wartość}}.
+ * set zawiera tylko pola, które panel przysłał (link, analiza, wnioski, komentarz dla klienta).
+ */
+function trFilmSeria_(s) {
+  s = s || {};
+  const str = v => String(v === undefined || v === null ? '' : v).trim();
+  const week = Number(s.week), order = Number(s.order), day = str(s.day), set = str(s.set).toUpperCase(), name = str(s.name);
+  if (!(week >= 0) || Math.floor(week) !== week) return { error: 'Zły tydzień.' };
+  if (!day || day.length > 20) return { error: 'Zła jednostka.' };
+  if (!(order >= 1) || Math.floor(order) !== order || order > 99) return { error: 'Zły numer ćwiczenia.' };
+  if (!TR_FILM_SET.test(set)) return { error: 'Zła seria (1…99, R1…, D1…).' };
+  if (!name || name.length > 120) return { error: 'Brak nazwy ćwiczenia.' };
+  const date = str(s.date);
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Zła data.' };
+  const num = (v, lo, hi, what) => { if (v === undefined || v === null || v === '') return ''; const n = Number(String(v).replace(',', '.'));
+    if (!isFinite(n) || n < lo || n > hi) throw new Error(what); return n; };
+  const out = { key: { week: week, day: day, order: order, set: set }, set: {} };
+  try {
+    out.base = { date: date, name: name, kg: s.kg === 'BW' ? 'BW' : num(s.kg, 0, 600, 'Zły ciężar.'), reps: str(s.reps).slice(0, 12), rpe: num(s.rpe, 1, 10, 'Złe RPE (1–10).') };
+    if (s.link !== undefined) {
+      if (!/^https:\/\/drive\.google\.com\//.test(str(s.link))) return { error: 'Zły link do filmu.' };
+      out.set.film_link = str(s.link);
+    }
+    if (s.vbt !== undefined) {
+      let path = s.path === undefined || s.path === null ? '' : typeof s.path === 'string' ? s.path : JSON.stringify(s.path);
+      if (path.length > 45000) path = '';
+      Object.assign(out.set, { vbt_ms: num(s.vbt, 0, 10, 'Zła prędkość.'), vbt_peak: num(s.vbtPeak, 0, 15, 'Zła prędkość szczytowa.'),
+        wysokosc_cm: num(s.height, 0, 300, 'Zła wysokość.'), sciezka: path });
+    }
+  } catch (err) { return { error: err.message }; }
+  [['note', 'notatka_trenera'], ['forClient', 'komentarz_trenera']].forEach(([k, col]) => {
+    if (s[k] === undefined) return;
+    const t = String(s[k] === null ? '' : s[k]).replace(/\r\n?/g, '\n').trim();
+    if (t.length > TR_KOM_MAX) out.error = 'Tekst jest za długi (najwyżej ' + TR_KOM_MAX + ' znaków).';
+    out.set[col] = t;
+  });
+  if (out.error) return { error: out.error };
+  return out;
+}
+
+/** Zapis przy serii klienta (trFilmSeria_): istniejący wiersz Logu = tylko przysłane kolumny; brak wiersza = nowa zrobiona seria. */
+function trFilmSeria(id, s) {
+  id = String(id || '').trim().toLowerCase();
+  trRow_(id);
+  const e = trFilmSeria_(s);
+  if (e.error) throw new Error(e.error);
+  const k = e.key, lid = trLogId_(id, k.week, k.day, k.order, k.set);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_('Log', LOG_HEADERS);
+    const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const hit = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 1).createTextFinder(lid).matchEntireCell(true).findNext();
+    if (hit) {
+      Object.keys(e.set).forEach(c => { const col = head.indexOf(c) + 1; if (col > 0) sh.getRange(hit.getRow(), col).setValue(plain_(e.set[c])); });
+      return { id: lid, added: false };
+    }
+    const b = e.base, row = LOG_HEADERS.map(() => '');
+    const put = (c, v) => { row[LOG_HEADERS.indexOf(c)] = v; };
+    [['id', lid], ['zapisano', new Date()], ['klient', id], ['tydzien', k.week], ['jednostka', k.day], ['data', b.date || today_()], ['nr_cw', k.order],
+      ['cwiczenie', b.name], ['seria', k.set], ['kg', b.kg], ['powt', b.reps], ['rpe', b.rpe], ['wykonane', 'TAK'], ['typ', /^D/.test(k.set) ? 'DROP' : '']].forEach(x => put(x[0], x[1]));
+    Object.keys(e.set).forEach(c => put(c, e.set[c]));
+    sh.appendRow(plainRow_(row));
+    return { id: lid, added: true };
+  } finally { lock.releaseLock(); }
 }
 
 /* ---------- Claude API: szkic komentarza do sesji ----------

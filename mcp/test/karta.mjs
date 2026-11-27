@@ -2,9 +2,9 @@
 // Uruchom: node test/karta.mjs [katalog_na_zrzuty]   (potrzebny Playwright z przeglądarką; nie jest częścią npm test)
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
-import { DZIS_HTML, KLIENT_HTML, FILM_HTML } from '../src/ui.js';
+import { DZIS_HTML, KLIENT_HTML, FILM_HTML, TOR_HTML } from '../src/ui.js';
 import { readFileSync } from 'node:fs';
-import { dzis, klient } from '../src/tools.js';
+import { dzis, klient, tor } from '../src/tools.js';
 const { chromium } = createRequire(import.meta.url)('playwright');
 
 const out = process.argv[2] || '.';
@@ -171,5 +171,26 @@ for (const theme of ['light', 'dark']) {
     await page.close();
   }
 }
+// Karta toru sztangi: wykres najlepszej serii dnia, nałożone tory, serie z wnioskami (dane syntetyczne)
+{
+  const logs = [['2026-10-27', 78, 0.52, 4], ['2026-11-03', 80, 0.55, 3.2], ['2026-11-10', 82, 0.57, 2.4], ['2026-11-17', 84, 0.61, 1.5]].map(([data, kg, v, w], i) => ({
+    tydzien: 6 + i, jednostka: 'A', data, nr_cw: 1, cwiczenie: 'Przysiad', seria: 2, kg, powt: 5, vbt_ms: v, vbt_peak: v + 0.4, wysokosc_cm: 58,
+    sciezka: JSON.stringify(Array.from({ length: 24 }, (_, k) => [Math.round(Math.sin(k / 7.6 * Math.PI / 2) * w * 10) / 10, k * 2.5])), notatka_trenera: i === 3 ? 'Kolana mniej do środka, tor prosty.' : '' }));
+  const td = tor({ cfg: { name: 'Ola' }, logs }, 'Przysiad');
+  for (const [theme, w] of [['light', 640], ['dark', 640], ['telefon', 380]]) {
+    const page = await browser.newPage({ viewport: { width: w, height: 900 }, colorScheme: theme === 'dark' ? 'dark' : 'light' });
+    const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+    await page.setContent(HOST.replace('BG', theme === 'dark' ? '#262624' : '#faf9f5').replace('CTXJSON', JSON.stringify({ theme: theme === 'dark' ? 'dark' : 'light' }))
+      .replace('DATA', JSON.stringify(td)).replace('HTML', () => JSON.stringify(TOR_HTML).replace(/</g, '\\u003c')));
+    const fr = page.frameLocator('#f');
+    await fr.getByText('Najlepsza seria dnia').waitFor();
+    assert.equal(await fr.locator('svg path').count(), 4);
+    await fr.getByText('Kolana mniej do środka, tor prosty.', { exact: false }).waitFor();
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: out + '/karta-tor-' + theme + '.png', fullPage: true });
+    assert.deepEqual(errs, []);
+    await page.close();
+  }
+}
 await browser.close();
-console.log('karty Dziś, klient i film: ok');
+console.log('karty Dziś, klient, film i tor: ok');

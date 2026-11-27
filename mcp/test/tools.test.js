@@ -1,9 +1,9 @@
 // Testy pośrednika MCP (czyste funkcje, dane syntetyczne): node --test mcp/test/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS, karta, e1rm, filmy, filmRef, refParse } from '../src/tools.js';
+import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS, karta, e1rm, filmy, filmRef, refParse, tor } from '../src/tools.js';
 import { handle, handleBody, VERSIONS } from '../src/mcp.js';
-import { UI_DZIS, UI_KLIENT, UI_FILM, KLIENT_HTML, FILM_HTML } from '../src/ui.js';
+import { UI_DZIS, UI_KLIENT, UI_FILM, UI_TOR, KLIENT_HTML, FILM_HTML, TOR_HTML } from '../src/ui.js';
 
 const PULPIT = {
   today: '2026-11-27', at: '2026-11-27T06:00:00Z',
@@ -134,7 +134,7 @@ test('karty MCP Apps: zasób ui:// z kartą Dziś, narzędzie „dzis” wskazuj
   const init = await handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25' } }, ctx);
   assert.ok(init.result.capabilities.resources);
   const list = await handle({ jsonrpc: '2.0', id: 2, method: 'resources/list' }, ctx);
-  assert.deepEqual(list.result.resources.map(r => [r.uri, r.mimeType]), [[UI_DZIS, 'text/html;profile=mcp-app'], [UI_FILM, 'text/html;profile=mcp-app'], [UI_KLIENT, 'text/html;profile=mcp-app']]);
+  assert.deepEqual(list.result.resources.map(r => [r.uri, r.mimeType]), [[UI_DZIS, 'text/html;profile=mcp-app'], [UI_FILM, 'text/html;profile=mcp-app'], [UI_TOR, 'text/html;profile=mcp-app'], [UI_KLIENT, 'text/html;profile=mcp-app']]);
   const read = await handle({ jsonrpc: '2.0', id: 3, method: 'resources/read', params: { uri: UI_DZIS } }, ctx);
   const c = read.result.contents[0];
   assert.equal(c.mimeType, 'text/html;profile=mcp-app');
@@ -230,4 +230,26 @@ test('filmy: lista bez linków, karta filmu z biletem tylko dla karty, klatki ja
   assert.match(FILM_HTML, /klatki_zapisz/); assert.match(FILM_HTML, /ui\/message/); assert.match(FILM_HTML, /komentarz_filmu/);
   assert.doesNotMatch(FILM_HTML, /https?:\/\/(?!www\.w3)/);
   new Function(FILM_HTML.match(/<script>([\s\S]*)<\/script>/)[1]);
+});
+
+test('tor: postęp prędkości i toru ćwiczenia (liczby dla Claude, tory tylko dla karty)', async () => {
+  const L = (data, seria, kg, v, x, note) => ({ tydzien: 1, jednostka: 'T1', data, nr_cw: 1, cwiczenie: 'Przysiad tylny', seria, kg, powt: 5, vbt_ms: v, vbt_peak: v + 0.4, wysokosc_cm: 58,
+    sciezka: JSON.stringify([[0, 0], [x, 30], [x / 2, 58]]), notatka_trenera: note || '', film_link: 'https://drive.google.com/file/d/a/view' });
+  const d = { cfg: { name: 'Ania' }, logs: [L('2026-11-03', 2, 80, 0.55, 3), L('2026-11-03', 3, 80, 0.5, 4), L('2026-11-10', 2, 82, 0.58, 2.5, 'kolana lepiej'),
+    { cwiczenie: 'Przysiad tylny', seria: 1, data: '2026-11-10', vbt_ms: '' }, { cwiczenie: 'Rwanie', seria: 1, data: '2026-11-12', vbt_ms: 1.7, kg: 60 }] };
+  const a = tor(d, '');
+  assert.deepEqual(a.cwiczenia.map(c => [c.cwiczenie, c.analiz]), [['Rwanie', 1], ['Przysiad tylny', 3]]);
+  const b = tor(d, 'przysiad tylny');
+  assert.equal(b.cwiczenie, 'Przysiad tylny'); assert.match(b.miara, /^MCV/);
+  assert.deepEqual(b.najlepsza_dnia, [{ data: '2026-11-03', predkosc_ms: 0.55, kg: 80 }, { data: '2026-11-10', predkosc_ms: 0.58, kg: 82 }]);
+  assert.deepEqual(b.serie.map(x => [x.seria, x.odchylenie_toru_cm]), [['2', 3], ['3', 4], ['2', 2.5]]);
+  assert.equal(b.serie[2].wnioski_trenera, 'kolana lepiej');
+  assert.equal(b._ui.tory.length, 3); assert.equal(b._ui.oly, false);
+  assert.match(tor(d, 'Rwanie').miara, /^v max/);
+  assert.match(tor(d, 'Martwy ciąg').uwaga, /Brak analizy/);
+  const out = await run('tor', { id: 'Ania', cwiczenie: 'Przysiad tylny' }, async (fn, id) => { assert.equal(fn, 'trKlient'); assert.equal(id, 'ania'); return d; });
+  assert.equal(out.serie.length, 3);
+  assert.equal(TOOLS.find(t => t.name === 'tor')._meta.ui.resourceUri, UI_TOR);
+  assert.doesNotMatch(TOR_HTML, /https?:\/\/(?!www\.w3)/);
+  new Function(TOR_HTML.match(/<script>([\s\S]*)<\/script>/)[1]);
 });

@@ -2825,3 +2825,19 @@ test('sekcja Rozgrzewka: wykonanie planu tak, tonaż, serie, partie i e1RM nie (
   assert.equal(col(warm, 'wykonanie_%'), 100);
   assert.equal(plain(warm.parts)[0][3], 2); assert.equal(plain(main.parts)[0][3], 4);   // serie na partię
 });
+
+test('trFilmSeria_: film z komputera trenera do serii (link, tor sztangi, wnioski; tylko przysłane kolumny)', () => {
+  const f = s => JSON.parse(JSON.stringify(C.trFilmSeria_(s)));
+  const S = x => Object.assign({ week: 9, day: 'T2', order: 1, set: '2', name: 'Rwanie' }, x || {});
+  assert.ok(C.TR_FNS.trFilmWgraj && C.TR_FNS.trFilmSeria && !C.API_FNS.trFilmWgraj && !C.API_FNS.trFilmSeria && !C.LIVE_FNS.trFilmSeria);
+  const a = f(S({ link: 'https://drive.google.com/file/d/x/view', vbt: '1,62', vbtPeak: 1.9, height: 98, path: [[0, 0], [1.5, 40]], note: ' pętla na wysokości bioder ', kg: '70', reps: '1', rpe: 8 }));
+  assert.deepEqual(a.key, { week: 9, day: 'T2', order: 1, set: '2' });
+  assert.deepEqual(a.base, { date: '', name: 'Rwanie', kg: 70, reps: '1', rpe: 8 });
+  assert.deepEqual(a.set, { film_link: 'https://drive.google.com/file/d/x/view', vbt_ms: 1.62, vbt_peak: 1.9, wysokosc_cm: 98, sciezka: '[[0,0],[1.5,40]]', notatka_trenera: 'pętla na wysokości bioder' });
+  assert.deepEqual(f(S({ forClient: 'Łokcie wyżej.' })).set, { komentarz_trenera: 'Łokcie wyżej.' });   // sam komentarz: link i analiza bez zmian
+  assert.deepEqual(f(S({ set: 'r1' })).key.set, 'R1');
+  assert.equal(f(S({ set: 'D2', kg: 'BW' })).base.kg, 'BW');
+  [S({ set: '0' }), S({ set: 'X1' }), S({ order: 0 }), S({ day: '' }), S({ name: '' }), S({ week: -1 }), S({ date: '27.11' }), S({ link: 'https://evil.example/x' }),
+    S({ vbt: 50 }), S({ rpe: 11 }), S({ kg: 'dużo' }), S({ note: 'x'.repeat(3001) })].forEach(s => assert.ok(f(s).error, JSON.stringify(s).slice(0, 80)));
+  assert.equal(f(S({ vbt: 1, path: 'x'.repeat(45001) })).set.sciezka, '');      // za długa ścieżka nie psuje zapisu
+});
