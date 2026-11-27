@@ -138,7 +138,7 @@ function mailLog_() {
   try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('MAIL_LOG') || '{}') || {}; } catch (e) { return {}; }
 }
 
-/** Wyzwalacz dzienny (menu Trening → Zainstaluj wyzwalacze albo zmiana godziny w panelu). */
+/** Wyzwalacz dzienny (menu Trening → Ustawienia (raz) → Zainstaluj albo napraw wyzwalacze albo zmiana godziny w panelu). */
 function porannyMail() {
   const props = PropertiesService.getScriptProperties(), today = today_(), dayOf = mailDayOf_();
   const plan = tableOf_('Plan');
@@ -245,7 +245,7 @@ function komWyzwalacz_() {
   ScriptApp.newTrigger('wieczornyMail').timeBased().everyDays(1).atHour(MAIL_KOM_GODZ).nearMinute(0).create();
 }
 
-/** Wyzwalacz dzienny ok. 20:00 (menu Trening → Zainstaluj wyzwalacze albo włączenie „Mail po komentarzu” w panelu). */
+/** Wyzwalacz dzienny ok. 20:00 (menu Trening → Ustawienia (raz) → Zainstaluj albo napraw wyzwalacze albo włączenie „Mail po komentarzu” w panelu). */
 function wieczornyMail() {
   const props = PropertiesService.getScriptProperties(), today = today_(), dayOf = mailDayOf_(), klienci = klRows_(klSheet_());
   const prev = {}; klienci.forEach(r => { const id = String(r[1]).trim().toLowerCase(), v = props.getProperty('MKS_' + id); if (id && v) try { prev[id] = JSON.parse(v); } catch (e) {} });

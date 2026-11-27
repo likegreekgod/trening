@@ -9,7 +9,7 @@
  * Bez komentarzy trenera.
  *
  * Tylko czyta arkusz z danymi i pisze do osobnego pliku; nie zmienia żadnej zakładki ani funkcji z Code.gs.
- * Odświeżanie: wyzwalacz co 10 min (`instalujPodglad`, uruchom raz z edytora); plik przepisywany tylko po zmianie.
+ * Odświeżanie: wyzwalacz co PODGLAD_CO (30) min (`podgladWyzwalacz_`, instaluje go `instalujWyzwalacze`); plik przepisywany tylko po zmianie.
  * ID pliku: właściwość skryptu PODGLAD_ID (nie wpisuj go do repo).
  */
 
@@ -174,7 +174,7 @@ function podgladPlik_() {
   return ss;
 }
 
-/** Wyzwalacz co 10 min (i ręcznie z edytora): przelicza widok i zapisuje go tylko po zmianie. */
+/** Wyzwalacz co PODGLAD_CO min (i ręcznie z edytora): przelicza widok i zapisuje go tylko po zmianie. */
 function odswiezPodglad() {
   const localDay = t => Utilities.formatDate(new Date(t), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const klienci = tableOf_('Klienci');
@@ -198,9 +198,13 @@ function odswiezPodglad() {
   Logger.log('Podgląd: ' + rows.length + ' wierszy, stan ciała: ' + stan.length + ' → ' + ss.getUrl());
 }
 
-/** Uruchom raz z edytora: wyzwalacz odswiezPodglad co 10 min (inne wyzwalacze bez zmian) i pierwsze odświeżenie. */
-function instalujPodglad() {
+/** Wyzwalacz odswiezPodglad co PODGLAD_CO min (Arkusz.gs); instaluje go też instalujWyzwalacze. */
+function podgladWyzwalacz_() {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'odswiezPodglad').forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('odswiezPodglad').timeBased().everyMinutes(10).create();
+  ScriptApp.newTrigger('odswiezPodglad').timeBased().everyMinutes(PODGLAD_CO).create();
+}
+/** Z edytora: sam wyzwalacz podglądu (inne bez zmian) i pierwsze odświeżenie. */
+function instalujPodglad() {
+  podgladWyzwalacz_();
   odswiezPodglad();
 }
