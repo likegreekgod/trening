@@ -9,7 +9,7 @@ import { UI_DZIS, UI_KLIENT, UI_FILM, UI_TOR } from './ui.js';
 const ST_DZIS = { wait: 'czeka', live: 'w trakcie', done: 'zrobione' };
 const SEKCJA = { R: 'Rozgrzewka', G: 'Główne', K: 'Korekcyjne' };   // kolumna Planu `sekcja` (litera), jak SEKCJE w Code.gs
 const ST_KAL = { wait: 'zaplanowana', live: 'w trakcie', done: 'zrobiona', late: 'zaległa' };
-export const ZAPIS = ['trJednostka', 'trKomentarz', 'trKomentarzFilm', 'trPlan', 'trPropozycja', 'trPrzesun'];   // zapisy: serwer wpisuje je do zakładki API
+export const ZAPIS = ['trJednostka', 'trKlientNowy', 'trKomentarz', 'trKomentarzFilm', 'trPlan', 'trPropozycja', 'trPrzesun'];   // zapisy: serwer wpisuje je do zakładki API
 
 const s = v => (v === undefined || v === null ? '' : String(v)).trim();
 const num = v => { const x = typeof v === 'number' ? v : parseFloat(s(v).replace(',', '.')); return isFinite(x) ? x : null; };
@@ -315,6 +315,25 @@ export function tor(d, nazwa) {
     _ui: { tory, dni: dni.slice(-12), oly } });
 }
 
+TOOLS.push(
+  { name: 'dodaj_klienta', title: 'Dodaj klienta',
+    description: 'Dodaje nowego klienta (jak „Nowy klient” w panelu): wiersz w zakładce Klienci z nowym kluczem; aktywny, bez planu. klient_id domyślnie z imienia (małe litery, bez polskich znaków, spacje → „-”); zajęty = błąd z wolnym ID w podpowiedzi. Linku z kluczem nie zwraca: trener kopiuje go w panelu (Klienci → ⧉ Kopiuj link). Zrób tylko na wyraźną prośbę trenera i powiedz, z jakimi ustawieniami dodałeś.',
+    inputSchema: { type: 'object', properties: {
+      imie: { type: 'string', description: 'imię widoczne w aplikacji, np. „Ola” albo „Ola K.”' },
+      klient_id: { type: 'string', description: 'opcjonalnie; puste = z imienia' },
+      tryb: { type: 'string', enum: ['PROSTY', 'PRO'], description: 'PROSTY = słowa zamiast RPE (domyślnie), PRO = RPE / RIR, VBT, %' },
+      skala: { type: 'string', enum: ['RPE', 'RIR'], description: 'skala wysiłku w PRO (domyślnie RPE)' },
+      zamiana: { type: 'string', enum: ['NIE', 'TRENER', 'DOWOLNA'], description: 'zamiana ćwiczeń przez klienta: NIE (domyślnie), TRENER = tylko zamienniki od trenera, DOWOLNA = cała baza' },
+      masters: { type: 'boolean', description: 'ostrzejsze progi obciążenia (domyślnie nie)' } },
+      required: ['imie'], additionalProperties: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } },
+);
+
+const ENUM = (v, list, nm) => { const x = s(v).toUpperCase(); if (x && list.indexOf(x) < 0) throw new Error(nm + ': ' + list.join(' / ') + '.'); return x; };
+/** Ustawienia nowego klienta z panelu (trKlientOf_) → krótka odpowiedź bez linku z kluczem. */
+export const klientNowy = k => nz({ zapisano: true, id: k.id, imie: k.name, tryb: k.mode, skala: k.scale, zamiana: k.swap, masters: !!k.masters,
+  link: 'w panelu: Klienci → ' + k.name + ' → ⧉ Kopiuj link' });
+
 export const KLATKI_MAX = 24, KLATKA_MAX = 400000;   // klatek w paczce, znaków base64 na klatkę (~300 kB)
 
 const need = (a, k) => { if (a[k] === undefined || a[k] === null || s(a[k]) === '') throw new Error('Brak pola „' + k + '”.'); return a[k]; };
@@ -387,6 +406,13 @@ export async function run(name, a, api, o) {
       const r = refParse(need(a, 'ref'));
       const x = await api('trKomentarzFilm', r.id, r.week, r.day, r.order, r.set, String(a.tekst === undefined ? '' : a.tekst));
       return { zapisano: true, tekst: x && x.text };
+    }
+    case 'dodaj_klienta': {
+      const imie = s(need(a, 'imie'));
+      const f = nz({ imie, id: s(a.klient_id), mode: ENUM(a.tryb, ['PROSTY', 'PRO'], 'Tryb') || 'PROSTY', scale: ENUM(a.skala, ['RPE', 'RIR'], 'Skala'),
+        swap: ENUM(a.zamiana, ['NIE', 'TRENER', 'DOWOLNA'], 'Zamiana') });
+      f.masters = !!a.masters;
+      return klientNowy(await api('trKlientNowy', f));
     }
     default: throw new Error('Nieznane narzędzie: ' + name);
   }

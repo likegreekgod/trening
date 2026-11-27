@@ -1043,6 +1043,14 @@ function slugId_(name) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+/** Czysta: pierwsze wolne „id-2”, „id-3”… (podpowiedź przy zajętym ID). */
+function freeId_(id, existingIds) {
+  const taken = (existingIds || []).map(x => String(x).trim().toLowerCase());
+  let n = 2;
+  while (taken.indexOf(id + '-' + n) >= 0) n++;
+  return id + '-' + n;
+}
+
 /** Sprawdza formularz i buduje wiersz Klienci (A–I). Czysta funkcja: {row, id} albo {error}. */
 function buildClientRow_(f, existingIds, key) {
   f = f || {};
@@ -1051,7 +1059,7 @@ function buildClientRow_(f, existingIds, key) {
   const id = slugId_(String(f.id || '').trim() || name);
   if (!id) return { error: 'ID klienta może zawierać tylko litery i cyfry.' };
   if ((existingIds || []).map(x => String(x).toLowerCase()).indexOf(id) >= 0)
-    return { error: 'Klient „' + id + '” już istnieje — wybierz inne ID (np. ' + id + '-2).' };
+    return { error: 'Klient „' + id + '” już istnieje — wybierz inne ID (np. ' + freeId_(id, existingIds) + ').' };
   const extra = String(f.dod_serie === undefined ? '' : f.dod_serie).trim();
   if (extra !== '' && !(Number(extra) >= 0 && Number(extra) <= 5)) return { error: 'Dodatkowe serie: liczba 0–5.' };
   return { id: id, row: [key, id, name, 'TAK', '', f.bol ? 'TAK' : '', f.prosty ? 'PROSTY' : '',

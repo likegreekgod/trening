@@ -260,6 +260,8 @@ test('slugId_ i buildClientRow_: nowy klient z menu', () => {
   assert.match(C.buildClientRow_({ imie: '' }, [], 'k').error, /imię/);
   assert.match(C.buildClientRow_({ imie: 'A', dod_serie: '9' }, [], 'k').error, /0–5/);
   assert.equal(C.buildClientRow_({ imie: 'Ewa', id: 'Ewa K' }, [], 'k').id, 'ewa-k');
+  assert.match(C.buildClientRow_({ imie: 'Ola' }, ['ola', 'ola-2'], 'k').error, /np\. ola-3/, 'wolne ID w podpowiedzi');
+  assert.equal(C.freeId_('ola', ['Ola-2', 'ola-3']), 'ola-4');
 });
 
 test('trKlientOf_ i trKlientVals_: klienci w panelu trenera (ustawienia ↔ wiersz Klienci)', () => {
@@ -2775,6 +2777,12 @@ test('rozmiarOpis_: komórki, największe zakładki, ścieżki i czas wczytania'
 });
 
 test('mcpLogRow_: zapisy z Claude (pośrednik MCP) do dziennika API, odczyty i panel pominięte', () => {
+  const nk = C.mcpLogRow_({ src: 'mcp', fn: 'trKlientNowy', args: [{ imie: 'Łucja Ś', mode: 'PROSTY' }] }, true, '');
+  assert.equal(nk[0], 'lucja-s'); assert.equal(nk[1], 'claude: trKlientNowy'); assert.match(nk[3], /PROSTY/);
+  assert.equal(C.mcpLogRow_({ src: 'mcp', fn: 'trKlientNowy', args: [{ imie: 'Ola', id: 'ola-k' }] }, true, '')[0], 'ola-k');
+  assert.deepEqual(JSON.parse(JSON.stringify(C.trKlientNowyUst_({ mode: 'PRO', swap: '', masters: 1 }))), Object.assign({}, JSON.parse(JSON.stringify(C.KL_DOMYSLNE)), { mode: 'PRO', masters: true }), 'panel: puste pola = domyślne');
+  assert.equal(C.trKlientNowyUst_({}).mode, 'PRO', 'bez trybu = PRO jak w panelu');
+  assert.equal(C.trKlientNowyUst_({ mode: 'PROSTY', scale: 'RIR' }).scale, 'RIR');
   assert.equal(C.mcpLogRow_({ fn: 'trPrzesun', args: ['ania', {}] }, true, ''), null, 'panel bez src');
   assert.equal(C.mcpLogRow_({ src: 'mcp', fn: 'trPulpit', args: [] }, true, ''), null, 'odczyt');
   assert.deepEqual(C.mcpLogRow_({ src: 'mcp', fn: 'trPrzesun', args: ['Ania', { week: 3, day: 'B', date: '2026-11-28' }] }, true, ''),

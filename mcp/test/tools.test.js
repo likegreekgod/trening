@@ -1,7 +1,7 @@
 // Testy pośrednika MCP (czyste funkcje, dane syntetyczne): node --test mcp/test/
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS, karta, e1rm, filmy, filmRef, refParse, tor } from '../src/tools.js';
+import { TOOLS, run, dzis, klient, jednostka, kalendarz, setTxt, light, ZAPIS, klientNowy, karta, e1rm, filmy, filmRef, refParse, tor } from '../src/tools.js';
 import { handle, handleBody, VERSIONS, rec } from '../src/mcp.js';
 import { UI_DZIS, UI_KLIENT, UI_FILM, UI_TOR, KLIENT_HTML, FILM_HTML, TOR_HTML } from '../src/ui.js';
 
@@ -268,4 +268,19 @@ test('tor: postęp prędkości i toru ćwiczenia (liczby dla Claude, tory tylko 
   assert.equal(TOOLS.find(t => t.name === 'tor')._meta.ui.resourceUri, UI_TOR);
   assert.doesNotMatch(TOR_HTML, /https?:\/\/(?!www\.w3)/);
   new Function(TOR_HTML.match(/<script>([\s\S]*)<\/script>/)[1]);
+});
+
+test('dodaj_klienta: domyślnie PROSTY, flagi do trKlientNowy, odpowiedź bez linku z kluczem', async () => {
+  const calls = [];
+  const api = async (fn, ...a) => { calls.push([fn, ...a]); return { id: 'ola-k', name: 'Ola K.', mode: a[0].mode, scale: a[0].scale || 'RPE', swap: a[0].swap || 'NIE', masters: a[0].masters, link: 'https://x/?k=kabcdef12345' }; };
+  const r = await run('dodaj_klienta', { imie: ' Ola K. ' }, api);
+  assert.deepEqual(calls[0], ['trKlientNowy', { imie: 'Ola K.', mode: 'PROSTY', masters: false }]);
+  assert.equal(r.id, 'ola-k'); assert.equal(r.tryb, 'PROSTY'); assert.ok(!JSON.stringify(r).includes('?k='), 'bez klucza');
+  await run('dodaj_klienta', { imie: 'Jan', klient_id: 'jan-2', tryb: 'pro', skala: 'RIR', zamiana: 'DOWOLNA', masters: true }, api);
+  assert.deepEqual(calls[1], ['trKlientNowy', { imie: 'Jan', id: 'jan-2', mode: 'PRO', scale: 'RIR', swap: 'DOWOLNA', masters: true }]);
+  await assert.rejects(run('dodaj_klienta', {}, api), /imie/);
+  await assert.rejects(run('dodaj_klienta', { imie: 'A', zamiana: 'TAK' }, api), /Zamiana/);
+  calls.forEach(c => assert.ok(ZAPIS.includes(c[0]), c[0]));
+  assert.ok(TOOLS.find(t => t.name === 'dodaj_klienta').inputSchema.required.includes('imie'));
+  assert.equal(klientNowy({ id: 'a', name: 'A', mode: 'PRO', scale: 'RPE', swap: 'NIE', link: 'k' }).link.includes('Kopiuj link'), true);
 });
