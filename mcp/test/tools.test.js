@@ -299,7 +299,9 @@ test('pakiet: dodaj (domyślnie) / ustaw przez trPakiet, ile zostało, walidacja
   assert.equal(r.zostalo, 6); assert.equal(r.bylo, undefined, 'bez pakietu przed = brak „bylo”');
   const u = await run('pakiet', { id: 'maciek', treningi: 6, tryb: 'ustaw', notatka: 'gotówka', data: '2026-11-27' }, api);
   assert.deepEqual(calls[1], ['trPakiet', 'maciek', { mode: 'ustaw', n: 6, note: 'gotówka', date: '2026-11-27' }]);
-  assert.equal(u.bylo, 4); assert.equal(u.zostalo, 6);
+  assert.equal(u.bylo, 4); assert.equal(u.zostalo, 6); assert.equal(u.klient_widzi, 'nie');
+  await run('pakiet', { id: 'maciek', treningi: 2, widoczny: true }, api);
+  assert.deepEqual(calls[2], ['trPakiet', 'maciek', { mode: 'dodaj', n: 2, show: true }]);
   for (const t of [0, -2, 1.5]) await assert.rejects(run('pakiet', { id: 'maciek', treningi: t }, api), /Liczba treningów/);
   await assert.rejects(run('pakiet', { id: 'maciek', treningi: 1, tryb: 'zabierz' }, api), /Tryb/);
   await assert.rejects(run('pakiet', { id: 'nikt', treningi: 1 }, api), /Nie ma klienta/);
