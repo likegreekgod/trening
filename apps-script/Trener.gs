@@ -205,7 +205,7 @@ function trPulpit_(t, o) {
     const load = weeks.map(w => { const s = S[w]; return { week: w, srpe: s ? num(s.sRPE_TL_AU) : null, ton: s ? num(s.tonaz_kg) : null,
       status: s ? String(s.status || '').replace(/^[^\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ–-]+/, '').trim() : '' }; });
     return { id: id, name: String(r.imie || names[id] || id), urg: Number(r.pilnosc) || 0, red: nRed, signals: sig,
-      last: d10(r.ostatni_trening), ago: num(r.dni_temu), week: String(r.ten_tydzien || ''), late: Number(r.zalegle) || 0,
+      last: d10(r.ostatni_trening), ago: num(r.dni_temu), week: frac_(r.ten_tydzien), late: Number(r.zalegle) || 0,
       status: String(r.status_tygodnia || '').replace(/^[^\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ–-]+/, '').trim(), note: String(r.uwagi_klienta || ''),
       films: Number(r.filmy_7dni) || 0, filmsNew: Number(r.filmy_bez_kom_7dni) || 0, planLeft: num(r.koniec_planu_dni), own: Number(r.wlasne_7dni) || 0,
       errors: Number(r.bledy_7dni) || 0, load: load };
@@ -286,7 +286,7 @@ function trKlient(id) {
   d.cfg.id = c.id;
   d.cfg.active = String(row[3]).toUpperCase() !== 'NIE';
   d.cfg.masters = String(row[8] || '').trim().toUpperCase() === 'TAK';
-  d.blocks = tableOf_('Bloki').filter(b => lc(b.klient) === c.id).map(b => Object.assign({}, b, { od: day(b.od), do: day(b.do) }));
+  d.blocks = tableOf_('Bloki').filter(b => lc(b.klient) === c.id).map(b => Object.assign({}, b, { od: day(b.od), do: day(b.do), jednostki: frac_(b.jednostki) }));
   d.summary = tableOf_('Podsumowanie').filter(s => lc(s.klient) === c.id).map(s => ({ week: day(s.tydzien_od), srpe: s.sRPE_TL_AU, acwr: s.ACWR,
     ton: s.tonaz_kg, done: s['wykonanie_%'], hard: s.serie_twarde, near: s.blisko_upadku, status: String(s.status || ''), why: String(s.powody || '') }));
   d.pkg = pkgOf_(c.id);
@@ -796,7 +796,7 @@ function trBlokSzkic(id, blok, opt) {
   const row = trRow_(id), c = clientOf_(row), d = clientData_(c, Date.now());
   d.cfg.masters = String(row[8] || '').trim().toUpperCase() === 'TAK';
   const tz = Session.getScriptTimeZone(), day = x => x instanceof Date ? Utilities.formatDate(x, tz, 'yyyy-MM-dd') : String(x || '').slice(0, 10);
-  d.blocks = tableOf_('Bloki').filter(b => String(b.klient).trim().toLowerCase() === c.id).map(b => Object.assign({}, b, { od: day(b.od), do: day(b.do) }));
+  d.blocks = tableOf_('Bloki').filter(b => String(b.klient).trim().toLowerCase() === c.id).map(b => Object.assign({}, b, { od: day(b.od), do: day(b.do), jednostki: frac_(b.jednostki) }));
   const ctx = trBlokCtx_(d, blok);
   if (!ctx) throw new Error('Nie ma bloku ' + blok + ' tego klienta w zakładce Bloki. Kliknij „Przelicz teraz”.');
   if (!trBlokSets_(d, blok)) throw new Error('W tym bloku nie ma zapisanych serii, więc szkic AI nie ma z czego pisać (bez opłaty).');
@@ -1015,7 +1015,7 @@ function trBlokPlan(id, opt) {
   const row = trRow_(id), c = clientOf_(row), d = clientData_(c, Date.now());
   d.cfg.masters = String(row[8] || '').trim().toUpperCase() === 'TAK';
   const tz = Session.getScriptTimeZone(), day = x => x instanceof Date ? Utilities.formatDate(x, tz, 'yyyy-MM-dd') : String(x || '').slice(0, 10);
-  d.blocks = tableOf_('Bloki').filter(b => String(b.klient).trim().toLowerCase() === c.id).map(b => Object.assign({}, b, { od: day(b.od), do: day(b.do) }));
+  d.blocks = tableOf_('Bloki').filter(b => String(b.klient).trim().toLowerCase() === c.id).map(b => Object.assign({}, b, { od: day(b.od), do: day(b.do), jednostki: frac_(b.jednostki) }));
   if (!trBlokSets_(d, blok)) throw new Error('W bloku ' + blok + ' nie ma zapisanych serii, więc AI nie ma z czego układać następnego (bez opłaty).');
   const all = tableOf_('Plan').filter(r => String(r.klient).trim().toLowerCase() === c.id);
   const w0 = Math.max(0, ...all.map(r => Number(r.tydzien) || 0)) + 1;

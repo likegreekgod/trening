@@ -1346,10 +1346,26 @@ function writeTable_(name, headers, rows, after) {
   const sh = ss.getSheetByName(name) || ss.insertSheet(name);
   sh.clear();
   sh.getRange(1, 1, 1, headers.length).setValues(plainRows_([headers])).setFontWeight('bold');
+  textCols_(rows).forEach(c => sh.getRange(2, c + 1, Math.max(rows.length, 1), 1).setNumberFormat('@'));
   if (rows.length) sh.getRange(2, 1, rows.length, headers.length).setValues(plainRows_(rows));
   sh.setFrozenRows(1);
   if (after) after(sh, rows.length);
 }
+
+/**
+ * Kolumny (indeksy od 0), w których jest tekst „zrobione/plan” („1/4”, „8/10”): Arkusze zamieniłyby go w datę
+ * (panel pokazywał wtedy „Sun Jan 04 2026 …”), więc writeTable_ ustawia im format „@” przed zapisem.
+ */
+function textCols_(rows) {
+  const out = [];
+  (rows || []).forEach(r => (r || []).forEach((v, i) => {
+    if (out.indexOf(i) < 0 && typeof v === 'string' && /^\s*\d+\s*\/\s*\d+\s*$/.test(v)) out.push(i);
+  }));
+  return out.sort((a, b) => a - b);
+}
+
+/** „zrobione/plan” odczytane z arkusza: data (stary zapis bez formatu „@”, do najbliższego przeliczenia) = puste */
+const frac_ = v => Object.prototype.toString.call(v) === '[object Date]' || blank_(v) ? '' : String(v);
 
 /* --- obliczenia (czyste funkcje, bez Arkuszy) --- */
 const blank_ = v => v === '' || v === null || v === undefined;
