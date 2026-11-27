@@ -1363,7 +1363,8 @@
   L.keyFrom = v => {
     const t = String(v || '').trim();
     const m = t.match(/[?&#]k=([^&#\s]+)/);
-    if (m) return decodeURIComponent(m[1]);
+    if (m) { let v = m[1]; try { v = decodeURIComponent(v); } catch (e) {}   // klucz to litery i cyfry: kropka, nawias, gwiazdki, cudzysłów z wklejonego zdania odpadają
+      const c = v.match(/^[0-9a-z]+/i); return c ? c[0] : ''; }
     const c = t.match(/(?:^|[^0-9a-z])(k[0-9a-f]{11})(?![0-9a-z])/i);
     return c ? c[1] : '';
   };

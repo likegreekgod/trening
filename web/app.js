@@ -8,13 +8,16 @@ const API_URL = window.API_URL;                    // z config.js
 const LIVE = (() => { const v = new URLSearchParams(location.search).get('prowadz') || ''; return /^[\w.-]{1,40}$/.test(v) ? v.toLowerCase() : ''; })();
 let LIVE_J = LIVE ? new URLSearchParams(location.search).get('j') || '' : '';
 const KEY_LINK = !LIVE && !!new URLSearchParams(location.search).get('k');   // wejście z linku od trenera (ekran powitalny)
+// iPhone w Safari (nie z ekranu głównego): klucz zostaje w pasku adresu. Ikona dodana „Do ekranu początkowego” bierze bieżący adres
+// i startuje z osobną pamięcią, więc bez ?k= w adresie pytała o link przy każdym otwarciu (27.11, klient dodał ikonę po powitaniu).
+const KEEP_K = (() => { try { return TL.welPlatform(navigator.userAgent, navigator.maxTouchPoints) === 'ios' && !(matchMedia('(display-mode: standalone)').matches || navigator.standalone === true); } catch (e) { return false; } })();
 const KEY = (() => {
   if (LIVE) return 'L_' + LIVE;                    // pamięć telefonu trenera osobno dla każdego prowadzonego klienta
   const k = new URLSearchParams(location.search).get('k');
   try {
     if (k) {
       localStorage.setItem('key', k);
-      if (localStorage.getItem('key') === k) history.replaceState(history.state, '', TL.urlNoKey(location.pathname, location.search, location.hash));
+      if (localStorage.getItem('key') === k && !KEEP_K) history.replaceState(history.state, '', TL.urlNoKey(location.pathname, location.search, location.hash));
     }
     return k || localStorage.getItem('key') || '';
   } catch (e) { return k || ''; }
@@ -557,6 +560,9 @@ function load(){
       if (!unitList().some(u => !u.own && u.date === t)) openNoPlan(true); }
   }).catch(e => {
     if (LIVE && /^Logowanie: /.test(e.message)) { if (!cached) liveLogin(); return; }
+    if (!cached && !LIVE && /^Brak dostępu/.test(e.message)) {   // zły albo nieaktualny klucz: z powrotem do wklejenia linku, zamiast ślepego „Błąd”
+      try { if (localStorage.getItem('key') === KEY) localStorage.removeItem('key'); } catch (x) {}
+      askKey(); setSync(''); $('#key-err').textContent = 'Ten link nie działa (niepełny albo nieaktualny). Skopiuj cały link od trenera jeszcze raz albo poproś o nowy.'; return; }
     if (!cached) { $('#main').innerHTML = '<div class="empty">Błąd: ' + esc(e.message) + '</div>'; setSync('błąd'); }
     else setSync('offline – ostatnie dane');
   });
@@ -571,9 +577,13 @@ function refreshData(){
 }
 /** brak klucza (np. iOS: aplikacja z ekranu głównego ma osobną pamięć i startuje bez ?k=) → wklejenie linku albo kodu */
 function askKey(){
-  $('#main').innerHTML = `<section class="card askkey"><label class="fl">Wklej link od trenera lub kod<input id="key-in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…?k=… albo k…"></label>
+  const paste = !!(navigator.clipboard && navigator.clipboard.readText);
+  $('#main').innerHTML = `<section class="card askkey"><div class="cn">Połącz aplikację ze swoim kontem</div>
+    <p class="sub">Skopiuj link od trenera (przytrzymaj go w wiadomości → Kopiuj) i wklej tutaj. Wystarczy raz: potem aplikacja otwiera się sama, także bez planu.</p>
+    ${paste ? '<button type="button" class="btn p" id="key-paste">Wklej skopiowany link</button>' : ''}
+    <label class="fl">Link od trenera lub kod<input id="key-in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…?k=… albo k…"></label>
     <div class="hint" id="key-err" role="alert"></div>
-    <button type="button" class="btn p" id="key-go">Otwórz plan</button></section>`;
+    <button type="button" class="btn${paste ? '' : ' p'}" id="key-go">Otwórz aplikację</button></section>`;
   const go = () => {
     const k = TL.keyFrom($('#key-in').value);
     if (!k) { $('#key-err').textContent = 'Nie rozpoznaję linku ani kodu. Skopiuj cały link od trenera.'; return; }
@@ -581,6 +591,9 @@ function askKey(){
     location.replace(location.pathname + '?k=' + encodeURIComponent(k));
   };
   $('#key-go').onclick = go;
+  const kp = $('#key-paste');
+  if (kp) kp.onclick = () => navigator.clipboard.readText().then(t => { $('#key-in').value = t; go(); })
+    .catch(() => { $('#key-err').textContent = 'Nie udało się wkleić. Przytrzymaj pole niżej i wybierz „Wklej”.'; $('#key-in').focus(); });
   $('#key-in').onkeydown = e => { if (e.key === 'Enter') go(); };
 }
 // ostatnio otwarta jednostka (cu_<klucz>): po zamknięciu aplikacji w tle wraca do niej tego samego dnia, a nie do dzisiejszej (lib keepUnit)
@@ -627,17 +640,7 @@ function welMaybe(){
   if (KEY_LINK && !seen && !STANDALONE) welOpen();
 }
 function welOpen(){ WEL = { step: 0, os: PLAT === 'android' ? 'android' : 'ios', installed: STANDALONE }; $('#wel').hidden = false; welDraw(); }
-// na czas kroku „iPhone” klucz wraca do paska adresu: gdyby Safari nie przyjął manifestu z kluczem, zakładka na ekranie weźmie bieżący adres
-function welUrl(on){
-  if (PLAT !== 'ios' || STANDALONE || !KEY) return;
-  let saved = false; try { saved = localStorage.getItem('key') === KEY; } catch (e) {}
-  if (!saved) return;                                  // klucz i tak został w adresie (pamięć telefonu nie działa)
-  const base = TL.urlNoKey(location.pathname, location.search, location.hash), h = location.hash;
-  const url = on ? base.slice(0, base.length - h.length) + (base.slice(0, base.length - h.length).includes('?') ? '&' : '?') + 'k=' + encodeURIComponent(KEY) + h : base;
-  if (url !== location.pathname + location.search + location.hash) history.replaceState(history.state, '', url);
-}
 function welClose(){
-  welUrl(false);
   try { localStorage.setItem(WELK, '1'); } catch (e) {}
   WEL = null; $('#wel').hidden = true; $('#wel').innerHTML = '';
 }
@@ -689,7 +692,6 @@ function welDraw(){
     <div class="wl-in"><div class="wl-dots" aria-label="Krok ${w.step + 1} z ${n}">${Array.from({ length: n }, (_, i) => `<i class="${i <= w.step ? 'on' : ''}"></i>`).join('')}</div>
     ${body}<div class="wl-foot">${foot}</div></div>`;
   $('#wel').scrollTop = 0;
-  welUrl(w.step === 1 && w.os === 'ios' && !w.installed);
   $('#wel').querySelectorAll('[data-wl]').forEach(b => b.onclick = () => { w.step = +b.dataset.wl; welDraw(); });
   $('#wel').querySelectorAll('[data-os]').forEach(b => b.onclick = () => { w.os = b.dataset.os; welDraw(); });
   const sk = $('#wl-skip'); if (sk) sk.onclick = welClose;

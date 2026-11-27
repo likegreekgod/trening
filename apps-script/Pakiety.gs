@@ -120,19 +120,23 @@ function trPakiet(id, f) {
   lock.waitLock(20000);
   try {
     const sh = pkgSheet_(), cur = pkgOf_(id);
+    const widok = (st, show) => {                                   // widoczny w wierszu zakupu obecnego pakietu
+      const rows = sh.getDataRange().getValues(), h = rows[0].map(x => String(x).trim()), ci = h.indexOf('widoczny'), ti = h.indexOf('typ'), di = h.indexOf('data');
+      let at = -1; rows.forEach((r, i) => { if (i && String(r[2]).toLowerCase() === id && String(r[ti]).trim() === 'zakup' && pkDay_(r[di]) === st.from) at = i; });
+      if (at > 0 && ci >= 0) sh.getRange(at + 1, ci + 1).setValue(plain_(show ? 'TAK' : ''));
+    };
     if (f.mode === 'widok') {
       if (!cur) throw new Error('Klient nie ma pakietu.');
-      const rows = sh.getDataRange().getValues(), h = rows[0].map(x => String(x).trim()), ci = h.indexOf('widoczny'), ti = h.indexOf('typ'), di = h.indexOf('data');
-      let at = -1; rows.forEach((r, i) => { if (i && String(r[2]).toLowerCase() === id && String(r[ti]).trim() === 'zakup' && pkDay_(r[di]) === cur.from) at = i; });
-      if (at > 0 && ci >= 0) sh.getRange(at + 1, ci + 1).setValue(plain_(f.show ? 'TAK' : ''));
+      widok(cur, f.show);
     } else if (f.mode === 'ustaw' || f.mode === 'dodaj') {         // Claude (MCP „pakiet”): czysta pkgSet_ wybiera zakup albo korektę
       const x = pkgSet_(f, cur, today_());
       if (x.error) throw new Error(x.error);
       if (x.f) {
-        const r = pkgRow_(id, x.f, cur, today_(), Date.now());
+        const r = pkgRow_(id, Object.assign({}, x.f, f.show === undefined ? {} : { show: !!f.show }), cur, today_(), Date.now());
         if (r.error) throw new Error(r.error);
         sh.appendRow(plainRow_(r.row));
       }
+      if (f.show !== undefined && (!x.f || x.f.mode !== 'nowy')) { const st = pkgOf_(id); if (st) widok(st, f.show); }   // korekta: widoczność w wierszu zakupu
     } else {
       const r = pkgRow_(id, f, cur, today_(), Date.now());
       if (r.error) throw new Error(r.error);

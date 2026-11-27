@@ -33,7 +33,8 @@ async function page(calls, offline, opt = {}) {
     if (offline) return r.abort();
     const b = JSON.parse(r.request().postData() || '{}'); calls.push(b);
     await r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, result: b.fn === 'getData' ? data : (opt.api && opt.api(b)) || { ok: true } }) });
+      body: JSON.stringify(b.fn === 'getData' && opt.deny && opt.deny(b) ? { ok: false, error: 'Brak dostępu.' }
+        : { ok: true, result: b.fn === 'getData' ? data : (opt.api && opt.api(b)) || { ok: true } }) });
   });
   // podpowiedzi przy pierwszym użyciu zasłaniają część karty: domyślnie obejrzane, opt.tips je włącza
   if (!opt.tips) await ctx.addInitScript(() => { try { ['kabc', 'k0123456789a', 'kABCDEF01234'].forEach(k => localStorage.setItem('tip_' + k, '["seria","wiecej","kamera","dzien"]')); } catch (e) {} });
@@ -62,7 +63,7 @@ test('bez klucza (iOS z ekranu głównego): wklejenie linku od trenera → klucz
   const calls = [];
   const { ctx, p } = await page(calls);
   await p.goto(base); await p.waitForSelector('#key-in');
-  assert.match(await p.textContent('#main'), /Wklej link od trenera lub kod/);
+  assert.match(await p.textContent('#main'), /Link od trenera lub kod/);
   assert.equal(calls.length, 0);                                  // bez klucza nic nie idzie do API
   await p.fill('#key-in', 'zły tekst'); await p.click('#key-go');
   assert.match(await p.textContent('#key-err'), /Nie rozpoznaję/);
@@ -75,6 +76,22 @@ test('bez klucza (iOS z ekranu głównego): wklejenie linku od trenera → klucz
   await p.goto(base + '?x=1&k=k0123456789a#plan'); await p.waitForSelector('.set[data-o="1"]');
   assert.equal(new URL(p.url()).search + new URL(p.url()).hash, '?x=1#plan');   // inne parametry i # zostają
   await p.goto(base); await p.waitForSelector('.set[data-o="1"]');      // kolejne uruchomienie bez ?k=
+  assert.deepEqual(p.errors, []);
+  await ctx.close();
+});
+
+test('bez klucza: zły klucz wraca do wklejania z komunikatem; nowy klient bez planu wchodzi i ma „+ Własny trening”', async () => {
+  const calls = [];
+  const empty = Object.assign({}, DATA, { plan: [], logs: [], sessions: [] });
+  const { ctx, p } = await page(calls, false, { data: empty, deny: b => b.key !== 'k0123456789a' });
+  await p.goto(base); await p.waitForSelector('#key-in');
+  await p.fill('#key-in', 'https://trener.example/trening/?k=kfffffffffff'); await p.click('#key-go');
+  await p.waitForFunction(() => /nie działa/.test(document.querySelector('#key-err') && document.querySelector('#key-err').textContent));
+  assert.equal(await p.evaluate(() => localStorage.getItem('key')), null);   // zły klucz nie zostaje w pamięci
+  await p.fill('#key-in', 'Twój link: https://trener.example/trening/?k=k0123456789a.'); await p.click('#key-go');
+  await p.waitForSelector('#own-first');
+  assert.match(await p.textContent('#main'), /Jeszcze nie masz planu/);
+  assert.equal(calls.filter(c => c.fn === 'getData').pop().key, 'k0123456789a');
   assert.deepEqual(p.errors, []);
   await ctx.close();
 });
@@ -2684,11 +2701,11 @@ test(`Animacja otwarcia (${scheme}): pierwsze uruchomienie pokazuje zasłonę z 
 const UA_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
 const UA_AND = 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
 
-test('Ekran powitalny (iPhone): pierwsze wejście z linku → 3 kroki, imię, kroki Safari, klucz w adresie i manifeście tylko na czas kroku; drugie wejście bez ekranu; ponownie z zakładki Trener', async () => {
+test('Ekran powitalny (iPhone): pierwsze wejście z linku → 3 kroki, imię, kroki Safari, klucz zostaje w adresie (ikona dodana w każdej chwili go ma) i w manifeście; drugie wejście bez ekranu; ponownie z zakładki Trener', async () => {
   const { ctx, p } = await page([], false, { wel: true, ua: UA_IOS, touch: true });
   await p.goto(base + '?k=kabc'); await p.waitForSelector('#wel:not([hidden]) #wel-t');
   assert.equal(await p.textContent('#wel-t'), 'Cześć, Robert!');
-  assert.doesNotMatch(p.url(), /kabc/);                                         // na powitaniu klucz już zniknął z adresu
+  assert.equal(new URL(p.url()).searchParams.get('k'), 'kabc');                // iPhone w Safari: klucz zostaje w adresie
   await p.screenshot({ path: path.join(SCREENS, 'powitanie-1.png') });
   await p.click('[data-wl="1"]');
   assert.equal(await p.textContent('#wel-t'), 'Dodaj na ekran główny');
@@ -2703,7 +2720,7 @@ test('Ekran powitalny (iPhone): pierwsze wejście z linku → 3 kroki, imię, kr
   await p.screenshot({ path: path.join(SCREENS, 'powitanie-2-iphone.png') });
   await p.click('[data-os="android"]');
   assert.match(await p.textContent('#wel'), /Dodaj do ekranu głównego/);
-  assert.equal(new URL(p.url()).searchParams.get('k'), null);                   // poza krokiem iPhone'a klucza w adresie nie ma
+  assert.equal(new URL(p.url()).searchParams.get('k'), 'kabc');                // na iPhonie klucz zostaje także przy innych krokach
   await p.click('.wl-foot [data-wl="2"]');
   assert.equal(await p.textContent('#wel-t'), 'Jak wygląda trening');
   assert.match(await p.textContent('#wel'), /Lekko.*Średnio.*Ciężko/);
@@ -2711,7 +2728,7 @@ test('Ekran powitalny (iPhone): pierwsze wejście z linku → 3 kroki, imię, kr
   await p.click('#wl-end');
   assert.equal(await p.isHidden('#wel'), true);
   assert.equal(await p.evaluate(() => localStorage.getItem('wel_kabc')), '1');
-  assert.doesNotMatch(p.url(), /kabc/);
+  assert.equal(new URL(p.url()).searchParams.get('k'), 'kabc');             // po zamknięciu powitania też (ikona dodana później startuje z kluczem)
   await p.goto(base + '?k=kabc'); await p.waitForSelector('.set[data-o="1"]'); await p.waitForTimeout(200);
   assert.equal(await p.isHidden('#wel'), true);                                 // raz na telefon
   await p.click('#nav [data-tab="trener"]'); await p.click('#wel-open');
